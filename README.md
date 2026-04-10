@@ -87,6 +87,9 @@ Available example environments:
 - `native-example`
 - `rpipico-arduino-example`
 - `esp32-c3-devkitm-1-example`
+- `native-example-ultra-minimal`
+- `rpipico-arduino-example-ultra-minimal`
+- `esp32-c3-devkitm-1-example-ultra-minimal`
 
 The PlatformIO example environments intentionally apply a reduced-capacity plus reduced-feature profile for MCU footprint checks.
 The profile keeps batch read/write, CPU-model, and loopback support, and compiles out random, multi-block, monitor, host-buffer, and module-buffer command families:
@@ -95,11 +98,23 @@ The profile keeps batch read/write, CPU-model, and loopback support, and compile
 - `ESP32-C3 sample RAM`: `36,740 bytes -> 15,868 bytes`
 - `ESP32-C3 sample Flash`: `289,914 bytes -> 264,024 bytes`
 
+An `ultra-minimal` sample profile is also available when you only need small batch read/write on MCU targets.
+This profile additionally compiles out CPU-model and loopback support, and shrinks the fixed frame/data buffers to `256 / 256 / 128` bytes:
+
+- `MelsecSerialClient`: about `18,984 bytes -> 792 bytes`
+- `ESP32-C3 ultra-minimal RAM`: `36,740 bytes -> 14,508 bytes`
+- `ESP32-C3 ultra-minimal Flash`: `289,914 bytes -> 261,046 bytes`
+- `RP2040 ultra-minimal RAM`: `41,512 bytes`
+- `RP2040 ultra-minimal Flash`: `4,850 bytes`
+
 Compile-checked on `2026-04-10`:
 
 - `native-example`: pass
 - `rpipico-arduino-example`: pass
 - `esp32-c3-devkitm-1-example`: pass
+- `native-example-ultra-minimal`: pass
+- `rpipico-arduino-example-ultra-minimal`: pass
+- `esp32-c3-devkitm-1-example-ultra-minimal`: pass
 
 Examples:
 
@@ -107,6 +122,9 @@ Examples:
 pio run -e native-example
 pio run -e rpipico-arduino-example
 pio run -e esp32-c3-devkitm-1-example
+pio run -e native-example-ultra-minimal
+pio run -e rpipico-arduino-example-ultra-minimal
+pio run -e esp32-c3-devkitm-1-example-ultra-minimal
 ```
 
 ## CLI

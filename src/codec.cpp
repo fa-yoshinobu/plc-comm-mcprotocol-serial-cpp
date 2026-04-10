@@ -664,7 +664,7 @@ class ByteWriter {
                                                      : buffer_too_small("Binary request data exceeds maximum size");
 }
 
-[[nodiscard]] Status validate_loopback_chars(std::span<const char> hex_ascii) noexcept {
+[[maybe_unused]] [[nodiscard]] Status validate_loopback_chars(std::span<const char> hex_ascii) noexcept {
   if (hex_ascii.empty() || hex_ascii.size() > kMaxLoopbackBytes) {
     return invalid_argument("Loopback data length must be in range 1..960");
   }
@@ -676,7 +676,7 @@ class ByteWriter {
   return ok_status();
 }
 
-void trim_right_spaces(std::array<char, kCpuModelNameLength + 1>& text) noexcept {
+[[maybe_unused]] void trim_right_spaces(std::array<char, kCpuModelNameLength + 1>& text) noexcept {
   std::size_t end = kCpuModelNameLength;
   while (end > 0U && text[end - 1U] == ' ') {
     --end;
