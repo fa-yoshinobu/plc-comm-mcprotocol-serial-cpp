@@ -88,3 +88,6 @@ After that, use the emulated high-level checks:
 - Current validation matrix: `../validation/reports/HARDWARE_VALIDATION.md`
 - Detailed dated evidence: `../validation/reports/RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md`
 - Command behavior and fallback notes: `USAGE_GUIDE.md`
+- Wiring overview: `WIRING_GUIDE.md`
+- MCU integration path: `MCU_QUICKSTART.md`
+- Common failures: `TROUBLESHOOTING.md`

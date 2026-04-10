@@ -13,6 +13,8 @@ The current codebase includes:
 - A transport-agnostic library centered on `MelsecSerialClient`
 - A Linux test CLI: `mcprotocol_cli`
 - PlatformIO example projects for `RP2040` and `ESP32-C3`
+- A read-only real-UART Arduino sample for `Serial1`
+- GitHub Actions for host build/test/docs and PlatformIO compile checks
 - Real-hardware validation records for `RJ71C24-R2`
 
 ## Start Here
@@ -95,6 +97,23 @@ First command to try:
   --station 0 \
   write-bits M100=1 M101=0
 ```
+
+## Documentation Map
+
+Start with these pages instead of reading the whole repository at once.
+
+- [Setup Guide](docsrc/user/SETUP_GUIDE.md)
+- [Wiring Guide](docsrc/user/WIRING_GUIDE.md)
+- [MCU Quickstart](docsrc/user/MCU_QUICKSTART.md)
+- [Usage Guide](docsrc/user/USAGE_GUIDE.md)
+- [Troubleshooting](docsrc/user/TROUBLESHOOTING.md)
+- [FAQ](docsrc/user/FAQ.md)
+- [Examples Index](examples/README.md)
+- [Hardware Validation Matrix](docsrc/validation/reports/HARDWARE_VALIDATION.md)
+- [Footprint Profiles](docsrc/validation/reports/FOOTPRINT_PROFILES.md)
+- [Developer Notes](docsrc/maintainer/DEVELOPER_NOTES.md)
+- [Release Process](docsrc/maintainer/RELEASE_PROCESS.md)
+- [Changelog](CHANGELOG.md)
 
 ## What Works Today
 
@@ -193,9 +212,11 @@ The normal workflow is:
 
 Examples:
 
-- [examples/README.md](examples/README.md)
+- [Examples Index](examples/README.md)
 - [mcu_async_batch_read.cpp](examples/mcu_async_batch_read.cpp)
 - [platformio_arduino_async.cpp](examples/platformio_arduino_async/platformio_arduino_async.cpp)
+- [platformio_arduino_uart.cpp](examples/platformio_arduino_uart/platformio_arduino_uart.cpp)
+- [Linux CLI examples](examples/linux_cli/README.md)
 
 ## PlatformIO
 
@@ -213,6 +234,8 @@ Available environments:
 - `native-example`
 - `rpipico-arduino-example`
 - `esp32-c3-devkitm-1-example`
+- `rpipico-arduino-uart-example`
+- `esp32-c3-devkitm-1-uart-example`
 - `native-example-ultra-minimal`
 - `rpipico-arduino-example-ultra-minimal`
 - `esp32-c3-devkitm-1-example-ultra-minimal`
@@ -223,6 +246,8 @@ Run them with:
 pio run -e native-example
 pio run -e rpipico-arduino-example
 pio run -e esp32-c3-devkitm-1-example
+pio run -e rpipico-arduino-uart-example
+pio run -e esp32-c3-devkitm-1-uart-example
 pio run -e native-example-ultra-minimal
 pio run -e rpipico-arduino-example-ultra-minimal
 pio run -e esp32-c3-devkitm-1-example-ultra-minimal
@@ -292,21 +317,30 @@ If your adapter is `RS-485` and needs manual direction control:
 ./build/mcprotocol_cli --device /dev/ttyUSB0 --rts-toggle on cpu-model
 ```
 
-## Documentation Map
+## Docs and CI
 
-This repository uses the same documentation layout style as the companion SLMP minimal repository.
-
-- [SETUP_GUIDE.md](docsrc/user/SETUP_GUIDE.md): setup and verified serial settings
-- [USAGE_GUIDE.md](docsrc/user/USAGE_GUIDE.md): CLI usage and fallback behavior
-- [examples/README.md](examples/README.md): example programs
-- [HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md): PASS / NG / HOLD matrix
-- [RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md](docsrc/validation/reports/RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md): dated real-hardware log
-- [DEVELOPER_NOTES.md](docsrc/maintainer/DEVELOPER_NOTES.md): implementation notes and follow-up items
-
-## Documentation Build
+Generate API docs:
 
 ```bash
 cmake --build build --target docs
 ```
 
-If `doxygen` is installed system-wide, or if a local bundle is placed under `.tools/doxygen`, HTML is generated under `build/docs/doxygen/html`.
+Check Markdown links:
+
+```bash
+cmake --build build --target check-markdown-links
+```
+
+Run both:
+
+```bash
+cmake --build build --target docs-all
+```
+
+GitHub Actions now verifies:
+
+- host build
+- `ctest`
+- Doxygen generation
+- Markdown link checks
+- PlatformIO compile checks for the supported example environments

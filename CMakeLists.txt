@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(MCPROTOCOL_BUILD_EXAMPLES "Build compile-checked example programs" ON)
 set(MCPROTOCOL_DOXYGEN_RUNNER ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_doxygen.sh)
+set(MCPROTOCOL_MARKDOWN_LINK_CHECKER ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_markdown_links.py)
 
 add_library(mcprotocol_serial
   src/client.cpp
@@ -41,6 +42,13 @@ elseif(MSVC)
 endif()
 
 include(CTest)
+find_package(Python3 COMPONENTS Interpreter QUIET)
+
+if(Python3_Interpreter_FOUND)
+  set(MCPROTOCOL_PYTHON_EXECUTABLE ${Python3_EXECUTABLE})
+else()
+  set(MCPROTOCOL_PYTHON_EXECUTABLE python3)
+endif()
 
 if(BUILD_TESTING)
   add_executable(codec_tests
@@ -77,4 +85,15 @@ add_custom_target(docs
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMENT "Generating API documentation with Doxygen"
   VERBATIM
+)
+
+add_custom_target(check-markdown-links
+  COMMAND ${MCPROTOCOL_PYTHON_EXECUTABLE} ${MCPROTOCOL_MARKDOWN_LINK_CHECKER}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMENT "Checking Markdown links"
+  VERBATIM
+)
+
+add_custom_target(docs-all
+  DEPENDS docs check-markdown-links
 )

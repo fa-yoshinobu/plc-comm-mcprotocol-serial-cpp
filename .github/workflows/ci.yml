@@ -1,0 +1,79 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  host-build-and-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build doxygen
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Generate docs
+        run: cmake --build build --target docs
+
+      - name: Check Markdown links
+        run: python3 scripts/check_markdown_links.py
+
+  platformio-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env:
+          - native-example
+          - rpipico-arduino-example
+          - esp32-c3-devkitm-1-example
+          - native-example-ultra-minimal
+          - rpipico-arduino-example-ultra-minimal
+          - esp32-c3-devkitm-1-example-ultra-minimal
+          - rpipico-arduino-uart-example
+          - esp32-c3-devkitm-1-uart-example
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: ${{ runner.os }}-pio-${{ matrix.env }}
+          restore-keys: |
+            ${{ runner.os }}-pio-
+
+      - name: Install PlatformIO
+        run: python3 -m pip install --upgrade pip platformio
+
+      - name: Build PlatformIO environment
+        run: pio run -e ${{ matrix.env }}

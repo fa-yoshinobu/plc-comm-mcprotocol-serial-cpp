@@ -108,3 +108,10 @@ For the exact PASS / NG / HOLD matrix and the dated evidence log, use:
 
 - `../validation/reports/HARDWARE_VALIDATION.md`
 - `../validation/reports/RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md`
+
+## Safe Read-only Examples
+
+If you want low-risk shell examples instead of typing commands manually, use:
+
+- `../../examples/linux_cli/safe_bringup_readonly.sh`
+- `../../examples/linux_cli/cyclic_read_words.sh`
