@@ -7,7 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <span>
+#include "mcprotocol/serial/span_compat.hpp"
 #include <string_view>
 
 #include "mcprotocol/serial/client.hpp"

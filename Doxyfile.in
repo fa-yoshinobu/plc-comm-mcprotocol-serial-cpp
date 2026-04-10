@@ -1,5 +1,5 @@
 PROJECT_NAME           = "MC Protocol Serial C++"
-PROJECT_NUMBER         = "0.1"
+PROJECT_NUMBER         = "0.1.1"
 PROJECT_BRIEF          = "MC protocol serial library for MCU-oriented environments"
 OUTPUT_DIRECTORY       = "@CMAKE_BINARY_DIR@/docs/doxygen"
 CREATE_SUBDIRS         = NO
@@ -27,6 +27,7 @@ GENERATE_HTML          = YES
 HTML_OUTPUT            = html
 GENERATE_TREEVIEW      = YES
 GENERATE_LATEX         = NO
+HAVE_DOT               = NO
 
 SOURCE_BROWSER         = YES
 INLINE_SOURCES         = NO

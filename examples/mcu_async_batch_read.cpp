@@ -3,9 +3,9 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <span>
 
 #include "mcprotocol/serial/client.hpp"
+#include "mcprotocol/serial/span_compat.hpp"
 
 namespace {
 

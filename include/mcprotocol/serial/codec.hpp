@@ -3,7 +3,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <span>
+
+#include "mcprotocol/serial/span_compat.hpp"
 
 #include "mcprotocol/serial/types.hpp"
 

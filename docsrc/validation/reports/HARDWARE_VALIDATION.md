@@ -21,6 +21,15 @@ Use it together with:
 
 ## Current Matrix
 
+### Host / Build Validation
+
+| Area | Target | Current status | Notes |
+|---|---|---|---|
+| CMake build | Linux host | pass | `cmake --build build`, `ctest`, `mcprotocol_example_mcu_async`, and `docs` target passed |
+| PlatformIO example build | `native-example` | pass | compile-check plus local execution of the built example |
+| PlatformIO example build | `rpipico-arduino-example` | pass | compile-check on `Raspberry Pi Pico` environment |
+| PlatformIO example build | `esp32-c3-devkitm-1-example` | pass | compile-check on `Espressif ESP32-C3-DevKitM-1` environment |
+
 Validated target:
 
 - PLC CPU: Mitsubishi iQ-R `R08CPU`

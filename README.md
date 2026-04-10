@@ -49,8 +49,38 @@ ctest --test-dir build --output-on-failure
 cmake --build build --target docs
 ```
 
-If `doxygen` is installed, the `docs` target generates HTML documentation under `build/docs/doxygen/html`.
-If it is not installed, the `docs` target prints the required next step.
+If `doxygen` is installed system-wide, or if a local bundle is placed under `.tools/doxygen`, the `docs` target generates HTML documentation under `build/docs/doxygen/html`.
+
+## PlatformIO
+
+Version `0.1.1` adds PlatformIO packaging metadata and example environments.
+
+Files:
+
+- `platformio.ini`: local example environments
+- `library.json`: PlatformIO library manifest
+- `library.properties`: Arduino library metadata
+- `include/mcprotocol_serial.hpp`: single-entry umbrella header
+
+Available example environments:
+
+- `native-example`
+- `rpipico-arduino-example`
+- `esp32-c3-devkitm-1-example`
+
+Compile-checked on `2026-04-10`:
+
+- `native-example`: pass
+- `rpipico-arduino-example`: pass
+- `esp32-c3-devkitm-1-example`: pass
+
+Examples:
+
+```bash
+pio run -e native-example
+pio run -e rpipico-arduino-example
+pio run -e esp32-c3-devkitm-1-example
+```
 
 ## CLI
 
@@ -88,6 +118,7 @@ This repository now follows the same documentation layout used in the companion 
 - `docsrc/user/SETUP_GUIDE.md`: bring-up steps and the verified RJ71C24-R2 serial settings
 - `docsrc/user/USAGE_GUIDE.md`: command usage, native vs emulated behavior, and recommended CLI flow
 - `examples/README.md`: compile-checked MCU-oriented sample programs
+- `platformio.ini`: PlatformIO example entry points for native, RP2040, and ESP32-C3
 - `docsrc/validation/reports/HARDWARE_VALIDATION.md`: current PASS / NG / HOLD matrix and validation backlog
 - `docsrc/validation/reports/RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md`: dated real-hardware evidence log for the current setup
 - `docsrc/maintainer/DEVELOPER_NOTES.md`: maintainer notes for request-shape conformance, fallback policy, and future follow-up

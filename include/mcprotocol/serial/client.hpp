@@ -3,9 +3,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 
 #include "mcprotocol/serial/codec.hpp"
+#include "mcprotocol/serial/span_compat.hpp"
 
 namespace mcprotocol::serial {
 
