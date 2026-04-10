@@ -72,17 +72,28 @@ Capacity override macros are available when you need a smaller MCU footprint:
 - `MCPROTOCOL_SERIAL_MAX_MONITOR_ITEMS`
 - `MCPROTOCOL_SERIAL_MAX_LOOPBACK_BYTES`
 
+Command-family feature switches are also available when you want to compile out unused code paths:
+
+- `MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS`
+- `MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS`
+- `MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS`
+- `MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS`
+- `MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS`
+- `MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS`
+- `MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS`
+
 Available example environments:
 
 - `native-example`
 - `rpipico-arduino-example`
 - `esp32-c3-devkitm-1-example`
 
-The PlatformIO example environments intentionally apply a reduced-capacity profile for MCU footprint checks:
+The PlatformIO example environments intentionally apply a reduced-capacity plus reduced-feature profile for MCU footprint checks.
+The profile keeps batch read/write, CPU-model, and loopback support, and compiles out random, multi-block, monitor, host-buffer, and module-buffer command families:
 
-- `MelsecSerialClient`: about `18,984 bytes -> 2,744 bytes`
-- `ESP32-C3 sample RAM`: `36,740 bytes -> 16,404 bytes`
-- `ESP32-C3 sample Flash`: `289,914 bytes -> 267,528 bytes`
+- `MelsecSerialClient`: about `18,984 bytes -> 2,168 bytes`
+- `ESP32-C3 sample RAM`: `36,740 bytes -> 15,868 bytes`
+- `ESP32-C3 sample Flash`: `289,914 bytes -> 264,024 bytes`
 
 Compile-checked on `2026-04-10`:
 

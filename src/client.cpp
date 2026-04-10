@@ -16,6 +16,10 @@ namespace {
   return make_status(StatusCode::Cancelled, "The active request was cancelled");
 }
 
+[[nodiscard]] constexpr Status feature_disabled(const char* message) noexcept {
+  return make_status(StatusCode::UnsupportedConfiguration, message);
+}
+
 [[nodiscard]] std::span<const std::uint8_t> as_u8_span(std::span<const std::byte> bytes) noexcept {
   return {
       reinterpret_cast<const std::uint8_t*>(bytes.data()),
@@ -315,18 +319,29 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
           out_bits_);
     case OperationKind::BatchWriteWords:
     case OperationKind::BatchWriteBits:
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
     case OperationKind::RandomWriteWords:
     case OperationKind::RandomWriteBits:
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
     case OperationKind::MultiBlockWrite:
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
     case OperationKind::WriteHostBuffer:
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
     case OperationKind::WriteModuleBuffer:
+#endif
       return ok_status();
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
     case OperationKind::RandomRead:
       return CommandCodec::parse_random_read_response(
           config_,
           std::span<const RandomReadItem>(pending_random_items_.data(), pending_random_item_count_),
           response_data,
           out_values_);
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
     case OperationKind::MultiBlockRead:
       return CommandCodec::parse_multi_block_read_response(
           config_,
@@ -335,6 +350,8 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
           out_words_,
           out_bits_,
           out_block_results_);
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
     case OperationKind::RegisterMonitor:
       std::copy_n(pending_random_items_.begin(), pending_random_item_count_, monitor_items_.begin());
       monitor_item_count_ = pending_random_item_count_;
@@ -346,23 +363,31 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
           std::span<const RandomReadItem>(monitor_items_.data(), monitor_item_count_),
           response_data,
           out_values_);
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
     case OperationKind::ReadHostBuffer:
       return CommandCodec::parse_read_host_buffer_response(
           config_,
           host_buffer_read_request_,
           response_data,
           out_words_);
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
     case OperationKind::ReadModuleBuffer:
       return CommandCodec::parse_read_module_buffer_response(
           config_,
           module_buffer_read_request_,
           response_data,
           out_bytes_);
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS
     case OperationKind::ReadCpuModel:
       return CommandCodec::parse_read_cpu_model_response(
           config_,
           response_data,
           *out_cpu_model_);
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
     case OperationKind::Loopback: {
       const Status parse_status = CommandCodec::parse_loopback_response(
           config_,
@@ -381,6 +406,7 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
       }
       return ok_status();
     }
+#endif
     case OperationKind::None:
       break;
   }
@@ -412,21 +438,41 @@ void MelsecSerialClient::complete(Status status) noexcept {
 void MelsecSerialClient::clear_pending_outputs() noexcept {
   out_words_ = {};
   out_bits_ = {};
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
   out_values_ = {};
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
   out_bytes_ = {};
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
   out_chars_ = {};
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
   out_block_results_ = {};
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS
   out_cpu_model_ = nullptr;
+#endif
   batch_read_words_request_ = {};
   batch_read_bits_request_ = {};
+#if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
   host_buffer_read_request_ = {};
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
   module_buffer_read_request_ = {};
+#endif
 }
 
 void MelsecSerialClient::clear_pending_copies() noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
   pending_random_item_count_ = 0;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
   pending_multi_block_count_ = 0;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
   pending_loopback_size_ = 0;
+#endif
 }
 
 Status MelsecSerialClient::async_batch_read_words(
@@ -495,6 +541,7 @@ Status MelsecSerialClient::async_random_read(
     std::span<std::uint32_t> out_values,
     CompletionHandler callback,
     void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
   if (request.items.size() > pending_random_items_.size()) {
     return make_status(StatusCode::InvalidArgument, "Random read item count exceeds the client limit");
   }
@@ -510,6 +557,14 @@ Status MelsecSerialClient::async_random_read(
     return status;
   }
   return start_request(now_ms, OperationKind::RandomRead, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)request;
+  (void)out_values;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Random commands are disabled at build time");
+#endif
 }
 
 Status MelsecSerialClient::async_random_write_words(
@@ -517,12 +572,20 @@ Status MelsecSerialClient::async_random_write_words(
     std::span<const RandomWriteWordItem> items,
     CompletionHandler callback,
     void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_random_write_words(config_, items, request_data_, request_size);
   if (!status.ok()) {
     return status;
   }
   return start_request(now_ms, OperationKind::RandomWriteWords, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)items;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Random commands are disabled at build time");
+#endif
 }
 
 Status MelsecSerialClient::async_random_write_bits(
@@ -530,12 +593,20 @@ Status MelsecSerialClient::async_random_write_bits(
     std::span<const RandomWriteBitItem> items,
     CompletionHandler callback,
     void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_random_write_bits(config_, items, request_data_, request_size);
   if (!status.ok()) {
     return status;
   }
   return start_request(now_ms, OperationKind::RandomWriteBits, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)items;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Random commands are disabled at build time");
+#endif
 }
 
 Status MelsecSerialClient::async_multi_block_read(
@@ -546,6 +617,7 @@ Status MelsecSerialClient::async_multi_block_read(
     std::span<MultiBlockReadBlockResult> out_results,
     CompletionHandler callback,
     void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
   if (request.blocks.size() > pending_multi_blocks_.size()) {
     return make_status(StatusCode::InvalidArgument, "Multi-block read block count exceeds the client limit");
   }
@@ -563,6 +635,16 @@ Status MelsecSerialClient::async_multi_block_read(
     return status;
   }
   return start_request(now_ms, OperationKind::MultiBlockRead, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)request;
+  (void)out_words;
+  (void)out_bits;
+  (void)out_results;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Multi-block commands are disabled at build time");
+#endif
 }
 
 Status MelsecSerialClient::async_multi_block_write(
@@ -570,12 +652,20 @@ Status MelsecSerialClient::async_multi_block_write(
     const MultiBlockWriteRequest& request,
     CompletionHandler callback,
     void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_multi_block_write(config_, request, request_data_, request_size);
   if (!status.ok()) {
     return status;
   }
   return start_request(now_ms, OperationKind::MultiBlockWrite, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)request;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Multi-block commands are disabled at build time");
+#endif
 }
 
 Status MelsecSerialClient::async_register_monitor(
@@ -583,6 +673,7 @@ Status MelsecSerialClient::async_register_monitor(
     const MonitorRegistration& request,
     CompletionHandler callback,
     void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
   if (request.items.size() > pending_random_items_.size()) {
     return make_status(StatusCode::InvalidArgument, "Monitor item count exceeds the client limit");
   }
@@ -596,6 +687,13 @@ Status MelsecSerialClient::async_register_monitor(
     return status;
   }
   return start_request(now_ms, OperationKind::RegisterMonitor, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)request;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Monitor commands are disabled at build time");
+#endif
 }
 
 Status MelsecSerialClient::async_read_monitor(
@@ -603,6 +701,7 @@ Status MelsecSerialClient::async_read_monitor(
     std::span<std::uint32_t> out_values,
     CompletionHandler callback,
     void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
   if (!monitor_registered_) {
     return make_status(StatusCode::InvalidArgument, "Monitor data has not been registered");
   }
@@ -618,6 +717,13 @@ Status MelsecSerialClient::async_read_monitor(
     return status;
   }
   return start_request(now_ms, OperationKind::ReadMonitor, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)out_values;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Monitor commands are disabled at build time");
+#endif
 }
 
 Status MelsecSerialClient::async_read_host_buffer(
@@ -626,6 +732,7 @@ Status MelsecSerialClient::async_read_host_buffer(
     std::span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
   host_buffer_read_request_ = request;
   out_words_ = out_words;
 
@@ -636,6 +743,14 @@ Status MelsecSerialClient::async_read_host_buffer(
     return status;
   }
   return start_request(now_ms, OperationKind::ReadHostBuffer, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)request;
+  (void)out_words;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Host-buffer commands are disabled at build time");
+#endif
 }
 
 Status MelsecSerialClient::async_write_host_buffer(
@@ -643,12 +758,20 @@ Status MelsecSerialClient::async_write_host_buffer(
     const HostBufferWriteRequest& request,
     CompletionHandler callback,
     void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_write_host_buffer(config_, request, request_data_, request_size);
   if (!status.ok()) {
     return status;
   }
   return start_request(now_ms, OperationKind::WriteHostBuffer, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)request;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Host-buffer commands are disabled at build time");
+#endif
 }
 
 Status MelsecSerialClient::async_read_module_buffer(
@@ -657,6 +780,7 @@ Status MelsecSerialClient::async_read_module_buffer(
     std::span<std::byte> out_bytes,
     CompletionHandler callback,
     void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
   module_buffer_read_request_ = request;
   out_bytes_ = out_bytes;
 
@@ -667,6 +791,14 @@ Status MelsecSerialClient::async_read_module_buffer(
     return status;
   }
   return start_request(now_ms, OperationKind::ReadModuleBuffer, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)request;
+  (void)out_bytes;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Module-buffer commands are disabled at build time");
+#endif
 }
 
 Status MelsecSerialClient::async_write_module_buffer(
@@ -674,12 +806,20 @@ Status MelsecSerialClient::async_write_module_buffer(
     const ModuleBufferWriteRequest& request,
     CompletionHandler callback,
     void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_write_module_buffer(config_, request, request_data_, request_size);
   if (!status.ok()) {
     return status;
   }
   return start_request(now_ms, OperationKind::WriteModuleBuffer, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)request;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Module-buffer commands are disabled at build time");
+#endif
 }
 
 Status MelsecSerialClient::async_read_cpu_model(
@@ -687,6 +827,7 @@ Status MelsecSerialClient::async_read_cpu_model(
     CpuModelInfo& out_info,
     CompletionHandler callback,
     void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS
   out_cpu_model_ = &out_info;
 
   std::size_t request_size = 0;
@@ -696,6 +837,13 @@ Status MelsecSerialClient::async_read_cpu_model(
     return status;
   }
   return start_request(now_ms, OperationKind::ReadCpuModel, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)out_info;
+  (void)callback;
+  (void)user;
+  return feature_disabled("CPU-model commands are disabled at build time");
+#endif
 }
 
 Status MelsecSerialClient::async_loopback(
@@ -704,6 +852,7 @@ Status MelsecSerialClient::async_loopback(
     std::span<char> out_echoed,
     CompletionHandler callback,
     void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
   if (hex_ascii.size() > pending_loopback_.size()) {
     return make_status(StatusCode::InvalidArgument, "Loopback request exceeds the client limit");
   }
@@ -719,6 +868,14 @@ Status MelsecSerialClient::async_loopback(
     return status;
   }
   return start_request(now_ms, OperationKind::Loopback, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)hex_ascii;
+  (void)out_echoed;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Loopback commands are disabled at build time");
+#endif
 }
 
 }  // namespace mcprotocol::serial

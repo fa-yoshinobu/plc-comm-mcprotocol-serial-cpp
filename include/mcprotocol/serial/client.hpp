@@ -154,19 +154,33 @@ class MelsecSerialClient {
     BatchReadBits,
     BatchWriteWords,
     BatchWriteBits,
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
     RandomRead,
     RandomWriteWords,
     RandomWriteBits,
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
     MultiBlockRead,
     MultiBlockWrite,
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
     RegisterMonitor,
     ReadMonitor,
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
     ReadHostBuffer,
     WriteHostBuffer,
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
     ReadModuleBuffer,
     WriteModuleBuffer,
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS
     ReadCpuModel,
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
     Loopback
+#endif
   };
 
   [[nodiscard]] Status start_request(
@@ -200,26 +214,48 @@ class MelsecSerialClient {
 
   BatchReadWordsRequest batch_read_words_request_ {};
   BatchReadBitsRequest batch_read_bits_request_ {};
+#if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
   HostBufferReadRequest host_buffer_read_request_ {};
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
   ModuleBufferReadRequest module_buffer_read_request_ {};
+#endif
 
   std::span<std::uint16_t> out_words_ {};
   std::span<BitValue> out_bits_ {};
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
   std::span<std::uint32_t> out_values_ {};
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
   std::span<std::byte> out_bytes_ {};
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
   std::span<char> out_chars_ {};
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
   std::span<MultiBlockReadBlockResult> out_block_results_ {};
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS
   CpuModelInfo* out_cpu_model_ = nullptr;
+#endif
 
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
   std::array<RandomReadItem, kMaxRandomAccessItems> pending_random_items_ {};
   std::size_t pending_random_item_count_ = 0;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
   std::array<RandomReadItem, kMaxMonitorItems> monitor_items_ {};
   std::size_t monitor_item_count_ = 0;
   bool monitor_registered_ = false;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
   std::array<MultiBlockReadBlock, kMaxMultiBlockCount> pending_multi_blocks_ {};
   std::size_t pending_multi_block_count_ = 0;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
   std::array<char, kMaxLoopbackBytes> pending_loopback_ {};
   std::size_t pending_loopback_size_ = 0;
+#endif
 };
 
 }  // namespace mcprotocol::serial
