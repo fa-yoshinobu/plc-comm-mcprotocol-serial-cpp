@@ -25,12 +25,9 @@ using mcprotocol::serial::Status;
 struct AppState {
   MelsecSerialClient client;
   std::array<std::uint16_t, 2> out_words {};
-  std::array<std::byte, mcprotocol::serial::kMaxResponseFrameBytes> rx_bytes {};
-  std::size_t rx_size = 0;
   bool started = false;
   bool tx_started = false;
   bool tx_completed = false;
-  bool rx_ready = false;
   bool done = false;
   bool reported = false;
   Status completion_status {};
@@ -69,7 +66,7 @@ void start_uart_tx(AppState& app, std::span<const std::byte> frame) {
   app.tx_started = true;
 }
 
-void simulate_response(AppState& app) {
+void simulate_response(AppState& app, std::uint32_t now_ms) {
   const ProtocolConfig config = make_protocol();
   const std::array<std::uint8_t, 8> response_data {'1', '2', '3', '4', '5', '6', '7', '8'};
   std::array<std::uint8_t, mcprotocol::serial::kMaxResponseFrameBytes> response_frame {};
@@ -85,9 +82,11 @@ void simulate_response(AppState& app) {
     return;
   }
 
-  std::memcpy(app.rx_bytes.data(), response_frame.data(), response_frame_size);
-  app.rx_size = response_frame_size;
-  app.rx_ready = true;
+  app.client.on_rx_bytes(
+      now_ms,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(response_frame.data()),
+          response_frame_size));
 }
 
 void report_once(AppState& app) {
@@ -149,18 +148,11 @@ void loop() {
     const Status status = g_app.client.notify_tx_complete(now);
     if (status.ok()) {
       g_app.tx_completed = true;
-      simulate_response(g_app);
+      simulate_response(g_app, now);
     } else {
       g_app.done = true;
       g_app.completion_status = status;
     }
-  }
-
-  if (!g_app.done && g_app.rx_ready) {
-    g_app.client.on_rx_bytes(
-        now,
-        std::span<const std::byte>(g_app.rx_bytes.data(), g_app.rx_size));
-    g_app.rx_ready = false;
   }
 
   if (!g_app.done) {

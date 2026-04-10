@@ -62,11 +62,27 @@ Files:
 - `library.properties`: Arduino library metadata
 - `include/mcprotocol_serial.hpp`: single-entry umbrella header
 
+Capacity override macros are available when you need a smaller MCU footprint:
+
+- `MCPROTOCOL_SERIAL_MAX_REQUEST_FRAME_BYTES`
+- `MCPROTOCOL_SERIAL_MAX_RESPONSE_FRAME_BYTES`
+- `MCPROTOCOL_SERIAL_MAX_REQUEST_DATA_BYTES`
+- `MCPROTOCOL_SERIAL_MAX_RANDOM_ACCESS_ITEMS`
+- `MCPROTOCOL_SERIAL_MAX_MULTI_BLOCK_COUNT`
+- `MCPROTOCOL_SERIAL_MAX_MONITOR_ITEMS`
+- `MCPROTOCOL_SERIAL_MAX_LOOPBACK_BYTES`
+
 Available example environments:
 
 - `native-example`
 - `rpipico-arduino-example`
 - `esp32-c3-devkitm-1-example`
+
+The PlatformIO example environments intentionally apply a reduced-capacity profile for MCU footprint checks:
+
+- `MelsecSerialClient`: about `18,984 bytes -> 2,744 bytes`
+- `ESP32-C3 sample RAM`: `36,740 bytes -> 16,404 bytes`
+- `ESP32-C3 sample Flash`: `289,914 bytes -> 267,528 bytes`
 
 Compile-checked on `2026-04-10`:
 
