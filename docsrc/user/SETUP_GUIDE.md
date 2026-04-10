@@ -75,7 +75,7 @@ Then verify a harmless loopback:
 7. `read-host-buffer` / `read-module-buffer`
 8. `write-host-buffer` / `write-module-buffer`
 
-After that, use the emulated high-level checks:
+After that, use the unsupported native checks only if you explicitly want to confirm what the module rejects:
 
 1. `random-read`
 2. `random-write-words`
@@ -87,7 +87,7 @@ After that, use the emulated high-level checks:
 
 - Current validation matrix: `../validation/reports/HARDWARE_VALIDATION.md`
 - Detailed dated evidence: `../validation/reports/RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md`
-- Command behavior and fallback notes: `USAGE_GUIDE.md`
+- Command behavior notes: `USAGE_GUIDE.md`
 - Wiring overview: `WIRING_GUIDE.md`
 - MCU integration path: `MCU_QUICKSTART.md`
 - Common failures: `TROUBLESHOOTING.md`

@@ -154,11 +154,6 @@ The following command flows were verified on `RJ71C24-R2` with the settings abov
 - `write-host-buffer`
 - `read-module-buffer`
 - `write-module-buffer`
-- `random-read`
-- `random-write-words`
-- `random-write-bits`
-- `probe-multi-block`
-- `probe-monitor`
 
 Stress tests completed on real hardware:
 
@@ -183,13 +178,8 @@ These are important if you are using `RJ71C24-R2`.
 - Native `1406 multi-block write` returns `0x7F22`
 - Native `0801 monitor registration` returns `0x7F22`
 
-The CLI works around these module-specific limits:
-
-- `random-read` falls back to repeated batch reads
-- `random-write-words` and `random-write-bits` fall back to repeated batch writes
-- `probe-multi-block` falls back to repeated batch read/write
-- `probe-monitor` falls back to repeated direct reads
-- Large contiguous `write-words` and `write-bits` are split automatically to fit fixed request buffers
+The CLI does not fall back to other commands for these native errors.
+Large contiguous `write-words` and `write-bits` are still split automatically to fit fixed request buffers.
 
 ## For MCU Users
 

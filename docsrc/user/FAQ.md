@@ -15,9 +15,9 @@ The repository includes PlatformIO examples for:
 
 The new real-UART MCU example is read-only. It repeatedly reads `D100-D103` and prints the values.
 
-## Why do `random-read` and `probe-monitor` work if native `0403` and `0801` are on hold?
+## Why do `random-read` and `probe-monitor` fail on the validated setup?
 
-Because the CLI emulates those higher-level command names with repeated native batch operations after the `RJ71C24-R2` setup rejects the native commands.
+Because this repository now keeps unsupported native command behavior visible instead of masking it with fallback reads or writes.
 
 ## Can I shrink memory usage for small firmware builds?
 

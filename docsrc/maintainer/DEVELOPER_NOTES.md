@@ -15,21 +15,13 @@ This repository now follows the same documentation split used in `plc-comm-slmp-
 Use these terms consistently in validation reports.
 
 - `native pass`: the intended MC command succeeds directly on hardware
-- `emulated pass`: the CLI succeeds by falling back to repeated native-safe operations
 - `native ng`: the direct MC command is rejected by the module or PLC
 - `hold`: not resolved yet, or intentionally excluded from the active probe set
 
-## Current Fallback Policy
+## Current Native-only Policy
 
-On the validated `RJ71C24-R2` setup:
-
-- `random-read` falls back to repeated batch reads
-- `random-write-words` falls back to repeated batch word writes
-- `random-write-bits` falls back to repeated batch bit writes
-- `probe-multi-block` falls back to repeated block-wise batch read/write
-- `probe-monitor` falls back to repeated direct reads
-
-The CLI must keep printing whether the observed path is `native` or `emulated`.
+On the validated `RJ71C24-R2` setup, unsupported native commands should stay failed.
+Do not add CLI fallback behavior that silently replaces them with other command families.
 
 ## Request-Shape Conformance
 
@@ -50,6 +42,4 @@ When adding new hardware results:
 1. Update `docsrc/validation/reports/HARDWARE_VALIDATION.md`.
 2. Add or extend a dated report in `docsrc/validation/reports/`.
 3. Keep the top-level `README.md` summary short and point to the detailed report.
-4. If a command only works through fallback, record both:
-   - native result and PLC end code
-   - emulated result and verification path
+4. Record the native result and PLC end code without masking it with a different command path.

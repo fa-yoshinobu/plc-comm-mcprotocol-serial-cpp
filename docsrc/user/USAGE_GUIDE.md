@@ -2,7 +2,7 @@
 
 Audience: users running the Linux CLI or integrating the library into host-side bring-up tools.
 
-This guide explains which command paths are native on the validated `RJ71C24-R2` setup and which ones are emulated by the CLI.
+This guide explains which command paths are native on the validated `RJ71C24-R2` setup and which ones are currently rejected as native commands.
 
 ## Command Classes
 
@@ -20,18 +20,6 @@ These commands are validated as direct protocol operations on the current setup.
 - `write-host-buffer`
 - `read-module-buffer`
 - `write-module-buffer`
-
-### Emulated PASS
-
-These command names work on the validated setup, but the CLI reaches them through repeated native batch operations after the module rejects the native command.
-
-- `random-read`
-- `random-write-words`
-- `random-write-bits`
-- `probe-multi-block`
-- `probe-monitor`
-
-The CLI prints `mode=emulated` for emulated paths where the command output is command-specific.
 
 ### Native NG / HOLD
 
@@ -79,7 +67,7 @@ Use the same verified communication options for every command:
 ./build/mcprotocol_cli ... write-bits M100=1 M101=0
 ```
 
-### Emulated non-consecutive access
+### Native non-consecutive access attempt
 
 ```bash
 ./build/mcprotocol_cli ... random-read D100 D105 M100 M105
@@ -89,9 +77,9 @@ Use the same verified communication options for every command:
 
 Expected behavior on the validated setup:
 
-- `random-read` returns the values directly
-- `random-write-words` prints `random-write-words=ok mode=emulated`
-- `random-write-bits` prints `random-write-bits=ok mode=emulated`
+- `random-read` fails with the native PLC end code
+- `random-write-words` fails with the native PLC end code
+- `random-write-bits` fails with the native PLC end code
 
 ## Large Contiguous Ranges
 

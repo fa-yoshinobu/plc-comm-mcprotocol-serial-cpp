@@ -40,7 +40,7 @@ Current known native hold items:
 - `0801`
 - `0802`
 
-Use the CLI command names instead. The CLI already falls back to emulated batch operations where possible.
+Those commands currently fail natively on the validated setup. The CLI does not replace them with other command families.
 
 ## MCU board compiles but never receives data
 
