@@ -2,157 +2,60 @@
 
 MC protocol serial library for MCU-oriented environments.
 
-## Scope
+This repository is for cases like these:
 
-- `4C` frame
-  - ASCII `Format1`
-  - ASCII `Format3`
-  - ASCII `Format4`
-  - Binary `Format5`
-- `3C` frame
-  - ASCII `Format1`
-  - ASCII `Format3`
-  - ASCII `Format4`
-- Commands
-  - Batch read/write
-  - Random read/write
-  - Multi-block read/write
-  - Monitor register/read
-  - Host buffer read/write
-  - Intelligent module buffer read/write
-  - Read CPU model
-  - Loopback
+- You want to talk to a Mitsubishi PLC over `serial / RS-232C / RS-485`
+- You want a `C++` library that does not allocate dynamically
+- You want to run the same core logic on `Linux`, `RP2040`, or `ESP32-C3`
 
-## Design
+The current codebase includes:
 
-- No exceptions
-- No RTTI
-- No dynamic allocation in the library
-- Caller-owned buffers via `std::span`
-- Transport-agnostic client state machine
+- A transport-agnostic library centered on `MelsecSerialClient`
+- A Linux test CLI: `mcprotocol_cli`
+- PlatformIO example projects for `RP2040` and `ESP32-C3`
+- Real-hardware validation records for `RJ71C24-R2`
 
-The client exposes a transport-neutral workflow:
+## Start Here
 
-1. Configure `MelsecSerialClient`
-2. Start an async operation
-3. Send `pending_tx_frame()` with your UART / RS-485 layer
-4. Call `notify_tx_complete()`
-5. Feed received bytes back through `on_rx_bytes()`
-6. Call `poll()` for response and inter-byte timeout handling
+If you are new to this repository, do this first.
 
-## Build
+### 1. Build
 
 ```bash
 cmake -S . -B build
 cmake --build build
 ctest --test-dir build --output-on-failure
-cmake --build build --target docs
 ```
 
-If `doxygen` is installed system-wide, or if a local bundle is placed under `.tools/doxygen`, the `docs` target generates HTML documentation under `build/docs/doxygen/html`.
+### 2. Try the verified serial settings
 
-## PlatformIO
-
-Version `0.1.1` adds PlatformIO packaging metadata and example environments.
-
-Files:
-
-- `platformio.ini`: local example environments
-- `library.json`: PlatformIO library manifest
-- `library.properties`: Arduino library metadata
-- `include/mcprotocol_serial.hpp`: single-entry umbrella header
-
-Available example environments:
-
-- `native-example`
-- `rpipico-arduino-example`
-- `esp32-c3-devkitm-1-example`
-
-Compile-checked on `2026-04-10`:
-
-- `native-example`: pass
-- `rpipico-arduino-example`: pass
-- `esp32-c3-devkitm-1-example`: pass
-
-Examples:
-
-```bash
-pio run -e native-example
-pio run -e rpipico-arduino-example
-pio run -e esp32-c3-devkitm-1-example
-```
-
-## CLI
-
-Linux host testing CLI is available as `mcprotocol_cli`.
-
-Examples:
-
-```bash
-./build/mcprotocol_cli --device /dev/ttyUSB0 cpu-model
-./build/mcprotocol_cli --device /dev/ttyUSB0 loopback ABCDE
-./build/mcprotocol_cli --device /dev/ttyUSB0 read-words D100 4
-./build/mcprotocol_cli --device /dev/ttyUSB0 read-bits M100 8
-./build/mcprotocol_cli --device /dev/ttyUSB0 read-host-buffer 0 16
-./build/mcprotocol_cli --device /dev/ttyUSB0 read-module-buffer 0 64 0
-./build/mcprotocol_cli --device /dev/ttyUSB0 write-host-buffer 0 0x1234
-./build/mcprotocol_cli --device /dev/ttyUSB0 write-module-buffer 0 0 0x12 0x34
-./build/mcprotocol_cli --device /dev/ttyUSB0 write-words D100=123 D101=456
-./build/mcprotocol_cli --device /dev/ttyUSB0 write-bits M100=1 Y2F=0
-./build/mcprotocol_cli --device /dev/ttyUSB0 random-write-words D100=123 D105=456
-./build/mcprotocol_cli --device /dev/ttyUSB0 random-write-bits M100=1 M105=0
-./build/mcprotocol_cli --device /dev/ttyUSB0 probe-all
-./build/mcprotocol_cli --device /dev/ttyUSB0 probe-write-all
-./build/mcprotocol_cli --device /dev/ttyUSB0 probe-multi-block
-./build/mcprotocol_cli --device /dev/ttyUSB0 probe-monitor
-./build/mcprotocol_cli --device /dev/ttyUSB0 probe-host-buffer
-./build/mcprotocol_cli --device /dev/ttyUSB0 probe-module-buffer
-./build/mcprotocol_cli --device /dev/ttyUSB0 probe-write-host-buffer
-./build/mcprotocol_cli --device /dev/ttyUSB0 probe-write-module-buffer
-```
-
-## Documentation
-
-This repository now follows the same documentation layout used in the companion SLMP minimal repository.
-
-- `docsrc/user/SETUP_GUIDE.md`: bring-up steps and the verified RJ71C24-R2 serial settings
-- `docsrc/user/USAGE_GUIDE.md`: command usage, native vs emulated behavior, and recommended CLI flow
-- `examples/README.md`: compile-checked MCU-oriented sample programs
-- `platformio.ini`: PlatformIO example entry points for native, RP2040, and ESP32-C3
-- `docsrc/validation/reports/HARDWARE_VALIDATION.md`: current PASS / NG / HOLD matrix and validation backlog
-- `docsrc/validation/reports/RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md`: dated real-hardware evidence log for the current setup
-- `docsrc/maintainer/DEVELOPER_NOTES.md`: maintainer notes for request-shape conformance, fallback policy, and future follow-up
-
-Verified on real hardware:
+The following settings were verified on real hardware:
 
 - Module: `RJ71C24-R2`
 - Link: `RS-232C`
 - Serial: `19200bps / 8E1`
-- Protocol: `MC Protocol Format4 (ASCII, CR/LF, sum-check off)`
-- Verified commands: `cpu-model`, `loopback`, `read-words`, `read-bits`, `read-host-buffer`, `read-module-buffer`, `write-host-buffer`, `write-module-buffer`, `write-words`, `write-bits`, `random-read`, `random-write-words`, `random-write-bits`, `probe-multi-block`, `probe-monitor`
+- Protocol: `MC Protocol Format4`
+- Code: `ASCII`
+- Terminator: `CR/LF`
+- Sum check: `off`
+- Station: `0`
 
-Notes:
+First command to try:
 
-- On this `RJ71C24-R2` setup, native `0403 random read` returns `0x7F22`.
-- On this `RJ71C24-R2` setup, native `1402 random write words` returns `0x7F22`, and native `1402 random write bits` returns `0x7F23`.
-- On this `RJ71C24-R2` setup, native `0406 multi-block read`, `1406 multi-block write`, and `0801 monitor registration` return `0x7F22`.
-- `mcprotocol_cli random-read` automatically falls back to repeated batch reads so mixed/non-consecutive device reads still work.
-- `mcprotocol_cli random-write-words` and `random-write-bits` automatically fall back to repeated batch writes when native `1402` is rejected by the module.
-- `mcprotocol_cli write-words` and `write-bits` automatically split large contiguous ranges across multiple batch-write frames to stay within the fixed request buffer.
-- `mcprotocol_cli probe-all` performs a read-only probe of all 27 supported device-code families with address `0`.
-- `mcprotocol_cli probe-write-all` performs `read -> write test value -> verify -> restore` against address `0` of each supported device family.
-- `mcprotocol_cli probe-multi-block` falls back to repeated batch read/write per block when native `0406/1406` is rejected, then restores the original values.
-- `mcprotocol_cli probe-monitor` falls back to repeated direct reads when native `0801/0802` is rejected.
-- `mcprotocol_cli probe-host-buffer` reads host buffer address `0` for `1` word.
-- `mcprotocol_cli probe-module-buffer` reads module buffer address `0` for `2` bytes with `module=0`.
-- `mcprotocol_cli probe-write-host-buffer` performs `read -> write test value -> verify -> restore` at host buffer address `0`.
-- `mcprotocol_cli probe-write-module-buffer` performs `read -> write test value -> verify -> restore` at module buffer start `0`, `module=0`, `bytes=2`.
-- Unit tests pin native `1402`, `0406`, `0801`, and `0802` request-data layouts against the official MC protocol reference examples or their documented request structure.
-- Real-hardware emulation checks completed: `random-write-words D300/D305 -> verify -> restore`, `random-write-bits M300/M305 -> verify -> restore`, `probe-multi-block` with `0406/1406` fallback, and `probe-monitor` with `0801/0802` fallback.
-- Real-hardware stress checks completed: `read-words 960`, `read-bits 3584`, `write-words 960`, `write-bits 3584`, `100-bit / 1 minute`, `100-word / 30 minutes`, `read-host-buffer 1/16/64/480`, `read-module-buffer 2/64/512/1920`, `host-buffer 480 + module-buffer 1920 / 1 minute`, `host/module buffer write-soak 64 cycles / 60 seconds`, `mixed supported-command soak 28 cycles / 61 seconds`, `extended mixed supported-command soak 140 cycles / 301 seconds`, `unsupported 1402 -> read-words recovery x20`, and `unsupported multi-block -> cpu-model recovery x10`.
-- For the exact PASS / NG / HOLD matrix, see `docsrc/validation/reports/HARDWARE_VALIDATION.md`.
+```bash
+./build/mcprotocol_cli \
+  --device /dev/ttyUSB0 \
+  --baud 19200 \
+  --data-bits 8 \
+  --stop-bits 1 \
+  --parity E \
+  --frame c4-ascii-f4 \
+  --sum-check off \
+  --station 0 \
+  cpu-model
+```
 
-Example with the verified settings:
+### 3. Read and write a PLC device
 
 ```bash
 ./build/mcprotocol_cli \
@@ -167,8 +70,243 @@ Example with the verified settings:
   read-words D100 2
 ```
 
-For RS-485 adapters that need manual RTS direction control:
+```bash
+./build/mcprotocol_cli \
+  --device /dev/ttyUSB0 \
+  --baud 19200 \
+  --data-bits 8 \
+  --stop-bits 1 \
+  --parity E \
+  --frame c4-ascii-f4 \
+  --sum-check off \
+  --station 0 \
+  write-words D100=123 D101=456
+```
+
+```bash
+./build/mcprotocol_cli \
+  --device /dev/ttyUSB0 \
+  --baud 19200 \
+  --data-bits 8 \
+  --stop-bits 1 \
+  --parity E \
+  --frame c4-ascii-f4 \
+  --sum-check off \
+  --station 0 \
+  write-bits M100=1 M101=0
+```
+
+## What Works Today
+
+### Library scope
+
+- `4C` frame
+  - ASCII `Format1`
+  - ASCII `Format3`
+  - ASCII `Format4`
+  - Binary `Format5`
+- `3C` frame
+  - ASCII `Format1`
+  - ASCII `Format3`
+  - ASCII `Format4`
+
+### Command support in the codebase
+
+- Batch read/write
+- Random read/write
+- Multi-block read/write
+- Monitor register/read
+- Host buffer read/write
+- Intelligent module buffer read/write
+- Read CPU model
+- Loopback
+
+### Verified on real hardware
+
+The following command flows were verified on `RJ71C24-R2` with the settings above:
+
+- `cpu-model`
+- `loopback`
+- `read-words`
+- `read-bits`
+- `write-words`
+- `write-bits`
+- `read-host-buffer`
+- `write-host-buffer`
+- `read-module-buffer`
+- `write-module-buffer`
+- `random-read`
+- `random-write-words`
+- `random-write-bits`
+- `probe-multi-block`
+- `probe-monitor`
+
+Stress tests completed on real hardware:
+
+- `read-words 960`
+- `write-words 960`
+- `read-bits 3584`
+- `write-bits 3584`
+- `100-bit / 1 minute`
+- `100-word / 30 minutes`
+- `mixed supported-command soak 301 seconds`
+
+For the exact PASS / NG / HOLD matrix, see [HARDWARE_VALIDATION.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/docsrc/validation/reports/HARDWARE_VALIDATION.md).
+
+## Current Limits
+
+These are important if you are using `RJ71C24-R2`.
+
+- Native `0403 random read` returns `0x7F22` on the verified setup
+- Native `1402 random write words` returns `0x7F22`
+- Native `1402 random write bits` returns `0x7F23`
+- Native `0406 multi-block read` returns `0x7F22`
+- Native `1406 multi-block write` returns `0x7F22`
+- Native `0801 monitor registration` returns `0x7F22`
+
+The CLI works around these module-specific limits:
+
+- `random-read` falls back to repeated batch reads
+- `random-write-words` and `random-write-bits` fall back to repeated batch writes
+- `probe-multi-block` falls back to repeated batch read/write
+- `probe-monitor` falls back to repeated direct reads
+- Large contiguous `write-words` and `write-bits` are split automatically to fit fixed request buffers
+
+## For MCU Users
+
+The library design is intentionally simple:
+
+- No exceptions
+- No RTTI
+- No dynamic allocation in the library
+- Caller-owned buffers via `std::span`
+- Transport-agnostic client state machine
+
+The normal workflow is:
+
+1. Configure `MelsecSerialClient`
+2. Start an async request
+3. Send `pending_tx_frame()` with your UART layer
+4. Call `notify_tx_complete()`
+5. Feed received bytes through `on_rx_bytes()`
+6. Call `poll()` for timeout handling
+
+Examples:
+
+- [examples/README.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/examples/README.md)
+- [mcu_async_batch_read.cpp](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/examples/mcu_async_batch_read.cpp)
+- [platformio_arduino_async.cpp](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/examples/platformio_arduino_async/platformio_arduino_async.cpp)
+
+## PlatformIO
+
+Version `0.1.1` adds PlatformIO packaging metadata and example environments.
+
+Main files:
+
+- `platformio.ini`
+- `library.json`
+- `library.properties`
+- `include/mcprotocol_serial.hpp`
+
+Available environments:
+
+- `native-example`
+- `rpipico-arduino-example`
+- `esp32-c3-devkitm-1-example`
+- `native-example-ultra-minimal`
+- `rpipico-arduino-example-ultra-minimal`
+- `esp32-c3-devkitm-1-example-ultra-minimal`
+
+Run them with:
+
+```bash
+pio run -e native-example
+pio run -e rpipico-arduino-example
+pio run -e esp32-c3-devkitm-1-example
+pio run -e native-example-ultra-minimal
+pio run -e rpipico-arduino-example-ultra-minimal
+pio run -e esp32-c3-devkitm-1-example-ultra-minimal
+```
+
+### Reduced profile
+
+The normal PlatformIO examples already use a reduced-footprint profile.
+That profile keeps batch read/write, `cpu-model`, and `loopback`, and compiles out the other command families.
+
+- `MelsecSerialClient`: about `18,984 bytes -> 2,168 bytes`
+- `ESP32-C3 RAM`: `36,740 bytes -> 15,868 bytes`
+- `ESP32-C3 Flash`: `289,914 bytes -> 264,024 bytes`
+
+### Ultra-minimal profile
+
+The `ultra-minimal` environments are for cases where you only want small batch read/write.
+They also compile out `cpu-model` and `loopback`, and shrink the fixed frame/data buffers to `256 / 256 / 128` bytes.
+
+- `MelsecSerialClient`: about `18,984 bytes -> 792 bytes`
+- `ESP32-C3 RAM`: `36,740 bytes -> 14,508 bytes`
+- `ESP32-C3 Flash`: `289,914 bytes -> 261,046 bytes`
+- `RP2040 RAM`: `41,512 bytes`
+- `RP2040 Flash`: `4,850 bytes`
+
+### Build-time tuning macros
+
+Capacity tuning:
+
+- `MCPROTOCOL_SERIAL_MAX_REQUEST_FRAME_BYTES`
+- `MCPROTOCOL_SERIAL_MAX_RESPONSE_FRAME_BYTES`
+- `MCPROTOCOL_SERIAL_MAX_REQUEST_DATA_BYTES`
+- `MCPROTOCOL_SERIAL_MAX_RANDOM_ACCESS_ITEMS`
+- `MCPROTOCOL_SERIAL_MAX_MULTI_BLOCK_COUNT`
+- `MCPROTOCOL_SERIAL_MAX_MONITOR_ITEMS`
+- `MCPROTOCOL_SERIAL_MAX_LOOPBACK_BYTES`
+
+Feature switches:
+
+- `MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS`
+- `MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS`
+- `MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS`
+- `MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS`
+- `MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS`
+- `MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS`
+- `MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS`
+
+## CLI Notes
+
+The Linux host CLI is intended for bring-up and validation.
+
+Useful commands:
+
+```bash
+./build/mcprotocol_cli --device /dev/ttyUSB0 cpu-model
+./build/mcprotocol_cli --device /dev/ttyUSB0 read-words D100 4
+./build/mcprotocol_cli --device /dev/ttyUSB0 read-bits M100 8
+./build/mcprotocol_cli --device /dev/ttyUSB0 write-words D100=123 D101=456
+./build/mcprotocol_cli --device /dev/ttyUSB0 write-bits M100=1 M101=0
+./build/mcprotocol_cli --device /dev/ttyUSB0 probe-all
+./build/mcprotocol_cli --device /dev/ttyUSB0 probe-write-all
+```
+
+If your adapter is `RS-485` and needs manual direction control:
 
 ```bash
 ./build/mcprotocol_cli --device /dev/ttyUSB0 --rts-toggle on cpu-model
 ```
+
+## Documentation Map
+
+This repository uses the same documentation layout style as the companion SLMP minimal repository.
+
+- [SETUP_GUIDE.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/docsrc/user/SETUP_GUIDE.md): setup and verified serial settings
+- [USAGE_GUIDE.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/docsrc/user/USAGE_GUIDE.md): CLI usage and fallback behavior
+- [examples/README.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/examples/README.md): example programs
+- [HARDWARE_VALIDATION.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/docsrc/validation/reports/HARDWARE_VALIDATION.md): PASS / NG / HOLD matrix
+- [RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/docsrc/validation/reports/RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md): dated real-hardware log
+- [DEVELOPER_NOTES.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/docsrc/maintainer/DEVELOPER_NOTES.md): implementation notes and follow-up items
+
+## Documentation Build
+
+```bash
+cmake --build build --target docs
+```
+
+If `doxygen` is installed system-wide, or if a local bundle is placed under `.tools/doxygen`, HTML is generated under `build/docs/doxygen/html`.

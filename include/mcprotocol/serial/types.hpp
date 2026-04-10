@@ -10,16 +10,94 @@
 
 namespace mcprotocol::serial {
 
-constexpr std::size_t kMaxRequestFrameBytes = 4096;
-constexpr std::size_t kMaxResponseFrameBytes = 4096;
-constexpr std::size_t kMaxRequestDataBytes = 3500;
-constexpr std::size_t kMaxBatchWordPoints = 960;
-constexpr std::size_t kMaxBatchBitPointsAscii = 7904;
-constexpr std::size_t kMaxBatchBitPointsBinary = 3584;
-constexpr std::size_t kMaxRandomAccessItems = 192;
-constexpr std::size_t kMaxMultiBlockCount = 120;
-constexpr std::size_t kMaxMonitorItems = 192;
-constexpr std::size_t kMaxLoopbackBytes = 960;
+#ifndef MCPROTOCOL_SERIAL_MAX_REQUEST_FRAME_BYTES
+#define MCPROTOCOL_SERIAL_MAX_REQUEST_FRAME_BYTES 4096U
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_MAX_RESPONSE_FRAME_BYTES
+#define MCPROTOCOL_SERIAL_MAX_RESPONSE_FRAME_BYTES 4096U
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_MAX_REQUEST_DATA_BYTES
+#define MCPROTOCOL_SERIAL_MAX_REQUEST_DATA_BYTES 3500U
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_MAX_BATCH_WORD_POINTS
+#define MCPROTOCOL_SERIAL_MAX_BATCH_WORD_POINTS 960U
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_MAX_BATCH_BIT_POINTS_ASCII
+#define MCPROTOCOL_SERIAL_MAX_BATCH_BIT_POINTS_ASCII 7904U
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_MAX_BATCH_BIT_POINTS_BINARY
+#define MCPROTOCOL_SERIAL_MAX_BATCH_BIT_POINTS_BINARY 3584U
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_MAX_RANDOM_ACCESS_ITEMS
+#define MCPROTOCOL_SERIAL_MAX_RANDOM_ACCESS_ITEMS 192U
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_MAX_MULTI_BLOCK_COUNT
+#define MCPROTOCOL_SERIAL_MAX_MULTI_BLOCK_COUNT 120U
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_MAX_MONITOR_ITEMS
+#define MCPROTOCOL_SERIAL_MAX_MONITOR_ITEMS 192U
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_MAX_LOOPBACK_BYTES
+#define MCPROTOCOL_SERIAL_MAX_LOOPBACK_BYTES 960U
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+#define MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS 1
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
+#define MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS 1
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
+#define MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS 1
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
+#define MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS 1
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
+#define MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS 1
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS
+#define MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS 1
+#endif
+
+#ifndef MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
+#define MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS 1
+#endif
+
+constexpr std::size_t kMaxRequestFrameBytes =
+    static_cast<std::size_t>(MCPROTOCOL_SERIAL_MAX_REQUEST_FRAME_BYTES);
+constexpr std::size_t kMaxResponseFrameBytes =
+    static_cast<std::size_t>(MCPROTOCOL_SERIAL_MAX_RESPONSE_FRAME_BYTES);
+constexpr std::size_t kMaxRequestDataBytes =
+    static_cast<std::size_t>(MCPROTOCOL_SERIAL_MAX_REQUEST_DATA_BYTES);
+constexpr std::size_t kMaxBatchWordPoints =
+    static_cast<std::size_t>(MCPROTOCOL_SERIAL_MAX_BATCH_WORD_POINTS);
+constexpr std::size_t kMaxBatchBitPointsAscii =
+    static_cast<std::size_t>(MCPROTOCOL_SERIAL_MAX_BATCH_BIT_POINTS_ASCII);
+constexpr std::size_t kMaxBatchBitPointsBinary =
+    static_cast<std::size_t>(MCPROTOCOL_SERIAL_MAX_BATCH_BIT_POINTS_BINARY);
+constexpr std::size_t kMaxRandomAccessItems =
+    static_cast<std::size_t>(MCPROTOCOL_SERIAL_MAX_RANDOM_ACCESS_ITEMS);
+constexpr std::size_t kMaxMultiBlockCount =
+    static_cast<std::size_t>(MCPROTOCOL_SERIAL_MAX_MULTI_BLOCK_COUNT);
+constexpr std::size_t kMaxMonitorItems =
+    static_cast<std::size_t>(MCPROTOCOL_SERIAL_MAX_MONITOR_ITEMS);
+constexpr std::size_t kMaxLoopbackBytes =
+    static_cast<std::size_t>(MCPROTOCOL_SERIAL_MAX_LOOPBACK_BYTES);
 constexpr std::size_t kCpuModelNameLength = 16;
 
 enum class FrameKind : std::uint8_t {

@@ -447,7 +447,7 @@ class ByteWriter {
   return true;
 }
 
-[[nodiscard]] bool parse_ascii_dword(
+[[maybe_unused]] [[nodiscard]] bool parse_ascii_dword(
     std::span<const std::uint8_t> text,
     std::uint32_t& value) noexcept {
   return parse_ascii_hex(text, value);
@@ -464,7 +464,7 @@ class ByteWriter {
   return true;
 }
 
-[[nodiscard]] bool parse_binary_dword(
+[[maybe_unused]] [[nodiscard]] bool parse_binary_dword(
     std::span<const std::uint8_t> bytes,
     std::size_t offset,
     std::uint32_t& value) noexcept {
@@ -499,7 +499,7 @@ class ByteWriter {
   return writer.append_le16(count);
 }
 
-[[nodiscard]] bool append_dword_data_ascii(ByteWriter& writer, std::uint32_t value) noexcept {
+[[maybe_unused]] [[nodiscard]] bool append_dword_data_ascii(ByteWriter& writer, std::uint32_t value) noexcept {
   return append_ascii_hex(writer, value, 8);
 }
 
@@ -532,7 +532,7 @@ class ByteWriter {
   return true;
 }
 
-[[nodiscard]] bool append_word_units_from_bits_ascii(
+[[maybe_unused]] [[nodiscard]] bool append_word_units_from_bits_ascii(
     ByteWriter& writer,
     std::span<const BitValue> bits) noexcept {
   if ((bits.size() % 16U) != 0U) {
@@ -552,7 +552,7 @@ class ByteWriter {
   return true;
 }
 
-[[nodiscard]] bool append_word_units_from_bits_binary(
+[[maybe_unused]] [[nodiscard]] bool append_word_units_from_bits_binary(
     ByteWriter& writer,
     std::span<const BitValue> bits) noexcept {
   if ((bits.size() % 16U) != 0U) {
@@ -588,7 +588,7 @@ class ByteWriter {
   return true;
 }
 
-[[nodiscard]] bool append_byte_data(
+[[maybe_unused]] [[nodiscard]] bool append_byte_data(
     ByteWriter& writer,
     const ProtocolConfig& config,
     std::span<const std::byte> bytes) noexcept {
@@ -664,7 +664,7 @@ class ByteWriter {
                                                      : buffer_too_small("Binary request data exceeds maximum size");
 }
 
-[[nodiscard]] Status validate_loopback_chars(std::span<const char> hex_ascii) noexcept {
+[[maybe_unused]] [[nodiscard]] Status validate_loopback_chars(std::span<const char> hex_ascii) noexcept {
   if (hex_ascii.empty() || hex_ascii.size() > kMaxLoopbackBytes) {
     return invalid_argument("Loopback data length must be in range 1..960");
   }
@@ -676,7 +676,7 @@ class ByteWriter {
   return ok_status();
 }
 
-void trim_right_spaces(std::array<char, kCpuModelNameLength + 1>& text) noexcept {
+[[maybe_unused]] void trim_right_spaces(std::array<char, kCpuModelNameLength + 1>& text) noexcept {
   std::size_t end = kCpuModelNameLength;
   while (end > 0U && text[end - 1U] == ' ') {
     --end;
@@ -1534,6 +1534,7 @@ Status encode_batch_write_bits(
   return ok_status();
 }
 
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
 Status encode_random_read(
     const ProtocolConfig& config,
     const RandomReadRequest& request,
@@ -1574,7 +1575,21 @@ Status encode_random_read(
   out_size = writer.size();
   return ok_status();
 }
+#else
+Status encode_random_read(
+    const ProtocolConfig& config,
+    const RandomReadRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)request;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Random commands are disabled at build time");
+}
+#endif
 
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
 Status parse_random_read_response(
     const ProtocolConfig& config,
     std::span<const RandomReadItem> items,
@@ -1631,7 +1646,21 @@ Status parse_random_read_response(
   }
   return ok_status();
 }
+#else
+Status parse_random_read_response(
+    const ProtocolConfig& config,
+    std::span<const RandomReadItem> items,
+    std::span<const std::uint8_t> response_data,
+    std::span<std::uint32_t> out_values) noexcept {
+  (void)config;
+  (void)items;
+  (void)response_data;
+  (void)out_values;
+  return unsupported("Random commands are disabled at build time");
+}
+#endif
 
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
 Status encode_random_write_words(
     const ProtocolConfig& config,
     std::span<const RandomWriteWordItem> items,
@@ -1683,7 +1712,21 @@ Status encode_random_write_words(
   out_size = writer.size();
   return ok_status();
 }
+#else
+Status encode_random_write_words(
+    const ProtocolConfig& config,
+    std::span<const RandomWriteWordItem> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)items;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Random commands are disabled at build time");
+}
+#endif
 
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
 Status encode_random_write_bits(
     const ProtocolConfig& config,
     std::span<const RandomWriteBitItem> items,
@@ -1723,7 +1766,21 @@ Status encode_random_write_bits(
   out_size = writer.size();
   return ok_status();
 }
+#else
+Status encode_random_write_bits(
+    const ProtocolConfig& config,
+    std::span<const RandomWriteBitItem> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)items;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Random commands are disabled at build time");
+}
+#endif
 
+#if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
 Status encode_multi_block_read(
     const ProtocolConfig& config,
     const MultiBlockReadRequest& request,
@@ -1939,7 +1996,49 @@ Status encode_multi_block_write(
   out_size = writer.size();
   return ok_status();
 }
+#else
+Status encode_multi_block_read(
+    const ProtocolConfig& config,
+    const MultiBlockReadRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)request;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Multi-block commands are disabled at build time");
+}
 
+Status parse_multi_block_read_response(
+    const ProtocolConfig& config,
+    std::span<const MultiBlockReadBlock> blocks,
+    std::span<const std::uint8_t> response_data,
+    std::span<std::uint16_t> out_words,
+    std::span<BitValue> out_bits,
+    std::span<MultiBlockReadBlockResult> out_results) noexcept {
+  (void)config;
+  (void)blocks;
+  (void)response_data;
+  (void)out_words;
+  (void)out_bits;
+  (void)out_results;
+  return unsupported("Multi-block commands are disabled at build time");
+}
+
+Status encode_multi_block_write(
+    const ProtocolConfig& config,
+    const MultiBlockWriteRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)request;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Multi-block commands are disabled at build time");
+}
+#endif
+
+#if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
 Status encode_register_monitor(
     const ProtocolConfig& config,
     const MonitorRegistration& request,
@@ -1989,7 +2088,43 @@ Status parse_read_monitor_response(
     std::span<std::uint32_t> out_values) noexcept {
   return parse_random_read_response(config, items, response_data, out_values);
 }
+#else
+Status encode_register_monitor(
+    const ProtocolConfig& config,
+    const MonitorRegistration& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)request;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Monitor commands are disabled at build time");
+}
 
+Status encode_read_monitor(
+    const ProtocolConfig& config,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Monitor commands are disabled at build time");
+}
+
+Status parse_read_monitor_response(
+    const ProtocolConfig& config,
+    std::span<const RandomReadItem> items,
+    std::span<const std::uint8_t> response_data,
+    std::span<std::uint32_t> out_values) noexcept {
+  (void)config;
+  (void)items;
+  (void)response_data;
+  (void)out_values;
+  return unsupported("Monitor commands are disabled at build time");
+}
+#endif
+
+#if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
 Status encode_read_host_buffer(
     const ProtocolConfig& config,
     const HostBufferReadRequest& request,
@@ -2050,7 +2185,45 @@ Status encode_write_host_buffer(
   out_size = writer.size();
   return ok_status();
 }
+#else
+Status encode_read_host_buffer(
+    const ProtocolConfig& config,
+    const HostBufferReadRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)request;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Host-buffer commands are disabled at build time");
+}
 
+Status parse_read_host_buffer_response(
+    const ProtocolConfig& config,
+    const HostBufferReadRequest& request,
+    std::span<const std::uint8_t> response_data,
+    std::span<std::uint16_t> out_words) noexcept {
+  (void)config;
+  (void)request;
+  (void)response_data;
+  (void)out_words;
+  return unsupported("Host-buffer commands are disabled at build time");
+}
+
+Status encode_write_host_buffer(
+    const ProtocolConfig& config,
+    const HostBufferWriteRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)request;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Host-buffer commands are disabled at build time");
+}
+#endif
+
+#if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
 Status encode_read_module_buffer(
     const ProtocolConfig& config,
     const ModuleBufferReadRequest& request,
@@ -2121,7 +2294,45 @@ Status encode_write_module_buffer(
   out_size = writer.size();
   return ok_status();
 }
+#else
+Status encode_read_module_buffer(
+    const ProtocolConfig& config,
+    const ModuleBufferReadRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)request;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Module-buffer commands are disabled at build time");
+}
 
+Status parse_read_module_buffer_response(
+    const ProtocolConfig& config,
+    const ModuleBufferReadRequest& request,
+    std::span<const std::uint8_t> response_data,
+    std::span<std::byte> out_bytes) noexcept {
+  (void)config;
+  (void)request;
+  (void)response_data;
+  (void)out_bytes;
+  return unsupported("Module-buffer commands are disabled at build time");
+}
+
+Status encode_write_module_buffer(
+    const ProtocolConfig& config,
+    const ModuleBufferWriteRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)request;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Module-buffer commands are disabled at build time");
+}
+#endif
+
+#if MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS
 Status encode_read_cpu_model(
     const ProtocolConfig& config,
     std::span<std::uint8_t> out_request_data,
@@ -2159,7 +2370,29 @@ Status parse_read_cpu_model_response(
   out_info.model_code = static_cast<std::uint16_t>(response_data[16] | (response_data[17] << 8U));
   return ok_status();
 }
+#else
+Status encode_read_cpu_model(
+    const ProtocolConfig& config,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("CPU-model commands are disabled at build time");
+}
 
+Status parse_read_cpu_model_response(
+    const ProtocolConfig& config,
+    std::span<const std::uint8_t> response_data,
+    CpuModelInfo& out_info) noexcept {
+  (void)config;
+  (void)response_data;
+  (void)out_info;
+  return unsupported("CPU-model commands are disabled at build time");
+}
+#endif
+
+#if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
 Status encode_loopback(
     const ProtocolConfig& config,
     std::span<const char> hex_ascii,
@@ -2220,6 +2453,29 @@ Status parse_loopback_response(
   }
   return ok_status();
 }
+#else
+Status encode_loopback(
+    const ProtocolConfig& config,
+    std::span<const char> hex_ascii,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)hex_ascii;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Loopback commands are disabled at build time");
+}
+
+Status parse_loopback_response(
+    const ProtocolConfig& config,
+    std::span<const std::uint8_t> response_data,
+    std::span<char> out_echoed) noexcept {
+  (void)config;
+  (void)response_data;
+  (void)out_echoed;
+  return unsupported("Loopback commands are disabled at build time");
+}
+#endif
 
 }  // namespace CommandCodec
 
