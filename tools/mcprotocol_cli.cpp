@@ -7,7 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <span>
+#include "mcprotocol/serial/span_compat.hpp"
 #include <string_view>
 
 #include "mcprotocol/serial/client.hpp"
@@ -1138,6 +1138,174 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
   return drive_request(client, port, command_state);
 }
 
+[[nodiscard]] constexpr bool is_native_command_unsupported(const Status& status) noexcept {
+  return status.code == StatusCode::PlcError &&
+         (status.plc_error_code == 0x7F22U || status.plc_error_code == 0x7F23U);
+}
+
+[[nodiscard]] Status run_random_read_fallback(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    std::span<const RandomReadItem> items,
+    std::span<std::uint32_t> out_values) {
+  if (out_values.size() < items.size()) {
+    return mcprotocol::serial::make_status(StatusCode::BufferTooSmall, "random-read fallback output buffer is too small");
+  }
+
+  for (std::size_t index = 0; index < items.size(); ++index) {
+    const DeviceAddress device = items[index].device;
+    if (is_bit_device(device.code)) {
+      BitValue bit = BitValue::Off;
+      const Status status = run_batch_read_bit(client, port, command_state, device, bit);
+      if (!status.ok()) {
+        return status;
+      }
+      out_values[index] = bit == BitValue::On ? 1U : 0U;
+    } else {
+      std::uint16_t word = 0;
+      const Status status = run_batch_read_word(client, port, command_state, device, word);
+      if (!status.ok()) {
+        return status;
+      }
+      out_values[index] = word;
+    }
+  }
+  return Status {};
+}
+
+[[nodiscard]] Status run_random_write_words_fallback(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    std::span<const RandomWriteWordItem> items) {
+  for (const RandomWriteWordItem& item : items) {
+    if (item.double_word || item.value > 0xFFFFU) {
+      return mcprotocol::serial::make_status(
+          StatusCode::UnsupportedConfiguration,
+          "random-write-words fallback supports 16-bit word items only");
+    }
+    const Status status =
+        run_batch_write_word(client, port, command_state, item.device, static_cast<std::uint16_t>(item.value));
+    if (!status.ok()) {
+      return status;
+    }
+  }
+  return Status {};
+}
+
+[[nodiscard]] Status run_random_write_bits_fallback(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    std::span<const RandomWriteBitItem> items) {
+  for (const RandomWriteBitItem& item : items) {
+    const Status status = run_batch_write_bit(client, port, command_state, item.device, item.value);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+  return Status {};
+}
+
+[[nodiscard]] Status run_multi_block_read_fallback(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const MultiBlockReadRequest& request,
+    std::span<std::uint16_t> out_words,
+    std::span<BitValue> out_bits,
+    std::span<MultiBlockReadBlockResult> out_results) {
+  if (out_results.size() < request.blocks.size()) {
+    return mcprotocol::serial::make_status(StatusCode::BufferTooSmall, "multi-block read fallback result buffer is too small");
+  }
+
+  std::size_t word_offset = 0;
+  std::size_t bit_offset = 0;
+  for (std::size_t index = 0; index < request.blocks.size(); ++index) {
+    const MultiBlockReadBlock& block = request.blocks[index];
+    if (block.bit_block) {
+      const std::size_t bit_count = static_cast<std::size_t>(block.points) * 16U;
+      if (out_bits.size() < (bit_offset + bit_count)) {
+        return mcprotocol::serial::make_status(StatusCode::BufferTooSmall, "multi-block read fallback bit buffer is too small");
+      }
+      const Status status = run_batch_read_bits_group(
+          client,
+          port,
+          command_state,
+          block.head_device,
+          static_cast<std::uint16_t>(bit_count),
+          out_bits.subspan(bit_offset, bit_count));
+      if (!status.ok()) {
+        return status;
+      }
+      out_results[index] = MultiBlockReadBlockResult {
+          .bit_block = true,
+          .head_device = block.head_device,
+          .points = block.points,
+          .data_offset = static_cast<std::uint16_t>(bit_offset),
+          .data_count = static_cast<std::uint16_t>(bit_count),
+      };
+      bit_offset += bit_count;
+    } else {
+      if (out_words.size() < (word_offset + block.points)) {
+        return mcprotocol::serial::make_status(StatusCode::BufferTooSmall, "multi-block read fallback word buffer is too small");
+      }
+      const Status status = run_batch_read_words_group(
+          client,
+          port,
+          command_state,
+          block.head_device,
+          block.points,
+          out_words.subspan(word_offset, block.points));
+      if (!status.ok()) {
+        return status;
+      }
+      out_results[index] = MultiBlockReadBlockResult {
+          .bit_block = false,
+          .head_device = block.head_device,
+          .points = block.points,
+          .data_offset = static_cast<std::uint16_t>(word_offset),
+          .data_count = block.points,
+      };
+      word_offset += block.points;
+    }
+  }
+
+  return Status {};
+}
+
+[[nodiscard]] Status run_multi_block_write_fallback(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const MultiBlockWriteRequest& request) {
+  for (const MultiBlockWriteBlock& block : request.blocks) {
+    Status status {};
+    if (block.bit_block) {
+      const std::size_t bit_count = static_cast<std::size_t>(block.points) * 16U;
+      if (block.bits.size() != bit_count) {
+        return mcprotocol::serial::make_status(
+            StatusCode::InvalidArgument,
+            "multi-block write fallback bit block size mismatch");
+      }
+      status = run_batch_write_bits_group(client, port, command_state, block.head_device, block.bits);
+    } else {
+      if (block.words.size() != block.points) {
+        return mcprotocol::serial::make_status(
+            StatusCode::InvalidArgument,
+            "multi-block write fallback word block size mismatch");
+      }
+      status = run_batch_write_words_group(client, port, command_state, block.head_device, block.words);
+    }
+    if (!status.ok()) {
+      return status;
+    }
+  }
+
+  return Status {};
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1499,6 +1667,7 @@ int main(int argc, char** argv) {
       std::array<BitValue, 48> multi_read_bits {};
       std::array<MultiBlockReadBlockResult, 4> multi_read_results {};
       bool multi_read_ok = false;
+      bool multi_read_emulated = false;
 
       status = run_multi_block_read(
           client,
@@ -1510,6 +1679,19 @@ int main(int argc, char** argv) {
           std::span<std::uint16_t>(multi_read_words.data(), multi_read_words.size()),
           std::span<BitValue>(multi_read_bits.data(), multi_read_bits.size()),
           std::span<MultiBlockReadBlockResult>(multi_read_results.data(), multi_read_results.size()));
+      if (!status.ok() && is_native_command_unsupported(status)) {
+        status = run_multi_block_read_fallback(
+            client,
+            port,
+            command_state,
+            MultiBlockReadRequest {
+                .blocks = std::span<const MultiBlockReadBlock>(read_blocks.data(), read_blocks.size()),
+            },
+            std::span<std::uint16_t>(multi_read_words.data(), multi_read_words.size()),
+            std::span<BitValue>(multi_read_bits.data(), multi_read_bits.size()),
+            std::span<MultiBlockReadBlockResult>(multi_read_results.data(), multi_read_results.size()));
+        multi_read_emulated = status.ok();
+      }
       if (!status.ok()) {
         std::printf("multi-block-read=skip ");
         if (status.code == StatusCode::PlcError) {
@@ -1547,7 +1729,7 @@ int main(int argc, char** argv) {
           std::printf("multi-block-read=skip verify-mismatch\n");
         } else {
           multi_read_ok = true;
-          std::printf("multi-block-read=ok\n");
+          std::printf("multi-block-read=ok %s\n", multi_read_emulated ? "emulated" : "native");
         }
       }
 
@@ -1589,6 +1771,7 @@ int main(int argc, char** argv) {
       }};
 
       bool multi_write_ok = false;
+      bool multi_write_emulated = false;
       status = run_multi_block_write(
           client,
           port,
@@ -1596,6 +1779,16 @@ int main(int argc, char** argv) {
           MultiBlockWriteRequest {
               .blocks = std::span<const MultiBlockWriteBlock>(write_blocks.data(), write_blocks.size()),
           });
+      if (!status.ok() && is_native_command_unsupported(status)) {
+        status = run_multi_block_write_fallback(
+            client,
+            port,
+            command_state,
+            MultiBlockWriteRequest {
+                .blocks = std::span<const MultiBlockWriteBlock>(write_blocks.data(), write_blocks.size()),
+            });
+        multi_write_emulated = status.ok();
+      }
       if (!status.ok()) {
         std::printf("multi-block-write=skip ");
         if (status.code == StatusCode::PlcError) {
@@ -1676,7 +1869,7 @@ int main(int argc, char** argv) {
           }
         } else {
           multi_write_ok = true;
-          std::printf("multi-block-write=ok\n");
+          std::printf("multi-block-write=ok %s\n", multi_write_emulated ? "emulated" : "native");
         }
       }
 
@@ -1758,8 +1951,8 @@ int main(int argc, char** argv) {
       }
 
       std::printf("probe-multi-block: read=%s write=%s restore=ok\n",
-                  multi_read_ok ? "ok" : "skip",
-                  multi_write_ok ? "ok" : "skip");
+                  multi_read_ok ? (multi_read_emulated ? "emulated" : "native") : "skip",
+                  multi_write_ok ? (multi_write_emulated ? "emulated" : "native") : "skip");
       return (multi_read_ok || multi_write_ok) ? 0 : 1;
     }
 
@@ -1772,12 +1965,15 @@ int main(int argc, char** argv) {
       }};
 
       std::array<std::uint32_t, items.size()> monitor_values {};
+      bool monitor_emulated = false;
       status = run_register_monitor(
           client,
           port,
           command_state,
           std::span<const RandomReadItem>(items.data(), items.size()));
-      if (!status.ok()) {
+      if (!status.ok() && is_native_command_unsupported(status)) {
+        monitor_emulated = true;
+      } else if (!status.ok()) {
         std::printf("probe-monitor: skip register ");
         if (status.code == StatusCode::PlcError) {
           std::printf("0x%04X\n", status.plc_error_code);
@@ -1787,12 +1983,16 @@ int main(int argc, char** argv) {
         return 1;
       }
 
-      status = run_read_monitor(
-          client,
-          port,
-          command_state,
-          std::span<std::uint32_t>(monitor_values.data(), monitor_values.size()));
-      if (!status.ok()) {
+      if (!monitor_emulated) {
+        status = run_read_monitor(
+            client,
+            port,
+            command_state,
+            std::span<std::uint32_t>(monitor_values.data(), monitor_values.size()));
+      }
+      if (!monitor_emulated && !status.ok() && is_native_command_unsupported(status)) {
+        monitor_emulated = true;
+      } else if (!monitor_emulated && !status.ok()) {
         std::printf("probe-monitor: skip read ");
         if (status.code == StatusCode::PlcError) {
           std::printf("0x%04X\n", status.plc_error_code);
@@ -1800,6 +2000,18 @@ int main(int argc, char** argv) {
           std::printf("%s\n", status.message);
         }
         return 1;
+      }
+      if (monitor_emulated) {
+        status = run_random_read_fallback(
+            client,
+            port,
+            command_state,
+            std::span<const RandomReadItem>(items.data(), items.size()),
+            std::span<std::uint32_t>(monitor_values.data(), monitor_values.size()));
+        if (!status.ok()) {
+          print_status_error("probe-monitor fallback failed", status);
+          return 1;
+        }
       }
 
       std::uint16_t expected_d100 = 0;
@@ -1838,7 +2050,8 @@ int main(int argc, char** argv) {
         }
       }
 
-      std::printf("probe-monitor=ok D100=%u D105=%u M100=%u M105=%u\n",
+      std::printf("probe-monitor=ok mode=%s D100=%u D105=%u M100=%u M105=%u\n",
+                  monitor_emulated ? "emulated" : "native",
                   static_cast<unsigned>(monitor_values[0]),
                   static_cast<unsigned>(monitor_values[1]),
                   static_cast<unsigned>(monitor_values[2]),
@@ -2365,31 +2578,19 @@ int main(int argc, char** argv) {
       }
       status = drive_request(client, port, command_state);
       if (!status.ok()) {
-        if (!(status.code == StatusCode::PlcError &&
-              (status.plc_error_code == 0x7F22U || status.plc_error_code == 0x7F23U))) {
+        if (!is_native_command_unsupported(status)) {
           print_status_error("random-read request failed", status);
           return 1;
         }
-
-        for (int index = 0; index < options.command_argc; ++index) {
-          const DeviceAddress device = items[static_cast<std::size_t>(index)].device;
-          if (is_bit_device(device.code)) {
-            BitValue bit = BitValue::Off;
-            status = run_batch_read_bit(client, port, command_state, device, bit);
-            if (!status.ok()) {
-              print_status_error("random-read fallback failed", status);
-              return 1;
-            }
-            values[static_cast<std::size_t>(index)] = bit == BitValue::On ? 1U : 0U;
-          } else {
-            std::uint16_t word = 0;
-            status = run_batch_read_word(client, port, command_state, device, word);
-            if (!status.ok()) {
-              print_status_error("random-read fallback failed", status);
-              return 1;
-            }
-            values[static_cast<std::size_t>(index)] = word;
-          }
+        status = run_random_read_fallback(
+            client,
+            port,
+            command_state,
+            std::span<const RandomReadItem>(items.data(), static_cast<std::size_t>(options.command_argc)),
+            std::span<std::uint32_t>(values.data(), static_cast<std::size_t>(options.command_argc)));
+        if (!status.ok()) {
+          print_status_error("random-read fallback failed", status);
+          return 1;
         }
       }
       for (int index = 0; index < options.command_argc; ++index) {
@@ -2430,10 +2631,23 @@ int main(int argc, char** argv) {
           command_state,
           std::span<const RandomWriteWordItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
-        print_status_error("random-write-words request failed", status);
-        return 1;
+        if (!is_native_command_unsupported(status)) {
+          print_status_error("random-write-words request failed", status);
+          return 1;
+        }
+        status = run_random_write_words_fallback(
+            client,
+            port,
+            command_state,
+            std::span<const RandomWriteWordItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
+        if (!status.ok()) {
+          print_status_error("random-write-words fallback failed", status);
+          return 1;
+        }
+        std::printf("random-write-words=ok mode=emulated\n");
+        return 0;
       }
-      std::printf("random-write-words=ok\n");
+      std::printf("random-write-words=ok mode=native\n");
       return 0;
     }
 
@@ -2458,10 +2672,23 @@ int main(int argc, char** argv) {
           command_state,
           std::span<const RandomWriteBitItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
-        print_status_error("random-write-bits request failed", status);
-        return 1;
+        if (!is_native_command_unsupported(status)) {
+          print_status_error("random-write-bits request failed", status);
+          return 1;
+        }
+        status = run_random_write_bits_fallback(
+            client,
+            port,
+            command_state,
+            std::span<const RandomWriteBitItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
+        if (!status.ok()) {
+          print_status_error("random-write-bits fallback failed", status);
+          return 1;
+        }
+        std::printf("random-write-bits=ok mode=emulated\n");
+        return 0;
       }
-      std::printf("random-write-bits=ok\n");
+      std::printf("random-write-bits=ok mode=native\n");
       return 0;
     }
 

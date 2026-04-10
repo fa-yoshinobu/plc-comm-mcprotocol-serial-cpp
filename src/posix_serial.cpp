@@ -1,3 +1,5 @@
+#if defined(__unix__) || defined(__APPLE__)
+
 #include "mcprotocol/serial/posix_serial.hpp"
 
 #include <cerrno>
@@ -282,3 +284,5 @@ Status PosixSerialPort::set_rts(bool enabled) noexcept {
 }
 
 }  // namespace mcprotocol::serial
+
+#endif

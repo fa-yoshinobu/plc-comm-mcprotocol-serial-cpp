@@ -3,12 +3,21 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 
 #include "mcprotocol/serial/codec.hpp"
+#include "mcprotocol/serial/span_compat.hpp"
 
 namespace mcprotocol::serial {
 
+/// \brief Asynchronous MC protocol client for UART / serial integrations.
+///
+/// The intended MCU-side workflow is:
+/// 1. call `configure()`
+/// 2. start an `async_*` request
+/// 3. transmit `pending_tx_frame()` with the board UART layer
+/// 4. call `notify_tx_complete()` when TX finishes
+/// 5. feed received bytes with `on_rx_bytes()`
+/// 6. call `poll()` from the main loop or scheduler for timeout handling
 class MelsecSerialClient {
  public:
   MelsecSerialClient() = default;
