@@ -332,6 +332,9 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
 #if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
     case OperationKind::WriteModuleBuffer:
 #endif
+      if (!response_data.empty()) {
+        return make_status(StatusCode::Parse, "Write response must not contain response data");
+      }
       return ok_status();
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
     case OperationKind::RandomRead:
@@ -353,6 +356,9 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
     case OperationKind::RegisterMonitor:
+      if (!response_data.empty()) {
+        return make_status(StatusCode::Parse, "Monitor registration response must not contain response data");
+      }
       std::copy_n(pending_random_items_.begin(), pending_random_item_count_, monitor_items_.begin());
       monitor_item_count_ = pending_random_item_count_;
       monitor_registered_ = true;

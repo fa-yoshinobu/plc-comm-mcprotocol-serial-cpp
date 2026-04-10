@@ -42,6 +42,12 @@ Current known native hold items:
 
 Those commands currently fail natively on the validated setup. The CLI does not replace them with other command families.
 
+Useful follow-up checks:
+
+- rerun with `--dump-frames on` to inspect the exact TX/RX bytes
+- keep `--sum-check off` on the validated setup; turning it on can produce `0x7F23` even for `0401`
+- if a `dword-only` random or monitor request is involved, expect `0x7F23` more often than `0x7F22`
+
 ## MCU board compiles but never receives data
 
 Check these first:

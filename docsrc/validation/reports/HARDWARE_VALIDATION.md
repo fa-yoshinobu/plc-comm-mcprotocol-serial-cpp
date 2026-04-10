@@ -49,6 +49,7 @@ Validated target:
 | Host buffer write | `1613` | native pass | real-hardware verify and restore completed |
 | Module buffer read | `0601` | native pass | validated up to `1920` bytes |
 | Module buffer write | `1601` | native pass | real-hardware verify and restore completed |
+| Qualified helper read/write | `read-qualified-words` / `write-qualified-words` | helper pass, narrow scope | `U3E0\\HG20` single-word read/write/restore passed; `U3E0\\G10` read returned `0x7F22` |
 | Random read | native `0403` | native ng | module returns `0x7F22` |
 | Random write words | native `1402` | native ng | module returns `0x7F22` |
 | Random write bits | native `1402` | native ng | module returns `0x7F23` |

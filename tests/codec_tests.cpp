@@ -8,6 +8,7 @@
 #include <string_view>
 
 #include "mcprotocol/serial/client.hpp"
+#include "mcprotocol/serial/qualified_buffer.hpp"
 
 namespace {
 
@@ -23,17 +24,25 @@ using mcprotocol::serial::DecodeStatus;
 using mcprotocol::serial::FrameCodec;
 using mcprotocol::serial::FrameKind;
 using mcprotocol::serial::MelsecSerialClient;
+using mcprotocol::serial::ModuleBufferReadRequest;
+using mcprotocol::serial::ModuleBufferWriteRequest;
 using mcprotocol::serial::MultiBlockReadBlock;
 using mcprotocol::serial::MultiBlockReadBlockResult;
 using mcprotocol::serial::MultiBlockReadRequest;
 using mcprotocol::serial::PlcSeries;
 using mcprotocol::serial::ProtocolConfig;
+using mcprotocol::serial::QualifiedBufferDeviceKind;
+using mcprotocol::serial::QualifiedBufferWordDevice;
 using mcprotocol::serial::RandomWriteBitItem;
 using mcprotocol::serial::RandomWriteWordItem;
 using mcprotocol::serial::RouteConfig;
 using mcprotocol::serial::RouteKind;
 using mcprotocol::serial::Status;
 using mcprotocol::serial::StatusCode;
+using mcprotocol::serial::decode_qualified_buffer_word_values;
+using mcprotocol::serial::make_qualified_buffer_read_words_request;
+using mcprotocol::serial::make_qualified_buffer_write_words_request;
+using mcprotocol::serial::parse_qualified_buffer_word_device;
 
 namespace CommandCodec = mcprotocol::serial::CommandCodec;
 
@@ -495,6 +504,80 @@ void test_parse_multi_block_read_response_ascii_mixed_blocks() {
   }
 }
 
+void test_parse_qualified_buffer_word_device_accepts_g_and_hg() {
+  QualifiedBufferWordDevice g_device {};
+  Status status = parse_qualified_buffer_word_device("U3E0\\G10", g_device);
+  assert(status.ok());
+  assert(g_device.kind == QualifiedBufferDeviceKind::G);
+  assert(g_device.module_number == 0x03E0U);
+  assert(g_device.word_address == 10U);
+
+  QualifiedBufferWordDevice hg_device {};
+  status = parse_qualified_buffer_word_device("u3e0/hg20", hg_device);
+  assert(status.ok());
+  assert(hg_device.kind == QualifiedBufferDeviceKind::HG);
+  assert(hg_device.module_number == 0x03E0U);
+  assert(hg_device.word_address == 20U);
+}
+
+void test_make_qualified_buffer_read_words_request_maps_to_module_buffer() {
+  const QualifiedBufferWordDevice device {
+      .kind = QualifiedBufferDeviceKind::G,
+      .module_number = 0x03E0U,
+      .word_address = 10U,
+  };
+
+  ModuleBufferReadRequest request {};
+  const Status status = make_qualified_buffer_read_words_request(device, 4U, request);
+  assert(status.ok());
+  assert(request.start_address == 20U);
+  assert(request.bytes == 8U);
+  assert(request.module_number == 0x03E0U);
+}
+
+void test_make_qualified_buffer_write_words_request_encodes_little_endian_bytes() {
+  const QualifiedBufferWordDevice device {
+      .kind = QualifiedBufferDeviceKind::HG,
+      .module_number = 0x03E0U,
+      .word_address = 20U,
+  };
+  const std::array<std::uint16_t, 2> words {0x1234U, 0xABCDU};
+  std::array<std::byte, 8> byte_storage {};
+  ModuleBufferWriteRequest request {};
+  std::size_t byte_count = 0U;
+
+  const Status status = make_qualified_buffer_write_words_request(
+      device,
+      words,
+      byte_storage,
+      request,
+      byte_count);
+  assert(status.ok());
+  assert(byte_count == 4U);
+  assert(request.start_address == 40U);
+  assert(request.module_number == 0x03E0U);
+  assert(request.bytes.size() == 4U);
+  assert(std::to_integer<std::uint8_t>(request.bytes[0]) == 0x34U);
+  assert(std::to_integer<std::uint8_t>(request.bytes[1]) == 0x12U);
+  assert(std::to_integer<std::uint8_t>(request.bytes[2]) == 0xCDU);
+  assert(std::to_integer<std::uint8_t>(request.bytes[3]) == 0xABU);
+}
+
+void test_decode_qualified_buffer_word_values_decodes_little_endian_bytes() {
+  const std::array<std::byte, 4> bytes {
+      std::byte {0x34},
+      std::byte {0x12},
+      std::byte {0xCD},
+      std::byte {0xAB},
+  };
+  std::array<std::uint16_t, 2> words {};
+
+  const Status status = decode_qualified_buffer_word_values(bytes, words);
+  assert(status.ok());
+  assert(words[0] == 0x1234U);
+  assert(words[1] == 0xABCDU);
+}
+
 struct CallbackCapture {
   bool called = false;
   Status status {};
@@ -609,6 +692,45 @@ void test_client_ascii_format4_resynchronizes_on_stale_ack() {
   assert(!client.busy());
 }
 
+void test_client_write_rejects_unexpected_success_data() {
+  const auto config = make_ascii_c4_format4_config();
+  MelsecSerialClient client;
+  Status status = client.configure(config);
+  assert(status.ok());
+
+  const std::array<std::uint16_t, 1> values {0x1234U};
+  CallbackCapture capture;
+  status = client.async_batch_write_words(
+      0,
+      BatchWriteWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100},
+          .words = values,
+      },
+      completion_callback,
+      &capture);
+  assert(status.ok());
+
+  status = client.notify_tx_complete(1);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 4> unexpected_data {'0', '0', '0', '0'};
+  std::array<std::uint8_t, 64> response_frame {};
+  std::size_t response_size = 0;
+  status = FrameCodec::encode_success_response(config, unexpected_data, response_frame, response_size);
+  assert(status.ok());
+
+  client.on_rx_bytes(
+      2,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(response_frame.data()),
+          response_size));
+
+  assert(capture.called);
+  assert(capture.status.code == StatusCode::Parse);
+  assert(std::string_view(capture.status.message) == "Write response must not contain response data");
+  assert(!client.busy());
+}
+
 }  // namespace
 
 int main() {
@@ -626,9 +748,14 @@ int main() {
   test_encode_register_monitor_ascii_reuses_random_read_layout();
   test_encode_read_monitor_ascii_matches_manual();
   test_parse_multi_block_read_response_ascii_mixed_blocks();
+  test_parse_qualified_buffer_word_device_accepts_g_and_hg();
+  test_make_qualified_buffer_read_words_request_maps_to_module_buffer();
+  test_make_qualified_buffer_write_words_request_encodes_little_endian_bytes();
+  test_decode_qualified_buffer_word_values_decodes_little_endian_bytes();
   test_client_binary_cpu_model_roundtrip();
   test_client_timeout();
   test_client_ascii_format4_resynchronizes_on_stale_ack();
+  test_client_write_rejects_unexpected_success_data();
 
   std::cout << "codec_tests: ok\n";
   return 0;

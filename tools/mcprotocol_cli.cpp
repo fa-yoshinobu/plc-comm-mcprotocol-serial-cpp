@@ -12,8 +12,11 @@
 
 #include "mcprotocol/serial/client.hpp"
 #include "mcprotocol/serial/posix_serial.hpp"
+#include "mcprotocol/serial/qualified_buffer.hpp"
 
 namespace {
+
+bool g_dump_frames = false;
 
 using mcprotocol::serial::AsciiFormat;
 using mcprotocol::serial::BatchReadBitsRequest;
@@ -40,6 +43,7 @@ using mcprotocol::serial::PlcSeries;
 using mcprotocol::serial::PosixSerialConfig;
 using mcprotocol::serial::PosixSerialPort;
 using mcprotocol::serial::ProtocolConfig;
+using mcprotocol::serial::QualifiedBufferWordDevice;
 using mcprotocol::serial::RandomReadItem;
 using mcprotocol::serial::RandomReadRequest;
 using mcprotocol::serial::RandomWriteBitItem;
@@ -48,6 +52,11 @@ using mcprotocol::serial::RouteKind;
 using mcprotocol::serial::Rs485Hooks;
 using mcprotocol::serial::Status;
 using mcprotocol::serial::StatusCode;
+using mcprotocol::serial::decode_qualified_buffer_word_values;
+using mcprotocol::serial::make_qualified_buffer_read_words_request;
+using mcprotocol::serial::make_qualified_buffer_write_words_request;
+using mcprotocol::serial::parse_qualified_buffer_word_device;
+using mcprotocol::serial::qualified_buffer_kind_name;
 
 enum class CommandKind : std::uint8_t {
   None,
@@ -57,8 +66,10 @@ enum class CommandKind : std::uint8_t {
   ReadBits,
   ReadHostBuffer,
   ReadModuleBuffer,
+  ReadQualifiedWords,
   WriteHostBuffer,
   WriteModuleBuffer,
+  WriteQualifiedWords,
   RandomRead,
   RandomWriteWords,
   RandomWriteBits,
@@ -83,6 +94,7 @@ struct CliOptions {
   PosixSerialConfig serial {};
   ProtocolConfig protocol {};
   bool rts_toggle = false;
+  bool dump_frames = false;
   CommandKind command = CommandKind::None;
   int command_argc = 0;
   char** command_argv = nullptr;
@@ -246,8 +258,10 @@ void print_usage() {
       "  mcprotocol_cli [options] read-bits DEVICE POINTS\n"
       "  mcprotocol_cli [options] read-host-buffer START WORDS\n"
       "  mcprotocol_cli [options] read-module-buffer START BYTES MODULE\n"
+      "  mcprotocol_cli [options] read-qualified-words U3E0\\\\G0 POINTS\n"
       "  mcprotocol_cli [options] write-host-buffer START VALUE [VALUE ...]\n"
       "  mcprotocol_cli [options] write-module-buffer START MODULE BYTE [BYTE ...]\n"
+      "  mcprotocol_cli [options] write-qualified-words U3E0\\\\G0 VALUE [VALUE ...]\n"
       "  mcprotocol_cli [options] random-read DEVICE [DEVICE ...]\n"
       "  mcprotocol_cli [options] random-write-words DEVICE=VALUE [DEVICE=VALUE ...]\n"
       "  mcprotocol_cli [options] random-write-bits DEVICE=0|1 [DEVICE=0|1 ...]\n"
@@ -270,6 +284,7 @@ void print_usage() {
       "  --parity N|E|O             Parity (default: N)\n"
       "  --rts-cts on|off           Hardware flow control (default: off)\n"
       "  --rts-toggle on|off        Toggle RTS during TX for RS-485 DE control\n"
+      "  --dump-frames on|off       Print raw TX/RX frame bytes to stderr (default: off)\n"
       "  --frame MODE               c4-binary | c4-ascii-f1 | c4-ascii-f3 | c4-ascii-f4 | c3-ascii-f1 | c3-ascii-f3 | c3-ascii-f4\n"
       "  --series ql|iqr            Target PLC family for device encoding (default: ql)\n"
       "  --station N                Station number; non-zero implies multidrop\n"
@@ -442,6 +457,10 @@ void print_usage() {
       if (!parse_on_off(argv[++index], options.rts_toggle)) {
         return false;
       }
+    } else if (arg == "--dump-frames" && (index + 1) < argc) {
+      if (!parse_on_off(argv[++index], options.dump_frames)) {
+        return false;
+      }
     } else if (arg == "--frame" && (index + 1) < argc) {
       if (!parse_frame_mode(argv[++index], options.protocol)) {
         return false;
@@ -493,10 +512,14 @@ void print_usage() {
         options.command = CommandKind::ReadHostBuffer;
       } else if (arg == "read-module-buffer") {
         options.command = CommandKind::ReadModuleBuffer;
+      } else if (arg == "read-qualified-words") {
+        options.command = CommandKind::ReadQualifiedWords;
       } else if (arg == "write-host-buffer") {
         options.command = CommandKind::WriteHostBuffer;
       } else if (arg == "write-module-buffer") {
         options.command = CommandKind::WriteModuleBuffer;
+      } else if (arg == "write-qualified-words") {
+        options.command = CommandKind::WriteQualifiedWords;
       } else if (arg == "random-read") {
         options.command = CommandKind::RandomRead;
       } else if (arg == "random-write-words") {
@@ -556,6 +579,7 @@ void print_usage() {
     case CommandKind::ReadWords:
     case CommandKind::ReadBits:
     case CommandKind::ReadHostBuffer:
+    case CommandKind::ReadQualifiedWords:
       return options.command_argc == 2;
     case CommandKind::ReadModuleBuffer:
       return options.command_argc == 3;
@@ -563,6 +587,8 @@ void print_usage() {
       return options.command_argc >= 2;
     case CommandKind::WriteModuleBuffer:
       return options.command_argc >= 3;
+    case CommandKind::WriteQualifiedWords:
+      return options.command_argc >= 2;
     case CommandKind::RandomRead:
     case CommandKind::RandomWriteWords:
     case CommandKind::RandomWriteBits:
@@ -615,15 +641,32 @@ void on_tx_end(void* user) {
   return mcprotocol::serial::ok_status();
 }
 
+void dump_frame_bytes(std::string_view label, std::span<const std::byte> bytes) {
+  std::fprintf(stderr, "%.*s[%zu] hex:", static_cast<int>(label.size()), label.data(), bytes.size());
+  for (const std::byte value : bytes) {
+    std::fprintf(stderr, " %02X", static_cast<unsigned>(std::to_integer<std::uint8_t>(value)));
+  }
+  std::fprintf(stderr, "\n%.*s[%zu] ascii:", static_cast<int>(label.size()), label.data(), bytes.size());
+  for (const std::byte value : bytes) {
+    const unsigned char ch = std::to_integer<unsigned char>(value);
+    std::fputc(std::isprint(ch) ? static_cast<int>(ch) : '.', stderr);
+  }
+  std::fputc('\n', stderr);
+}
+
 [[nodiscard]] Status drive_request(
     MelsecSerialClient& client,
     PosixSerialPort& port,
-    CommandState& state) {
+    CommandState& state,
+    bool dump_frames = false) {
   Status status = discard_stale_rx(port);
   if (!status.ok()) {
     return status;
   }
 
+  if (dump_frames || g_dump_frames) {
+    dump_frame_bytes("tx", client.pending_tx_frame());
+  }
   status = port.write_all(client.pending_tx_frame());
   if (status.ok()) {
     status = port.drain_tx();
@@ -646,6 +689,9 @@ void on_tx_end(void* user) {
       return status;
     }
     if (bytes_read != 0U) {
+      if (dump_frames || g_dump_frames) {
+        dump_frame_bytes("rx", std::span<const std::byte>(rx_buffer.data(), bytes_read));
+      }
       client.on_rx_bytes(now_ms(), std::span<const std::byte>(rx_buffer.data(), bytes_read));
     }
     client.poll(now_ms());
@@ -1143,6 +1189,7 @@ int main(int argc, char** argv) {
     print_usage();
     return 2;
   }
+  g_dump_frames = options.dump_frames;
 
   PosixSerialPort port;
   Status status = port.open(options.serial);
@@ -2205,6 +2252,69 @@ int main(int argc, char** argv) {
       return 0;
     }
 
+    case CommandKind::ReadQualifiedWords: {
+      QualifiedBufferWordDevice device {};
+      const std::string_view device_arg(options.command_argv[0]);
+      const std::string_view points_arg(options.command_argv[1]);
+      status = parse_qualified_buffer_word_device(device_arg, device);
+      if (!status.ok()) {
+        print_status_error("Invalid qualified buffer device", status);
+        return 2;
+      }
+
+      std::uint32_t points = 0;
+      if (!parse_u32(points_arg, points) || points == 0U || points > 960U) {
+        std::fprintf(stderr, "Invalid qualified buffer word count: %.*s\n",
+                     static_cast<int>(points_arg.size()),
+                     points_arg.data());
+        return 2;
+      }
+
+      ModuleBufferReadRequest request {};
+      status = make_qualified_buffer_read_words_request(
+          device,
+          static_cast<std::uint16_t>(points),
+          request);
+      if (!status.ok()) {
+        print_status_error("Failed to build read-qualified-words request", status);
+        return 2;
+      }
+
+      std::array<std::byte, 1920> bytes {};
+      status = run_read_module_buffer(
+          client,
+          port,
+          command_state,
+          request,
+          std::span<std::byte>(bytes.data(), static_cast<std::size_t>(points * 2U)));
+      if (!status.ok()) {
+        print_status_error("read-qualified-words request failed", status);
+        return 1;
+      }
+
+      std::array<std::uint16_t, 960> words {};
+      status = decode_qualified_buffer_word_values(
+          std::span<const std::byte>(bytes.data(), static_cast<std::size_t>(points * 2U)),
+          std::span<std::uint16_t>(words.data(), points));
+      if (!status.ok()) {
+        print_status_error("Failed to decode read-qualified-words response", status);
+        return 1;
+      }
+
+      const auto kind = qualified_buffer_kind_name(device.kind);
+      for (std::uint32_t index = 0; index < points; ++index) {
+        const auto value = words[index];
+        std::printf("U%X\\%.*s%u=0x%04X %u\n",
+                    device.module_number,
+                    static_cast<int>(kind.size()),
+                    kind.data(),
+                    static_cast<unsigned>(device.word_address + index),
+                    value,
+                    value);
+      }
+      return 0;
+    }
+
     case CommandKind::WriteModuleBuffer: {
       const std::string_view start_arg(options.command_argv[0]);
       const std::string_view module_arg(options.command_argv[1]);
@@ -2244,6 +2354,54 @@ int main(int argc, char** argv) {
         return 1;
       }
       std::printf("write-module-buffer=ok\n");
+      return 0;
+    }
+
+    case CommandKind::WriteQualifiedWords: {
+      QualifiedBufferWordDevice device {};
+      const std::string_view device_arg(options.command_argv[0]);
+      status = parse_qualified_buffer_word_device(device_arg, device);
+      if (!status.ok()) {
+        print_status_error("Invalid qualified buffer device", status);
+        return 2;
+      }
+
+      const int word_count = options.command_argc - 1;
+      if (word_count < 1 || word_count > 960) {
+        std::fprintf(stderr, "Invalid write-qualified-words word count\n");
+        return 2;
+      }
+
+      std::array<std::uint16_t, 960> words {};
+      for (int index = 0; index < word_count; ++index) {
+        std::uint32_t value = 0;
+        if (!parse_u32_auto(options.command_argv[index + 1], value) || value > 0xFFFFU) {
+          std::fprintf(stderr, "Invalid write-qualified-words value: %s\n", options.command_argv[index + 1]);
+          return 2;
+        }
+        words[static_cast<std::size_t>(index)] = static_cast<std::uint16_t>(value);
+      }
+
+      std::array<std::byte, 1920> byte_storage {};
+      ModuleBufferWriteRequest request {};
+      std::size_t byte_count = 0U;
+      status = make_qualified_buffer_write_words_request(
+          device,
+          std::span<const std::uint16_t>(words.data(), static_cast<std::size_t>(word_count)),
+          std::span<std::byte>(byte_storage),
+          request,
+          byte_count);
+      if (!status.ok()) {
+        print_status_error("Failed to build write-qualified-words request", status);
+        return 2;
+      }
+
+      status = run_write_module_buffer(client, port, command_state, request);
+      if (!status.ok()) {
+        print_status_error("write-qualified-words request failed", status);
+        return 1;
+      }
+      std::printf("write-qualified-words=ok bytes=%zu\n", byte_count);
       return 0;
     }
 

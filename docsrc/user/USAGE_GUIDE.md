@@ -20,6 +20,8 @@ These commands are validated as direct protocol operations on the current setup.
 - `write-host-buffer`
 - `read-module-buffer`
 - `write-module-buffer`
+- `read-qualified-words`
+- `write-qualified-words`
 
 ### Native NG / HOLD
 
@@ -51,6 +53,12 @@ Use the same verified communication options for every command:
   cpu-model
 ```
 
+If you need the exact on-wire request and response bytes, add:
+
+```bash
+--dump-frames on
+```
+
 ## Read / Write Examples
 
 ### Native contiguous word access
@@ -67,6 +75,21 @@ Use the same verified communication options for every command:
 ./build/mcprotocol_cli ... write-bits M100=1 M101=0
 ```
 
+### Qualified `U...\G...` / `U...\HG...` helper access
+
+These helper commands are convenience wrappers over the validated `0601/1601` module-buffer path.
+They do not mean that native `0082/0083` extended-device access is validated on this serial setup.
+
+```bash
+./build/mcprotocol_cli ... read-qualified-words 'U3E0\G10' 2
+./build/mcprotocol_cli ... write-qualified-words 'U3E0\HG20' 0x1234 0x5678
+```
+
+Observed status on the validated setup:
+
+- `U3E0\HG20` single-word helper read/write/restore: pass
+- `U3E0\G10` helper read: `0x7F22`
+
 ### Native non-consecutive access attempt
 
 ```bash
@@ -80,6 +103,11 @@ Expected behavior on the validated setup:
 - `random-read` fails with the native PLC end code
 - `random-write-words` fails with the native PLC end code
 - `random-write-bits` fails with the native PLC end code
+
+Observed follow-up notes on the validated setup:
+
+- `dword-only` native random/monitor requests tend to fail with `0x7F23`
+- `sum-check on` is not part of the validated setup; even `read-words` returns `0x7F23` there
 
 ## Large Contiguous Ranges
 

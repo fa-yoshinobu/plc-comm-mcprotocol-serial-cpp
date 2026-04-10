@@ -98,6 +98,37 @@ First command to try:
   write-bits M100=1 M101=0
 ```
 
+If you need `U...\\G...` or `U...\\HG...` style qualified word access, use the helper commands below.
+These are convenience wrappers over the already validated `0601/1601 module buffer` path, not proof that native `0082/0083` extended-device commands work on this setup.
+On the current validated setup, single-word `U3E0\HG20` read/write/restore was confirmed on real hardware.
+Broader `U...\\G...` coverage is not established yet, and `U3E0\G10` still returned `0x7F22` during spot checks.
+
+```bash
+./build/mcprotocol_cli \
+  --device /dev/ttyUSB0 \
+  --baud 19200 \
+  --data-bits 8 \
+  --stop-bits 1 \
+  --parity E \
+  --frame c4-ascii-f4 \
+  --sum-check off \
+  --station 0 \
+  read-qualified-words 'U3E0\G10' 2
+```
+
+```bash
+./build/mcprotocol_cli \
+  --device /dev/ttyUSB0 \
+  --baud 19200 \
+  --data-bits 8 \
+  --stop-bits 1 \
+  --parity E \
+  --frame c4-ascii-f4 \
+  --sum-check off \
+  --station 0 \
+  write-qualified-words 'U3E0\HG20' 0x1234 0x5678
+```
+
 ## Documentation Map
 
 Start with these pages instead of reading the whole repository at once.
@@ -154,6 +185,8 @@ The following command flows were verified on `RJ71C24-R2` with the settings abov
 - `write-host-buffer`
 - `read-module-buffer`
 - `write-module-buffer`
+- `read-qualified-words`
+- `write-qualified-words`
 
 Stress tests completed on real hardware:
 
