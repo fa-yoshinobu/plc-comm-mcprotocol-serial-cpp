@@ -101,6 +101,7 @@ Notes:
 - `mcprotocol_cli probe-module-buffer` reads module buffer address `0` for `2` bytes with `module=0`.
 - `mcprotocol_cli probe-write-host-buffer` performs `read -> write test value -> verify -> restore` at host buffer address `0`.
 - `mcprotocol_cli probe-write-module-buffer` performs `read -> write test value -> verify -> restore` at module buffer start `0`, `module=0`, `bytes=2`.
+- Unit tests pin native `1402`, `0406`, `0801`, and `0802` request-data layouts against the official MC protocol reference examples or their documented request structure.
 - Real-hardware emulation checks completed: `random-write-words D300/D305 -> verify -> restore`, `random-write-bits M300/M305 -> verify -> restore`, `probe-multi-block` with `0406/1406` fallback, and `probe-monitor` with `0801/0802` fallback.
 - Real-hardware stress checks completed: `read-words 960`, `read-bits 3584`, `write-words 960`, `write-bits 3584`, `100-bit / 1 minute`, `100-word / 30 minutes`, `read-host-buffer 1/16/64/480`, `read-module-buffer 2/64/512/1920`, `host-buffer 480 + module-buffer 1920 / 1 minute`, `host/module buffer write-soak 64 cycles / 60 seconds`, `mixed supported-command soak 28 cycles / 61 seconds`, `extended mixed supported-command soak 140 cycles / 301 seconds`, `unsupported 1402 -> read-words recovery x20`, and `unsupported multi-block -> cpu-model recovery x10`.
 

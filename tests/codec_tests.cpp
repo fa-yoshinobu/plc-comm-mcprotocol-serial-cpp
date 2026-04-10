@@ -391,6 +391,58 @@ void test_encode_multi_block_read_ascii_matches_manual() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
+void test_encode_register_monitor_ascii_reuses_random_read_layout() {
+  const auto config = make_ascii_c4_format4_config();
+  const std::array<mcprotocol::serial::RandomReadItem, 4> items {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}, .double_word = false},
+      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 105}, .double_word = false},
+      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 100}, .double_word = false},
+      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 105}, .double_word = false},
+  }};
+
+  std::array<std::uint8_t, 128> random_read_request {};
+  std::size_t random_read_size = 0;
+  Status status = CommandCodec::encode_random_read(
+      config,
+      mcprotocol::serial::RandomReadRequest {
+          .items = std::span<const mcprotocol::serial::RandomReadItem>(items.data(), items.size()),
+      },
+      random_read_request,
+      random_read_size);
+  assert(status.ok());
+
+  std::array<std::uint8_t, 128> monitor_request {};
+  std::size_t monitor_size = 0;
+  status = CommandCodec::encode_register_monitor(
+      config,
+      mcprotocol::serial::MonitorRegistration {
+          .items = std::span<const mcprotocol::serial::RandomReadItem>(items.data(), items.size()),
+      },
+      monitor_request,
+      monitor_size);
+  assert(status.ok());
+
+  assert(monitor_size == random_read_size);
+  constexpr std::string_view expected_prefix = "08010000";
+  assert(std::memcmp(monitor_request.data(), expected_prefix.data(), expected_prefix.size()) == 0);
+  assert(std::memcmp(
+             monitor_request.data() + expected_prefix.size(),
+             random_read_request.data() + expected_prefix.size(),
+             random_read_size - expected_prefix.size()) == 0);
+}
+
+void test_encode_read_monitor_ascii_matches_manual() {
+  const auto config = make_ascii_c4_format4_config();
+  std::array<std::uint8_t, 16> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_read_monitor(config, request_data, request_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected = "08020000";
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
 void test_parse_multi_block_read_response_ascii_mixed_blocks() {
   const auto config = make_ascii_c4_format4_config();
   const std::array<MultiBlockReadBlock, 3> blocks {{
@@ -571,6 +623,8 @@ int main() {
   test_encode_random_write_words_ascii_matches_manual();
   test_encode_random_write_bits_ascii_matches_manual();
   test_encode_multi_block_read_ascii_matches_manual();
+  test_encode_register_monitor_ascii_reuses_random_read_layout();
+  test_encode_read_monitor_ascii_matches_manual();
   test_parse_multi_block_read_response_ascii_mixed_blocks();
   test_client_binary_cpu_model_roundtrip();
   test_client_timeout();
