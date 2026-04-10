@@ -151,7 +151,7 @@ Stress tests completed on real hardware:
 - `100-word / 30 minutes`
 - `mixed supported-command soak 301 seconds`
 
-For the exact PASS / NG / HOLD matrix, see [HARDWARE_VALIDATION.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/docsrc/validation/reports/HARDWARE_VALIDATION.md).
+For the exact PASS / NG / HOLD matrix, see [HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md).
 
 ## Current Limits
 
@@ -193,9 +193,9 @@ The normal workflow is:
 
 Examples:
 
-- [examples/README.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/examples/README.md)
-- [mcu_async_batch_read.cpp](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/examples/mcu_async_batch_read.cpp)
-- [platformio_arduino_async.cpp](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/examples/platformio_arduino_async/platformio_arduino_async.cpp)
+- [examples/README.md](examples/README.md)
+- [mcu_async_batch_read.cpp](examples/mcu_async_batch_read.cpp)
+- [platformio_arduino_async.cpp](examples/platformio_arduino_async/platformio_arduino_async.cpp)
 
 ## PlatformIO
 
@@ -296,12 +296,12 @@ If your adapter is `RS-485` and needs manual direction control:
 
 This repository uses the same documentation layout style as the companion SLMP minimal repository.
 
-- [SETUP_GUIDE.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/docsrc/user/SETUP_GUIDE.md): setup and verified serial settings
-- [USAGE_GUIDE.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/docsrc/user/USAGE_GUIDE.md): CLI usage and fallback behavior
-- [examples/README.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/examples/README.md): example programs
-- [HARDWARE_VALIDATION.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/docsrc/validation/reports/HARDWARE_VALIDATION.md): PASS / NG / HOLD matrix
-- [RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/docsrc/validation/reports/RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md): dated real-hardware log
-- [DEVELOPER_NOTES.md](/home/user/myproject/OTHER/plc-comm-mcprotocol-serial-cpp/docsrc/maintainer/DEVELOPER_NOTES.md): implementation notes and follow-up items
+- [SETUP_GUIDE.md](docsrc/user/SETUP_GUIDE.md): setup and verified serial settings
+- [USAGE_GUIDE.md](docsrc/user/USAGE_GUIDE.md): CLI usage and fallback behavior
+- [examples/README.md](examples/README.md): example programs
+- [HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md): PASS / NG / HOLD matrix
+- [RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md](docsrc/validation/reports/RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md): dated real-hardware log
+- [DEVELOPER_NOTES.md](docsrc/maintainer/DEVELOPER_NOTES.md): implementation notes and follow-up items
 
 ## Documentation Build
 
