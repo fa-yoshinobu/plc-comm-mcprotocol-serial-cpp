@@ -46,7 +46,11 @@ The client exposes a transport-neutral workflow:
 cmake -S . -B build
 cmake --build build
 ctest --test-dir build --output-on-failure
+cmake --build build --target docs
 ```
+
+If `doxygen` is installed, the `docs` target generates HTML documentation under `build/docs/doxygen/html`.
+If it is not installed, the `docs` target prints the required next step.
 
 ## CLI
 
@@ -77,6 +81,17 @@ Examples:
 ./build/mcprotocol_cli --device /dev/ttyUSB0 probe-write-module-buffer
 ```
 
+## Documentation
+
+This repository now follows the same documentation layout used in the companion SLMP minimal repository.
+
+- `docsrc/user/SETUP_GUIDE.md`: bring-up steps and the verified RJ71C24-R2 serial settings
+- `docsrc/user/USAGE_GUIDE.md`: command usage, native vs emulated behavior, and recommended CLI flow
+- `examples/README.md`: compile-checked MCU-oriented sample programs
+- `docsrc/validation/reports/HARDWARE_VALIDATION.md`: current PASS / NG / HOLD matrix and validation backlog
+- `docsrc/validation/reports/RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md`: dated real-hardware evidence log for the current setup
+- `docsrc/maintainer/DEVELOPER_NOTES.md`: maintainer notes for request-shape conformance, fallback policy, and future follow-up
+
 Verified on real hardware:
 
 - Module: `RJ71C24-R2`
@@ -104,6 +119,7 @@ Notes:
 - Unit tests pin native `1402`, `0406`, `0801`, and `0802` request-data layouts against the official MC protocol reference examples or their documented request structure.
 - Real-hardware emulation checks completed: `random-write-words D300/D305 -> verify -> restore`, `random-write-bits M300/M305 -> verify -> restore`, `probe-multi-block` with `0406/1406` fallback, and `probe-monitor` with `0801/0802` fallback.
 - Real-hardware stress checks completed: `read-words 960`, `read-bits 3584`, `write-words 960`, `write-bits 3584`, `100-bit / 1 minute`, `100-word / 30 minutes`, `read-host-buffer 1/16/64/480`, `read-module-buffer 2/64/512/1920`, `host-buffer 480 + module-buffer 1920 / 1 minute`, `host/module buffer write-soak 64 cycles / 60 seconds`, `mixed supported-command soak 28 cycles / 61 seconds`, `extended mixed supported-command soak 140 cycles / 301 seconds`, `unsupported 1402 -> read-words recovery x20`, and `unsupported multi-block -> cpu-model recovery x10`.
+- For the exact PASS / NG / HOLD matrix, see `docsrc/validation/reports/HARDWARE_VALIDATION.md`.
 
 Example with the verified settings:
 
