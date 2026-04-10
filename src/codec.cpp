@@ -56,7 +56,6 @@ constexpr std::array<DeviceSpec, 27> kDeviceSpecs {{
     {DeviceCode::Z, "Z", "Z", 0xCC, 0x00CC, false, false},
     {DeviceCode::R, "R", "R", 0xAF, 0x00AF, false, false},
     {DeviceCode::ZR, "ZR", "ZR", 0xB0, 0x00B0, true, false},
-    {DeviceCode::RD, "RD", "RD", 0x2C, 0x002C, false, false},
 }};
 
 class ByteWriter {

@@ -5,6 +5,7 @@ This repository uses the tag name as the release trigger.
 ## Files To Update For A Version Bump
 
 - `CMakeLists.txt`
+- `Doxyfile`
 - `Doxyfile.in`
 - `library.json`
 - `library.properties`

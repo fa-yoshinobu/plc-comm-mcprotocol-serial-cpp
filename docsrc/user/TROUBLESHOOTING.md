@@ -60,6 +60,12 @@ Run:
 cmake --build build --target docs
 ```
 
+or:
+
+```bash
+doxygen Doxyfile
+```
+
 If it says `Doxygen not found`, install Doxygen system-wide or place a local bundle under `.tools/doxygen`.
 
 ## Markdown link check fails

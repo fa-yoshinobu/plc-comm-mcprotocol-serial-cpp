@@ -61,8 +61,8 @@ Validated target:
 | Multi-block write | CLI `probe-multi-block` | emulated pass | repeated block-wise batch writes |
 | Monitor register/read | native `0801/0802` | native ng | `0801` register path returns `0x7F22` |
 | Monitor register/read | CLI `probe-monitor` | emulated pass | repeated direct reads |
-| Device-family read probe | `probe-all` | partial pass | `26/27` passed, `RD0` returned `0x7F22` |
-| Device-family write probe | `probe-write-all` | pass with exclusions | `25/25` passed after excluding `RD0` and `S`, and using `F100` instead of `F0` |
+| Device-family read probe | `probe-all` | pass | `26/26` passed after dropping `RD` from the supported device set |
+| Device-family write probe | `probe-write-all` | pass with exclusions | `25/25` passed after excluding `S` and using `F100` instead of `F0` |
 
 ## Stress / Endurance Snapshot
 
@@ -81,7 +81,6 @@ Validated target:
 
 ## Current HOLD Items
 
-- `RD0` direct access on this setup
 - native `0403`
 - native `1402`
 - native `0406`

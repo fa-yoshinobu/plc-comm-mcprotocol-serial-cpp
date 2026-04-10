@@ -325,6 +325,12 @@ Generate API docs:
 cmake --build build --target docs
 ```
 
+Or run Doxygen directly from the repository root:
+
+```bash
+doxygen Doxyfile
+```
+
 Check Markdown links:
 
 ```bash

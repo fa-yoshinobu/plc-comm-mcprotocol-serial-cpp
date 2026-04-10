@@ -44,3 +44,9 @@ cmake --build build --target docs
 ```
 
 The output is generated under `build/docs/doxygen/html`.
+
+If you want to run Doxygen without CMake, use:
+
+```bash
+doxygen Doxyfile
+```
