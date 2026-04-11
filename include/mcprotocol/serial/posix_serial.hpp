@@ -2,10 +2,10 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <string_view>
 
 #include "mcprotocol/serial/status.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
+#include "mcprotocol/serial/string_view_compat.hpp"
 
 namespace mcprotocol::serial {
 

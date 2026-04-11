@@ -3684,10 +3684,9 @@ int main(int argc, char** argv) {
       const auto kind = qualified_buffer_kind_name(device.kind);
       for (std::uint32_t index = 0; index < points; ++index) {
         const auto value = words[index];
-        std::printf("U%X\\%.*s%u=0x%04X %u\n",
+        std::printf("U%X\\%s%u=0x%04X %u\n",
                     device.module_number,
-                    static_cast<int>(kind.size()),
-                    kind.data(),
+                    kind,
                     static_cast<unsigned>(device.word_address + index),
                     value,
                     value);
@@ -3729,10 +3728,9 @@ int main(int argc, char** argv) {
       const auto kind = qualified_buffer_kind_name(device.kind);
       for (std::uint32_t index = 0; index < points; ++index) {
         const auto value = words[index];
-        std::printf("U%X\\%.*s%u=0x%04X %u\n",
+        std::printf("U%X\\%s%u=0x%04X %u\n",
                     device.module_number,
-                    static_cast<int>(kind.size()),
-                    kind.data(),
+                    kind,
                     static_cast<unsigned>(device.word_address + index),
                     value,
                     value);

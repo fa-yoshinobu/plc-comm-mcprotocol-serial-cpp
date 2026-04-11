@@ -3,11 +3,11 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <string_view>
 
 #include "mcprotocol/serial/client.hpp"
 #include "mcprotocol/serial/high_level.hpp"
 #include "mcprotocol/serial/posix_serial.hpp"
+#include "mcprotocol/serial/string_view_compat.hpp"
 
 namespace mcprotocol::serial {
 

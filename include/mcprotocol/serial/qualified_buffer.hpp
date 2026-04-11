@@ -1,13 +1,12 @@
 #pragma once
 
 #include <array>
-#include <charconv>
 #include <cstddef>
 #include <cstdint>
-#include <string_view>
 
 #include "mcprotocol/serial/span_compat.hpp"
 #include "mcprotocol/serial/status.hpp"
+#include "mcprotocol/serial/string_view_compat.hpp"
 #include "mcprotocol/serial/types.hpp"
 
 namespace mcprotocol::serial {
@@ -26,9 +25,9 @@ struct QualifiedBufferWordDevice {
 };
 
 /// \brief Returns `"G"` or `"HG"` for the helper device kind.
-[[nodiscard]] constexpr std::string_view qualified_buffer_kind_name(
+[[nodiscard]] constexpr const char* qualified_buffer_kind_name(
     QualifiedBufferDeviceKind kind) noexcept {
-  return kind == QualifiedBufferDeviceKind::HG ? std::string_view("HG") : std::string_view("G");
+  return kind == QualifiedBufferDeviceKind::HG ? "HG" : "G";
 }
 
 /// \brief Converts a qualified word address to the corresponding module-buffer byte address.
@@ -51,10 +50,32 @@ namespace detail {
     std::string_view text,
     int base,
     std::uint32_t& out_value) noexcept {
-  const auto* begin = text.data();
-  const auto* end = text.data() + text.size();
-  const auto result = std::from_chars(begin, end, out_value, base);
-  return result.ec == std::errc() && result.ptr == end;
+  if (text.empty()) {
+    return false;
+  }
+
+  std::uint32_t value = 0U;
+  for (char ch : text) {
+    std::uint32_t digit = 0U;
+    if (ch >= '0' && ch <= '9') {
+      digit = static_cast<std::uint32_t>(ch - '0');
+    } else if (base == 16 && ch >= 'A' && ch <= 'F') {
+      digit = static_cast<std::uint32_t>(ch - 'A' + 10);
+    } else if (base == 16 && ch >= 'a' && ch <= 'f') {
+      digit = static_cast<std::uint32_t>(ch - 'a' + 10);
+    } else {
+      return false;
+    }
+
+    if (digit >= static_cast<std::uint32_t>(base)) {
+      return false;
+    }
+
+    value = static_cast<std::uint32_t>(value * static_cast<std::uint32_t>(base) + digit);
+  }
+
+  out_value = value;
+  return true;
 }
 
 [[nodiscard]] inline bool parse_u32_auto(

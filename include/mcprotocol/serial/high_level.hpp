@@ -1,14 +1,13 @@
 #pragma once
 
 #include <array>
-#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <cctype>
-#include <string_view>
 
 #include "mcprotocol/serial/span_compat.hpp"
 #include "mcprotocol/serial/status.hpp"
+#include "mcprotocol/serial/string_view_compat.hpp"
 #include "mcprotocol/serial/types.hpp"
 
 namespace mcprotocol::serial::highlevel {
@@ -26,38 +25,39 @@ namespace mcprotocol::serial::highlevel {
 namespace detail {
 
 struct DeviceParseSpec {
-  std::string_view prefix;
+  const char* prefix;
+  std::size_t prefix_length;
   DeviceCode code;
   int base;
 };
 
 constexpr std::array<DeviceParseSpec, 26> kDeviceParseSpecs {{
-    {"STS", DeviceCode::STS, 10},
-    {"STC", DeviceCode::STC, 10},
-    {"STN", DeviceCode::STN, 10},
-    {"TS", DeviceCode::TS, 10},
-    {"TC", DeviceCode::TC, 10},
-    {"TN", DeviceCode::TN, 10},
-    {"CS", DeviceCode::CS, 10},
-    {"CC", DeviceCode::CC, 10},
-    {"CN", DeviceCode::CN, 10},
-    {"SB", DeviceCode::SB, 16},
-    {"SW", DeviceCode::SW, 16},
-    {"DX", DeviceCode::DX, 16},
-    {"DY", DeviceCode::DY, 16},
-    {"ZR", DeviceCode::ZR, 16},
-    {"X", DeviceCode::X, 16},
-    {"Y", DeviceCode::Y, 16},
-    {"M", DeviceCode::M, 10},
-    {"L", DeviceCode::L, 10},
-    {"F", DeviceCode::F, 10},
-    {"V", DeviceCode::V, 10},
-    {"B", DeviceCode::B, 16},
-    {"D", DeviceCode::D, 10},
-    {"W", DeviceCode::W, 16},
-    {"S", DeviceCode::S, 10},
-    {"Z", DeviceCode::Z, 10},
-    {"R", DeviceCode::R, 10},
+    {"STS", 3U, DeviceCode::STS, 10},
+    {"STC", 3U, DeviceCode::STC, 10},
+    {"STN", 3U, DeviceCode::STN, 10},
+    {"TS", 2U, DeviceCode::TS, 10},
+    {"TC", 2U, DeviceCode::TC, 10},
+    {"TN", 2U, DeviceCode::TN, 10},
+    {"CS", 2U, DeviceCode::CS, 10},
+    {"CC", 2U, DeviceCode::CC, 10},
+    {"CN", 2U, DeviceCode::CN, 10},
+    {"SB", 2U, DeviceCode::SB, 16},
+    {"SW", 2U, DeviceCode::SW, 16},
+    {"DX", 2U, DeviceCode::DX, 16},
+    {"DY", 2U, DeviceCode::DY, 16},
+    {"ZR", 2U, DeviceCode::ZR, 16},
+    {"X", 1U, DeviceCode::X, 16},
+    {"Y", 1U, DeviceCode::Y, 16},
+    {"M", 1U, DeviceCode::M, 10},
+    {"L", 1U, DeviceCode::L, 10},
+    {"F", 1U, DeviceCode::F, 10},
+    {"V", 1U, DeviceCode::V, 10},
+    {"B", 1U, DeviceCode::B, 16},
+    {"D", 1U, DeviceCode::D, 10},
+    {"W", 1U, DeviceCode::W, 16},
+    {"S", 1U, DeviceCode::S, 10},
+    {"Z", 1U, DeviceCode::Z, 10},
+    {"R", 1U, DeviceCode::R, 10},
 }};
 
 [[nodiscard]] constexpr char ascii_upper(char value) noexcept {
@@ -68,10 +68,32 @@ constexpr std::array<DeviceParseSpec, 26> kDeviceParseSpecs {{
     std::string_view text,
     std::uint32_t& out_value,
     int base) noexcept {
-  const auto* begin = text.data();
-  const auto* end = text.data() + text.size();
-  const auto result = std::from_chars(begin, end, out_value, base);
-  return result.ec == std::errc() && result.ptr == end;
+  if (text.empty()) {
+    return false;
+  }
+
+  std::uint32_t value = 0U;
+  for (char ch : text) {
+    std::uint32_t digit = 0U;
+    if (ch >= '0' && ch <= '9') {
+      digit = static_cast<std::uint32_t>(ch - '0');
+    } else if (base == 16 && ch >= 'A' && ch <= 'F') {
+      digit = static_cast<std::uint32_t>(ch - 'A' + 10);
+    } else if (base == 16 && ch >= 'a' && ch <= 'f') {
+      digit = static_cast<std::uint32_t>(ch - 'a' + 10);
+    } else {
+      return false;
+    }
+
+    if (digit >= static_cast<std::uint32_t>(base)) {
+      return false;
+    }
+
+    value = static_cast<std::uint32_t>(value * static_cast<std::uint32_t>(base) + digit);
+  }
+
+  out_value = value;
+  return true;
 }
 
 }  // namespace detail
@@ -125,12 +147,12 @@ constexpr std::array<DeviceParseSpec, 26> kDeviceParseSpecs {{
     std::string_view text,
     DeviceAddress& out_device) noexcept {
   for (const auto& spec : detail::kDeviceParseSpecs) {
-    if (text.size() <= spec.prefix.size()) {
+    if (text.size() <= spec.prefix_length) {
       continue;
     }
 
     bool prefix_match = true;
-    for (std::size_t index = 0; index < spec.prefix.size(); ++index) {
+    for (std::size_t index = 0; index < spec.prefix_length; ++index) {
       const char lhs = detail::ascii_upper(text[index]);
       if (lhs != spec.prefix[index]) {
         prefix_match = false;
@@ -142,7 +164,7 @@ constexpr std::array<DeviceParseSpec, 26> kDeviceParseSpecs {{
     }
 
     std::uint32_t number = 0;
-    if (!detail::parse_u32(text.substr(spec.prefix.size()), number, spec.base)) {
+    if (!detail::parse_u32(text.substr(spec.prefix_length), number, spec.base)) {
       return make_status(StatusCode::InvalidArgument, "Device address number is invalid");
     }
 
