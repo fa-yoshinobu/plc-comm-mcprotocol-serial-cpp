@@ -16,6 +16,29 @@
 namespace mcprotocol::serial {
 namespace {
 
+#if defined(__linux__)
+using LinuxCc = unsigned char;
+using LinuxSpeed = unsigned int;
+using LinuxTcflag = unsigned int;
+
+struct LinuxTermios2 {
+  LinuxTcflag c_iflag;
+  LinuxTcflag c_oflag;
+  LinuxTcflag c_cflag;
+  LinuxTcflag c_lflag;
+  LinuxCc c_line;
+  LinuxCc c_cc[19];
+  LinuxSpeed c_ispeed;
+  LinuxSpeed c_ospeed;
+};
+
+constexpr LinuxTcflag kLinuxCbaud = 0x0000100fU;
+constexpr LinuxTcflag kLinuxCibaud = 0x100f0000U;
+constexpr LinuxTcflag kLinuxBother = 0x00001000U;
+constexpr unsigned long kLinuxTcgets2 = _IOR('T', 0x2A, LinuxTermios2);
+constexpr unsigned long kLinuxTcsets2 = _IOW('T', 0x2B, LinuxTermios2);
+#endif
+
 [[nodiscard]] Status transport_error(const char* message) noexcept {
   return make_status(StatusCode::Transport, message);
 }
@@ -47,6 +70,10 @@ namespace {
       return B9600;
     case 19200:
       return B19200;
+#if defined(B28800)
+    case 28800:
+      return B28800;
+#endif
     case 38400:
       return B38400;
     case 57600:
@@ -64,6 +91,25 @@ namespace {
   }
 }
 
+#if defined(__linux__)
+[[nodiscard]] Status configure_custom_baud_linux(int fd, std::uint32_t baud_rate) noexcept {
+  LinuxTermios2 tty {};
+  if (::ioctl(fd, kLinuxTcgets2, &tty) != 0) {
+    return make_status(StatusCode::InvalidArgument, "Unsupported baud rate");
+  }
+
+  tty.c_cflag &= ~(kLinuxCbaud | kLinuxCibaud);
+  tty.c_cflag |= kLinuxBother;
+  tty.c_ispeed = baud_rate;
+  tty.c_ospeed = baud_rate;
+
+  if (::ioctl(fd, kLinuxTcsets2, &tty) != 0) {
+    return make_status(StatusCode::InvalidArgument, "Unsupported baud rate");
+  }
+  return ok_status();
+}
+#endif
+
 [[nodiscard]] Status configure_termios(int fd, const PosixSerialConfig& config) noexcept {
   termios tty {};
   if (::tcgetattr(fd, &tty) != 0) {
@@ -71,10 +117,6 @@ namespace {
   }
 
   const speed_t speed = to_baud_constant(config.baud_rate);
-  if (speed == 0) {
-    return make_status(StatusCode::InvalidArgument, "Unsupported baud rate");
-  }
-
   ::cfmakeraw(&tty);
   tty.c_cflag |= CLOCAL | CREAD;
   tty.c_cflag &= ~CSIZE;
@@ -131,15 +173,43 @@ namespace {
   tty.c_cc[VMIN] = 0;
   tty.c_cc[VTIME] = 0;
 
-  if (::cfsetispeed(&tty, speed) != 0 || ::cfsetospeed(&tty, speed) != 0) {
-    return transport_error("Failed to configure baud rate");
+  if (speed != 0) {
+    if (::cfsetispeed(&tty, speed) != 0 || ::cfsetospeed(&tty, speed) != 0) {
+      return transport_error("Failed to configure baud rate");
+    }
   }
   if (::tcsetattr(fd, TCSANOW, &tty) != 0) {
     return transport_error("tcsetattr failed");
   }
+#if defined(__linux__)
+  if (speed == 0) {
+    const Status custom_baud_status = configure_custom_baud_linux(fd, config.baud_rate);
+    if (!custom_baud_status.ok()) {
+      return custom_baud_status;
+    }
+  }
+#else
+  if (speed == 0) {
+    return make_status(StatusCode::InvalidArgument, "Unsupported baud rate");
+  }
+#endif
   if (::tcflush(fd, TCIOFLUSH) != 0) {
     return transport_error("tcflush failed");
   }
+  return ok_status();
+}
+
+[[nodiscard]] Status enable_exclusive_access(int fd) noexcept {
+#if defined(TIOCEXCL)
+  if (::ioctl(fd, TIOCEXCL) != 0) {
+    if (errno == ENOTTY || errno == EINVAL || errno == ENOSYS) {
+      return ok_status();
+    }
+    return transport_errno("exclusive access failed");
+  }
+#else
+  (void)fd;
+#endif
   return ok_status();
 }
 
@@ -167,11 +237,19 @@ Status PosixSerialPort::open(const PosixSerialConfig& config) noexcept {
     close();
     return status;
   }
+  const Status exclusive_status = enable_exclusive_access(fd_);
+  if (!exclusive_status.ok()) {
+    close();
+    return exclusive_status;
+  }
   return ok_status();
 }
 
 void PosixSerialPort::close() noexcept {
   if (fd_ >= 0) {
+#if defined(TIOCNXCL)
+    (void)::ioctl(fd_, TIOCNXCL);
+#endif
     ::close(fd_);
     fd_ = -1;
   }

@@ -61,6 +61,7 @@ using mcprotocol::serial::qualified_buffer_kind_name;
 enum class CommandKind : std::uint8_t {
   None,
   CpuModel,
+  RecoverC24,
   Loopback,
   ReadWords,
   ReadBits,
@@ -208,6 +209,20 @@ constexpr std::size_t kCliMaxBatchBitPoints = mcprotocol::serial::kMaxBatchBitPo
       std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
 }
 
+[[nodiscard]] bool equals_ignore_case(std::string_view lhs, std::string_view rhs) {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+  for (std::size_t index = 0; index < lhs.size(); ++index) {
+    const auto lhs_ch = static_cast<unsigned char>(lhs[index]);
+    const auto rhs_ch = static_cast<unsigned char>(rhs[index]);
+    if (std::tolower(lhs_ch) != std::tolower(rhs_ch)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 [[nodiscard]] constexpr std::size_t cli_request_command_header_size(const ProtocolConfig& config) {
   return config.code_mode == CodeMode::Ascii ? 8U : 4U;
 }
@@ -255,6 +270,7 @@ void print_usage() {
       stderr,
       "Usage:\n"
       "  mcprotocol_cli [options] cpu-model\n"
+      "  mcprotocol_cli [options] recover-c24 [eot|cl]\n"
       "  mcprotocol_cli [options] loopback HEXASCII\n"
       "  mcprotocol_cli [options] read-words DEVICE POINTS\n"
       "  mcprotocol_cli [options] read-bits DEVICE POINTS\n"
@@ -295,7 +311,14 @@ void print_usage() {
       "  --self-station N           Self-station number for m:n connections\n"
       "  --sum-check on|off         Enable or disable sum-check (default: on)\n"
       "  --response-timeout-ms N    Response timeout in milliseconds (default: 5000)\n"
-      "  --inter-byte-timeout-ms N  Inter-byte timeout in milliseconds (default: 250)\n");
+      "  --inter-byte-timeout-ms N  Inter-byte timeout in milliseconds (default: 250)\n"
+      "\n"
+      "Notes:\n"
+      "  recover-c24 sends ASCII EOT CRLF by default; pass cl to send CL CRLF.\n"
+      "  Use recover-c24 after timeout or mixed-response states on C24 ASCII links; no reply is expected.\n"
+      "  read-qualified-words / write-qualified-words use the practical 0601/1601 helper path.\n"
+      "  read-native-qualified-words / write-native-qualified-words are native probes for unresolved extended-device access.\n"
+      "  random-read / random-write-* / probe-multi-block / probe-monitor expose native RJ71C24-R2 errors directly.\n");
 }
 
 [[nodiscard]] bool parse_u32(std::string_view text, std::uint32_t& out_value, int base = 10) {
@@ -506,6 +529,8 @@ void print_usage() {
     } else if (!arg.empty() && arg.front() != '-') {
       if (arg == "cpu-model" || arg == "read-cpu-model") {
         options.command = CommandKind::CpuModel;
+      } else if (arg == "recover-c24") {
+        options.command = CommandKind::RecoverC24;
       } else if (arg == "loopback") {
         options.command = CommandKind::Loopback;
       } else if (arg == "read-words") {
@@ -582,6 +607,8 @@ void print_usage() {
     case CommandKind::ProbeWriteHostBuffer:
     case CommandKind::ProbeWriteModuleBuffer:
       return options.command_argc == 0;
+    case CommandKind::RecoverC24:
+      return options.command_argc <= 1;
     case CommandKind::Loopback:
       return options.command_argc == 1;
     case CommandKind::ReadWords:
@@ -662,6 +689,68 @@ void dump_frame_bytes(std::string_view label, std::span<const std::byte> bytes) 
     std::fputc(std::isprint(ch) ? static_cast<int>(ch) : '.', stderr);
   }
   std::fputc('\n', stderr);
+}
+
+[[nodiscard]] bool parse_c24_recovery_kind(
+    std::string_view arg,
+    std::byte& out_control_code,
+    std::string_view& out_name) {
+  if (arg.empty() || equals_ignore_case(arg, "eot")) {
+    out_control_code = std::byte {0x04U};
+    out_name = "EOT";
+    return true;
+  }
+  if (equals_ignore_case(arg, "cl")) {
+    out_control_code = std::byte {0x0CU};
+    out_name = "CL";
+    return true;
+  }
+  return false;
+}
+
+[[nodiscard]] Status run_c24_recovery(
+    PosixSerialPort& port,
+    bool rts_toggle,
+    std::byte control_code,
+    bool dump_frames = false) {
+  Status status = discard_stale_rx(port);
+  if (!status.ok()) {
+    return status;
+  }
+
+  const std::array<std::byte, 3> control_frame {
+      control_code,
+      std::byte {0x0DU},
+      std::byte {0x0AU},
+  };
+
+  if (rts_toggle) {
+    status = port.set_rts(true);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+
+  if (dump_frames || g_dump_frames) {
+    dump_frame_bytes("tx", std::span<const std::byte>(control_frame.data(), control_frame.size()));
+  }
+
+  status = port.write_all(std::span<const std::byte>(control_frame.data(), control_frame.size()));
+  if (status.ok()) {
+    status = port.drain_tx();
+  }
+
+  if (rts_toggle) {
+    const Status rts_status = port.set_rts(false);
+    if (status.ok()) {
+      status = rts_status;
+    }
+  }
+  if (!status.ok()) {
+    return status;
+  }
+
+  return discard_stale_rx(port);
 }
 
 [[nodiscard]] Status drive_request(
@@ -1253,18 +1342,20 @@ int main(int argc, char** argv) {
   }
 
   MelsecSerialClient client;
-  if (options.rts_toggle) {
-    client.set_rs485_hooks(Rs485Hooks {
-        .on_tx_begin = on_tx_begin,
-        .on_tx_end = on_tx_end,
-        .user = &port,
-    });
-  }
+  if (options.command != CommandKind::RecoverC24) {
+    if (options.rts_toggle) {
+      client.set_rs485_hooks(Rs485Hooks {
+          .on_tx_begin = on_tx_begin,
+          .on_tx_end = on_tx_end,
+          .user = &port,
+      });
+    }
 
-  status = client.configure(options.protocol);
-  if (!status.ok()) {
-    print_status_error("Invalid protocol configuration", status);
-    return 1;
+    status = client.configure(options.protocol);
+    if (!status.ok()) {
+      print_status_error("Invalid protocol configuration", status);
+      return 1;
+    }
   }
 
   CommandState command_state;
@@ -1282,6 +1373,26 @@ int main(int argc, char** argv) {
         return 1;
       }
       std::printf("model_name=%s\nmodel_code=0x%04X\n", info.model_name.data(), info.model_code);
+      return 0;
+    }
+
+    case CommandKind::RecoverC24: {
+      std::byte control_code {};
+      std::string_view control_name;
+      const std::string_view requested_kind =
+          options.command_argc == 0 ? std::string_view {} : std::string_view(options.command_argv[0]);
+      if (!parse_c24_recovery_kind(requested_kind, control_code, control_name)) {
+        std::fprintf(stderr, "recover-c24 mode must be 'eot' or 'cl'\n");
+        return 1;
+      }
+      status = run_c24_recovery(port, options.rts_toggle, control_code, options.dump_frames);
+      if (!status.ok()) {
+        print_status_error("recover-c24 failed", status);
+        return 1;
+      }
+      std::printf("recover-c24=ok code=%.*s response=none\n",
+                  static_cast<int>(control_name.size()),
+                  control_name.data());
       return 0;
     }
 

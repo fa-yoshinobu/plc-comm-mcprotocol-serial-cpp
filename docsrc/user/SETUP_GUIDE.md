@@ -17,6 +17,22 @@ This guide is the short path to the known-good setup used for the current real-h
 - Station number: `0`
 - Serial line: `19200 bps / 8E1`
 
+## Additional Verified Setup
+
+- PLC CPU: Mitsubishi L-series `L26CPU-BT`
+- Serial module: `LJ71C24`
+- Link: `RS-232C`
+- Communication protocol: `MC protocol (Format 5)`
+- Code: Binary
+- Sum check: `on`
+- Station number: `0`
+- Serial line: `28800 bps / 8E2`
+- CLI family selection: `--series ql`
+
+Do not reuse `--series iqr` on this L-series target. On `2026-04-11`, even contiguous
+`read-words D100 1` and `read-bits M100 1` failed with `0x7F22` until the CLI family selection was
+switched to `ql`.
+
 ## Build
 
 ```bash
@@ -74,14 +90,20 @@ Then verify a harmless loopback:
 6. `write-bits` against a safe test range
 7. `read-host-buffer` / `read-module-buffer`
 8. `write-host-buffer` / `write-module-buffer`
+9. `read-qualified-words` / `write-qualified-words`
 
 After that, use the unsupported native checks only if you explicitly want to confirm what the module rejects:
 
 1. `random-read`
 2. `random-write-words`
 3. `random-write-bits`
-4. `probe-multi-block`
-5. `probe-monitor`
+4. `read-native-qualified-words`
+5. `probe-multi-block`
+6. `probe-monitor`
+
+If you need `U...\\G...` or `U...\\HG...` access during normal bring-up, stay on
+`read-qualified-words` / `write-qualified-words`. The native qualified commands are follow-up probes
+on this setup.
 
 ## Where To Look Next
 

@@ -29,6 +29,10 @@ This directory contains both simulated integration examples and board-oriented b
   - runs a small `read-words`
 - `linux_cli/cyclic_read_words.sh`
   - repeats `read-words` for a configurable duration
+- `linux_cli/supported_device_rw_soak.sh`
+  - runs an approximately 3-minute read/write/verify/restore soak
+  - uses the supported non-low-address device set that completed command screening without protocol errors
+  - tolerates RUN-mode readback mismatch and reports it as observation data
 
 ## Build
 

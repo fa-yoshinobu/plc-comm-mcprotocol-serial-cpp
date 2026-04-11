@@ -496,7 +496,28 @@ void test_encode_random_write_bits_ascii_matches_manual() {
       request_size);
   assert(status.ok());
 
-  constexpr std::string_view expected = "140200010002M*0000500Y*00002F1";
+  constexpr std::string_view expected = "140200010002M*00005000Y*00002F01";
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_random_write_bits_ascii_iqr_shape() {
+  const auto config = make_ascii_c4_format4_iqr_config();
+  const std::array<RandomWriteBitItem, 2> items {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 50}, .value = BitValue::Off},
+      {.device = {.code = mcprotocol::serial::DeviceCode::Y, .number = 0x2F}, .value = BitValue::On},
+  }};
+
+  std::array<std::uint8_t, 96> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_random_write_bits(
+      config,
+      std::span<const RandomWriteBitItem>(items.data(), items.size()),
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected = "140200030002M***000000500000Y***0000002F0001";
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
@@ -881,6 +902,7 @@ int main() {
   test_encode_batch_write_bits_ascii_limit_matches_buffer();
   test_encode_random_write_words_ascii_matches_manual();
   test_encode_random_write_bits_ascii_matches_manual();
+  test_encode_random_write_bits_ascii_iqr_shape();
   test_encode_multi_block_read_ascii_matches_manual();
   test_encode_register_monitor_ascii_reuses_random_read_layout();
   test_encode_read_monitor_ascii_matches_manual();

@@ -23,6 +23,15 @@ Check the physical and protocol basics first:
 - correct `Format4 ASCII` vs another frame format
 - correct station number
 
+If the validated `RJ71C24-R2` ASCII link gets stuck after a failed native probe, recover the C24
+transmission sequence before the next command:
+
+```bash
+./build/mcprotocol_cli ... recover-c24
+```
+
+That sends ASCII `EOT CRLF` and expects no response payload.
+
 ## `0x7F22` or `0x7F23` from `RJ71C24-R2`
 
 On the validated `RJ71C24-R2` setup, that usually means one of these:
@@ -47,6 +56,18 @@ Useful follow-up checks:
 - rerun with `--dump-frames on` to inspect the exact TX/RX bytes
 - keep `--sum-check off` on the validated setup; turning it on can produce `0x7F23` even for `0401`
 - if a `dword-only` random or monitor request is involved, expect `0x7F23` more often than `0x7F22`
+
+## `0x7F22` even on simple `read-words` / `read-bits` after swapping hardware
+
+Check the CLI family selection against the actual CPU family.
+
+Known example from `2026-04-11`:
+
+- `L26CPU-BT + LJ71C24 + Format5/Binary` required `--series ql`
+- the same setup under `--series iqr` returned `0x7F22` even for `read-words D100 1` and `read-bits M100 1`
+
+If you changed the PLC CPU or serial module family, rerun `cpu-model` first and then pick the
+matching `--series` before diagnosing anything else.
 
 ## MCU board compiles but never receives data
 

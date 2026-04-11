@@ -1960,10 +1960,12 @@ Status encode_random_write_bits(
     if (!append_device_reference(writer, config, item.device)) {
       return buffer_too_small("Random write bits request buffer is too small");
     }
+    const std::uint16_t bit_value = item.value == BitValue::On ? 0x0001U : 0x0000U;
     const bool ok = config.code_mode == CodeMode::Ascii
-                        ? writer.push(item.value == BitValue::On ? static_cast<std::uint8_t>('1')
-                                                                : static_cast<std::uint8_t>('0'))
-                        : writer.push(item.value == BitValue::On ? 0x01U : 0x00U);
+                        ? (is_iq_r_series(config) ? append_word_data_ascii(writer, bit_value)
+                                                  : append_ascii_hex(writer, bit_value, 2U))
+                        : (is_iq_r_series(config) ? writer.append_le16(bit_value)
+                                                  : writer.push(static_cast<std::uint8_t>(bit_value)));
     if (!ok) {
       return buffer_too_small("Random write bits request buffer is too small");
     }

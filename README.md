@@ -101,7 +101,25 @@ First command to try:
 If you need `U...\\G...` or `U...\\HG...` style qualified word access, use the helper commands below.
 These are convenience wrappers over the already validated `0601/1601 module buffer` path, not proof that native `0082/0083` extended-device commands work on this setup.
 On the current validated setup, single-word `U3E0\HG20` read/write/restore was confirmed on real hardware.
-Broader `U...\\G...` coverage is not established yet, and `U3E0\G10` still returned `0x7F22` during spot checks.
+A `2026-04-11` spot recheck of helper `U3E0\G10` returned `0x83BD`.
+Native qualified probes for `U3E0\G10` / `U3E0\HG20` remain unresolved and can still return
+`0x7F22` or time out.
+
+If a failed native probe leaves the C24 link in a mixed-response or timeout state, recover the
+ASCII transmission sequence before the next command:
+
+```bash
+./build/mcprotocol_cli \
+  --device /dev/ttyUSB0 \
+  --baud 19200 \
+  --data-bits 8 \
+  --stop-bits 1 \
+  --parity E \
+  --frame c4-ascii-f4 \
+  --sum-check off \
+  --station 0 \
+  recover-c24
+```
 
 ```bash
 ./build/mcprotocol_cli \
@@ -143,7 +161,7 @@ Start with these pages instead of reading the whole repository at once.
 - [Hardware Validation Matrix](docsrc/validation/reports/HARDWARE_VALIDATION.md)
 - [Footprint Profiles](docsrc/validation/reports/FOOTPRINT_PROFILES.md)
 - [Developer Notes](docsrc/maintainer/DEVELOPER_NOTES.md)
-- [TODO](TODO.md)
+- [Native Command Backlog](docsrc/maintainer/NATIVE_COMMAND_BACKLOG.md)
 - [Release Process](docsrc/maintainer/RELEASE_PROCESS.md)
 - [Changelog](CHANGELOG.md)
 
@@ -172,6 +190,10 @@ Start with these pages instead of reading the whole repository at once.
 - Read CPU model
 - Loopback
 
+Some native command families are intentionally still exposed even though the current validated
+`RJ71C24-R2` setup rejects them. The CLI keeps them visible so you can see the native end code
+directly instead of hitting a fallback path.
+
 ### Verified on real hardware
 
 The following command flows were verified on `RJ71C24-R2` with the settings above:
@@ -186,8 +208,9 @@ The following command flows were verified on `RJ71C24-R2` with the settings abov
 - `write-host-buffer`
 - `read-module-buffer`
 - `write-module-buffer`
-- `read-qualified-words`
-- `write-qualified-words`
+- `read-qualified-words` / `write-qualified-words`
+  helper path over `0601/1601`, with `U3E0\HG20` read/write/restore validated and a `2026-04-11`
+  spot recheck of `U3E0\G10=0x83BD`
 
 Stress tests completed on real hardware:
 
@@ -205,12 +228,19 @@ For the exact PASS / NG / HOLD matrix, see [HARDWARE_VALIDATION.md](docsrc/valid
 
 These are important if you are using `RJ71C24-R2`.
 
+The commands below remain visible in the public API and CLI, but on this validated setup they
+should be treated as native probes, not known-good workflows.
+
 - Native `0403 random read` returns `0x7F22` on the verified setup
 - Native `1402 random write words` returns `0x7F22`
 - Native `1402 random write bits` returns `0x7F23`
 - Native `0406 multi-block read` returns `0x7F22`
 - Native `1406 multi-block write` returns `0x7F22`
 - Native `0801 monitor registration` returns `0x7F22`
+- Native qualified access via `read-native-qualified-words` / `write-native-qualified-words`
+  is not a known-good path on this setup; `U3E0\G10` alternated between `0x7F22` and timeout
+  across spot checks, `U3E0\HG20` native read returned `0x7F22`, and native `U3E0\HG20` write
+  timed out during revalidation
 
 The CLI does not fall back to other commands for these native errors.
 Large contiguous `write-words` and `write-bits` are still split automatically to fit fixed request buffers.
@@ -331,6 +361,7 @@ Useful commands:
 ./build/mcprotocol_cli --device /dev/ttyUSB0 read-bits M100 8
 ./build/mcprotocol_cli --device /dev/ttyUSB0 write-words D100=123 D101=456
 ./build/mcprotocol_cli --device /dev/ttyUSB0 write-bits M100=1 M101=0
+./build/mcprotocol_cli --device /dev/ttyUSB0 --frame c4-ascii-f4 recover-c24
 ./build/mcprotocol_cli --device /dev/ttyUSB0 probe-all
 ./build/mcprotocol_cli --device /dev/ttyUSB0 probe-write-all
 ```

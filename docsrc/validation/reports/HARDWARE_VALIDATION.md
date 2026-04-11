@@ -2,14 +2,17 @@
 
 Audience: maintainers and future validation follow-up work.
 
-This file is the validation matrix and backlog for the current real-hardware setup.
+This file is the validation matrix and backlog for the current real-hardware setups.
 
 Use it together with:
 
 - [../../../README.md](../../../README.md) for the repository overview
 - [../../user/SETUP_GUIDE.md](../../user/SETUP_GUIDE.md) for the verified serial settings
 - [../../user/USAGE_GUIDE.md](../../user/USAGE_GUIDE.md) for command behavior notes
+- [LJ71C24_RS232C_FORMAT5_2026-04-11.md](LJ71C24_RS232C_FORMAT5_2026-04-11.md) for the dated L-series / `LJ71C24` evidence log
+- [RJ71C24_R2_RS232C_FORMAT5_2026-04-11.md](RJ71C24_R2_RS232C_FORMAT5_2026-04-11.md) for the dated iQ-R / `RJ71C24-R2` Format5 evidence log
 - [RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md](RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md) for the dated evidence log
+- [RJ71C24_R2_RS232C_FORMAT4_2026-04-11.md](RJ71C24_R2_RS232C_FORMAT4_2026-04-11.md) for recovery and follow-up native-command rechecks
 
 ## Validation Flow
 
@@ -49,15 +52,41 @@ Validated target:
 | Host buffer write | `1613` | native pass | real-hardware verify and restore completed |
 | Module buffer read | `0601` | native pass | validated up to `1920` bytes |
 | Module buffer write | `1601` | native pass | real-hardware verify and restore completed |
-| Qualified helper read/write | `read-qualified-words` / `write-qualified-words` | helper pass, narrow scope | `U3E0\\HG20` single-word read/write/restore passed; `U3E0\\G10` read returned `0x7F22` |
-| Random read | native `0403` | native ng | module returns `0x7F22` |
-| Random write words | native `1402` | native ng | module returns `0x7F22` |
+| Qualified helper read/write | `read-qualified-words` / `write-qualified-words` over `0601/1601` | helper pass, narrow scope | recommended public path on this setup; `U3E0\\HG20` single-word read/write/restore passed; `2026-04-11` spot recheck `U3E0\\G10=0x83BD` |
+| Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | hold | mixed results across retries; `U3E0\\G10` produced both `0x7F22` and timeout, `U3E0\\HG20` native read returned `0x7F22`, and native `U3E0\\HG20` write timed out; no validated native write effect |
+| Random read | native `0403` | native ng | module returns `0x7F22`; `2026-04-11` recheck with `--series iqr` switched to `0403 0002` and still failed |
+| Random write words | native `1402` | native ng | module returns `0x7F22`; `2026-04-11` recheck with `--series iqr` switched to `1402 0002` and still failed |
 | Random write bits | native `1402` | native ng | module returns `0x7F23` |
-| Multi-block read | native `0406` | native ng | module returns `0x7F22` |
-| Multi-block write | native `1406` | native ng | module returns `0x7F22` |
-| Monitor register/read | native `0801/0802` | native ng | `0801` register path returns `0x7F22` |
+| Multi-block read | native `0406` | native ng | module returns `0x7F22`; `2026-04-11` recheck with `--series iqr` switched to `0406 0002` and still failed |
+| Multi-block write | native `1406` | native ng | module returns `0x7F22`; `2026-04-11` recheck with `--series iqr` switched to `1406 0002` and still failed |
+| Monitor register/read | native `0801/0802` | native ng | `0801` register path returns `0x7F22`; `2026-04-11` recheck with `--series iqr` switched to `0801 0002` and still failed |
 | Device-family read probe | `probe-all` | pass | `26/26` passed after dropping `RD` from the supported device set |
 | Device-family write probe | `probe-write-all` | pass with exclusions | `25/25` passed after excluding `S` and using `F100` instead of `F0` |
+
+Additional validated target:
+
+- PLC CPU: Mitsubishi L-series `L26CPU-BT`
+- Serial module: `LJ71C24`
+- Link: `RS-232C`
+- Settings: `28800 / 8E2 / MC Protocol Format5 Binary / sum-check on / station 0`
+- CLI family selection: use `--series ql`; `--series iqr` caused even contiguous `D100` / `M100` reads to fail with `0x7F22`
+
+| Area | Command path | Current status | Notes |
+|---|---|---|---|
+| CPU identification | `cpu-model` | native pass | returns `L26CPU-BT`, `0x0542` |
+| Contiguous read/write | `0401/1401` via `read-*` / `write-*` | native pass | supported-device screening `25/25` passed with non-low addresses under `--series ql` |
+| Supported-device soak | `supported_device_rw_soak.sh` | pass | two `180` second runs passed with no protocol errors; bit-family readback often showed RUN overwrite |
+| Host buffer read | `0613` | native pass | `probe-host-buffer` passed |
+| Host buffer write | `1613` | hold | `probe-write-host-buffer` wrote but verify mismatched at start `0` |
+| Module buffer read/write | `0601/1601` | native pass | `probe-module-buffer` and `probe-write-module-buffer` passed |
+| Qualified helper read/write | `read-qualified-words` / `write-qualified-words` over `0601/1601` | helper pass, narrow scope | helper `U3E0\\G10=0x0000`; helper `U3E0\\HG20` read/write/restore passed |
+| Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | hold / not applicable | native `U3E0\\G10` returned `0x4030`; native `HG` path is not applicable under `--series ql` |
+| Random read | native `0403` | native ng | `0x7F23` |
+| Random write words | native `1402` | native ng | `0x7F23`; no write effect confirmed |
+| Random write bits | native `1402` | native ng | `0x7F23`; no write effect confirmed |
+| Multi-block read | native `0406` | native ng | `0x7F23` |
+| Multi-block write | native `1406` | native ng | `0x7F22`; contiguous restore passed |
+| Monitor register/read | native `0801/0802` | native ng / hold | `0801` register path returned `0x7F23` |
 
 ## Stress / Endurance Snapshot
 
@@ -81,11 +110,14 @@ Validated target:
 - native `0406`
 - native `1406`
 - native `0801/0802`
+- native qualified extended-device access
 
 ## Maintainer Note
 
 The library now pins native request-data shapes for `1402`, `0406`, `0801`, and `0802` with host-side tests. At this point, the best current interpretation is:
 
 - request encoding matches the official MC protocol reference examples or documented request structure
-- the validated `RJ71C24-R2` setup still rejects those native commands
+- `2026-04-11` follow-up rechecks showed the same native failures even after switching those families to iQ-R subcommands with `--series iqr`
+- the validated `RJ71C24-R2` and `LJ71C24` setups still reject those native commands once the CLI family selection is matched to the actual CPU family
 - the CLI should expose those native failures directly on this setup
+- qualified helper commands and native qualified probes should stay documented as separate paths
