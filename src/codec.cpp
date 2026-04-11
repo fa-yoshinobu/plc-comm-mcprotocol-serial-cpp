@@ -29,7 +29,7 @@ struct DeviceSpec {
   bool bit_device;
 };
 
-constexpr std::array<DeviceSpec, 27> kDeviceSpecs {{
+constexpr std::array<DeviceSpec, 28> kDeviceSpecs {{
     {DeviceCode::X, "X", "X", 0x9C, 0x009C, true, true},
     {DeviceCode::Y, "Y", "Y", 0x9D, 0x009D, true, true},
     {DeviceCode::M, "M", "M", 0x90, 0x0090, false, true},
@@ -56,6 +56,8 @@ constexpr std::array<DeviceSpec, 27> kDeviceSpecs {{
     {DeviceCode::Z, "Z", "Z", 0xCC, 0x00CC, false, false},
     {DeviceCode::R, "R", "R", 0xAF, 0x00AF, false, false},
     {DeviceCode::ZR, "ZR", "ZR", 0xB0, 0x00B0, true, false},
+    {DeviceCode::G, "G", "G", 0xAB, 0x00AB, false, false},
+    {DeviceCode::HG, "HG", "HG", 0x2E, 0x002E, false, false},
 }};
 
 class ByteWriter {
@@ -161,6 +163,11 @@ class ByteWriter {
   return is_iq_r_series(config) ? 8U : 6U;
 }
 
+[[nodiscard]] constexpr std::size_t ascii_extended_device_number_width(
+    const ProtocolConfig& config) noexcept {
+  return is_iq_r_series(config) ? 10U : 6U;
+}
+
 [[nodiscard]] constexpr std::size_t binary_device_code_width(const ProtocolConfig& config) noexcept {
   return is_iq_r_series(config) ? 2U : 1U;
 }
@@ -213,6 +220,15 @@ class ByteWriter {
 
 [[nodiscard]] constexpr std::uint16_t bit_subcommand(const ProtocolConfig& config) noexcept {
   return is_iq_r_series(config) ? 0x0003U : 0x0001U;
+}
+
+[[nodiscard]] constexpr std::uint16_t extended_word_subcommand(const ProtocolConfig& config) noexcept {
+  return is_iq_r_series(config) ? 0x0082U : 0x0080U;
+}
+
+[[nodiscard]] constexpr std::size_t ascii_device_modification_width(
+    const ProtocolConfig& config) noexcept {
+  return is_iq_r_series(config) ? 4U : 3U;
 }
 
 [[nodiscard]] const DeviceSpec* find_device_spec(DeviceCode code) noexcept {
@@ -341,6 +357,151 @@ class ByteWriter {
     return append_device_reference_ascii(writer, config, device);
   }
   return append_device_reference_binary(writer, config, device);
+}
+
+[[nodiscard]] Status invalid_argument(const char* message) noexcept;
+[[nodiscard]] Status buffer_too_small(const char* message) noexcept;
+[[nodiscard]] Status parse_error(const char* message) noexcept;
+[[nodiscard]] bool parse_ascii_word(
+    std::span<const std::uint8_t> bytes,
+    std::uint16_t& value) noexcept;
+[[nodiscard]] bool parse_binary_word(
+    std::span<const std::uint8_t> bytes,
+    std::size_t offset,
+    std::uint16_t& value) noexcept;
+
+[[nodiscard]] constexpr DeviceCode qualified_device_code(
+    const QualifiedBufferWordDevice& device) noexcept {
+  return device.kind == QualifiedBufferDeviceKind::HG ? DeviceCode::HG : DeviceCode::G;
+}
+
+[[nodiscard]] constexpr std::uint8_t qualified_binary_direct_memory(
+    const ProtocolConfig& config,
+    const QualifiedBufferWordDevice& device) noexcept {
+  (void)config;
+  if (device.kind == QualifiedBufferDeviceKind::HG) {
+    return 0xFAU;
+  }
+  // CPU No.1-4 occupy U3E0..U3E3 in the manual's CPU buffer examples.
+  if (device.module_number >= 0x03E0U && device.module_number <= 0x03E3U) {
+    return 0xFAU;
+  }
+  return 0xF8U;
+}
+
+[[nodiscard]] Status validate_extended_word_device(
+    const ProtocolConfig& config,
+    const QualifiedBufferWordDevice& device) noexcept {
+  if (device.kind == QualifiedBufferDeviceKind::HG && !is_iq_r_series(config)) {
+    return invalid_argument("HG device extension access requires MELSEC iQ-R series");
+  }
+  if (config.code_mode == CodeMode::Ascii && device.module_number > 0x0FFFU) {
+    return invalid_argument("ASCII device extension specification must be in range 0x000..0xFFF");
+  }
+  return ok_status();
+}
+
+[[nodiscard]] bool append_extension_specification_ascii(
+    ByteWriter& writer,
+    const QualifiedBufferWordDevice& device) noexcept {
+  return writer.push(static_cast<std::uint8_t>('U')) &&
+         append_ascii_hex(writer, device.module_number & 0x0FFFU, 3U);
+}
+
+[[nodiscard]] bool append_extension_modification_ascii(
+    ByteWriter& writer) noexcept {
+  return writer.push(static_cast<std::uint8_t>('0')) &&
+         writer.push(static_cast<std::uint8_t>('0'));
+}
+
+[[nodiscard]] bool append_device_modification_ascii(
+    ByteWriter& writer,
+    const ProtocolConfig& config) noexcept {
+  for (std::size_t index = 0; index < ascii_device_modification_width(config); ++index) {
+    if (!writer.push(static_cast<std::uint8_t>('0'))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+[[nodiscard]] bool append_extended_device_reference_ascii(
+    ByteWriter& writer,
+    const ProtocolConfig& config,
+    const QualifiedBufferWordDevice& device) noexcept {
+  const DeviceSpec* spec = find_device_spec(qualified_device_code(device));
+  if (spec == nullptr) {
+    return false;
+  }
+  return append_extension_modification_ascii(writer) &&
+         append_extension_specification_ascii(writer, device) &&
+         append_device_modification_ascii(writer, config) &&
+         append_ascii_device_code(writer, config, *spec) &&
+         append_ascii_device_number(
+             writer,
+             device.word_address,
+             ascii_extended_device_number_width(config),
+             spec->hexadecimal);
+}
+
+[[nodiscard]] bool append_extended_device_reference_binary(
+    ByteWriter& writer,
+    const ProtocolConfig& config,
+    const QualifiedBufferWordDevice& device) noexcept {
+  const DeviceAddress address {
+      .code = qualified_device_code(device),
+      .number = device.word_address,
+  };
+  return writer.push(0x00U) &&
+         writer.push(0x00U) &&
+         append_device_reference_binary(writer, config, address) &&
+         writer.push(0x00U) &&
+         writer.push(0x00U) &&
+         writer.append_le16(device.module_number) &&
+         writer.push(qualified_binary_direct_memory(config, device));
+}
+
+[[nodiscard]] bool append_extended_device_reference(
+    ByteWriter& writer,
+    const ProtocolConfig& config,
+    const QualifiedBufferWordDevice& device) noexcept {
+  if (config.code_mode == CodeMode::Ascii) {
+    return append_extended_device_reference_ascii(writer, config, device);
+  }
+  return append_extended_device_reference_binary(writer, config, device);
+}
+
+[[nodiscard]] Status parse_word_values_response(
+    const ProtocolConfig& config,
+    std::uint16_t points,
+    std::span<const std::uint8_t> response_data,
+    std::span<std::uint16_t> out_words,
+    const char* ascii_error_prefix,
+    const char* binary_error_prefix) noexcept {
+  if (out_words.size() < points) {
+    return buffer_too_small("Word output buffer is too small");
+  }
+  if (config.code_mode == CodeMode::Ascii) {
+    if (response_data.size() != (static_cast<std::size_t>(points) * 4U)) {
+      return parse_error(ascii_error_prefix);
+    }
+    for (std::size_t index = 0; index < points; ++index) {
+      if (!parse_ascii_word(response_data.subspan(index * 4U, 4U), out_words[index])) {
+        return parse_error("Failed to parse ASCII word payload");
+      }
+    }
+    return ok_status();
+  }
+
+  if (response_data.size() != (static_cast<std::size_t>(points) * 2U)) {
+    return parse_error(binary_error_prefix);
+  }
+  for (std::size_t index = 0; index < points; ++index) {
+    if (!parse_binary_word(response_data, index * 2U, out_words[index])) {
+      return parse_error("Failed to parse binary word payload");
+    }
+  }
+  return ok_status();
 }
 
 [[nodiscard]] std::uint8_t compute_sum_check_byte(std::span<const std::uint8_t> bytes) noexcept {
@@ -1388,35 +1549,55 @@ Status encode_batch_read_words(
   return ok_status();
 }
 
+Status encode_extended_batch_read_words(
+    const ProtocolConfig& config,
+    const QualifiedBufferWordDevice& device,
+    std::uint16_t points,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  if (points == 0U || points > kMaxBatchWordPoints) {
+    return invalid_argument("Extended batch read words points must be in range 1..960");
+  }
+  const Status device_status = validate_extended_word_device(config, device);
+  if (!device_status.ok()) {
+    return device_status;
+  }
+  ByteWriter writer(out_request_data);
+  if (!append_command_header(writer, config, 0x0401U, extended_word_subcommand(config)) ||
+      !append_extended_device_reference(writer, config, device) ||
+      !append_word_count(writer, config, points)) {
+    return buffer_too_small("Extended batch read words request buffer is too small");
+  }
+  out_size = writer.size();
+  return ok_status();
+}
+
 Status parse_batch_read_words_response(
     const ProtocolConfig& config,
     const BatchReadWordsRequest& request,
     std::span<const std::uint8_t> response_data,
     std::span<std::uint16_t> out_words) noexcept {
-  if (out_words.size() < request.points) {
-    return buffer_too_small("Batch read words output buffer is too small");
-  }
-  if (config.code_mode == CodeMode::Ascii) {
-    if (response_data.size() != (static_cast<std::size_t>(request.points) * 4U)) {
-      return parse_error("Batch read words ASCII response length mismatch");
-    }
-    for (std::size_t index = 0; index < request.points; ++index) {
-      if (!parse_ascii_word(response_data.subspan(index * 4U, 4U), out_words[index])) {
-        return parse_error("Failed to parse batch read words ASCII payload");
-      }
-    }
-    return ok_status();
-  }
+  return parse_word_values_response(
+      config,
+      request.points,
+      response_data,
+      out_words,
+      "Batch read words ASCII response length mismatch",
+      "Batch read words binary response length mismatch");
+}
 
-  if (response_data.size() != (static_cast<std::size_t>(request.points) * 2U)) {
-    return parse_error("Batch read words binary response length mismatch");
-  }
-  for (std::size_t index = 0; index < request.points; ++index) {
-    if (!parse_binary_word(response_data, index * 2U, out_words[index])) {
-      return parse_error("Failed to parse batch read words binary payload");
-    }
-  }
-  return ok_status();
+Status parse_extended_batch_read_words_response(
+    const ProtocolConfig& config,
+    std::uint16_t points,
+    std::span<const std::uint8_t> response_data,
+    std::span<std::uint16_t> out_words) noexcept {
+  return parse_word_values_response(
+      config,
+      points,
+      response_data,
+      out_words,
+      "Extended batch read words ASCII response length mismatch",
+      "Extended batch read words binary response length mismatch");
 }
 
 Status encode_batch_read_bits(
@@ -1498,6 +1679,31 @@ Status encode_batch_write_words(
       !append_word_count(writer, config, static_cast<std::uint16_t>(request.words.size())) ||
       !append_word_data(writer, config, request.words)) {
     return buffer_too_small("Batch write words request buffer is too small");
+  }
+  out_size = writer.size();
+  return ok_status();
+}
+
+Status encode_extended_batch_write_words(
+    const ProtocolConfig& config,
+    const QualifiedBufferWordDevice& device,
+    std::span<const std::uint16_t> words,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  const std::size_t max_points = batch_write_words_point_limit_for_buffer(config);
+  if (words.empty() || words.size() > max_points) {
+    return invalid_argument("Extended batch write words count exceeds supported range for the current buffer/configuration");
+  }
+  const Status device_status = validate_extended_word_device(config, device);
+  if (!device_status.ok()) {
+    return device_status;
+  }
+  ByteWriter writer(out_request_data);
+  if (!append_command_header(writer, config, 0x1401U, extended_word_subcommand(config)) ||
+      !append_extended_device_reference(writer, config, device) ||
+      !append_word_count(writer, config, static_cast<std::uint16_t>(words.size())) ||
+      !append_word_data(writer, config, words)) {
+    return buffer_too_small("Extended batch write words request buffer is too small");
   }
   out_size = writer.size();
   return ok_status();

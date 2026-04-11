@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "mcprotocol/serial/codec.hpp"
+#include "mcprotocol/serial/qualified_buffer.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
 
 namespace mcprotocol::serial {
@@ -59,6 +60,21 @@ class MelsecSerialClient {
   [[nodiscard]] Status async_batch_write_bits(
       std::uint32_t now_ms,
       const BatchWriteBitsRequest& request,
+      CompletionHandler callback,
+      void* user) noexcept;
+
+  [[nodiscard]] Status async_extended_batch_read_words(
+      std::uint32_t now_ms,
+      const QualifiedBufferWordDevice& device,
+      std::uint16_t points,
+      std::span<std::uint16_t> out_words,
+      CompletionHandler callback,
+      void* user) noexcept;
+
+  [[nodiscard]] Status async_extended_batch_write_words(
+      std::uint32_t now_ms,
+      const QualifiedBufferWordDevice& device,
+      std::span<const std::uint16_t> words,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -154,6 +170,8 @@ class MelsecSerialClient {
     BatchReadBits,
     BatchWriteWords,
     BatchWriteBits,
+    ExtendedBatchReadWords,
+    ExtendedBatchWriteWords,
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
     RandomRead,
     RandomWriteWords,
@@ -214,6 +232,8 @@ class MelsecSerialClient {
 
   BatchReadWordsRequest batch_read_words_request_ {};
   BatchReadBitsRequest batch_read_bits_request_ {};
+  QualifiedBufferWordDevice extended_batch_words_device_ {};
+  std::uint16_t extended_batch_words_points_ = 0;
 #if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
   HostBufferReadRequest host_buffer_read_request_ {};
 #endif

@@ -311,6 +311,12 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
           batch_read_words_request_,
           response_data,
           out_words_);
+    case OperationKind::ExtendedBatchReadWords:
+      return CommandCodec::parse_extended_batch_read_words_response(
+          config_,
+          extended_batch_words_points_,
+          response_data,
+          out_words_);
     case OperationKind::BatchReadBits:
       return CommandCodec::parse_batch_read_bits_response(
           config_,
@@ -319,6 +325,7 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
           out_bits_);
     case OperationKind::BatchWriteWords:
     case OperationKind::BatchWriteBits:
+    case OperationKind::ExtendedBatchWriteWords:
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
     case OperationKind::RandomWriteWords:
     case OperationKind::RandomWriteBits:
@@ -461,6 +468,8 @@ void MelsecSerialClient::clear_pending_outputs() noexcept {
 #endif
   batch_read_words_request_ = {};
   batch_read_bits_request_ = {};
+  extended_batch_words_device_ = {};
+  extended_batch_words_points_ = 0U;
 #if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
   host_buffer_read_request_ = {};
 #endif
@@ -539,6 +548,52 @@ Status MelsecSerialClient::async_batch_write_bits(
     return status;
   }
   return start_request(now_ms, OperationKind::BatchWriteBits, request_size, callback, user);
+}
+
+Status MelsecSerialClient::async_extended_batch_read_words(
+    std::uint32_t now_ms,
+    const QualifiedBufferWordDevice& device,
+    std::uint16_t points,
+    std::span<std::uint16_t> out_words,
+    CompletionHandler callback,
+    void* user) noexcept {
+  extended_batch_words_device_ = device;
+  extended_batch_words_points_ = points;
+  out_words_ = out_words;
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_extended_batch_read_words(
+      config_,
+      device,
+      points,
+      request_data_,
+      request_size);
+  if (!status.ok()) {
+    clear_pending_outputs();
+    return status;
+  }
+  return start_request(now_ms, OperationKind::ExtendedBatchReadWords, request_size, callback, user);
+}
+
+Status MelsecSerialClient::async_extended_batch_write_words(
+    std::uint32_t now_ms,
+    const QualifiedBufferWordDevice& device,
+    std::span<const std::uint16_t> words,
+    CompletionHandler callback,
+    void* user) noexcept {
+  extended_batch_words_device_ = device;
+  extended_batch_words_points_ = static_cast<std::uint16_t>(words.size());
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_extended_batch_write_words(
+      config_,
+      device,
+      words,
+      request_data_,
+      request_size);
+  if (!status.ok()) {
+    clear_pending_outputs();
+    return status;
+  }
+  return start_request(now_ms, OperationKind::ExtendedBatchWriteWords, request_size, callback, user);
 }
 
 Status MelsecSerialClient::async_random_read(

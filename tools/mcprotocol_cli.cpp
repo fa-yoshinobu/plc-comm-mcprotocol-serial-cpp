@@ -67,9 +67,11 @@ enum class CommandKind : std::uint8_t {
   ReadHostBuffer,
   ReadModuleBuffer,
   ReadQualifiedWords,
+  ReadNativeQualifiedWords,
   WriteHostBuffer,
   WriteModuleBuffer,
   WriteQualifiedWords,
+  WriteNativeQualifiedWords,
   RandomRead,
   RandomWriteWords,
   RandomWriteBits,
@@ -259,9 +261,11 @@ void print_usage() {
       "  mcprotocol_cli [options] read-host-buffer START WORDS\n"
       "  mcprotocol_cli [options] read-module-buffer START BYTES MODULE\n"
       "  mcprotocol_cli [options] read-qualified-words U3E0\\\\G0 POINTS\n"
+      "  mcprotocol_cli [options] read-native-qualified-words U3E0\\\\G0 POINTS\n"
       "  mcprotocol_cli [options] write-host-buffer START VALUE [VALUE ...]\n"
       "  mcprotocol_cli [options] write-module-buffer START MODULE BYTE [BYTE ...]\n"
       "  mcprotocol_cli [options] write-qualified-words U3E0\\\\G0 VALUE [VALUE ...]\n"
+      "  mcprotocol_cli [options] write-native-qualified-words U3E0\\\\G0 VALUE [VALUE ...]\n"
       "  mcprotocol_cli [options] random-read DEVICE [DEVICE ...]\n"
       "  mcprotocol_cli [options] random-write-words DEVICE=VALUE [DEVICE=VALUE ...]\n"
       "  mcprotocol_cli [options] random-write-bits DEVICE=0|1 [DEVICE=0|1 ...]\n"
@@ -514,12 +518,16 @@ void print_usage() {
         options.command = CommandKind::ReadModuleBuffer;
       } else if (arg == "read-qualified-words") {
         options.command = CommandKind::ReadQualifiedWords;
+      } else if (arg == "read-native-qualified-words") {
+        options.command = CommandKind::ReadNativeQualifiedWords;
       } else if (arg == "write-host-buffer") {
         options.command = CommandKind::WriteHostBuffer;
       } else if (arg == "write-module-buffer") {
         options.command = CommandKind::WriteModuleBuffer;
       } else if (arg == "write-qualified-words") {
         options.command = CommandKind::WriteQualifiedWords;
+      } else if (arg == "write-native-qualified-words") {
+        options.command = CommandKind::WriteNativeQualifiedWords;
       } else if (arg == "random-read") {
         options.command = CommandKind::RandomRead;
       } else if (arg == "random-write-words") {
@@ -580,6 +588,7 @@ void print_usage() {
     case CommandKind::ReadBits:
     case CommandKind::ReadHostBuffer:
     case CommandKind::ReadQualifiedWords:
+    case CommandKind::ReadNativeQualifiedWords:
       return options.command_argc == 2;
     case CommandKind::ReadModuleBuffer:
       return options.command_argc == 3;
@@ -588,6 +597,7 @@ void print_usage() {
     case CommandKind::WriteModuleBuffer:
       return options.command_argc >= 3;
     case CommandKind::WriteQualifiedWords:
+    case CommandKind::WriteNativeQualifiedWords:
       return options.command_argc >= 2;
     case CommandKind::RandomRead:
     case CommandKind::RandomWriteWords:
@@ -832,6 +842,50 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
           .head_device = head_device,
           .words = values,
       },
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_extended_batch_read_words(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const QualifiedBufferWordDevice& device,
+    std::uint16_t points,
+    std::span<std::uint16_t> out_values) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_extended_batch_read_words(
+      now_ms(),
+      device,
+      points,
+      out_values,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_extended_batch_write_words(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const QualifiedBufferWordDevice& device,
+    std::span<const std::uint16_t> values) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_extended_batch_write_words(
+      now_ms(),
+      device,
+      values,
       request_complete,
       &command_state);
   if (!start_status.ok()) {
@@ -2315,6 +2369,51 @@ int main(int argc, char** argv) {
       return 0;
     }
 
+    case CommandKind::ReadNativeQualifiedWords: {
+      QualifiedBufferWordDevice device {};
+      const std::string_view device_arg(options.command_argv[0]);
+      const std::string_view points_arg(options.command_argv[1]);
+      status = parse_qualified_buffer_word_device(device_arg, device);
+      if (!status.ok()) {
+        print_status_error("Invalid qualified buffer device", status);
+        return 2;
+      }
+
+      std::uint32_t points = 0;
+      if (!parse_u32(points_arg, points) || points == 0U || points > 960U) {
+        std::fprintf(stderr, "Invalid native qualified word count: %.*s\n",
+                     static_cast<int>(points_arg.size()),
+                     points_arg.data());
+        return 2;
+      }
+
+      std::array<std::uint16_t, 960> words {};
+      status = run_extended_batch_read_words(
+          client,
+          port,
+          command_state,
+          device,
+          static_cast<std::uint16_t>(points),
+          std::span<std::uint16_t>(words.data(), points));
+      if (!status.ok()) {
+        print_status_error("read-native-qualified-words request failed", status);
+        return 1;
+      }
+
+      const auto kind = qualified_buffer_kind_name(device.kind);
+      for (std::uint32_t index = 0; index < points; ++index) {
+        const auto value = words[index];
+        std::printf("U%X\\%.*s%u=0x%04X %u\n",
+                    device.module_number,
+                    static_cast<int>(kind.size()),
+                    kind.data(),
+                    static_cast<unsigned>(device.word_address + index),
+                    value,
+                    value);
+      }
+      return 0;
+    }
+
     case CommandKind::WriteModuleBuffer: {
       const std::string_view start_arg(options.command_argv[0]);
       const std::string_view module_arg(options.command_argv[1]);
@@ -2402,6 +2501,45 @@ int main(int argc, char** argv) {
         return 1;
       }
       std::printf("write-qualified-words=ok bytes=%zu\n", byte_count);
+      return 0;
+    }
+
+    case CommandKind::WriteNativeQualifiedWords: {
+      QualifiedBufferWordDevice device {};
+      const std::string_view device_arg(options.command_argv[0]);
+      status = parse_qualified_buffer_word_device(device_arg, device);
+      if (!status.ok()) {
+        print_status_error("Invalid qualified buffer device", status);
+        return 2;
+      }
+
+      const int word_count = options.command_argc - 1;
+      if (word_count < 1 || word_count > 960) {
+        std::fprintf(stderr, "Invalid write-native-qualified-words word count\n");
+        return 2;
+      }
+
+      std::array<std::uint16_t, 960> words {};
+      for (int index = 0; index < word_count; ++index) {
+        std::uint32_t value = 0;
+        if (!parse_u32_auto(options.command_argv[index + 1], value) || value > 0xFFFFU) {
+          std::fprintf(stderr, "Invalid write-native-qualified-words value: %s\n", options.command_argv[index + 1]);
+          return 2;
+        }
+        words[static_cast<std::size_t>(index)] = static_cast<std::uint16_t>(value);
+      }
+
+      status = run_extended_batch_write_words(
+          client,
+          port,
+          command_state,
+          device,
+          std::span<const std::uint16_t>(words.data(), static_cast<std::size_t>(word_count)));
+      if (!status.ok()) {
+        print_status_error("write-native-qualified-words request failed", status);
+        return 1;
+      }
+      std::printf("write-native-qualified-words=ok\n");
       return 0;
     }
 

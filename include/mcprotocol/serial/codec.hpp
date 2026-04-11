@@ -6,6 +6,7 @@
 
 #include "mcprotocol/serial/span_compat.hpp"
 
+#include "mcprotocol/serial/qualified_buffer.hpp"
 #include "mcprotocol/serial/types.hpp"
 
 namespace mcprotocol::serial {
@@ -65,9 +66,22 @@ namespace CommandCodec {
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
+[[nodiscard]] Status encode_extended_batch_read_words(
+    const ProtocolConfig& config,
+    const QualifiedBufferWordDevice& device,
+    std::uint16_t points,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
 [[nodiscard]] Status parse_batch_read_words_response(
     const ProtocolConfig& config,
     const BatchReadWordsRequest& request,
+    std::span<const std::uint8_t> response_data,
+    std::span<std::uint16_t> out_words) noexcept;
+
+[[nodiscard]] Status parse_extended_batch_read_words_response(
+    const ProtocolConfig& config,
+    std::uint16_t points,
     std::span<const std::uint8_t> response_data,
     std::span<std::uint16_t> out_words) noexcept;
 
@@ -86,6 +100,13 @@ namespace CommandCodec {
 [[nodiscard]] Status encode_batch_write_words(
     const ProtocolConfig& config,
     const BatchWriteWordsRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_extended_batch_write_words(
+    const ProtocolConfig& config,
+    const QualifiedBufferWordDevice& device,
+    std::span<const std::uint16_t> words,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 

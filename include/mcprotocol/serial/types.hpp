@@ -157,7 +157,9 @@ enum class DeviceCode : std::uint8_t {
   DY,
   Z,
   R,
-  ZR
+  ZR,
+  G,
+  HG
 };
 
 enum class BitValue : std::uint8_t {

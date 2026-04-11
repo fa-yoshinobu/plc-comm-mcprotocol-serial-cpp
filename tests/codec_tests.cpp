@@ -66,6 +66,12 @@ ProtocolConfig make_binary_c4_config() {
   return config;
 }
 
+ProtocolConfig make_binary_c4_iqr_config() {
+  ProtocolConfig config = make_binary_c4_config();
+  config.target_series = PlcSeries::IQ_R;
+  return config;
+}
+
 ProtocolConfig make_ascii_c3_format3_config() {
   ProtocolConfig config;
   config.frame_kind = FrameKind::C3;
@@ -103,6 +109,12 @@ ProtocolConfig make_ascii_c4_format4_config() {
       .self_station_enabled = false,
       .self_station_no = 0x00,
   };
+  return config;
+}
+
+ProtocolConfig make_ascii_c4_format4_iqr_config() {
+  ProtocolConfig config = make_ascii_c4_format4_config();
+  config.target_series = PlcSeries::IQ_R;
   return config;
 }
 
@@ -255,6 +267,127 @@ void test_encode_batch_write_words_ascii_order() {
   constexpr std::string_view expected = "14010000D*0001000002007B01C8";
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_extended_batch_read_words_ascii_matches_manual_shape() {
+  const auto config = make_ascii_c4_format4_iqr_config();
+  const QualifiedBufferWordDevice device {
+      .kind = QualifiedBufferDeviceKind::G,
+      .module_number = 0x03E0U,
+      .word_address = 1U,
+  };
+  std::array<std::uint8_t, 96> request_data {};
+  std::size_t request_size = 0;
+
+  const Status status = CommandCodec::encode_extended_batch_read_words(
+      config,
+      device,
+      1U,
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected_prefix = "0401008200U3E00000G***0000000001";
+  assert(request_size == expected_prefix.size() + 4U);
+  assert(std::memcmp(request_data.data(), expected_prefix.data(), expected_prefix.size()) == 0);
+  assert(std::memcmp(request_data.data() + expected_prefix.size(), "0001", 4U) == 0);
+}
+
+void test_encode_extended_batch_read_words_binary_matches_capture_shape() {
+  const auto config = make_binary_c4_iqr_config();
+  const QualifiedBufferWordDevice device {
+      .kind = QualifiedBufferDeviceKind::G,
+      .module_number = 0x03E0U,
+      .word_address = 10U,
+  };
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const Status status = CommandCodec::encode_extended_batch_read_words(
+      config,
+      device,
+      1U,
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 19> expected {
+      0x01, 0x04, 0x82, 0x00,
+      0x00, 0x00,
+      0x0A, 0x00, 0x00, 0x00,
+      0xAB, 0x00,
+      0x00, 0x00,
+      0xE0, 0x03,
+      0xFA,
+      0x01, 0x00,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_extended_batch_read_words_binary_hg_matches_capture_shape() {
+  const auto config = make_binary_c4_iqr_config();
+  const QualifiedBufferWordDevice device {
+      .kind = QualifiedBufferDeviceKind::HG,
+      .module_number = 0x03E0U,
+      .word_address = 20U,
+  };
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const Status status = CommandCodec::encode_extended_batch_read_words(
+      config,
+      device,
+      1U,
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 19> expected {
+      0x01, 0x04, 0x82, 0x00,
+      0x00, 0x00,
+      0x14, 0x00, 0x00, 0x00,
+      0x2E, 0x00,
+      0x00, 0x00,
+      0xE0, 0x03,
+      0xFA,
+      0x01, 0x00,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_extended_batch_read_words_binary_module_access_ql_shape() {
+  const auto config = make_binary_c4_config();
+  const QualifiedBufferWordDevice device {
+      .kind = QualifiedBufferDeviceKind::G,
+      .module_number = 0x0003U,
+      .word_address = 1U,
+  };
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const Status status = CommandCodec::encode_extended_batch_read_words(
+      config,
+      device,
+      1U,
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 15> expected {
+      0x01, 0x04, 0x80, 0x00,
+      0x00, 0x00,
+      0x01, 0x00, 0x00,
+      0xAB,
+      0x00, 0x00,
+      0x03, 0x00,
+      0xF8,
+  };
+  assert(request_size == expected.size() + 2U);
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+  assert(request_data[expected.size()] == 0x01);
+  assert(request_data[expected.size() + 1U] == 0x00);
 }
 
 void test_encode_batch_write_words_ascii_limit_matches_buffer() {
@@ -740,6 +873,10 @@ int main() {
   test_encode_ascii_format4_request_appends_crlf();
   test_decode_ascii_format4_ack_response();
   test_encode_batch_write_words_ascii_order();
+  test_encode_extended_batch_read_words_ascii_matches_manual_shape();
+  test_encode_extended_batch_read_words_binary_matches_capture_shape();
+  test_encode_extended_batch_read_words_binary_hg_matches_capture_shape();
+  test_encode_extended_batch_read_words_binary_module_access_ql_shape();
   test_encode_batch_write_words_ascii_limit_matches_buffer();
   test_encode_batch_write_bits_ascii_limit_matches_buffer();
   test_encode_random_write_words_ascii_matches_manual();
