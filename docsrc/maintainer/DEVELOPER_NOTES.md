@@ -86,17 +86,18 @@ binary `1406` bit-block encoder to pre-apply that pair-order reversal and adding
 the non-symmetric two-point case, `probe-multi-block[mixed]` reached
 `multi-block-read=ok native`, `multi-block-write=ok native`, `restore=ok` on `FX5UC-32MT/D`.
 
-The nearest remaining candidate, `1402` random-write-bits, still does not look like the same bug
-as `1406`. Its binary request shape was first pinned against the manual example and later corrected
-again after a page `108` manual re-read plus unrelated `pak4` capture showed a one-byte count
-field for non-iQ-R binary `1402 bit`. After that encoder fix, the same focused FX5U probe advanced
-from `0x7F23` to success-end-code with readback `verify-mismatch` for single-item `M100=1`, dense
-`M100..M115`, and sparse `M100/M105/M110/M115` writes while the same `M100..M115` alternating
-pattern passed under contiguous `1401`. A focused FX5U recheck also showed `0403` returning
-`0x7F23` for both
-word-only `random-read D100 D105` and bit-only `random-read M100 M105`. That keeps the remaining
-random family in the unresolved family-specific bucket instead of the resolved `1406` packing
-bucket.
+`1402` random-write-bits then turned out to be the same kind of host-side compatibility problem,
+but not the same exact field as `1406`. Its binary request shape was first corrected after a page
+`108` manual re-read plus unrelated `pak4` capture showed a one-byte count field for non-iQ-R
+binary `1402 bit`. After that encoder fix, the focused FX5U probe advanced from `0x7F23` to
+success-end-code with readback mismatch for single-item `M100=1`, dense `M100..M115`, and sparse
+`M100/M105/M110/M115` writes while the same `M100..M115` alternating pattern passed under
+contiguous `1401`. A second FX5U recheck then showed the mismatch was pair-swapped bit-address
+parity inside each two-point unit: logical `M198=1` wrote to `M199`, `M199=1` wrote to `M198`,
+`M200=1` wrote to `M201`, and `M201=1` wrote to `M200`; `M201=0` on an all-ones baseline also
+cleared `M200`, not `M201`. Flipping the encoded device-number low bit for non-iQ-R binary `1402`
+bit resolved the focused FX5U probes, so `1402` random-write-bits is now in the resolved bucket on
+that target.
 
 Dedicated FX5U `probe-random-read` and `probe-random-write-words` runs then tightened that result:
 the contiguous `D100..D105` and `M100..M105` baselines passed, but the native `0403` single/dense/

@@ -578,7 +578,7 @@ void test_encode_random_write_bits_ascii_iqr_shape() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
-void test_encode_random_write_bits_binary_matches_manual() {
+void test_encode_random_write_bits_binary_matches_observed_ql_wire_behavior() {
   const auto config = make_binary_c4_config();
   const std::array<RandomWriteBitItem, 2> items {{
       {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 50}, .value = BitValue::Off},
@@ -595,8 +595,8 @@ void test_encode_random_write_bits_binary_matches_manual() {
   assert(status.ok());
 
   const std::array<std::uint8_t, 15> expected {
-      0x02, 0x14, 0x01, 0x00, 0x02, 0x32, 0x00,
-      0x00, 0x90, 0x00, 0x2F, 0x00, 0x00, 0x9D, 0x01,
+      0x02, 0x14, 0x01, 0x00, 0x02, 0x33, 0x00,
+      0x00, 0x90, 0x00, 0x2E, 0x00, 0x00, 0x9D, 0x01,
   };
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
@@ -1127,7 +1127,7 @@ int main() {
   test_encode_random_write_words_binary_ql_layout();
   test_encode_random_write_bits_ascii_matches_manual();
   test_encode_random_write_bits_ascii_iqr_shape();
-  test_encode_random_write_bits_binary_matches_manual();
+  test_encode_random_write_bits_binary_matches_observed_ql_wire_behavior();
   test_encode_multi_block_read_ascii_matches_manual();
   test_encode_multi_block_read_binary_matches_capture_counts();
   test_encode_multi_block_write_binary_uses_single_byte_block_counts();

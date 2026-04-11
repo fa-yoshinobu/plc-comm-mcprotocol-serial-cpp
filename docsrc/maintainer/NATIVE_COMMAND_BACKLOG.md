@@ -38,13 +38,6 @@ Shared native-family holds across the currently validated targets:
   - `LJ71C24 + L26CPU-BT + --series ql`: `0x7F23`
   - `QJ71C24N + Q06UDVCPU + --series ql`: `0x7F23`
   - `FX5UC-32MT/D + --series ql`: `0x7F23` on single-item, dense, and sparse `D100` probes; dedicated `probe-random-write-words` showed the same `D100..D105` range passing under contiguous write/restore
-- `1402` random write bits
-  - `RJ71C24-R2 + R08CPU + --series iqr`: `0x7F23`
-  - `LJ71C24 + L26CPU-BT + --series ql`: `0x7F23`
-  - `QJ71C24N + Q06UDVCPU + --series ql`: `0x7F23`
-  - `FX5UC-32MT/D + --series ql`: originally `0x7F23` on `M`, `Y`, and `B`; after the non-iQ-R
-    binary one-byte count fix from page `108` plus `pak4`, focused `M100..M115` probes moved to
-    success-end-code with readback `verify-mismatch`
 - `0801/0802` monitor register/read
   - `RJ71C24-R2 + R08CPU + --series iqr`: `0801=0x7F22`
   - `LJ71C24 + L26CPU-BT + --series ql`: `0801=0x7F23`
@@ -54,6 +47,7 @@ Shared native-family holds across the currently validated targets:
 Target-specific remaining items:
 
 - `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` still hold on native `0406/1406`
+- `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` still hold on native `1402` random-write-bits
 - `RJ71C24-R2` native qualified access is still unresolved and semantically inconsistent with helper results
 - `LJ71C24` and `QJ71C24N` still hold on native `U3E0\\G...`; native `HG` is not applicable outside iQ-R
 - `FX5UC-32MT/D` still holds on host/module buffer, helper qualified, native qualified, and contiguous `DX`, `DY`, `ZR`, `V`
@@ -62,12 +56,14 @@ Resolved enough to remove from the active hold list:
 
 - `FX5UC-32MT/D` native `0406` moved to pass after the binary one-byte block-count fix
 - `FX5UC-32MT/D` native `1406` moved to pass after the binary one-byte block-count fix plus bit-block two-bit-pair reversal
+- `FX5UC-32MT/D` focused native `1402` random-write-bits `M` probes moved to pass after the binary
+  one-byte count fix plus the non-iQ-R pair-swapped bit-address correction
 
 ### Next Actions
 
 If only `FX5UC-32MT/D` is available:
 
-- keep focused follow-up on `0403`, `1402`, and `0801/0802`
+- keep focused follow-up on `0403`, `1402` words, and `0801/0802`
 - treat `0406/1406` as resolved on that target unless a regression appears
 - do not spend more probe time on FX5U helper/native qualified access until a concrete shape change is identified
 
@@ -125,12 +121,12 @@ Qualified-device follow-up:
   as `0x1C84`, which is the same word with reversed two-bit-pair order. After correcting the local
   binary encoder to pre-apply that pair-order reversal, `FX5UC-32MT/D` `probe-multi-block[mixed]`
   passed natively.
-- Treat native `1402` random-write-bits as a separate problem from the `1406` bit-block fix until
-  proved otherwise. On `2026-04-11`, the binary request shape was first pinned against the manual
-  example and later corrected again after a page `108` manual re-read plus unrelated `pak4` capture
-  showed a one-byte count field for Q/L-era binary `1402 bit`. On `FX5UC-32MT/D`, that moved the
-  command from `0x7F23` to success-end-code with readback `verify-mismatch`, so the remaining issue
-  is no longer an immediate family-level reject.
+- Treat non-iQ-R binary `1402` random-write-bits as two separate host-side compatibility points.
+  On `2026-04-11`, a page `108` manual re-read plus unrelated `pak4` capture showed a one-byte
+  count field for Q/L-era binary `1402 bit`, moving `FX5UC-32MT/D` from `0x7F23` to
+  success-end-code with readback mismatch. The remaining mismatch then narrowed to pair-swapped
+  bit-address parity inside each two-point unit (`M198↔M199`, `M200↔M201`), and flipping the
+  encoded device-number low bit made focused FX5U single/dense/sparse probes pass natively.
 - Treat native `0801/0802` monitor as a family-level hold on FX5U until proved otherwise. On
   `2026-04-11`, `probe-monitor` returned `0x7E40` on `0801` and `probe-monitor read-only` returned
   the same `0x7E40` on raw `0802`.

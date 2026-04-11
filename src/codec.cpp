@@ -682,6 +682,18 @@ class ByteWriter {
   return writer.append_le16(count);
 }
 
+[[nodiscard]] bool append_random_write_bit_device_reference(
+    ByteWriter& writer,
+    const ProtocolConfig& config,
+    const DeviceAddress& device) noexcept {
+  if (config.code_mode != CodeMode::Binary || is_iq_r_series(config)) {
+    return append_device_reference(writer, config, device);
+  }
+  DeviceAddress adjusted = device;
+  adjusted.number ^= 1U;
+  return append_device_reference(writer, config, adjusted);
+}
+
 [[maybe_unused]] [[nodiscard]] bool append_dword_data_ascii(ByteWriter& writer, std::uint32_t value) noexcept {
   return append_ascii_hex(writer, value, 8);
 }
@@ -1985,7 +1997,7 @@ Status encode_random_write_bits(
     return buffer_too_small("Random write bits request buffer is too small");
   }
   for (const RandomWriteBitItem& item : items) {
-    if (!append_device_reference(writer, config, item.device)) {
+    if (!append_random_write_bit_device_reference(writer, config, item.device)) {
       return buffer_too_small("Random write bits request buffer is too small");
     }
     const std::uint16_t bit_value = item.value == BitValue::On ? 0x0001U : 0x0000U;

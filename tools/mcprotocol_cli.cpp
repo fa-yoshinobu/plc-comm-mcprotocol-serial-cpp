@@ -2328,14 +2328,50 @@ int main(int argc, char** argv) {
       const auto verify_bits = [](std::string_view context,
                                   std::span<const BitValue> expected,
                                   std::span<const BitValue> actual) -> bool {
+        const auto pack_word = [](std::span<const BitValue> bits) -> std::uint16_t {
+          std::uint16_t value = 0;
+          for (std::size_t bit = 0; bit < bits.size() && bit < 16U; ++bit) {
+            if (bits[bit] == BitValue::On) {
+              value = static_cast<std::uint16_t>(value | (1U << (15U - bit)));
+            }
+          }
+          return value;
+        };
+        const auto print_bit_string = [](std::span<const BitValue> bits) {
+          for (std::size_t index = 0; index < bits.size(); ++index) {
+            std::printf("%c", bits[index] == BitValue::On ? '1' : '0');
+            if (((index + 1U) % 4U) == 0U && (index + 1U) != bits.size()) {
+              std::printf("_");
+            }
+          }
+        };
         for (std::size_t index = 0; index < expected.size(); ++index) {
           if (actual[index] != expected[index]) {
-            std::printf("%.*s-mismatch[%zu] expected=%u read=%u\n",
+            std::printf("%.*s-mismatch[%zu] expected=%u read=%u",
                         static_cast<int>(context.size()),
                         context.data(),
                         index,
                         expected[index] == BitValue::On ? 1U : 0U,
                         actual[index] == BitValue::On ? 1U : 0U);
+            if ((expected.size() % 16U) == 0U) {
+              const std::size_t word_index = index / 16U;
+              const auto expected_word = pack_word(expected.subspan(word_index * 16U, 16U));
+              const auto actual_word = pack_word(actual.subspan(word_index * 16U, 16U));
+              std::printf(" expected-word[%zu]=0x%04X read-word[%zu]=0x%04X",
+                          word_index,
+                          expected_word,
+                          word_index,
+                          actual_word);
+            }
+            std::printf("\n%.*s-expected-bits=",
+                        static_cast<int>(context.size()),
+                        context.data());
+            print_bit_string(expected);
+            std::printf("\n%.*s-read-bits=",
+                        static_cast<int>(context.size()),
+                        context.data());
+            print_bit_string(actual);
+            std::printf("\n");
             return false;
           }
         }

@@ -36,7 +36,7 @@ Interpretation:
 | link bootstrap | `cpu-model` passed with `FX5UC-32MT/D`, `0x4A91` |
 | supported-device screening | `21/25` targets passed under `--series ql`; `DX10`, `DY10`, `ZR10`, and `V100` failed with `0x7E43` twice |
 | supported-device soak | two `180` second runs passed with no protocol errors on the screened `21` target subset |
-| native random read/write | `0403` and `1402 words` returned `0x7F23`; `1402 bits` later advanced to success-end-code with readback `verify-mismatch` after the binary one-byte count fix |
+| native random read/write | `0403` and `1402 words` returned `0x7F23`; focused `1402 bit` `M` probes now pass natively on this target after the binary one-byte count fix plus pair-swapped bit-address correction |
 | native monitor / multi-block | both `0801` and raw `0802` returned `0x7E40`; after the binary count-width and bit-block packing fixes, both `0406` and `1406` passed |
 | host / module buffer | helper and native buffer probes returned `0x7E40` |
 | qualified access | helper `U3E0\\G10` / `U3E0\\HG20` returned `0x7E40`; native `U3E0\\G10` returned `0x7E43`; native `HG` path is not applicable under `--series ql` |
@@ -142,7 +142,8 @@ Observed result:
   - restore back to the original `D100..D105` values: pass
 - `1402 random-write-bits`: originally `0x7F23`; after the binary one-byte count fix from page
   `108` plus unrelated `pak4`, native writes reached success-end-code but still read back as
-  `verify-mismatch`
+  `verify-mismatch`; a second FX5U-focused recheck then showed the remaining issue was pair-swapped
+  bit-address parity inside each two-point unit
 - post-read after both `1402` probes still showed no write effect at `D300..D305` and `M300..M305`
 - baseline `D300..D305` on this target was `0x0000`, `0x0001`, `0x0002`, `0x0003`, `0x0004`, `0x0005`
 - focused `probe-random-write-bits` recheck on the same target:
@@ -153,11 +154,20 @@ Observed result:
   - before the count-width fix, native `random-write-bits` sparse subset `M100`, `M105`, `M110`,
     `M115`: `0x7F23`
   - after switching non-iQ-R binary `1402 bit` to a one-byte access-count field, the same probe
-    returned:
+    returned success-end-code with `verify-mismatch`
+  - direct FX5U parity rechecks then showed the mismatch was not a generic `+1` shift but a strict
+    two-point swap:
+    - logical `M198=1` wrote to `M199`
+    - logical `M199=1` wrote to `M198`
+    - logical `M200=1` wrote to `M201`
+    - logical `M201=1` wrote to `M200`
+    - `M201=0` on an all-ones baseline cleared `M200`, not `M201`
+  - after correcting non-iQ-R binary `1402 bit` to flip the device-number low bit within each
+    two-point unit, the same probe returned:
     - `batch-write-bits=ok contiguous`
-    - `random-write-bits-single=skip verify-mismatch`
-    - `random-write-bits-dense=skip verify-mismatch`
-    - `random-write-bits-sparse=skip verify-mismatch`
+    - `random-write-bits-single=ok native`
+    - `random-write-bits-dense=ok native`
+    - `random-write-bits-sparse=ok native`
     - `restore=ok`
   - restore back to the original `M100..M115` values: pass
 - `0801 probe-monitor`: `probe-monitor: skip register 0x7E40`
@@ -178,9 +188,9 @@ Interpretation:
   frames; the manual example on page `108` and the unrelated `pak4` capture both use a one-byte
   bit-access count
 - after correcting that count field, FX5U no longer rejected native `1402 bit` immediately; the
-  command reached success-end-code responses but still read back as `verify-mismatch`
-- native `1402 bit` therefore remains unresolved on FX5U, but the remaining problem is no longer an
-  immediate family-level reject
+  remaining mismatch was pair-swapped bit-address parity inside each two-point unit
+- after correcting that pair swap in the local encoder, native `1402 bit` passed on FX5U for
+  single-item, dense, and sparse probes with restore
 - monitor failures still do not match the `LJ71C24` and `QJ71C24N` end-code mix exactly, so this
   target should stay documented separately
 
