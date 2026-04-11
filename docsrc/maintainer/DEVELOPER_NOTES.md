@@ -43,3 +43,7 @@ When adding new hardware results:
 2. Add or extend a dated report in `docsrc/validation/reports/`.
 3. Keep the top-level `README.md` summary short and point to the detailed report.
 4. Record the native result and PLC end code without masking it with a different command path.
+
+## Open Items
+
+Track active unresolved items in [../../TODO.md](../../TODO.md).
