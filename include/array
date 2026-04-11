@@ -1,0 +1,44 @@
+#pragma once
+
+#if defined(__has_include_next)
+#if __has_include_next(<array>)
+#include_next <array>
+#define MCPROTOCOL_HAVE_STD_ARRAY 1
+#endif
+#endif
+
+#if !defined(MCPROTOCOL_HAVE_STD_ARRAY)
+#include <cstddef>
+
+namespace std {
+
+template <typename T, size_t N>
+struct array {
+  using value_type = T;
+  using size_type = size_t;
+  using difference_type = ptrdiff_t;
+  using reference = value_type&;
+  using const_reference = const value_type&;
+  using pointer = value_type*;
+  using const_pointer = const value_type*;
+  using iterator = value_type*;
+  using const_iterator = const value_type*;
+
+  value_type elems[N == 0 ? 1 : N];
+
+  [[nodiscard]] constexpr iterator begin() noexcept { return elems; }
+  [[nodiscard]] constexpr const_iterator begin() const noexcept { return elems; }
+  [[nodiscard]] constexpr iterator end() noexcept { return elems + N; }
+  [[nodiscard]] constexpr const_iterator end() const noexcept { return elems + N; }
+  [[nodiscard]] constexpr reference operator[](size_type index) noexcept { return elems[index]; }
+  [[nodiscard]] constexpr const_reference operator[](size_type index) const noexcept {
+    return elems[index];
+  }
+  [[nodiscard]] constexpr pointer data() noexcept { return elems; }
+  [[nodiscard]] constexpr const_pointer data() const noexcept { return elems; }
+  [[nodiscard]] constexpr size_type size() const noexcept { return N; }
+  [[nodiscard]] constexpr bool empty() const noexcept { return N == 0; }
+};
+
+}  // namespace std
+#endif

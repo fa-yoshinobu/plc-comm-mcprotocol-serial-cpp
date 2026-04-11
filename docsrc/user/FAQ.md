@@ -11,6 +11,7 @@ The repository includes PlatformIO examples for:
 
 - `RP2040`
 - `ESP32-C3`
+- `Arduino Mega 2560`
 
 ## Is the MCU example safe to run on a live PLC?
 

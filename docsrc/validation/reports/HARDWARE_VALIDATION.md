@@ -31,6 +31,7 @@ Use it together with:
 | PlatformIO example build | `native-example` | pass | compile-check plus local execution of the built example |
 | PlatformIO example build | `rpipico-arduino-example` | pass | compile-check on `Raspberry Pi Pico` environment |
 | PlatformIO example build | `esp32-c3-devkitm-1-example` | pass | compile-check on `Espressif ESP32-C3-DevKitM-1` environment |
+| PlatformIO example build | `mega2560-arduino-uart-example` | pass | compile-check on `Arduino Mega 2560` environment |
 
 Validated target:
 

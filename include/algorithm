@@ -1,0 +1,55 @@
+#pragma once
+
+#if defined(__has_include_next)
+#if __has_include_next(<algorithm>)
+#include_next <algorithm>
+#define MCPROTOCOL_HAVE_STD_ALGORITHM 1
+#endif
+#endif
+
+#if !defined(MCPROTOCOL_HAVE_STD_ALGORITHM)
+namespace std {
+
+template <typename InputIt, typename OutputIt>
+constexpr OutputIt copy(InputIt first, InputIt last, OutputIt dest) {
+  while (first != last) {
+    *dest = *first;
+    ++first;
+    ++dest;
+  }
+  return dest;
+}
+
+template <typename InputIt, typename Size, typename OutputIt>
+constexpr OutputIt copy_n(InputIt first, Size count, OutputIt dest) {
+  for (Size index = 0; index < count; ++index) {
+    *dest = *first;
+    ++first;
+    ++dest;
+  }
+  return dest;
+}
+
+template <typename InputIt, typename T>
+constexpr InputIt find(InputIt first, InputIt last, const T& value) {
+  while (first != last) {
+    if (*first == value) {
+      break;
+    }
+    ++first;
+  }
+  return first;
+}
+
+template <typename InputIt>
+constexpr ptrdiff_t distance(InputIt first, InputIt last) {
+  ptrdiff_t result = 0;
+  while (first != last) {
+    ++first;
+    ++result;
+  }
+  return result;
+}
+
+}  // namespace std
+#endif

@@ -1,0 +1,29 @@
+#pragma once
+
+#if defined(__has_include_next)
+#if __has_include_next(<cstdint>)
+#include_next <cstdint>
+#define MCPROTOCOL_HAVE_CSTDINT 1
+#endif
+#endif
+
+#if !defined(MCPROTOCOL_HAVE_CSTDINT)
+#include <stdint.h>
+
+namespace std {
+
+using ::int8_t;
+using ::int16_t;
+using ::int32_t;
+using ::int64_t;
+using ::intptr_t;
+using ::intmax_t;
+using ::uint8_t;
+using ::uint16_t;
+using ::uint32_t;
+using ::uint64_t;
+using ::uintptr_t;
+using ::uintmax_t;
+
+}  // namespace std
+#endif

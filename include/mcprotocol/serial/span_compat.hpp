@@ -2,7 +2,6 @@
 
 #include <array>
 #include <cstddef>
-#include <type_traits>
 
 #if defined(__has_include)
 #if __has_include(<span>)
@@ -19,11 +18,31 @@ constexpr size_t dynamic_extent = static_cast<size_t>(-1);
 enum class byte : unsigned char {};
 #endif
 
+template <typename T>
+struct mcprotocol_remove_cv {
+  using type = T;
+};
+
+template <typename T>
+struct mcprotocol_remove_cv<const T> {
+  using type = T;
+};
+
+template <typename T>
+struct mcprotocol_remove_cv<volatile T> {
+  using type = T;
+};
+
+template <typename T>
+struct mcprotocol_remove_cv<const volatile T> {
+  using type = T;
+};
+
 template <typename T, size_t Extent = dynamic_extent>
 class span {
  public:
   using element_type = T;
-  using value_type = typename remove_cv<T>::type;
+  using value_type = typename mcprotocol_remove_cv<T>::type;
   using size_type = size_t;
   using difference_type = ptrdiff_t;
   using pointer = element_type*;
@@ -39,27 +58,16 @@ class span {
   constexpr span(pointer first, pointer last) noexcept
       : data_(first), size_(static_cast<size_type>(last - first)) {}
 
-  template <size_t N,
-            typename enable_if<(Extent == dynamic_extent || Extent == N), int>::type = 0>
+  template <size_t N>
   constexpr span(element_type (&arr)[N]) noexcept : data_(arr), size_(N) {}
 
-  template <typename U,
-            size_t N,
-            typename enable_if<is_convertible<U (*)[], element_type (*)[]>::value &&
-                                   (Extent == dynamic_extent || Extent == N),
-                               int>::type = 0>
+  template <typename U, size_t N>
   constexpr span(array<U, N>& arr) noexcept : data_(arr.data()), size_(N) {}
 
-  template <typename U,
-            size_t N,
-            typename enable_if<is_convertible<const U (*)[], element_type (*)[]>::value &&
-                                   (Extent == dynamic_extent || Extent == N),
-                               int>::type = 0>
+  template <typename U, size_t N>
   constexpr span(const array<U, N>& arr) noexcept : data_(arr.data()), size_(N) {}
 
-  template <typename U,
-            size_t OtherExtent,
-            typename enable_if<is_convertible<U (*)[], element_type (*)[]>::value, int>::type = 0>
+  template <typename U, size_t OtherExtent>
   constexpr span(const span<U, OtherExtent>& other) noexcept
       : data_(other.data()), size_(other.size()) {}
 

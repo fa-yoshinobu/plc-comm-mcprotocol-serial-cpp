@@ -6,14 +6,14 @@ This repository is for cases like these:
 
 - You want to talk to a Mitsubishi PLC over `serial / RS-232C / RS-485`
 - You want a `C++` library that does not allocate dynamically
-- You want to run the same core logic on `Linux`, `RP2040`, or `ESP32-C3`
+- You want to run the same core logic on `Linux`, `RP2040`, `ESP32-C3`, or `Arduino Mega 2560`
 
 The current codebase includes:
 
 - A transport-agnostic library centered on `MelsecSerialClient`
 - A simpler host-side synchronous entrypoint via `PosixSyncClient`
-- PlatformIO example projects for `RP2040` and `ESP32-C3`
-- A read-only real-UART Arduino sample for `Serial1`
+- PlatformIO example projects for `RP2040`, `ESP32-C3`, and `Arduino Mega 2560`
+- Board-specific Arduino samples for `RP2040`, `ESP32-C3`, and `Arduino Mega 2560`
 - GitHub Actions for host build/test/docs and PlatformIO compile checks
 - Real-hardware validation records for `RJ71C24-R2`, `LJ71C24`, `QJ71C24N`, and `FX5UC-32MT/D`
 
@@ -159,9 +159,12 @@ Examples:
 
 - [Examples Index](examples/README.md)
 - [host_sync_quickstart.cpp](examples/host_sync_quickstart.cpp)
-- [platformio_arduino_uart.cpp](examples/platformio_arduino_uart/platformio_arduino_uart.cpp)
+- [platformio_rpipico_arduino_uart.cpp](examples/platformio_rpipico_arduino_uart/platformio_rpipico_arduino_uart.cpp)
+- [platformio_esp32c3_arduino_uart.cpp](examples/platformio_esp32c3_arduino_uart/platformio_esp32c3_arduino_uart.cpp)
+- [platformio_arduino_mega2560_uart.cpp](examples/platformio_arduino_mega2560_uart/platformio_arduino_mega2560_uart.cpp)
 - [mcu_async_batch_read.cpp](examples/mcu_async_batch_read.cpp)
-- [platformio_arduino_async.cpp](examples/platformio_arduino_async/platformio_arduino_async.cpp)
+- [platformio_rpipico_arduino_async.cpp](examples/platformio_rpipico_arduino_async/platformio_rpipico_arduino_async.cpp)
+- [platformio_esp32c3_arduino_async.cpp](examples/platformio_esp32c3_arduino_async/platformio_esp32c3_arduino_async.cpp)
 
 ## PlatformIO
 
@@ -181,6 +184,7 @@ Available environments:
 - `esp32-c3-devkitm-1-example`
 - `rpipico-arduino-uart-example`
 - `esp32-c3-devkitm-1-uart-example`
+- `mega2560-arduino-uart-example`
 - `native-example-ultra-minimal`
 - `rpipico-arduino-example-ultra-minimal`
 - `esp32-c3-devkitm-1-example-ultra-minimal`
@@ -193,6 +197,7 @@ pio run -e rpipico-arduino-example
 pio run -e esp32-c3-devkitm-1-example
 pio run -e rpipico-arduino-uart-example
 pio run -e esp32-c3-devkitm-1-uart-example
+pio run -e mega2560-arduino-uart-example
 pio run -e native-example-ultra-minimal
 pio run -e rpipico-arduino-example-ultra-minimal
 pio run -e esp32-c3-devkitm-1-example-ultra-minimal

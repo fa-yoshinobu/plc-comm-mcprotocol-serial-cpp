@@ -1,0 +1,22 @@
+#pragma once
+
+#if defined(__has_include_next)
+#if __has_include_next(<cstring>)
+#include_next <cstring>
+#define MCPROTOCOL_HAVE_CSTRING 1
+#endif
+#endif
+
+#if !defined(MCPROTOCOL_HAVE_CSTRING)
+#include <string.h>
+
+namespace std {
+
+using ::memcmp;
+using ::memcpy;
+using ::memmove;
+using ::memset;
+using ::strlen;
+
+}  // namespace std
+#endif

@@ -19,17 +19,20 @@ cmake --build build --target mcprotocol_example_host_sync
 
 ## 2. Real MCU UART Example
 
-- `platformio_arduino_uart/platformio_arduino_uart.cpp`
-  - Arduino-style `Serial1` sample
-  - read-only PLC access
-  - intended for actual UART bring-up through a level shifter
-  - shared by `rpipico-arduino-uart-example` and `esp32-c3-devkitm-1-uart-example`
+- `platformio_rpipico_arduino_uart/platformio_rpipico_arduino_uart.cpp`
+  - Raspberry Pi Pico specific `Serial1` sample
+- `platformio_esp32c3_arduino_uart/platformio_esp32c3_arduino_uart.cpp`
+  - ESP32-C3 specific `Serial1` sample
+- `platformio_arduino_mega2560_uart/platformio_arduino_mega2560_uart.cpp`
+  - Arduino Mega 2560 specific `Serial1` sample
+- all three are read-only PLC access samples intended for actual UART bring-up through a level shifter
 
 Build:
 
 ```bash
 pio run -e rpipico-arduino-uart-example
 pio run -e esp32-c3-devkitm-1-uart-example
+pio run -e mega2560-arduino-uart-example
 ```
 
 ## 3. Advanced Async Examples
@@ -38,10 +41,11 @@ pio run -e esp32-c3-devkitm-1-uart-example
   - low-level asynchronous state-machine example
   - host-runnable
   - uses a simulated success response
-- `platformio_arduino_async/platformio_arduino_async.cpp`
-  - Arduino-style `setup()` / `loop()` sample
-  - compile-safe on `RP2040` and `ESP32-C3`
-  - still uses a simulated response path
+- `platformio_rpipico_arduino_async/platformio_rpipico_arduino_async.cpp`
+  - Raspberry Pi Pico specific async sample
+- `platformio_esp32c3_arduino_async/platformio_esp32c3_arduino_async.cpp`
+  - ESP32-C3 specific async sample
+- both Arduino async samples still use a simulated response path
 
 Build:
 

@@ -3,7 +3,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 
 #include "mcprotocol_serial.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
@@ -90,22 +89,18 @@ void simulate_response(AppState& app, std::uint32_t now_ms) {
 }
 
 void report_once(AppState& app) {
-  if (app.reported) {
-    return;
-  }
-
-  if (!app.done) {
+  if (app.reported || !app.done) {
     return;
   }
 
   app.reported = true;
   if (!app.completion_status.ok()) {
-    Serial.print("mcprotocol example failed: ");
+    Serial.print("rpipico async example failed: ");
     Serial.println(app.completion_status.message);
     return;
   }
 
-  Serial.print("mcprotocol example read ok: D100=0x");
+  Serial.print("rpipico async example read ok: D100=0x");
   Serial.print(app.out_words[0], HEX);
   Serial.print(" D101=0x");
   Serial.println(app.out_words[1], HEX);

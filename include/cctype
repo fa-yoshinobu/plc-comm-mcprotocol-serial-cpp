@@ -1,0 +1,24 @@
+#pragma once
+
+#if defined(__has_include_next)
+#if __has_include_next(<cctype>)
+#include_next <cctype>
+#define MCPROTOCOL_HAVE_CCTYPE 1
+#endif
+#endif
+
+#if !defined(MCPROTOCOL_HAVE_CCTYPE)
+#include <ctype.h>
+
+namespace std {
+
+using ::isalnum;
+using ::isalpha;
+using ::isdigit;
+using ::isspace;
+using ::tolower;
+using ::toupper;
+using ::isxdigit;
+
+}  // namespace std
+#endif

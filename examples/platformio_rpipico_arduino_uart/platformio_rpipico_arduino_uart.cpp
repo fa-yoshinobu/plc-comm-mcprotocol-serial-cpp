@@ -7,14 +7,6 @@
 #include "mcprotocol_serial.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
 
-#ifndef MCPROTOCOL_EXAMPLE_UART_RX_PIN
-#define MCPROTOCOL_EXAMPLE_UART_RX_PIN 1
-#endif
-
-#ifndef MCPROTOCOL_EXAMPLE_UART_TX_PIN
-#define MCPROTOCOL_EXAMPLE_UART_TX_PIN 0
-#endif
-
 #ifndef MCPROTOCOL_EXAMPLE_PLC_BAUD
 #define MCPROTOCOL_EXAMPLE_PLC_BAUD 19200
 #endif
@@ -44,8 +36,6 @@ using mcprotocol::serial::Status;
 
 constexpr std::uint32_t kPollIntervalMs = MCPROTOCOL_EXAMPLE_POLL_INTERVAL_MS;
 constexpr std::uint32_t kPlcBaud = MCPROTOCOL_EXAMPLE_PLC_BAUD;
-constexpr int kRxPin = MCPROTOCOL_EXAMPLE_UART_RX_PIN;
-constexpr int kTxPin = MCPROTOCOL_EXAMPLE_UART_TX_PIN;
 constexpr DeviceAddress kHeadDevice {.code = DeviceCode::D, .number = 100};
 
 struct AppState {
@@ -92,13 +82,7 @@ void on_request_complete(void* user, Status status) {
 }
 
 void configure_plc_uart() {
-#if defined(ARDUINO_ARCH_ESP32)
-  g_plc_serial.begin(kPlcBaud, SERIAL_8E1, kRxPin, kTxPin);
-#else
-  (void)kRxPin;
-  (void)kTxPin;
   g_plc_serial.begin(kPlcBaud, SERIAL_8E1);
-#endif
 }
 
 void pump_uart_tx(std::uint32_t now_ms) {
@@ -176,12 +160,12 @@ void report_once() {
 
   g_app.request_reported = true;
   if (!g_app.completion_status.ok()) {
-    Serial.print("mcprotocol uart example failed: ");
+    Serial.print("rpipico uart example failed: ");
     Serial.println(g_app.completion_status.message);
     return;
   }
 
-  Serial.print("mcprotocol uart read ok: D100=");
+  Serial.print("rpipico uart read ok: D100=");
   Serial.print(g_app.out_words[0], HEX);
   Serial.print(" D101=");
   Serial.print(g_app.out_words[1], HEX);
@@ -204,7 +188,7 @@ void setup() {
   }
 
   g_app.next_request_ms = 0;
-  Serial.println("mcprotocol uart example: read-only D100-D103 via Serial1");
+  Serial.println("rpipico uart example: read-only D100-D103 via Serial1");
 }
 
 void loop() {

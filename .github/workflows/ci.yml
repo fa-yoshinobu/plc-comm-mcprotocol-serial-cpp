@@ -53,6 +53,7 @@ jobs:
           - esp32-c3-devkitm-1-example-ultra-minimal
           - rpipico-arduino-uart-example
           - esp32-c3-devkitm-1-uart-example
+          - mega2560-arduino-uart-example
     steps:
       - name: Checkout
         uses: actions/checkout@v4

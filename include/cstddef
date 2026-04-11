@@ -1,0 +1,20 @@
+#pragma once
+
+#if defined(__has_include_next)
+#if __has_include_next(<cstddef>)
+#include_next <cstddef>
+#define MCPROTOCOL_HAVE_CSTDDEF 1
+#endif
+#endif
+
+#if !defined(MCPROTOCOL_HAVE_CSTDDEF)
+#include <stddef.h>
+
+namespace std {
+
+using ::ptrdiff_t;
+using ::size_t;
+using nullptr_t = decltype(nullptr);
+
+}  // namespace std
+#endif
