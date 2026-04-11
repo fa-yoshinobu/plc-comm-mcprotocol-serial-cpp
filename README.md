@@ -11,7 +11,7 @@ This repository is for cases like these:
 The current codebase includes:
 
 - A transport-agnostic library centered on `MelsecSerialClient`
-- A Linux test CLI: `mcprotocol_cli`
+- A simpler host-side synchronous entrypoint via `PosixSyncClient`
 - PlatformIO example projects for `RP2040` and `ESP32-C3`
 - A read-only real-UART Arduino sample for `Serial1`
 - GitHub Actions for host build/test/docs and PlatformIO compile checks
@@ -29,40 +29,21 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-### 2. Try a verified serial setting
-
-One verified starting point is:
-
-- Module: `RJ71C24-R2`
-- Link: `RS-232C`
-- Serial: `19200bps / 8E1`
-- Protocol: `MC Protocol Format4`
-- Code: `ASCII`
-- Terminator: `CR/LF`
-- Sum check: `off`
-- Station: `0`
-
-First command to try:
+### 2. Try the smallest library entrypoint
 
 ```bash
-./build/mcprotocol_cli \
-  --device /dev/ttyUSB0 \
-  --baud 19200 \
-  --data-bits 8 \
-  --stop-bits 1 \
-  --parity E \
-  --frame c4-ascii-f4 \
-  --sum-check off \
-  --station 0 \
-  cpu-model
+cmake --build build --target mcprotocol_example_host_sync
+./build/mcprotocol_example_host_sync
 ```
+
+That example uses the synchronous host-side facade in
+[host_sync_quickstart.cpp](examples/host_sync_quickstart.cpp).
 
 ### 3. Choose your entry path
 
-- If you want shell commands on Linux, start with [Usage Guide](docsrc/user/USAGE_GUIDE.md).
-- If you want the low-level MCU state machine, start with [MCU Quickstart](docsrc/user/MCU_QUICKSTART.md).
-- If you want a simpler host-side synchronous wrapper, start with
+- If you want the simplest library example on a POSIX host, start with
   [host_sync_quickstart.cpp](examples/host_sync_quickstart.cpp).
+- If you want the low-level MCU state machine, start with [MCU Quickstart](docsrc/user/MCU_QUICKSTART.md).
 - If you need verified target settings and current limits, use
   [HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md).
 
@@ -70,11 +51,8 @@ First command to try:
 
 Start with these pages instead of reading the whole repository at once.
 
-- [Setup Guide](docsrc/user/SETUP_GUIDE.md)
 - [Wiring Guide](docsrc/user/WIRING_GUIDE.md)
 - [MCU Quickstart](docsrc/user/MCU_QUICKSTART.md)
-- [Usage Guide](docsrc/user/USAGE_GUIDE.md)
-- [Troubleshooting](docsrc/user/TROUBLESHOOTING.md)
 - [FAQ](docsrc/user/FAQ.md)
 - [Examples Index](examples/README.md)
 - [Hardware Validation Matrix](docsrc/validation/reports/HARDWARE_VALIDATION.md)
@@ -102,8 +80,6 @@ For the exact PASS / HOLD matrix and the verified serial settings for each targe
 - Some command families are target-dependent and require the right `--series` selection.
 - Native qualified access remains unresolved or semantically inconsistent on several targets.
 - `FX5UC-32MT/D` has additional target-specific limits around host/module buffer and qualified access.
-- The CLI does not silently fall back from one native family to a different one when a native
-  probe fails.
 - Large contiguous `write-words` and `write-bits` are still split automatically to fit fixed request buffers.
 
 For target-specific limits, use
@@ -182,15 +158,14 @@ mcprotocol::serial::Status status = plc.open(serial, protocol);
 Examples:
 
 - [Examples Index](examples/README.md)
-- [mcu_async_batch_read.cpp](examples/mcu_async_batch_read.cpp)
 - [host_sync_quickstart.cpp](examples/host_sync_quickstart.cpp)
-- [platformio_arduino_async.cpp](examples/platformio_arduino_async/platformio_arduino_async.cpp)
 - [platformio_arduino_uart.cpp](examples/platformio_arduino_uart/platformio_arduino_uart.cpp)
-- [Linux CLI examples](examples/linux_cli/README.md)
+- [mcu_async_batch_read.cpp](examples/mcu_async_batch_read.cpp)
+- [platformio_arduino_async.cpp](examples/platformio_arduino_async/platformio_arduino_async.cpp)
 
 ## PlatformIO
 
-Version `0.1.1` adds PlatformIO packaging metadata and example environments.
+Version `0.2.0` includes PlatformIO packaging metadata and simpler host-side entrypoints.
 
 Main files:
 
@@ -264,29 +239,6 @@ Feature switches:
 - `MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS`
 - `MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS`
 - `MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS`
-
-## CLI Notes
-
-The Linux host CLI is intended for bring-up and validation.
-
-Useful commands:
-
-```bash
-./build/mcprotocol_cli --device /dev/ttyUSB0 cpu-model
-./build/mcprotocol_cli --device /dev/ttyUSB0 read-words D100 4
-./build/mcprotocol_cli --device /dev/ttyUSB0 read-bits M100 8
-./build/mcprotocol_cli --device /dev/ttyUSB0 write-words D100=123 D101=456
-./build/mcprotocol_cli --device /dev/ttyUSB0 write-bits M100=1 M101=0
-./build/mcprotocol_cli --device /dev/ttyUSB0 --frame c4-ascii-f4 recover-c24
-./build/mcprotocol_cli --device /dev/ttyUSB0 probe-all
-./build/mcprotocol_cli --device /dev/ttyUSB0 probe-write-all
-```
-
-If your adapter is `RS-485` and needs manual direction control:
-
-```bash
-./build/mcprotocol_cli --device /dev/ttyUSB0 --rts-toggle on cpu-model
-```
 
 ## Docs and CI
 

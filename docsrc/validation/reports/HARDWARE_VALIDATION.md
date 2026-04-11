@@ -7,8 +7,7 @@ This file is the validation matrix and backlog for the current real-hardware set
 Use it together with:
 
 - [../../../README.md](../../../README.md) for the repository overview
-- [../../user/SETUP_GUIDE.md](../../user/SETUP_GUIDE.md) for the verified serial settings
-- [../../user/USAGE_GUIDE.md](../../user/USAGE_GUIDE.md) for command behavior notes
+- [../../user/MCU_QUICKSTART.md](../../user/MCU_QUICKSTART.md) for the firmware-side entry path
 - [FX5UC_32MT_D_RS232C.md](FX5UC_32MT_D_RS232C.md) for the consolidated FX/iQ-F target report
 - [LJ71C24_RS232C.md](LJ71C24_RS232C.md) for the consolidated L-series target report
 - [QJ71C24N_RS232C.md](QJ71C24N_RS232C.md) for the consolidated Q-series target report
@@ -68,7 +67,7 @@ Additional validated target:
 - PLC CPU: Mitsubishi iQ-F `FX5UC-32MT/D`
 - Link: `RS-232C`
 - Settings: `38400 / 8E2 / MC Protocol Format5 Binary / sum-check on / station 0`
-- CLI family selection: use `--series ql`; `--series iqr` caused contiguous `D100` / `M100` reads to fail with `0x7E40`
+- Validated family selection: use `ql`; `iqr` caused contiguous `D100` / `M100` reads to fail with `0x7E40`
 
 | Area | Command path | Current status | Notes |
 |---|---|---|---|
@@ -93,7 +92,7 @@ Additional validated target:
 - Serial module: `LJ71C24`
 - Link: `RS-232C`
 - Settings: `28800 / 8E2 / MC Protocol Format5 Binary / sum-check on / station 0`
-- CLI family selection: use `--series ql`; `--series iqr` caused even contiguous `D100` / `M100` reads to fail with `0x7F22`
+- Validated family selection: use `ql`; `iqr` caused even contiguous `D100` / `M100` reads to fail with `0x7F22`
 
 | Area | Command path | Current status | Notes |
 |---|---|---|---|
@@ -118,7 +117,7 @@ Additional validated target:
 - Serial module: `QJ71C24N`
 - Link: `RS-232C`
 - Settings: `19200 / 8E2 / MC Protocol Format5 Binary / sum-check on / station 0`
-- CLI family selection: use `--series ql`
+- Validated family selection: use `ql`
 
 | Area | Command path | Current status | Notes |
 |---|---|---|---|

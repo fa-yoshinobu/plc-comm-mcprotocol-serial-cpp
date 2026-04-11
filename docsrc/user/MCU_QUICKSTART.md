@@ -1,6 +1,6 @@
 # MCU Quickstart
 
-Audience: users who want to move from the Linux CLI to actual MCU firmware.
+Audience: users who want to move from the host-side examples to actual MCU firmware.
 
 This page points to the real-UART read-only sample added for `RP2040` and `ESP32-C3`.
 
@@ -62,8 +62,8 @@ In a production firmware port you may replace `flush()` with:
 
 ## Recommended Sequence
 
-1. Validate the line first with the Linux CLI.
+1. Confirm the target settings in `HARDWARE_VALIDATION.md`.
 2. Wire the MCU through a `TTL <-> RS-232C` level shifter.
 3. Build the matching PlatformIO UART example.
-4. Confirm `cpu-model` or a read-only `D` range works from the MCU.
+4. Confirm a read-only `D` range works from the MCU.
 5. Only then add write operations.

@@ -7,7 +7,7 @@ This repository now follows the same documentation split used in `plc-comm-slmp-
 ## Documentation Layout
 
 - `docsrc/user/`: user-facing bring-up and usage
-- `docsrc/validation/reports/`: validation matrix and dated evidence logs
+- `docsrc/validation/reports/`: validation matrix and one consolidated report per hardware target
 - `docsrc/maintainer/`: repository-maintenance notes
 
 ## Status Terms
@@ -21,7 +21,7 @@ Use these terms consistently in validation reports.
 ## Current Native-only Policy
 
 On the validated `RJ71C24-R2` setup, unsupported native commands should stay failed.
-Do not add CLI fallback behavior that silently replaces them with other command families.
+Do not add fallback behavior that silently replaces them with other command families.
 
 ## Qualified `G/HG` Policy
 
@@ -61,7 +61,7 @@ Host-side tests now pin or check these request families:
 This matters because the current hardware problem is not proven to be an encoder bug anymore. The request shapes are now locked down separately from the real-hardware outcome.
 
 `2026-04-11` follow-up hardware rechecks also confirmed that `0403`, `1402` words, `0406`,
-`1406`, and `0801` still fail after switching the CLI to `--series iqr`. Those commands did change
+`1406`, and `0801` still fail after switching the target-family setting to `iqr`. Those commands did change
 to iQ-R subcommands on the wire, while contiguous `0401/1401` traffic still passed with `0002/0003`.
 Do not assume the remaining failures are caused by forgetting the PLC family selection.
 
@@ -108,7 +108,7 @@ sparse probes and native `1402` word single/dense/sparse probes still all return
 When adding new hardware results:
 
 1. Update `docsrc/validation/reports/HARDWARE_VALIDATION.md`.
-2. Add or extend a dated report in `docsrc/validation/reports/`.
+2. Add or extend the consolidated report for that hardware target in `docsrc/validation/reports/`.
 3. Keep the top-level `README.md` summary short and point to the detailed report.
 4. Record the native result and PLC end code without masking it with a different command path.
 

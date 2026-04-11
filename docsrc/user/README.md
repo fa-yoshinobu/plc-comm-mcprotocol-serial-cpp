@@ -1,12 +1,14 @@
 # User Docs
 
-This section is for users who want to set up and use the library.
+This section is for library entrypoints, wiring, and MCU integration.
+
+If you want the smallest library usage example first, start from:
+
+- [../../examples/host_sync_quickstart.cpp](../../examples/host_sync_quickstart.cpp)
+- [../../README.md](../../README.md)
 
 Current pages:
 
-- [SETUP_GUIDE.md](SETUP_GUIDE.md)
 - [WIRING_GUIDE.md](WIRING_GUIDE.md)
 - [MCU_QUICKSTART.md](MCU_QUICKSTART.md)
-- [USAGE_GUIDE.md](USAGE_GUIDE.md)
-- [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 - [FAQ.md](FAQ.md)

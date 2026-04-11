@@ -7,10 +7,10 @@ docs focused on known-good workflows and keep this page for unresolved native be
 
 ## Public Policy
 
-- Keep unresolved native command behavior visible. Do not add CLI fallback behavior that silently
+- Keep unresolved native command behavior visible. Do not add fallback behavior that silently
   swaps in a different command family.
-- Keep unresolved native commands in the public API and CLI, but describe them as native probes on
-  the validated real-hardware setups instead of known-good workflows.
+- Keep unresolved native commands in the public API, but describe them as native probes on the
+  validated real-hardware setups instead of known-good workflows.
 - Treat `read-qualified-words` / `write-qualified-words` over `0601/1601` as the practical public
   path for `U...\\G...` / `U...\\HG...` access on the current setup.
 - Keep native qualified commands separate from helper qualified commands in docs, validation logs,
@@ -95,8 +95,8 @@ Qualified-device follow-up:
 ## Follow-up Rules
 
 - Add every new hardware result to `docsrc/validation/reports/HARDWARE_VALIDATION.md`.
-- Add or extend a dated report under `docsrc/validation/reports/` for raw evidence and command
-  examples.
+- Add or extend the consolidated report under `docsrc/validation/reports/` for that hardware
+  target, including raw evidence and command examples.
 - Keep the top-level `README.md` summary short. Push detailed failure evidence into validation docs.
 - Preserve request-shape conformance tests before treating hardware rejection as an encoder bug.
 - Record the exact serial settings, PLC model, and native PLC end code for every new result.
@@ -145,6 +145,5 @@ Qualified-device follow-up:
   `2026-04-11`, helper reads of `U3E0\\G599`, `U3E0\\G600`, and `U3E0\\G31998..32003` stayed
   zero after native `0x7F23` and `0x4031` probes.
 - When C24 ASCII communication times out or returns mixed fragments, send ASCII `EOT CRLF` or
-  `CL CRLF` before the next probe to reinitialize the transmission sequence. `EOT CRLF` is the
-  default recovery path exposed by the CLI. Treat this as transport recovery only, not as evidence
-  that the native command family works.
+  `CL CRLF` before the next probe to reinitialize the transmission sequence. Treat this as
+  transport recovery only, not as evidence that the native command family works.

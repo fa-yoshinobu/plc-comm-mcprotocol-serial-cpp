@@ -52,13 +52,13 @@ Confirm these before sending frames:
 
 ## Recommended Bring-up Order
 
-1. Run `cpu-model`
-2. Run `loopback`
-3. Run read-only `read-words`
-4. Run write commands only against a safe test area
+1. Confirm the target settings in `HARDWARE_VALIDATION.md`
+2. Prove the line with a read-only identification check
+3. Prove a small read-only device range
+4. Add write traffic only against a safe test area
 
 ## Related Pages
 
-- [SETUP_GUIDE.md](SETUP_GUIDE.md)
 - [MCU_QUICKSTART.md](MCU_QUICKSTART.md)
-- [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+- [FAQ.md](FAQ.md)
+- [../validation/reports/HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md)
