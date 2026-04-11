@@ -29,17 +29,13 @@ Validated setup:
 Shared native-family holds across the currently validated targets:
 
 - `0801/0802` monitor register/read
-  - `RJ71C24-R2 + R08CPU + --series iqr`: `0801=0x7F22`
-  - `LJ71C24 + L26CPU-BT + --series ql`: `0801=0x7F23`
-  - `QJ71C24N + Q06UDVCPU + --series ql`: `0801=0x7F23`
+  - `RJ71C24-R2 + R08CPU`: `--series ql` passed; `--series iqr` still produced `0801=0x7F23`, raw `0802=0x7155`
+  - `LJ71C24 + L26CPU-BT + --series ql`: passed on focused recheck
+  - `QJ71C24N + Q06UDVCPU + --series ql`: passed on focused recheck
   - `FX5UC-32MT/D + --series ql`: `0801=0x7E40`, raw `0802=0x7E40`
 
 Target-specific remaining items:
 
-- `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` still hold on native `0403`
-- `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` still hold on native `1402` random-write-words
-- `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` still hold on native `0406/1406`
-- `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` still hold on native `1402` random-write-bits
 - `RJ71C24-R2` native qualified access is still unresolved and semantically inconsistent with helper results
 - `LJ71C24` and `QJ71C24N` still hold on native `U3E0\\G...`; native `HG` is not applicable outside iQ-R
 - `FX5UC-32MT/D` still holds on host/module buffer, helper qualified, native qualified, and contiguous `DX`, `DY`, `ZR`, `V`
@@ -50,8 +46,16 @@ Resolved enough to remove from the active hold list:
   from two-byte fields to the one-byte Q/L-era layout
 - `FX5UC-32MT/D` native `1402` random-write-words moved to pass after the same non-iQ-R binary
   one-byte word/dword count fix
+- `RJ71C24-R2 + R08CPU` native `0403`, `1402` words, and `1402` bits moved to pass on `2026-04-11`
+  when the same corrected encoder was rechecked under `--series ql`
+- `LJ71C24 + L26CPU-BT` native `0403`, `1402` words, `1402` bits, `0406/1406`, and `0801/0802`
+  moved to pass on `2026-04-11` when the same corrected encoder was rechecked under `--series ql`
+- `QJ71C24N + Q06UDVCPU` native `0403`, `1402` words, `1402` bits, `0406/1406`, and `0801/0802`
+  moved to pass on `2026-04-11` when the same corrected encoder was rechecked under `--series ql`
 - `FX5UC-32MT/D` native `0406` moved to pass after the binary one-byte block-count fix
 - `FX5UC-32MT/D` native `1406` moved to pass after the binary one-byte block-count fix plus bit-block two-bit-pair reversal
+- `RJ71C24-R2 + R08CPU + --series iqr` native `0406/1406` moved to pass on `2026-04-11` after the same corrected binary encoder was rechecked on hardware
+- `RJ71C24-R2 + R08CPU` native `0801/0802` moved to pass on `2026-04-11` under `--series ql`
 - `FX5UC-32MT/D` focused native `1402` random-write-bits `M` probes moved to pass after the binary
   one-byte count fix plus the non-iQ-R pair-swapped bit-address correction
 
