@@ -524,6 +524,30 @@ void test_encode_random_write_bits_ascii_iqr_shape() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
+void test_encode_random_write_bits_binary_matches_manual() {
+  const auto config = make_binary_c4_config();
+  const std::array<RandomWriteBitItem, 2> items {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 50}, .value = BitValue::Off},
+      {.device = {.code = mcprotocol::serial::DeviceCode::Y, .number = 0x2F}, .value = BitValue::On},
+  }};
+
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_random_write_bits(
+      config,
+      std::span<const RandomWriteBitItem>(items.data(), items.size()),
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 16> expected {
+      0x02, 0x14, 0x01, 0x00, 0x02, 0x00, 0x32, 0x00,
+      0x00, 0x90, 0x00, 0x2F, 0x00, 0x00, 0x9D, 0x01,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
 void test_encode_multi_block_read_ascii_matches_manual() {
   const auto config = make_ascii_c4_format4_config();
   const std::array<MultiBlockReadBlock, 5> blocks {{
@@ -1047,6 +1071,7 @@ int main() {
   test_encode_random_write_words_ascii_matches_manual();
   test_encode_random_write_bits_ascii_matches_manual();
   test_encode_random_write_bits_ascii_iqr_shape();
+  test_encode_random_write_bits_binary_matches_manual();
   test_encode_multi_block_read_ascii_matches_manual();
   test_encode_multi_block_read_binary_matches_capture_counts();
   test_encode_multi_block_write_binary_uses_single_byte_block_counts();

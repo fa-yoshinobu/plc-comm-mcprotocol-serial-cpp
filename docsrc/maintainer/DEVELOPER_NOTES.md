@@ -83,6 +83,15 @@ binary `1406` bit-block encoder to pre-apply that pair-order reversal and adding
 the non-symmetric two-point case, `probe-multi-block[mixed]` reached
 `multi-block-read=ok native`, `multi-block-write=ok native`, `restore=ok` on `FX5UC-32MT/D`.
 
+The nearest remaining candidate, `1402` random-write-bits, does not currently look like the same
+bug. Its binary request shape is now pinned against the manual example, and a focused FX5U probe
+showed native `1402` returning `0x7F23` for single-item `M100=1`, dense `M100..M115`, and sparse
+`M100/M105/M110/M115` writes while the same `M100..M115` alternating pattern passed under
+contiguous `1401`. A focused FX5U recheck also showed `0403` returning `0x7F23` for both
+word-only `random-read D100 D105` and bit-only `random-read M100 M105`. That keeps the remaining
+random family in the unresolved family-specific bucket instead of the resolved `1406` packing
+bucket.
+
 ## Validation Reporting Rule
 
 When adding new hardware results:

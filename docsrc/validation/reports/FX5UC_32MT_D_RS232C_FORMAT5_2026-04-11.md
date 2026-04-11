@@ -121,10 +121,25 @@ Interpretation:
 Observed result:
 
 - `0403 random-read`: PLC error `0x7F23`
+- focused `0403` recheck on the same target:
+  - `random-read D100`: `0x7F23`
+  - `random-read M100`: `0x7F23`
+  - `random-read D100 D105`: `0x7F23`
+  - `random-read M100 M105`: `0x7F23`
 - `1402 random-write-words`: PLC error `0x7F23`
+- focused `1402` word recheck on the same target:
+  - `random-write-words D100=1`: `0x7F23`
+  - `random-write-words D100=1 D101=2`: `0x7F23`
+  - `random-write-words D100=1 D105=2`: `0x7F23`
 - `1402 random-write-bits`: PLC error `0x7F23`
 - post-read after both `1402` probes still showed no write effect at `D300..D305` and `M300..M305`
 - baseline `D300..D305` on this target was `0x0000`, `0x0001`, `0x0002`, `0x0003`, `0x0004`, `0x0005`
+- focused `probe-random-write-bits` recheck on the same target:
+  - contiguous `write-bits` to `M100..M115` with alternating `1010...` pattern: pass
+  - native `random-write-bits` single item `M100=1`: `0x7F23`
+  - native `random-write-bits` on the same `M100..M115` pattern: `0x7F23`
+  - native `random-write-bits` sparse subset `M100`, `M105`, `M110`, `M115`: `0x7F23`
+  - restore back to the original `M100..M115` values: pass
 - `0801 probe-monitor`: `probe-monitor: skip register 0x7E40`
 - `0406 probe-multi-block`: moved to the capture-driven recheck section after the binary count fix
 - `1406 probe-multi-block`: moved to the capture-driven recheck section after the binary count fix
@@ -132,6 +147,13 @@ Observed result:
 Interpretation:
 
 - the unresolved native random family stays unresolved on this FX target
+- `0403` is not just a mixed `D+M` problem on FX5U; both word-only and bit-only random reads still
+  return `0x7F23`, and the same remains true even for single-item `D100` / `M100`
+- `1402` word-write is not just a sparse random case on FX5U; single-item, dense adjacent, and
+  sparse `D100` writes all still return `0x7F23`
+- the `1402` bit-write failure is not explained by low addresses, RUN overwrite, or the concrete
+  `M100..M115` pattern itself because the same target bits passed under contiguous `1401`; the
+  failure also persists for a single-item `M100=1` random write
 - monitor failures still do not match the `LJ71C24` and `QJ71C24N` end-code mix exactly, so this
   target should stay documented separately
 

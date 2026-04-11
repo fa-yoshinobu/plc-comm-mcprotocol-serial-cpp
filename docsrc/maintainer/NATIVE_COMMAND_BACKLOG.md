@@ -27,8 +27,17 @@ Validated setup:
 Unresolved native command families:
 
 - `0403` random read: native ng, PLC end code `0x7F22`, unchanged after `2026-04-11` `--series iqr` recheck (`0403 0002`)
+- `2026-04-11` `FX5UC-32MT/D` focused recheck: both `random-read D100 D105` and
+  `random-read M100 M105` still returned `0x7F23`; additional single-item `random-read D100` and
+  `random-read M100` rechecks also returned `0x7F23`
 - `1402` random write words: native ng, PLC end code `0x7F22`, unchanged after `2026-04-11` `--series iqr` recheck (`1402 0002`)
+- `2026-04-11` `FX5UC-32MT/D` focused recheck: `random-write-words D100=1`,
+  `random-write-words D100=1 D101=2`, and `random-write-words D100=1 D105=2` all returned
+  `0x7F23`
 - `1402` random write bits: native ng, PLC end code `0x7F23`
+- `2026-04-11` `FX5UC-32MT/D` focused recheck: native `random-write-bits` still returned `0x7F23`
+  for single-item `M100=1`, dense `M100..M115`, and sparse `M100/M105/M110/M115` cases even
+  though the same `M100..M115` alternating pattern passed under contiguous `1401`
 - `0406` multi-block read: native ng on the validated `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N`
   setups; `FX5UC-32MT/D` moved to native pass after the `2026-04-11` binary count-width fix
 - `1406` multi-block write: native ng on `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N`; `FX5UC-32MT/D`
@@ -83,6 +92,10 @@ Qualified-device follow-up:
   as `0x1C84`, which is the same word with reversed two-bit-pair order. After correcting the local
   binary encoder to pre-apply that pair-order reversal, `FX5UC-32MT/D` `probe-multi-block[mixed]`
   passed natively.
+- Treat native `1402` random-write-bits as a separate problem from the `1406` bit-block fix until
+  proved otherwise. On `2026-04-11`, the binary request shape was pinned against the manual example
+  and an FX5U focused probe still returned `0x7F23` on the same `M100..M115` pattern that passed
+  under contiguous `1401`.
 - Do not treat a native qualified success code as proof of semantic correctness. On `2026-04-11`
   under `Format5 / Binary / 28800 / 8E2 / sum-check on`, native `U3E0\\G10` returned `0x0000`
   while the helper path still returned `0x83BD`.
