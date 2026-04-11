@@ -682,6 +682,19 @@ class ByteWriter {
   return writer.append_le16(count);
 }
 
+[[nodiscard]] bool append_random_word_dword_count(
+    ByteWriter& writer,
+    const ProtocolConfig& config,
+    std::uint16_t count) noexcept {
+  if (config.code_mode == CodeMode::Ascii) {
+    return append_ascii_hex(writer, count, 4);
+  }
+  if (!is_iq_r_series(config)) {
+    return count <= 0xFFU && writer.push(static_cast<std::uint8_t>(count));
+  }
+  return writer.append_le16(count);
+}
+
 [[nodiscard]] bool append_random_write_bit_device_reference(
     ByteWriter& writer,
     const ProtocolConfig& config,
@@ -1801,8 +1814,8 @@ Status encode_random_read(
 
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x0403U, word_subcommand(config)) ||
-      !append_word_count(writer, config, word_count) ||
-      !append_word_count(writer, config, dword_count)) {
+      !append_random_word_dword_count(writer, config, word_count) ||
+      !append_random_word_dword_count(writer, config, dword_count)) {
     return buffer_too_small("Random read request buffer is too small");
   }
 
@@ -1928,8 +1941,8 @@ Status encode_random_write_words(
 
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x1402U, word_subcommand(config)) ||
-      !append_word_count(writer, config, word_count) ||
-      !append_word_count(writer, config, dword_count)) {
+      !append_random_word_dword_count(writer, config, word_count) ||
+      !append_random_word_dword_count(writer, config, dword_count)) {
     return buffer_too_small("Random write words request buffer is too small");
   }
 

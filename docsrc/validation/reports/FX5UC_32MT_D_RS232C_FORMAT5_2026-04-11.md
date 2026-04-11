@@ -36,7 +36,7 @@ Interpretation:
 | link bootstrap | `cpu-model` passed with `FX5UC-32MT/D`, `0x4A91` |
 | supported-device screening | `21/25` targets passed under `--series ql`; `DX10`, `DY10`, `ZR10`, and `V100` failed with `0x7E43` twice |
 | supported-device soak | two `180` second runs passed with no protocol errors on the screened `21` target subset |
-| native random read/write | `0403` and `1402 words` returned `0x7F23`; focused `1402 bit` `M` probes now pass natively on this target after the binary one-byte count fix plus pair-swapped bit-address correction |
+| native random read/write | `0403`, `1402 words`, and focused `1402 bit` `M` probes now pass natively on this target after the non-iQ-R binary count-width fixes; `1402 bit` additionally needed pair-swapped bit-address correction |
 | native monitor / multi-block | both `0801` and raw `0802` returned `0x7E40`; after the binary count-width and bit-block packing fixes, both `0406` and `1406` passed |
 | host / module buffer | helper and native buffer probes returned `0x7E40` |
 | qualified access | helper `U3E0\\G10` / `U3E0\\HG20` returned `0x7E40`; native `U3E0\\G10` returned `0x7E43`; native `HG` path is not applicable under `--series ql` |
@@ -116,30 +116,34 @@ Interpretation:
 - on FX5U, `1406` is also no longer part of the unresolved native set after correcting the binary
   bit-block payload from natural bit order to reversed two-bit-pair order within each 16-bit unit
 
-## Native Unresolved Command Recheck
+## Native Random and Monitor Recheck
 
 Observed result:
 
-- `0403 random-read`: PLC error `0x7F23`
-- focused `0403` recheck on the same target:
+- `0403 random-read`: originally `0x7F23`
+- focused `0403` recheck before the count-width fix on the same target:
   - `random-read D100`: `0x7F23`
   - `random-read M100`: `0x7F23`
   - `random-read D100 D105`: `0x7F23`
   - `random-read M100 M105`: `0x7F23`
-- dedicated `probe-random-read` recheck on the same target:
+- dedicated `probe-random-read` recheck before the fix on the same target:
   - contiguous `read-words D100 6`: pass
   - contiguous `read-bits M100 6`: pass
   - native `random-read` single, dense, and sparse word probes: all `0x7F23`
   - native `random-read` single, dense, and sparse bit probes: all `0x7F23`
-- `1402 random-write-words`: PLC error `0x7F23`
-- focused `1402` word recheck on the same target:
+- `1402 random-write-words`: originally `0x7F23`
+- focused `1402` word recheck before the count-width fix on the same target:
   - `random-write-words D100=1`: `0x7F23`
   - `random-write-words D100=1 D101=2`: `0x7F23`
   - `random-write-words D100=1 D105=2`: `0x7F23`
-- dedicated `probe-random-write-words` recheck on the same target:
+- dedicated `probe-random-write-words` recheck before the fix on the same target:
   - contiguous `write-words D100..D105`: pass
   - native `random-write-words` single, dense, and sparse probes: all `0x7F23`
   - restore back to the original `D100..D105` values: pass
+- after switching non-iQ-R binary `0403` and `1402` word/dword counts from two-byte fields to the
+  one-byte Q/L-era layout shown by the binary manual examples, the same FX5U probes returned:
+  - `probe-random-read: word-single=native word-dense=native word-sparse=native bit-single=native bit-dense=native bit-sparse=native`
+  - `probe-random-write-words: contiguous=contiguous single=native dense=native sparse=native restore=ok`
 - `1402 random-write-bits`: originally `0x7F23`; after the binary one-byte count fix from page
   `108` plus unrelated `pak4`, native writes reached success-end-code but still read back as
   `verify-mismatch`; a second FX5U-focused recheck then showed the remaining issue was pair-swapped
@@ -177,13 +181,9 @@ Observed result:
 
 Interpretation:
 
-- the unresolved native random family stays unresolved on this FX target
-- `0403` is not just a mixed `D+M` problem on FX5U; both word-only and bit-only random reads still
-  return `0x7F23`, and the same remains true even for single-item `D100` / `M100`; dedicated
-  `probe-random-read` also showed the contiguous `D100..D105` and `M100..M105` baselines passing
-- `1402` word-write is not just a sparse random case on FX5U; single-item, dense adjacent, and
-  sparse `D100` writes all still return `0x7F23`; dedicated `probe-random-write-words` showed the
-  same `D100..D105` range passing under contiguous `1401`
+- the old non-iQ-R binary `0403` and `1402` word/dword count widths were host-side compatibility
+  bugs; on FX5U, switching those counts from two-byte fields to the one-byte Q/L-era layout made
+  both `probe-random-read` and `probe-random-write-words` pass natively
 - the old binary `1402 bit` count width was a host-side compatibility bug for Q/L-era binary
   frames; the manual example on page `108` and the unrelated `pak4` capture both use a one-byte
   bit-access count
@@ -191,6 +191,8 @@ Interpretation:
   remaining mismatch was pair-swapped bit-address parity inside each two-point unit
 - after correcting that pair swap in the local encoder, native `1402 bit` passed on FX5U for
   single-item, dense, and sparse probes with restore
+- FX5U therefore no longer has unresolved native random-read or random-write families; its
+  remaining native-family hold is `0801/0802`
 - monitor failures still do not match the `LJ71C24` and `QJ71C24N` end-code mix exactly, so this
   target should stay documented separately
 
