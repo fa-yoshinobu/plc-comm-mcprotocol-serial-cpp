@@ -669,6 +669,19 @@ class ByteWriter {
   return count <= 0xFFU && writer.push(static_cast<std::uint8_t>(count));
 }
 
+[[nodiscard]] bool append_random_write_bit_count(
+    ByteWriter& writer,
+    const ProtocolConfig& config,
+    std::uint16_t count) noexcept {
+  if (config.code_mode == CodeMode::Ascii) {
+    return append_ascii_hex(writer, count, 4);
+  }
+  if (!is_iq_r_series(config)) {
+    return count <= 0xFFU && writer.push(static_cast<std::uint8_t>(count));
+  }
+  return writer.append_le16(count);
+}
+
 [[maybe_unused]] [[nodiscard]] bool append_dword_data_ascii(ByteWriter& writer, std::uint32_t value) noexcept {
   return append_ascii_hex(writer, value, 8);
 }
@@ -1968,7 +1981,7 @@ Status encode_random_write_bits(
 
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x1402U, bit_subcommand(config)) ||
-      !append_word_count(writer, config, static_cast<std::uint16_t>(items.size()))) {
+      !append_random_write_bit_count(writer, config, static_cast<std::uint16_t>(items.size()))) {
     return buffer_too_small("Random write bits request buffer is too small");
   }
   for (const RandomWriteBitItem& item : items) {

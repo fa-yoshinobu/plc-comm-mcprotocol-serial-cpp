@@ -84,7 +84,7 @@ Additional validated target:
 | Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | native ng / not applicable | native `U3E0\\G10` returned `0x7E43`; native `HG` path is not applicable under `--series ql` |
 | Random read | native `0403` | native ng | `0x7F23`; FX5U focused recheck confirmed both single-item and two-item word/bit random reads still fail, while dedicated contiguous `D100..D105` and `M100..M105` baselines passed |
 | Random write words | native `1402` | native ng | `0x7F23`; FX5U focused recheck confirmed single-item, dense, and sparse `D100` writes all fail, while dedicated contiguous `D100..D105` write/restore passed |
-| Random write bits | native `1402` | native ng | `0x7F23`; FX5U focused probe confirmed single-item, dense, and sparse `M100..M115` cases all fail while the same dense pattern passes under contiguous `1401` |
+| Random write bits | native `1402` | native hold | `FX5UC-32MT/D`: after the binary one-byte count fix from the page `108` example plus unrelated `pak4`, focused `M100..M115` probes moved from `0x7F23` to success-end-code with `verify-mismatch`; other validated targets still show native ng |
 | Multi-block read | native `0406` | native pass | after the binary block-count fix based on capture and manual re-read, `probe-multi-block` read passed natively |
 | Multi-block write | native `1406` | native pass | after the follow-up binary bit-block pair-order fix, `probe-multi-block[mixed]` passed natively with restore |
 | Monitor register/read | native `0801/0802` | native ng / hold | `0801` register path returned `0x7E40`; raw `0802` via `probe-monitor read-only` also returned `0x7E40` |

@@ -52,6 +52,8 @@ Host-side tests now pin or check these request families:
 - `1402` random write words against the official MC protocol example
 - `1402` random write bits against the official MC protocol example
   `Q/L` ASCII `1402 bit` uses `00/01` set-reset bytes, not single-character `0/1`
+  `Q/L` binary `1402 bit` also uses a one-byte bit-access count in the page `108` example; the old
+  local binary test had incorrectly inserted an extra zero byte before the first device reference
 - `0406` multi-block read against the official MC protocol example
 - `0801` register monitor against the documented `0403`-equivalent request layout
 - `0802` read monitor against the documented command structure
@@ -84,11 +86,14 @@ binary `1406` bit-block encoder to pre-apply that pair-order reversal and adding
 the non-symmetric two-point case, `probe-multi-block[mixed]` reached
 `multi-block-read=ok native`, `multi-block-write=ok native`, `restore=ok` on `FX5UC-32MT/D`.
 
-The nearest remaining candidate, `1402` random-write-bits, does not currently look like the same
-bug. Its binary request shape is now pinned against the manual example, and a focused FX5U probe
-showed native `1402` returning `0x7F23` for single-item `M100=1`, dense `M100..M115`, and sparse
-`M100/M105/M110/M115` writes while the same `M100..M115` alternating pattern passed under
-contiguous `1401`. A focused FX5U recheck also showed `0403` returning `0x7F23` for both
+The nearest remaining candidate, `1402` random-write-bits, still does not look like the same bug
+as `1406`. Its binary request shape was first pinned against the manual example and later corrected
+again after a page `108` manual re-read plus unrelated `pak4` capture showed a one-byte count
+field for non-iQ-R binary `1402 bit`. After that encoder fix, the same focused FX5U probe advanced
+from `0x7F23` to success-end-code with readback `verify-mismatch` for single-item `M100=1`, dense
+`M100..M115`, and sparse `M100/M105/M110/M115` writes while the same `M100..M115` alternating
+pattern passed under contiguous `1401`. A focused FX5U recheck also showed `0403` returning
+`0x7F23` for both
 word-only `random-read D100 D105` and bit-only `random-read M100 M105`. That keeps the remaining
 random family in the unresolved family-specific bucket instead of the resolved `1406` packing
 bucket.

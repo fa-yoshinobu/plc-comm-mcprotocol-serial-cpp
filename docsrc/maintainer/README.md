@@ -4,6 +4,7 @@ This section is for implementation notes and follow-up items.
 
 Current pages:
 
+- [CODEX_TAKEBISHI_CAPTURE_PLAYBOOK.md](CODEX_TAKEBISHI_CAPTURE_PLAYBOOK.md)
 - [DEVELOPER_NOTES.md](DEVELOPER_NOTES.md)
 - [NATIVE_COMMAND_BACKLOG.md](NATIVE_COMMAND_BACKLOG.md)
 - [RELEASE_PROCESS.md](RELEASE_PROCESS.md)

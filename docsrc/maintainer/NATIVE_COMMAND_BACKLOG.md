@@ -42,7 +42,9 @@ Shared native-family holds across the currently validated targets:
   - `RJ71C24-R2 + R08CPU + --series iqr`: `0x7F23`
   - `LJ71C24 + L26CPU-BT + --series ql`: `0x7F23`
   - `QJ71C24N + Q06UDVCPU + --series ql`: `0x7F23`
-  - `FX5UC-32MT/D + --series ql`: `0x7F23` on `M`, `Y`, and `B`, including single-item, dense, and sparse probes
+  - `FX5UC-32MT/D + --series ql`: originally `0x7F23` on `M`, `Y`, and `B`; after the non-iQ-R
+    binary one-byte count fix from page `108` plus `pak4`, focused `M100..M115` probes moved to
+    success-end-code with readback `verify-mismatch`
 - `0801/0802` monitor register/read
   - `RJ71C24-R2 + R08CPU + --series iqr`: `0801=0x7F22`
   - `LJ71C24 + L26CPU-BT + --series ql`: `0801=0x7F23`
@@ -124,9 +126,11 @@ Qualified-device follow-up:
   binary encoder to pre-apply that pair-order reversal, `FX5UC-32MT/D` `probe-multi-block[mixed]`
   passed natively.
 - Treat native `1402` random-write-bits as a separate problem from the `1406` bit-block fix until
-  proved otherwise. On `2026-04-11`, the binary request shape was pinned against the manual example
-  and an FX5U focused probe still returned `0x7F23` on the same `M100..M115` pattern that passed
-  under contiguous `1401`.
+  proved otherwise. On `2026-04-11`, the binary request shape was first pinned against the manual
+  example and later corrected again after a page `108` manual re-read plus unrelated `pak4` capture
+  showed a one-byte count field for Q/L-era binary `1402 bit`. On `FX5UC-32MT/D`, that moved the
+  command from `0x7F23` to success-end-code with readback `verify-mismatch`, so the remaining issue
+  is no longer an immediate family-level reject.
 - Treat native `0801/0802` monitor as a family-level hold on FX5U until proved otherwise. On
   `2026-04-11`, `probe-monitor` returned `0x7E40` on `0801` and `probe-monitor read-only` returned
   the same `0x7E40` on raw `0802`.

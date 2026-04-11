@@ -36,7 +36,7 @@ Interpretation:
 | link bootstrap | `cpu-model` passed with `FX5UC-32MT/D`, `0x4A91` |
 | supported-device screening | `21/25` targets passed under `--series ql`; `DX10`, `DY10`, `ZR10`, and `V100` failed with `0x7E43` twice |
 | supported-device soak | two `180` second runs passed with no protocol errors on the screened `21` target subset |
-| native random read/write | `0403`, `1402` returned `0x7F23` |
+| native random read/write | `0403` and `1402 words` returned `0x7F23`; `1402 bits` later advanced to success-end-code with readback `verify-mismatch` after the binary one-byte count fix |
 | native monitor / multi-block | both `0801` and raw `0802` returned `0x7E40`; after the binary count-width and bit-block packing fixes, both `0406` and `1406` passed |
 | host / module buffer | helper and native buffer probes returned `0x7E40` |
 | qualified access | helper `U3E0\\G10` / `U3E0\\HG20` returned `0x7E40`; native `U3E0\\G10` returned `0x7E43`; native `HG` path is not applicable under `--series ql` |
@@ -140,14 +140,25 @@ Observed result:
   - contiguous `write-words D100..D105`: pass
   - native `random-write-words` single, dense, and sparse probes: all `0x7F23`
   - restore back to the original `D100..D105` values: pass
-- `1402 random-write-bits`: PLC error `0x7F23`
+- `1402 random-write-bits`: originally `0x7F23`; after the binary one-byte count fix from page
+  `108` plus unrelated `pak4`, native writes reached success-end-code but still read back as
+  `verify-mismatch`
 - post-read after both `1402` probes still showed no write effect at `D300..D305` and `M300..M305`
 - baseline `D300..D305` on this target was `0x0000`, `0x0001`, `0x0002`, `0x0003`, `0x0004`, `0x0005`
 - focused `probe-random-write-bits` recheck on the same target:
   - contiguous `write-bits` to `M100..M115` with alternating `1010...` pattern: pass
-  - native `random-write-bits` single item `M100=1`: `0x7F23`
-  - native `random-write-bits` on the same `M100..M115` pattern: `0x7F23`
-  - native `random-write-bits` sparse subset `M100`, `M105`, `M110`, `M115`: `0x7F23`
+  - before the count-width fix, native `random-write-bits` single item `M100=1`: `0x7F23`
+  - before the count-width fix, native `random-write-bits` on the same `M100..M115` pattern:
+    `0x7F23`
+  - before the count-width fix, native `random-write-bits` sparse subset `M100`, `M105`, `M110`,
+    `M115`: `0x7F23`
+  - after switching non-iQ-R binary `1402 bit` to a one-byte access-count field, the same probe
+    returned:
+    - `batch-write-bits=ok contiguous`
+    - `random-write-bits-single=skip verify-mismatch`
+    - `random-write-bits-dense=skip verify-mismatch`
+    - `random-write-bits-sparse=skip verify-mismatch`
+    - `restore=ok`
   - restore back to the original `M100..M115` values: pass
 - `0801 probe-monitor`: `probe-monitor: skip register 0x7E40`
 - raw `0802` only via `probe-monitor read-only`: `probe-monitor[read-only]: skip 0x7E40`
@@ -163,9 +174,13 @@ Interpretation:
 - `1402` word-write is not just a sparse random case on FX5U; single-item, dense adjacent, and
   sparse `D100` writes all still return `0x7F23`; dedicated `probe-random-write-words` showed the
   same `D100..D105` range passing under contiguous `1401`
-- the `1402` bit-write failure is not explained by low addresses, RUN overwrite, or the concrete
-  `M100..M115` pattern itself because the same target bits passed under contiguous `1401`; the
-  failure also persists for a single-item `M100=1` random write
+- the old binary `1402 bit` count width was a host-side compatibility bug for Q/L-era binary
+  frames; the manual example on page `108` and the unrelated `pak4` capture both use a one-byte
+  bit-access count
+- after correcting that count field, FX5U no longer rejected native `1402 bit` immediately; the
+  command reached success-end-code responses but still read back as `verify-mismatch`
+- native `1402 bit` therefore remains unresolved on FX5U, but the remaining problem is no longer an
+  immediate family-level reject
 - monitor failures still do not match the `LJ71C24` and `QJ71C24N` end-code mix exactly, so this
   target should stay documented separately
 
