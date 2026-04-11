@@ -10,6 +10,7 @@ Use it together with:
 - [../../user/SETUP_GUIDE.md](../../user/SETUP_GUIDE.md) for the verified serial settings
 - [../../user/USAGE_GUIDE.md](../../user/USAGE_GUIDE.md) for command behavior notes
 - [LJ71C24_RS232C_FORMAT5_2026-04-11.md](LJ71C24_RS232C_FORMAT5_2026-04-11.md) for the dated L-series / `LJ71C24` evidence log
+- [QJ71C24N_RS232C_FORMAT5_2026-04-11.md](QJ71C24N_RS232C_FORMAT5_2026-04-11.md) for the dated Q-series / `QJ71C24N` evidence log
 - [RJ71C24_R2_RS232C_FORMAT5_2026-04-11.md](RJ71C24_R2_RS232C_FORMAT5_2026-04-11.md) for the dated iQ-R / `RJ71C24-R2` Format5 evidence log
 - [RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md](RJ71C24_R2_RS232C_FORMAT4_2026-04-10.md) for the dated evidence log
 - [RJ71C24_R2_RS232C_FORMAT4_2026-04-11.md](RJ71C24_R2_RS232C_FORMAT4_2026-04-11.md) for recovery and follow-up native-command rechecks
@@ -88,6 +89,31 @@ Additional validated target:
 | Multi-block write | native `1406` | native ng | `0x7F22`; contiguous restore passed |
 | Monitor register/read | native `0801/0802` | native ng / hold | `0801` register path returned `0x7F23` |
 
+Additional validated target:
+
+- PLC CPU: Mitsubishi Q-series `Q06UDVCPU`
+- Serial module: `QJ71C24N`
+- Link: `RS-232C`
+- Settings: `28800 / 8E2 / MC Protocol Format5 Binary / sum-check on / station 0`
+- CLI family selection: use `--series ql`
+
+| Area | Command path | Current status | Notes |
+|---|---|---|---|
+| CPU identification | `cpu-model` | native pass | returns `Q06UDVCPU`, `0x0368` |
+| Contiguous read/write | `0401/1401` via `read-*` / `write-*` | native pass | `read-words D100 1` and `read-bits M100 1` passed; supported-device soak passed |
+| Supported-device soak | `supported_device_rw_soak.sh` | pass | one `180` second run passed with no protocol errors; bit-family readback often showed RUN overwrite |
+| Host buffer read | `0613` | native pass | `probe-host-buffer` passed |
+| Host buffer write | `1613` | hold | `probe-write-host-buffer` wrote but verify mismatched at start `0` |
+| Module buffer read/write | `0601/1601` | native pass | `probe-module-buffer` and `probe-write-module-buffer` passed |
+| Qualified helper read/write | `read-qualified-words` / `write-qualified-words` over `0601/1601` | helper pass, narrow scope | helper `U3E0\\G10=0x1000`; helper `U3E0\\HG20` read/write/restore passed |
+| Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | hold / not applicable | native `U3E0\\G10` returned `0x4030`; native `HG` path is not applicable under `--series ql` |
+| Random read | native `0403` | native ng | `0x7F23` |
+| Random write words | native `1402` | native ng | `0x7F23`; no write effect confirmed |
+| Random write bits | native `1402` | native ng | `0x7F23`; no write effect confirmed |
+| Multi-block read | native `0406` | native ng | `0x7F23` |
+| Multi-block write | native `1406` | native ng | `0x7F22`; contiguous restore passed |
+| Monitor register/read | native `0801/0802` | native ng / hold | `0801` register path returned `0x7F23` |
+
 ## Stress / Endurance Snapshot
 
 | Test | Result |
@@ -118,6 +144,6 @@ The library now pins native request-data shapes for `1402`, `0406`, `0801`, and 
 
 - request encoding matches the official MC protocol reference examples or documented request structure
 - `2026-04-11` follow-up rechecks showed the same native failures even after switching those families to iQ-R subcommands with `--series iqr`
-- the validated `RJ71C24-R2` and `LJ71C24` setups still reject those native commands once the CLI family selection is matched to the actual CPU family
+- the validated `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` setups still reject those native commands once the CLI family selection is matched to the actual CPU family
 - the CLI should expose those native failures directly on this setup
 - qualified helper commands and native qualified probes should stay documented as separate paths
