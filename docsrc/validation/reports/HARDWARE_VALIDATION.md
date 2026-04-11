@@ -75,8 +75,8 @@ Additional validated target:
 | Area | Command path | Current status | Notes |
 |---|---|---|---|
 | CPU identification | `cpu-model` | native pass | returns `FX5UC-32MT/D`, `0x4A91` |
-| Contiguous read/write | `0401/1401` via `read-*` / `write-*` | native pass, narrow subset | non-low-address screening passed on `21/25` targets under `--series ql`; `DX10`, `DY10`, `ZR10`, and `V100` failed with `0x7E43` |
-| Supported-device soak | `fx5u_supported_device_rw_soak.sh` | pass | one `180` second run passed with no protocol errors on the screened `21` target subset |
+| Contiguous read/write | `0401/1401` via `read-*` / `write-*` | native pass, narrow subset | non-low-address screening passed on `21/25` targets under `--series ql`; `DX10`, `DY10`, `ZR10`, and `V100` failed with `0x7E43` and repeated the same code on read-only recheck |
+| Supported-device soak | `fx5u_supported_device_rw_soak.sh` | pass | two `180` second runs passed with no protocol errors on the screened `21` target subset |
 | Host buffer read | `0613` | native ng / not applicable | `probe-host-buffer` returned `0x7E40` |
 | Host buffer write | `1613` | native ng / not applicable | backup read failed with `0x7E40` |
 | Module buffer read/write | `0601/1601` | native ng / not applicable | `probe-module-buffer` and `probe-write-module-buffer` returned `0x7E40` |

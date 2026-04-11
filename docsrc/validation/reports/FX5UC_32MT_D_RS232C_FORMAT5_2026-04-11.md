@@ -34,8 +34,8 @@ Interpretation:
 | Category | Status |
 |---|---|
 | link bootstrap | `cpu-model` passed with `FX5UC-32MT/D`, `0x4A91` |
-| supported-device screening | `21/25` targets passed under `--series ql`; `DX10`, `DY10`, `ZR10`, and `V100` failed with `0x7E43` |
-| supported-device soak | one `180` second run passed with no protocol errors on the screened `21` target subset |
+| supported-device screening | `21/25` targets passed under `--series ql`; `DX10`, `DY10`, `ZR10`, and `V100` failed with `0x7E43` twice |
+| supported-device soak | two `180` second runs passed with no protocol errors on the screened `21` target subset |
 | native random read/write | `0403`, `1402` returned `0x7F23` |
 | native monitor / multi-block | `0801` returned `0x7E40`; `0406` returned `0x7F23`; `1406` returned `0x7F40`, restore passed |
 | host / module buffer | helper and native buffer probes returned `0x7E40` |
@@ -52,6 +52,9 @@ Observed result:
 - failing targets:
   `DX10`, `DY10`, `ZR10`, `V100`
 - failing targets all returned PLC error `0x7E43`
+- read-only recheck on the same date:
+  `read-bits DX10 1`, `read-bits DY10 1`, `read-words ZR10 1`, and `read-bits V100 1` all again
+  returned `0x7E43`
 
 Interpretation:
 
@@ -70,14 +73,16 @@ Command:
 
 Observed result:
 
-- run: `pass cycles=18 checks=374 elapsed_sec=180 verify_mismatch=234 restore_mismatch=0 total_commands=1871`
-- protocol failures observed during the run: none
+- first run: `pass cycles=18 checks=374 elapsed_sec=180 verify_mismatch=234 restore_mismatch=0 total_commands=1871`
+- second run: `pass cycles=18 checks=374 elapsed_sec=180`
+- protocol failures observed during either run: none
 
 Interpretation:
 
 - the no-wait, strictly serial contiguous soak is stable on `FX5UC-32MT/D` when limited to the
   screened `21` target subset
 - bit-family `verify-mismatch` remained common and is consistent with RUN-mode overwrite
+- the screened subset result is reproducible across at least two `180` second runs
 
 ## Native Unresolved Command Recheck
 
