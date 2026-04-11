@@ -69,6 +69,13 @@ not sufficient to unlock buffer or qualified paths. `FX5UC-32MT/D` passed contig
 module-buffer, helper-qualified, and native-qualified probes returned `0x7E40` or `0x7E43`.
 Do not project the C24-era helper/buffer workflow onto FX targets without revalidation.
 
+The same date also produced a concrete binary multi-block fix. TAK capture in `cap/write.txt`
+showed `0406` request frames with one-byte `word block count` and one-byte `bit block count`.
+The local implementation had encoded those two fields as little-endian words. After correcting the
+binary `0406/1406` count width and adding codec tests, `FX5UC-32MT/D` `probe-multi-block`
+changed from native rejection to `multi-block-read=ok native`, while `1406` advanced to
+`verify-mismatch` instead of immediate PLC rejection.
+
 ## Validation Reporting Rule
 
 When adding new hardware results:

@@ -659,6 +659,16 @@ class ByteWriter {
   return writer.append_le16(count);
 }
 
+[[nodiscard]] bool append_multi_block_block_count(
+    ByteWriter& writer,
+    const ProtocolConfig& config,
+    std::uint16_t count) noexcept {
+  if (config.code_mode == CodeMode::Ascii) {
+    return append_ascii_hex(writer, count, 4);
+  }
+  return count <= 0xFFU && writer.push(static_cast<std::uint8_t>(count));
+}
+
 [[maybe_unused]] [[nodiscard]] bool append_dword_data_ascii(ByteWriter& writer, std::uint32_t value) noexcept {
   return append_ascii_hex(writer, value, 8);
 }
@@ -2016,8 +2026,8 @@ Status encode_multi_block_read(
 
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x0406U, word_subcommand(config)) ||
-      !append_word_count(writer, config, word_blocks) ||
-      !append_word_count(writer, config, bit_blocks)) {
+      !append_multi_block_block_count(writer, config, word_blocks) ||
+      !append_multi_block_block_count(writer, config, bit_blocks)) {
     return buffer_too_small("Multi-block read request buffer is too small");
   }
   for (const MultiBlockReadBlock& block : request.blocks) {
@@ -2171,8 +2181,8 @@ Status encode_multi_block_write(
 
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x1406U, word_subcommand(config)) ||
-      !append_word_count(writer, config, word_blocks) ||
-      !append_word_count(writer, config, bit_blocks)) {
+      !append_multi_block_block_count(writer, config, word_blocks) ||
+      !append_multi_block_block_count(writer, config, bit_blocks)) {
     return buffer_too_small("Multi-block write request buffer is too small");
   }
 

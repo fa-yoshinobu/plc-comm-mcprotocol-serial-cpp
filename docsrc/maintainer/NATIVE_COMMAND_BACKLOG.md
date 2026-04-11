@@ -29,8 +29,11 @@ Unresolved native command families:
 - `0403` random read: native ng, PLC end code `0x7F22`, unchanged after `2026-04-11` `--series iqr` recheck (`0403 0002`)
 - `1402` random write words: native ng, PLC end code `0x7F22`, unchanged after `2026-04-11` `--series iqr` recheck (`1402 0002`)
 - `1402` random write bits: native ng, PLC end code `0x7F23`
-- `0406` multi-block read: native ng, PLC end code `0x7F22`, unchanged after `2026-04-11` `--series iqr` recheck (`0406 0002`)
-- `1406` multi-block write: native ng, PLC end code `0x7F22`, unchanged after `2026-04-11` `--series iqr` recheck (`1406 0002`)
+- `0406` multi-block read: native ng on the validated `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N`
+  setups; `FX5UC-32MT/D` moved to native pass after the `2026-04-11` binary count-width fix
+- `1406` multi-block write: native ng / hold; `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` still reject
+  it, while `FX5UC-32MT/D` advanced to write-verify mismatch after the `2026-04-11` binary
+  count-width fix
 - `0801/0802` monitor register/read: native ng / hold, `0801` currently `0x7F22`, unchanged after `2026-04-11` `--series iqr` recheck (`0801 0002`)
 
 Qualified-device follow-up:
@@ -47,6 +50,9 @@ Qualified-device follow-up:
 - `2026-04-11` `FX5UC-32MT/D + --series ql`: helper `U3E0\\G10` and `U3E0\\HG20` returned `0x7E40`, native `U3E0\\G10` read/write returned `0x7E43`, native `HG` path was not applicable outside iQ-R
 - `2026-04-11` Format5/Binary status-word recheck: helper-visible `U3E0\\G599`, `U3E0\\G600`, and `U3E0\\G31998..32003` stayed `0x0000` even after native `0x7F23` and `0x4031` probes
 - No validated native qualified write effect yet
+- `2026-04-11` TAK capture in `cap/write.txt` matched the MC manual's binary `0406` layout with
+  one-byte `word block count` and one-byte `bit block count`; the repository had been encoding
+  those fields as two-byte little-endian words
 
 ## Follow-up Rules
 
@@ -70,6 +76,10 @@ Qualified-device follow-up:
   `2026-04-11`, `DX10`, `DY10`, `ZR10`, and `V100` returned `0x7E43` on `FX5UC-32MT/D` even
   though the screened `21`-target subset completed a `180` second contiguous soak without protocol
   errors.
+- Treat binary `0406/1406` count-field width as a proven host-side compatibility point. On
+  `2026-04-11`, the local implementation was corrected from two-byte block counts to one-byte block
+  counts based on TAK capture plus manual re-read; `FX5UC-32MT/D` `0406` then passed natively and
+  `1406` advanced to write-verify follow-up.
 - Do not treat a native qualified success code as proof of semantic correctness. On `2026-04-11`
   under `Format5 / Binary / 28800 / 8E2 / sum-check on`, native `U3E0\\G10` returned `0x0000`
   while the helper path still returned `0x83BD`.

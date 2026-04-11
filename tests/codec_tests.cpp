@@ -29,6 +29,8 @@ using mcprotocol::serial::ModuleBufferWriteRequest;
 using mcprotocol::serial::MultiBlockReadBlock;
 using mcprotocol::serial::MultiBlockReadBlockResult;
 using mcprotocol::serial::MultiBlockReadRequest;
+using mcprotocol::serial::MultiBlockWriteBlock;
+using mcprotocol::serial::MultiBlockWriteRequest;
 using mcprotocol::serial::PlcSeries;
 using mcprotocol::serial::ProtocolConfig;
 using mcprotocol::serial::QualifiedBufferDeviceKind;
@@ -554,6 +556,105 @@ void test_encode_multi_block_read_ascii_matches_manual() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
+void test_encode_multi_block_read_binary_matches_capture_counts() {
+  const auto config = make_binary_c4_config();
+
+  const std::array<MultiBlockReadBlock, 3> bit_blocks {{
+      {.head_device = {.code = mcprotocol::serial::DeviceCode::X, .number = 0}, .points = 1, .bit_block = true},
+      {.head_device = {.code = mcprotocol::serial::DeviceCode::Y, .number = 0}, .points = 1, .bit_block = true},
+      {.head_device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0}, .points = 1, .bit_block = true},
+  }};
+
+  std::array<std::uint8_t, 128> request_data {};
+  std::size_t request_size = 0;
+  Status status = CommandCodec::encode_multi_block_read(
+      config,
+      MultiBlockReadRequest {
+          .blocks = std::span<const MultiBlockReadBlock>(bit_blocks.data(), bit_blocks.size()),
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 24> expected_bit_request {
+      0x06, 0x04, 0x00, 0x00,
+      0x00, 0x03,
+      0x00, 0x00, 0x00, 0x9C, 0x01, 0x00,
+      0x00, 0x00, 0x00, 0x9D, 0x01, 0x00,
+      0x00, 0x00, 0x00, 0xA0, 0x01, 0x00,
+  };
+  assert(request_size == expected_bit_request.size());
+  assert(std::memcmp(request_data.data(), expected_bit_request.data(), expected_bit_request.size()) == 0);
+
+  const std::array<MultiBlockReadBlock, 3> word_blocks {{
+      {.head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 0}, .points = 1, .bit_block = false},
+      {.head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 10}, .points = 1, .bit_block = false},
+      {.head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}, .points = 1, .bit_block = false},
+  }};
+
+  request_size = 0;
+  status = CommandCodec::encode_multi_block_read(
+      config,
+      MultiBlockReadRequest {
+          .blocks = std::span<const MultiBlockReadBlock>(word_blocks.data(), word_blocks.size()),
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 24> expected_word_request {
+      0x06, 0x04, 0x00, 0x00,
+      0x03, 0x00,
+      0x00, 0x00, 0x00, 0xA8, 0x01, 0x00,
+      0x0A, 0x00, 0x00, 0xA8, 0x01, 0x00,
+      0x64, 0x00, 0x00, 0xA8, 0x01, 0x00,
+  };
+  assert(request_size == expected_word_request.size());
+  assert(std::memcmp(request_data.data(), expected_word_request.data(), expected_word_request.size()) == 0);
+}
+
+void test_encode_multi_block_write_binary_uses_single_byte_block_counts() {
+  const auto config = make_binary_c4_config();
+
+  const std::array<std::uint16_t, 2> word_values {0x1234U, 0x5678U};
+  const std::array<BitValue, 16> bit_values {{
+      BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
+      BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
+      BitValue::Off, BitValue::On, BitValue::Off, BitValue::On,
+      BitValue::Off, BitValue::On, BitValue::Off, BitValue::On,
+  }};
+  const std::array<MultiBlockWriteBlock, 2> blocks {{
+      {.head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 0},
+       .points = 2,
+       .bit_block = false,
+       .words = std::span<const std::uint16_t>(word_values.data(), word_values.size())},
+      {.head_device = {.code = mcprotocol::serial::DeviceCode::M, .number = 100},
+       .points = 1,
+       .bit_block = true,
+       .bits = std::span<const BitValue>(bit_values.data(), bit_values.size())},
+  }};
+
+  std::array<std::uint8_t, 128> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_multi_block_write(
+      config,
+      MultiBlockWriteRequest {
+          .blocks = std::span<const MultiBlockWriteBlock>(blocks.data(), blocks.size()),
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 24> expected {
+      0x06, 0x14, 0x00, 0x00,
+      0x01, 0x01,
+      0x00, 0x00, 0x00, 0xA8, 0x02, 0x00, 0x34, 0x12, 0x78, 0x56,
+      0x64, 0x00, 0x00, 0x90, 0x01, 0x00, 0x55, 0xAA,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
 void test_encode_register_monitor_ascii_reuses_random_read_layout() {
   const auto config = make_ascii_c4_format4_config();
   const std::array<mcprotocol::serial::RandomReadItem, 4> items {{
@@ -904,6 +1005,8 @@ int main() {
   test_encode_random_write_bits_ascii_matches_manual();
   test_encode_random_write_bits_ascii_iqr_shape();
   test_encode_multi_block_read_ascii_matches_manual();
+  test_encode_multi_block_read_binary_matches_capture_counts();
+  test_encode_multi_block_write_binary_uses_single_byte_block_counts();
   test_encode_register_monitor_ascii_reuses_random_read_layout();
   test_encode_read_monitor_ascii_matches_manual();
   test_parse_multi_block_read_response_ascii_mixed_blocks();

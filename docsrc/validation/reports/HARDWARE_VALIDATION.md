@@ -85,8 +85,8 @@ Additional validated target:
 | Random read | native `0403` | native ng | `0x7F23` |
 | Random write words | native `1402` | native ng | `0x7F23`; no write effect confirmed |
 | Random write bits | native `1402` | native ng | `0x7F23`; no write effect confirmed |
-| Multi-block read | native `0406` | native ng | `0x7F23` |
-| Multi-block write | native `1406` | native ng | `0x7F40`; contiguous restore passed |
+| Multi-block read | native `0406` | native pass | after the binary block-count fix based on capture and manual re-read, `probe-multi-block` read passed natively |
+| Multi-block write | native `1406` | hold | after the same fix, the write path reached `verify-mismatch`; contiguous restore still passed |
 | Monitor register/read | native `0801/0802` | native ng / hold | `0801` register path returned `0x7E40` |
 
 Additional validated target:
@@ -172,3 +172,6 @@ The library now pins native request-data shapes for `1402`, `0406`, `0801`, and 
 - the validated `RJ71C24-R2`, `LJ71C24`, `QJ71C24N`, and `FX5UC-32MT/D` setups still reject those native commands once the CLI family selection is matched to the actual CPU family
 - the CLI should expose those native failures directly on this setup
 - qualified helper commands and native qualified probes should stay documented as separate paths
+- one exception is now known: binary `0406/1406` used one-byte block counts, not little-endian
+  word counts; after correcting that host-side bug, `FX5UC-32MT/D` `0406` passed natively and
+  `1406` advanced to write-verify follow-up

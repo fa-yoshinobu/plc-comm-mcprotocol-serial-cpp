@@ -37,7 +37,7 @@ Interpretation:
 | supported-device screening | `21/25` targets passed under `--series ql`; `DX10`, `DY10`, `ZR10`, and `V100` failed with `0x7E43` twice |
 | supported-device soak | two `180` second runs passed with no protocol errors on the screened `21` target subset |
 | native random read/write | `0403`, `1402` returned `0x7F23` |
-| native monitor / multi-block | `0801` returned `0x7E40`; `0406` returned `0x7F23`; `1406` returned `0x7F40`, restore passed |
+| native monitor / multi-block | `0801` returned `0x7E40`; after the binary block-count fix, `0406` passed and `1406` reached verify-mismatch with restore passed |
 | host / module buffer | helper and native buffer probes returned `0x7E40` |
 | qualified access | helper `U3E0\\G10` / `U3E0\\HG20` returned `0x7E40`; native `U3E0\\G10` returned `0x7E43`; native `HG` path is not applicable under `--series ql` |
 
@@ -84,6 +84,27 @@ Interpretation:
 - bit-family `verify-mismatch` remained common and is consistent with RUN-mode overwrite
 - the screened subset result is reproducible across at least two `180` second runs
 
+## Capture-driven Multi-block Recheck
+
+Observed result:
+
+- TAK capture in `cap/write.txt` showed `0406` binary requests with one-byte `word block count` and
+  one-byte `bit block count`
+- the repository previously encoded those binary count fields as little-endian words
+- after switching binary `0406/1406` to one-byte block counts and adding codec tests, FX5U
+  `probe-multi-block` changed to:
+  - `multi-block-read=ok native`
+  - `multi-block-write=skip verify-mismatch`
+  - `probe-multi-block: read=native write=skip restore=ok`
+
+Interpretation:
+
+- the old binary multi-block count-field width was a host-side bug
+- the capture and local manual re-read both support the one-byte count layout for binary
+- on FX5U, `0406` is no longer part of the unresolved native set after this fix
+- `1406` is no longer rejected immediately, but it is still not promoted to native pass because the
+  write verification did not hold
+
 ## Native Unresolved Command Recheck
 
 Observed result:
@@ -94,15 +115,14 @@ Observed result:
 - post-read after both `1402` probes still showed no write effect at `D300..D305` and `M300..M305`
 - baseline `D300..D305` on this target was `0x0000`, `0x0001`, `0x0002`, `0x0003`, `0x0004`, `0x0005`
 - `0801 probe-monitor`: `probe-monitor: skip register 0x7E40`
-- `0406 probe-multi-block`: `multi-block-read=skip 0x7F23`
-- `1406 probe-multi-block`: `multi-block-write=skip 0x7F40`
-- `probe-multi-block` contiguous restore: pass
+- `0406 probe-multi-block`: moved to the capture-driven recheck section after the binary count fix
+- `1406 probe-multi-block`: moved to the capture-driven recheck section after the binary count fix
 
 Interpretation:
 
 - the unresolved native random family stays unresolved on this FX target
-- monitor and multi-block failures do not match the `LJ71C24` and `QJ71C24N` end-code mix exactly,
-  so this target should stay documented separately
+- monitor failures still do not match the `LJ71C24` and `QJ71C24N` end-code mix exactly, so this
+  target should stay documented separately
 
 ## Buffer and Qualified Access
 
