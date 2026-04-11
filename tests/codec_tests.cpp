@@ -649,10 +649,53 @@ void test_encode_multi_block_write_binary_uses_single_byte_block_counts() {
       0x06, 0x14, 0x00, 0x00,
       0x01, 0x01,
       0x00, 0x00, 0x00, 0xA8, 0x02, 0x00, 0x34, 0x12, 0x78, 0x56,
-      0x64, 0x00, 0x00, 0x90, 0x01, 0x00, 0x55, 0xAA,
+      0x64, 0x00, 0x00, 0x90, 0x01, 0x00, 0xAA, 0x55,
   };
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_multi_block_write_binary_bit_blocks_reverse_pair_order() {
+  const auto config = make_binary_c4_config();
+  const std::array<BitValue, 32> bit_values {{
+      BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+      BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+      BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+      BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+      BitValue::Off, BitValue::Off, BitValue::Off, BitValue::On,
+      BitValue::Off, BitValue::Off, BitValue::On, BitValue::Off,
+      BitValue::Off, BitValue::Off, BitValue::On, BitValue::On,
+      BitValue::Off, BitValue::On, BitValue::Off, BitValue::Off,
+  }};
+  const std::array<MultiBlockWriteBlock, 1> blocks {{
+      {.head_device = {.code = mcprotocol::serial::DeviceCode::M, .number = 200},
+       .points = 2,
+       .bit_block = true,
+       .bits = std::span<const BitValue>(bit_values.data(), bit_values.size())},
+  }};
+
+  std::array<std::uint8_t, 128> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_multi_block_write(
+      config,
+      MultiBlockWriteRequest {
+          .blocks = std::span<const MultiBlockWriteBlock>(blocks.data(), blocks.size()),
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 12> expected {
+      0x06, 0x14, 0x00, 0x00,
+      0x00, 0x01,
+      0xC8, 0x00, 0x00, 0x90, 0x02, 0x00,
+  };
+  const std::array<std::uint8_t, 4> expected_bit_words {
+      0x00, 0x00, 0x84, 0x1C,
+  };
+  assert(request_size == expected.size() + expected_bit_words.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+  assert(std::memcmp(request_data.data() + expected.size(), expected_bit_words.data(), expected_bit_words.size()) == 0);
 }
 
 void test_encode_register_monitor_ascii_reuses_random_read_layout() {
@@ -1007,6 +1050,7 @@ int main() {
   test_encode_multi_block_read_ascii_matches_manual();
   test_encode_multi_block_read_binary_matches_capture_counts();
   test_encode_multi_block_write_binary_uses_single_byte_block_counts();
+  test_encode_multi_block_write_binary_bit_blocks_reverse_pair_order();
   test_encode_register_monitor_ascii_reuses_random_read_layout();
   test_encode_read_monitor_ascii_matches_manual();
   test_parse_multi_block_read_response_ascii_mixed_blocks();

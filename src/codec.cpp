@@ -712,7 +712,7 @@ class ByteWriter {
     std::uint16_t value = 0;
     for (std::size_t index = 0; index < 16U; ++index) {
       if (bits[offset + index] == BitValue::On) {
-        value = static_cast<std::uint16_t>(value | (1U << index));
+        value = static_cast<std::uint16_t>(value | (1U << (15U - index)));
       }
     }
     if (!append_word_data_ascii(writer, value)) {
@@ -732,10 +732,15 @@ class ByteWriter {
     std::uint16_t value = 0;
     for (std::size_t index = 0; index < 16U; ++index) {
       if (bits[offset + index] == BitValue::On) {
-        value = static_cast<std::uint16_t>(value | (1U << index));
+        value = static_cast<std::uint16_t>(value | (1U << (15U - index)));
       }
     }
-    if (!writer.append_le16(value)) {
+    std::uint16_t pair_reversed = 0;
+    for (std::size_t pair = 0; pair < 8U; ++pair) {
+      const std::uint16_t pair_bits = static_cast<std::uint16_t>((value >> (pair * 2U)) & 0x0003U);
+      pair_reversed = static_cast<std::uint16_t>(pair_reversed | (pair_bits << ((7U - pair) * 2U)));
+    }
+    if (!writer.append_le16(pair_reversed)) {
       return false;
     }
   }

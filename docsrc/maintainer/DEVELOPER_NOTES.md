@@ -76,6 +76,13 @@ binary `0406/1406` count width and adding codec tests, `FX5UC-32MT/D` `probe-mul
 changed from native rejection to `multi-block-read=ok native`, while `1406` advanced to
 `verify-mismatch` instead of immediate PLC rejection.
 
+The same FX5U follow-up then isolated the remaining `1406` mismatch to the second word of a
+two-point bit block. A non-symmetric diagnostic pattern with expected logical word `0x1234`
+read back as `0x1C84`, which is the same word with reversed two-bit-pair order. After changing the
+binary `1406` bit-block encoder to pre-apply that pair-order reversal and adding a codec test for
+the non-symmetric two-point case, `probe-multi-block[mixed]` reached
+`multi-block-read=ok native`, `multi-block-write=ok native`, `restore=ok` on `FX5UC-32MT/D`.
+
 ## Validation Reporting Rule
 
 When adding new hardware results:

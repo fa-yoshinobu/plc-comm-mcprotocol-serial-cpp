@@ -88,6 +88,16 @@ enum class CommandKind : std::uint8_t {
   ProbeWriteModuleBuffer
 };
 
+enum class ProbeMultiBlockMode : std::uint8_t {
+  Mixed,
+  WordOnly,
+  BitOnly,
+  WordA,
+  WordB,
+  BitA,
+  BitB,
+};
+
 struct CommandState {
   bool done = false;
   Status status {};
@@ -289,7 +299,7 @@ void print_usage() {
       "  mcprotocol_cli [options] write-bits DEVICE=0|1 [DEVICE=0|1 ...]\n"
       "  mcprotocol_cli [options] probe-all\n"
       "  mcprotocol_cli [options] probe-write-all\n"
-      "  mcprotocol_cli [options] probe-multi-block\n"
+      "  mcprotocol_cli [options] probe-multi-block [mixed|word-only|bit-only|word-a|word-b|bit-a|bit-b]\n"
       "  mcprotocol_cli [options] probe-monitor\n"
       "  mcprotocol_cli [options] probe-host-buffer\n"
       "  mcprotocol_cli [options] probe-module-buffer\n"
@@ -318,6 +328,7 @@ void print_usage() {
       "  Use recover-c24 after timeout or mixed-response states on C24 ASCII links; no reply is expected.\n"
       "  read-qualified-words / write-qualified-words use the practical 0601/1601 helper path.\n"
       "  read-native-qualified-words / write-native-qualified-words are native probes for unresolved extended-device access.\n"
+      "  probe-multi-block defaults to mixed; pass word-only/bit-only or a single block mode to isolate 1406 verification.\n"
       "  random-read / random-write-* / probe-multi-block / probe-monitor expose native RJ71C24-R2 errors directly.\n");
 }
 
@@ -345,6 +356,58 @@ void print_usage() {
     return true;
   }
   return false;
+}
+
+[[nodiscard]] bool parse_probe_multi_block_mode(std::string_view text, ProbeMultiBlockMode& out_mode) {
+  if (text.empty() || text == "mixed") {
+    out_mode = ProbeMultiBlockMode::Mixed;
+    return true;
+  }
+  if (text == "word-only") {
+    out_mode = ProbeMultiBlockMode::WordOnly;
+    return true;
+  }
+  if (text == "bit-only") {
+    out_mode = ProbeMultiBlockMode::BitOnly;
+    return true;
+  }
+  if (text == "word-a") {
+    out_mode = ProbeMultiBlockMode::WordA;
+    return true;
+  }
+  if (text == "word-b") {
+    out_mode = ProbeMultiBlockMode::WordB;
+    return true;
+  }
+  if (text == "bit-a") {
+    out_mode = ProbeMultiBlockMode::BitA;
+    return true;
+  }
+  if (text == "bit-b") {
+    out_mode = ProbeMultiBlockMode::BitB;
+    return true;
+  }
+  return false;
+}
+
+[[nodiscard]] constexpr std::string_view probe_multi_block_mode_name(ProbeMultiBlockMode mode) {
+  switch (mode) {
+    case ProbeMultiBlockMode::Mixed:
+      return "mixed";
+    case ProbeMultiBlockMode::WordOnly:
+      return "word-only";
+    case ProbeMultiBlockMode::BitOnly:
+      return "bit-only";
+    case ProbeMultiBlockMode::WordA:
+      return "word-a";
+    case ProbeMultiBlockMode::WordB:
+      return "word-b";
+    case ProbeMultiBlockMode::BitA:
+      return "bit-a";
+    case ProbeMultiBlockMode::BitB:
+      return "bit-b";
+  }
+  return "mixed";
 }
 
 [[nodiscard]] bool parse_frame_mode(std::string_view text, ProtocolConfig& config) {
@@ -606,7 +669,7 @@ void print_usage() {
     case CommandKind::ProbeModuleBuffer:
     case CommandKind::ProbeWriteHostBuffer:
     case CommandKind::ProbeWriteModuleBuffer:
-      return options.command_argc == 0;
+      return options.command_argc <= 1;
     case CommandKind::RecoverC24:
       return options.command_argc <= 1;
     case CommandKind::Loopback:
@@ -1593,16 +1656,100 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ProbeMultiBlock: {
+      ProbeMultiBlockMode probe_mode = ProbeMultiBlockMode::Mixed;
+      if (options.command_argc == 1 &&
+          !parse_probe_multi_block_mode(std::string_view(options.command_argv[0]), probe_mode)) {
+        std::fprintf(
+            stderr,
+            "probe-multi-block mode must be 'mixed', 'word-only', 'bit-only', 'word-a', 'word-b', 'bit-a', or 'bit-b'\n");
+        return 1;
+      }
+
       constexpr DeviceAddress kWordBlockADevice {.code = mcprotocol::serial::DeviceCode::D, .number = 100};
       constexpr DeviceAddress kWordBlockBDevice {.code = mcprotocol::serial::DeviceCode::D, .number = 110};
       constexpr DeviceAddress kBitBlockADevice {.code = mcprotocol::serial::DeviceCode::M, .number = 100};
       constexpr DeviceAddress kBitBlockBDevice {.code = mcprotocol::serial::DeviceCode::M, .number = 200};
+
+      const std::string_view mode_name = probe_multi_block_mode_name(probe_mode);
+      const bool verify_word_a = probe_mode == ProbeMultiBlockMode::Mixed ||
+                                 probe_mode == ProbeMultiBlockMode::WordOnly ||
+                                 probe_mode == ProbeMultiBlockMode::WordA;
+      const bool verify_word_b = probe_mode == ProbeMultiBlockMode::Mixed ||
+                                 probe_mode == ProbeMultiBlockMode::WordOnly ||
+                                 probe_mode == ProbeMultiBlockMode::WordB;
+      const bool verify_bit_a = probe_mode == ProbeMultiBlockMode::Mixed ||
+                                probe_mode == ProbeMultiBlockMode::BitOnly ||
+                                probe_mode == ProbeMultiBlockMode::BitA;
+      const bool verify_bit_b = probe_mode == ProbeMultiBlockMode::Mixed ||
+                                probe_mode == ProbeMultiBlockMode::BitOnly ||
+                                probe_mode == ProbeMultiBlockMode::BitB;
+      const bool include_words = verify_word_a || verify_word_b;
+      const bool include_bits = verify_bit_a || verify_bit_b;
 
       std::array<std::uint16_t, 2> backup_word_block_a {};
       std::array<std::uint16_t, 3> backup_word_block_b {};
       std::array<BitValue, 16> backup_bit_block_a {};
       std::array<BitValue, 32> backup_bit_block_b {};
       bool backups_valid = false;
+
+      const auto verify_word_block = [](std::string_view context,
+                                        std::string_view label,
+                                        std::span<const std::uint16_t> expected,
+                                        std::span<const std::uint16_t> actual) -> bool {
+        for (std::size_t index = 0; index < expected.size(); ++index) {
+          if (actual[index] != expected[index]) {
+            std::printf("%.*s-mismatch=%.*s[%zu] expected=0x%04X read=0x%04X\n",
+                        static_cast<int>(context.size()),
+                        context.data(),
+                        static_cast<int>(label.size()),
+                        label.data(),
+                        index,
+                        expected[index],
+                        actual[index]);
+            return false;
+          }
+        }
+        return true;
+      };
+      const auto verify_bit_block = [](std::string_view context,
+                                       std::string_view label,
+                                       std::span<const BitValue> expected,
+                                       std::span<const BitValue> actual) -> bool {
+        const auto pack_word = [](std::span<const BitValue> bits) -> std::uint16_t {
+          std::uint16_t value = 0;
+          for (std::size_t bit = 0; bit < bits.size() && bit < 16U; ++bit) {
+            if (bits[bit] == BitValue::On) {
+              value = static_cast<std::uint16_t>(value | (1U << (15U - bit)));
+            }
+          }
+          return value;
+        };
+        for (std::size_t index = 0; index < expected.size(); ++index) {
+          if (actual[index] != expected[index]) {
+            std::printf("%.*s-mismatch=%.*s[%zu] expected=%u read=%u",
+                        static_cast<int>(context.size()),
+                        context.data(),
+                        static_cast<int>(label.size()),
+                        label.data(),
+                        index,
+                        expected[index] == BitValue::On ? 1U : 0U,
+                        actual[index] == BitValue::On ? 1U : 0U);
+            if ((expected.size() % 16U) == 0U) {
+              const std::size_t word_index = index / 16U;
+              const auto expected_word = pack_word(expected.subspan(word_index * 16U, 16U));
+              const auto actual_word = pack_word(actual.subspan(word_index * 16U, 16U));
+              std::printf(" expected-word[%zu]=0x%04X read-word[%zu]=0x%04X",
+                          word_index,
+                          expected_word,
+                          word_index,
+                          actual_word);
+            }
+            std::printf("\n");
+            return false;
+          }
+        }
+        return true;
+      };
 
       const auto restore_originals = [&]() -> bool {
         if (!backups_valid) {
@@ -1697,12 +1844,49 @@ int main(int argc, char** argv) {
       }
       backups_valid = true;
 
-      const std::array<MultiBlockReadBlock, 4> read_blocks {{
+      const std::array<MultiBlockReadBlock, 2> read_word_blocks {{
+          {.head_device = kWordBlockADevice, .points = 2, .bit_block = false},
+          {.head_device = kWordBlockBDevice, .points = 3, .bit_block = false},
+      }};
+      const std::array<MultiBlockReadBlock, 2> read_bit_blocks {{
+          {.head_device = kBitBlockADevice, .points = 1, .bit_block = true},
+          {.head_device = kBitBlockBDevice, .points = 2, .bit_block = true},
+      }};
+      const std::array<MultiBlockReadBlock, 4> read_mixed_blocks {{
           {.head_device = kWordBlockADevice, .points = 2, .bit_block = false},
           {.head_device = kWordBlockBDevice, .points = 3, .bit_block = false},
           {.head_device = kBitBlockADevice, .points = 1, .bit_block = true},
           {.head_device = kBitBlockBDevice, .points = 2, .bit_block = true},
       }};
+      const std::array<MultiBlockReadBlock, 1> read_word_block_a_only {{
+          {.head_device = kWordBlockADevice, .points = 2, .bit_block = false},
+      }};
+      const std::array<MultiBlockReadBlock, 1> read_word_block_b_only {{
+          {.head_device = kWordBlockBDevice, .points = 3, .bit_block = false},
+      }};
+      const std::array<MultiBlockReadBlock, 1> read_bit_block_a_only {{
+          {.head_device = kBitBlockADevice, .points = 1, .bit_block = true},
+      }};
+      const std::array<MultiBlockReadBlock, 1> read_bit_block_b_only {{
+          {.head_device = kBitBlockBDevice, .points = 2, .bit_block = true},
+      }};
+      const std::span<const MultiBlockReadBlock> selected_read_blocks =
+          probe_mode == ProbeMultiBlockMode::WordOnly
+              ? std::span<const MultiBlockReadBlock>(read_word_blocks.data(), read_word_blocks.size())
+              : (probe_mode == ProbeMultiBlockMode::BitOnly
+                     ? std::span<const MultiBlockReadBlock>(read_bit_blocks.data(), read_bit_blocks.size())
+                     : (probe_mode == ProbeMultiBlockMode::WordA
+                            ? std::span<const MultiBlockReadBlock>(read_word_block_a_only.data(), read_word_block_a_only.size())
+                            : (probe_mode == ProbeMultiBlockMode::WordB
+                                   ? std::span<const MultiBlockReadBlock>(read_word_block_b_only.data(), read_word_block_b_only.size())
+                                   : (probe_mode == ProbeMultiBlockMode::BitA
+                                          ? std::span<const MultiBlockReadBlock>(read_bit_block_a_only.data(),
+                                                                                  read_bit_block_a_only.size())
+                                          : (probe_mode == ProbeMultiBlockMode::BitB
+                                                 ? std::span<const MultiBlockReadBlock>(read_bit_block_b_only.data(),
+                                                                                         read_bit_block_b_only.size())
+                                                 : std::span<const MultiBlockReadBlock>(read_mixed_blocks.data(),
+                                                                                         read_mixed_blocks.size()))))));
 
       std::array<std::uint16_t, 5> multi_read_words {};
       std::array<BitValue, 48> multi_read_bits {};
@@ -1714,11 +1898,11 @@ int main(int argc, char** argv) {
           port,
           command_state,
           MultiBlockReadRequest {
-              .blocks = std::span<const MultiBlockReadBlock>(read_blocks.data(), read_blocks.size()),
+              .blocks = selected_read_blocks,
           },
-          std::span<std::uint16_t>(multi_read_words.data(), multi_read_words.size()),
-          std::span<BitValue>(multi_read_bits.data(), multi_read_bits.size()),
-          std::span<MultiBlockReadBlockResult>(multi_read_results.data(), multi_read_results.size()));
+          std::span<std::uint16_t>(multi_read_words.data(), include_words ? multi_read_words.size() : 0U),
+          std::span<BitValue>(multi_read_bits.data(), include_bits ? multi_read_bits.size() : 0U),
+          std::span<MultiBlockReadBlockResult>(multi_read_results.data(), selected_read_blocks.size()));
       if (!status.ok()) {
         std::printf("multi-block-read=skip ");
         if (status.code == StatusCode::PlcError) {
@@ -1728,29 +1912,39 @@ int main(int argc, char** argv) {
         }
       } else {
         bool matches_backup = true;
-        for (std::size_t index = 0; index < backup_word_block_a.size(); ++index) {
-          if (multi_read_words[index] != backup_word_block_a[index]) {
-            matches_backup = false;
-            break;
-          }
+        std::size_t word_cursor = 0;
+        std::size_t bit_cursor = 0;
+        if (verify_word_a) {
+          matches_backup = verify_word_block(
+              "multi-block-read",
+              "words-a",
+              backup_word_block_a,
+              std::span<const std::uint16_t>(multi_read_words.data() + word_cursor, backup_word_block_a.size()));
+          word_cursor += backup_word_block_a.size();
         }
-        for (std::size_t index = 0; matches_backup && index < backup_word_block_b.size(); ++index) {
-          if (multi_read_words[backup_word_block_a.size() + index] != backup_word_block_b[index]) {
-            matches_backup = false;
-            break;
-          }
+        if (matches_backup && verify_word_b) {
+          matches_backup = verify_word_block(
+              "multi-block-read",
+              "words-b",
+              backup_word_block_b,
+              std::span<const std::uint16_t>(multi_read_words.data() + word_cursor,
+                                             backup_word_block_b.size()));
+          word_cursor += backup_word_block_b.size();
         }
-        for (std::size_t index = 0; matches_backup && index < backup_bit_block_a.size(); ++index) {
-          if (multi_read_bits[index] != backup_bit_block_a[index]) {
-            matches_backup = false;
-            break;
-          }
+        if (matches_backup && verify_bit_a) {
+          matches_backup = verify_bit_block(
+              "multi-block-read",
+              "bits-a",
+              backup_bit_block_a,
+              std::span<const BitValue>(multi_read_bits.data() + bit_cursor, backup_bit_block_a.size()));
+          bit_cursor += backup_bit_block_a.size();
         }
-        for (std::size_t index = 0; matches_backup && index < backup_bit_block_b.size(); ++index) {
-          if (multi_read_bits[backup_bit_block_a.size() + index] != backup_bit_block_b[index]) {
-            matches_backup = false;
-            break;
-          }
+        if (matches_backup && verify_bit_b) {
+          matches_backup = verify_bit_block(
+              "multi-block-read",
+              "bits-b",
+              backup_bit_block_b,
+              std::span<const BitValue>(multi_read_bits.data() + bit_cursor, backup_bit_block_b.size()));
         }
         if (!matches_backup) {
           std::printf("multi-block-read=skip verify-mismatch\n");
@@ -1769,16 +1963,36 @@ int main(int argc, char** argv) {
           BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
       }};
       const std::array<BitValue, 32> test_bit_block_b {{
+          BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+          BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+          BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+          BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+          BitValue::Off, BitValue::Off, BitValue::Off, BitValue::On,
+          BitValue::Off, BitValue::Off, BitValue::On, BitValue::Off,
           BitValue::Off, BitValue::Off, BitValue::On, BitValue::On,
-          BitValue::Off, BitValue::Off, BitValue::On, BitValue::On,
-          BitValue::On, BitValue::On, BitValue::Off, BitValue::Off,
-          BitValue::On, BitValue::On, BitValue::Off, BitValue::Off,
-          BitValue::Off, BitValue::On, BitValue::Off, BitValue::On,
-          BitValue::Off, BitValue::On, BitValue::Off, BitValue::On,
-          BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
-          BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
+          BitValue::Off, BitValue::On, BitValue::Off, BitValue::Off,
       }};
-      const std::array<MultiBlockWriteBlock, 4> write_blocks {{
+      const std::array<MultiBlockWriteBlock, 2> write_word_blocks {{
+          {.head_device = kWordBlockADevice,
+           .points = static_cast<std::uint16_t>(test_word_block_a.size()),
+           .bit_block = false,
+           .words = std::span<const std::uint16_t>(test_word_block_a.data(), test_word_block_a.size())},
+          {.head_device = kWordBlockBDevice,
+           .points = static_cast<std::uint16_t>(test_word_block_b.size()),
+           .bit_block = false,
+           .words = std::span<const std::uint16_t>(test_word_block_b.data(), test_word_block_b.size())},
+      }};
+      const std::array<MultiBlockWriteBlock, 2> write_bit_blocks {{
+          {.head_device = kBitBlockADevice,
+           .points = 1,
+           .bit_block = true,
+           .bits = std::span<const BitValue>(test_bit_block_a.data(), test_bit_block_a.size())},
+          {.head_device = kBitBlockBDevice,
+           .points = 2,
+           .bit_block = true,
+           .bits = std::span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())},
+      }};
+      const std::array<MultiBlockWriteBlock, 4> write_mixed_blocks {{
           {.head_device = kWordBlockADevice,
            .points = static_cast<std::uint16_t>(test_word_block_a.size()),
            .bit_block = false,
@@ -1796,6 +2010,49 @@ int main(int argc, char** argv) {
            .bit_block = true,
            .bits = std::span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())},
       }};
+      const std::array<MultiBlockWriteBlock, 1> write_word_block_a_only {{
+          {.head_device = kWordBlockADevice,
+           .points = static_cast<std::uint16_t>(test_word_block_a.size()),
+           .bit_block = false,
+           .words = std::span<const std::uint16_t>(test_word_block_a.data(), test_word_block_a.size())},
+      }};
+      const std::array<MultiBlockWriteBlock, 1> write_word_block_b_only {{
+          {.head_device = kWordBlockBDevice,
+           .points = static_cast<std::uint16_t>(test_word_block_b.size()),
+           .bit_block = false,
+           .words = std::span<const std::uint16_t>(test_word_block_b.data(), test_word_block_b.size())},
+      }};
+      const std::array<MultiBlockWriteBlock, 1> write_bit_block_a_only {{
+          {.head_device = kBitBlockADevice,
+           .points = 1,
+           .bit_block = true,
+           .bits = std::span<const BitValue>(test_bit_block_a.data(), test_bit_block_a.size())},
+      }};
+      const std::array<MultiBlockWriteBlock, 1> write_bit_block_b_only {{
+          {.head_device = kBitBlockBDevice,
+           .points = 2,
+           .bit_block = true,
+           .bits = std::span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())},
+      }};
+      const std::span<const MultiBlockWriteBlock> selected_write_blocks =
+          probe_mode == ProbeMultiBlockMode::WordOnly
+              ? std::span<const MultiBlockWriteBlock>(write_word_blocks.data(), write_word_blocks.size())
+              : (probe_mode == ProbeMultiBlockMode::BitOnly
+                     ? std::span<const MultiBlockWriteBlock>(write_bit_blocks.data(), write_bit_blocks.size())
+                     : (probe_mode == ProbeMultiBlockMode::WordA
+                            ? std::span<const MultiBlockWriteBlock>(write_word_block_a_only.data(),
+                                                                    write_word_block_a_only.size())
+                            : (probe_mode == ProbeMultiBlockMode::WordB
+                                   ? std::span<const MultiBlockWriteBlock>(write_word_block_b_only.data(),
+                                                                           write_word_block_b_only.size())
+                                   : (probe_mode == ProbeMultiBlockMode::BitA
+                                          ? std::span<const MultiBlockWriteBlock>(write_bit_block_a_only.data(),
+                                                                                  write_bit_block_a_only.size())
+                                          : (probe_mode == ProbeMultiBlockMode::BitB
+                                                 ? std::span<const MultiBlockWriteBlock>(write_bit_block_b_only.data(),
+                                                                                        write_bit_block_b_only.size())
+                                                 : std::span<const MultiBlockWriteBlock>(write_mixed_blocks.data(),
+                                                                                         write_mixed_blocks.size()))))));
 
       bool multi_write_ok = false;
       status = run_multi_block_write(
@@ -1803,7 +2060,7 @@ int main(int argc, char** argv) {
           port,
           command_state,
           MultiBlockWriteRequest {
-              .blocks = std::span<const MultiBlockWriteBlock>(write_blocks.data(), write_blocks.size()),
+              .blocks = selected_write_blocks,
           });
       if (!status.ok()) {
         std::printf("multi-block-write=skip ");
@@ -1818,14 +2075,16 @@ int main(int argc, char** argv) {
         std::array<BitValue, 16> verify_bit_block_a {};
         std::array<BitValue, 32> verify_bit_block_b {};
 
-        status = run_batch_read_words_group(
-            client,
-            port,
-            command_state,
-            kWordBlockADevice,
-            static_cast<std::uint16_t>(verify_word_block_a.size()),
-            std::span<std::uint16_t>(verify_word_block_a.data(), verify_word_block_a.size()));
-        if (status.ok()) {
+        if (include_words) {
+          status = run_batch_read_words_group(
+              client,
+              port,
+              command_state,
+              kWordBlockADevice,
+              static_cast<std::uint16_t>(verify_word_block_a.size()),
+              std::span<std::uint16_t>(verify_word_block_a.data(), verify_word_block_a.size()));
+        }
+        if (status.ok() && include_words) {
           status = run_batch_read_words_group(
               client,
               port,
@@ -1834,7 +2093,7 @@ int main(int argc, char** argv) {
               static_cast<std::uint16_t>(verify_word_block_b.size()),
               std::span<std::uint16_t>(verify_word_block_b.data(), verify_word_block_b.size()));
         }
-        if (status.ok()) {
+        if (status.ok() && include_bits) {
           status = run_batch_read_bits_group(
               client,
               port,
@@ -1843,7 +2102,7 @@ int main(int argc, char** argv) {
               static_cast<std::uint16_t>(verify_bit_block_a.size()),
               std::span<BitValue>(verify_bit_block_a.data(), verify_bit_block_a.size()));
         }
-        if (status.ok()) {
+        if (status.ok() && include_bits) {
           status = run_batch_read_bits_group(
               client,
               port,
@@ -1854,25 +2113,21 @@ int main(int argc, char** argv) {
         }
 
         bool matches_test = status.ok();
-        for (std::size_t index = 0; matches_test && index < test_word_block_a.size(); ++index) {
-          if (verify_word_block_a[index] != test_word_block_a[index]) {
-            matches_test = false;
-          }
+        if (matches_test && verify_word_a) {
+          matches_test =
+              verify_word_block("multi-block-write", "words-a", test_word_block_a, verify_word_block_a);
         }
-        for (std::size_t index = 0; matches_test && index < test_word_block_b.size(); ++index) {
-          if (verify_word_block_b[index] != test_word_block_b[index]) {
-            matches_test = false;
-          }
+        if (matches_test && verify_word_b) {
+          matches_test =
+              verify_word_block("multi-block-write", "words-b", test_word_block_b, verify_word_block_b);
         }
-        for (std::size_t index = 0; matches_test && index < test_bit_block_a.size(); ++index) {
-          if (verify_bit_block_a[index] != test_bit_block_a[index]) {
-            matches_test = false;
-          }
+        if (matches_test && verify_bit_a) {
+          matches_test =
+              verify_bit_block("multi-block-write", "bits-a", test_bit_block_a, verify_bit_block_a);
         }
-        for (std::size_t index = 0; matches_test && index < test_bit_block_b.size(); ++index) {
-          if (verify_bit_block_b[index] != test_bit_block_b[index]) {
-            matches_test = false;
-          }
+        if (matches_test && verify_bit_b) {
+          matches_test =
+              verify_bit_block("multi-block-write", "bits-b", test_bit_block_b, verify_bit_block_b);
         }
 
         if (!matches_test) {
@@ -1941,32 +2196,16 @@ int main(int argc, char** argv) {
         print_status_error("probe-multi-block restore verify bits B failed", status);
         return 1;
       }
-      for (std::size_t index = 0; index < backup_word_block_a.size(); ++index) {
-        if (restore_word_block_a[index] != backup_word_block_a[index]) {
-          std::fprintf(stderr, "probe-multi-block restore mismatch words A\n");
-          return 1;
-        }
-      }
-      for (std::size_t index = 0; index < backup_word_block_b.size(); ++index) {
-        if (restore_word_block_b[index] != backup_word_block_b[index]) {
-          std::fprintf(stderr, "probe-multi-block restore mismatch words B\n");
-          return 1;
-        }
-      }
-      for (std::size_t index = 0; index < backup_bit_block_a.size(); ++index) {
-        if (restore_bit_block_a[index] != backup_bit_block_a[index]) {
-          std::fprintf(stderr, "probe-multi-block restore mismatch bits A\n");
-          return 1;
-        }
-      }
-      for (std::size_t index = 0; index < backup_bit_block_b.size(); ++index) {
-        if (restore_bit_block_b[index] != backup_bit_block_b[index]) {
-          std::fprintf(stderr, "probe-multi-block restore mismatch bits B\n");
-          return 1;
-        }
+      if (!verify_word_block("probe-multi-block-restore", "words-a", backup_word_block_a, restore_word_block_a) ||
+          !verify_word_block("probe-multi-block-restore", "words-b", backup_word_block_b, restore_word_block_b) ||
+          !verify_bit_block("probe-multi-block-restore", "bits-a", backup_bit_block_a, restore_bit_block_a) ||
+          !verify_bit_block("probe-multi-block-restore", "bits-b", backup_bit_block_b, restore_bit_block_b)) {
+        return 1;
       }
 
-      std::printf("probe-multi-block: read=%s write=%s restore=ok\n",
+      std::printf("probe-multi-block[%.*s]: read=%s write=%s restore=ok\n",
+                  static_cast<int>(mode_name.size()),
+                  mode_name.data(),
                   multi_read_ok ? "native" : "skip",
                   multi_write_ok ? "native" : "skip");
       return (multi_read_ok || multi_write_ok) ? 0 : 1;

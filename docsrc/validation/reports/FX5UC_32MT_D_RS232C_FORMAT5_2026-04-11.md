@@ -37,7 +37,7 @@ Interpretation:
 | supported-device screening | `21/25` targets passed under `--series ql`; `DX10`, `DY10`, `ZR10`, and `V100` failed with `0x7E43` twice |
 | supported-device soak | two `180` second runs passed with no protocol errors on the screened `21` target subset |
 | native random read/write | `0403`, `1402` returned `0x7F23` |
-| native monitor / multi-block | `0801` returned `0x7E40`; after the binary block-count fix, `0406` passed and `1406` reached verify-mismatch with restore passed |
+| native monitor / multi-block | `0801` returned `0x7E40`; after the binary count-width and bit-block packing fixes, both `0406` and `1406` passed |
 | host / module buffer | helper and native buffer probes returned `0x7E40` |
 | qualified access | helper `U3E0\\G10` / `U3E0\\HG20` returned `0x7E40`; native `U3E0\\G10` returned `0x7E43`; native `HG` path is not applicable under `--series ql` |
 
@@ -96,14 +96,25 @@ Observed result:
   - `multi-block-read=ok native`
   - `multi-block-write=skip verify-mismatch`
   - `probe-multi-block: read=native write=skip restore=ok`
+- a follow-up diagnostic split `1406` into `word-only`, `bit-only`, and single-block modes:
+  - `probe-multi-block[word-only]: read=native write=native restore=ok`
+  - `probe-multi-block[bit-b]` isolated the remaining mismatch to the second word of a two-point bit
+    block
+  - a non-symmetric `bit-b` pattern with expected second word `0x1234` read back as `0x1C84`
+    before the fix, proving the binary bit-word payload needed reversed two-bit-pair order
+- after correcting that binary `1406` bit-block packing and pinning it in codec tests, FX5U
+  `probe-multi-block` changed to:
+  - `multi-block-read=ok native`
+  - `multi-block-write=ok native`
+  - `probe-multi-block[mixed]: read=native write=native restore=ok`
 
 Interpretation:
 
 - the old binary multi-block count-field width was a host-side bug
 - the capture and local manual re-read both support the one-byte count layout for binary
 - on FX5U, `0406` is no longer part of the unresolved native set after this fix
-- `1406` is no longer rejected immediately, but it is still not promoted to native pass because the
-  write verification did not hold
+- on FX5U, `1406` is also no longer part of the unresolved native set after correcting the binary
+  bit-block payload from natural bit order to reversed two-bit-pair order within each 16-bit unit
 
 ## Native Unresolved Command Recheck
 

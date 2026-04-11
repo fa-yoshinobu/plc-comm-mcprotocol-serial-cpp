@@ -86,7 +86,7 @@ Additional validated target:
 | Random write words | native `1402` | native ng | `0x7F23`; no write effect confirmed |
 | Random write bits | native `1402` | native ng | `0x7F23`; no write effect confirmed |
 | Multi-block read | native `0406` | native pass | after the binary block-count fix based on capture and manual re-read, `probe-multi-block` read passed natively |
-| Multi-block write | native `1406` | hold | after the same fix, the write path reached `verify-mismatch`; contiguous restore still passed |
+| Multi-block write | native `1406` | native pass | after the follow-up binary bit-block pair-order fix, `probe-multi-block[mixed]` passed natively with restore |
 | Monitor register/read | native `0801/0802` | native ng / hold | `0801` register path returned `0x7E40` |
 
 Additional validated target:
@@ -173,5 +173,7 @@ The library now pins native request-data shapes for `1402`, `0406`, `0801`, and 
 - the CLI should expose those native failures directly on this setup
 - qualified helper commands and native qualified probes should stay documented as separate paths
 - one exception is now known: binary `0406/1406` used one-byte block counts, not little-endian
-  word counts; after correcting that host-side bug, `FX5UC-32MT/D` `0406` passed natively and
-  `1406` advanced to write-verify follow-up
+  word counts; after correcting that host-side bug, `FX5UC-32MT/D` `0406` passed natively
+- a second binary `1406` host-side bug is now known on FX5U: bit-block payload words had to be
+  encoded with reversed two-bit-pair order; after correcting that, `FX5UC-32MT/D`
+  `probe-multi-block[mixed]` passed natively
