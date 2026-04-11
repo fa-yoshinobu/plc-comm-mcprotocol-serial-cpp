@@ -56,6 +56,7 @@ Qualified-device follow-up:
 - `2026-04-11` Format5/Binary spot recheck: helper `U3E0\\G10=0x83BD`, helper `U3E0\\HG20=0x0000`, native `U3E0\\G10=0x0000`, native `U3E0\\HG20=0x4031`
 - `2026-04-11` `LJ71C24 + L26CPU-BT + --series ql`: helper `U3E0\\G10=0x0000`, helper `U3E0\\HG20` read/write/restore passed, native `U3E0\\G10` read/write returned `0x4030`, native `HG` path was not applicable outside iQ-R
 - `2026-04-11` `FX5UC-32MT/D + --series ql`: helper `U3E0\\G10` and `U3E0\\HG20` returned `0x7E40`, native `U3E0\\G10` read/write returned `0x7E43`, native `HG` path was not applicable outside iQ-R
+- `2026-04-11` `FX5UC-32MT/D + --series ql`: monitor family remained native ng as a family; `0801` register and raw `0802` read-only both returned `0x7E40`
 - `2026-04-11` Format5/Binary status-word recheck: helper-visible `U3E0\\G599`, `U3E0\\G600`, and `U3E0\\G31998..32003` stayed `0x0000` even after native `0x7F23` and `0x4031` probes
 - No validated native qualified write effect yet
 - `2026-04-11` TAK capture in `cap/write.txt` matched the MC manual's binary `0406` layout with

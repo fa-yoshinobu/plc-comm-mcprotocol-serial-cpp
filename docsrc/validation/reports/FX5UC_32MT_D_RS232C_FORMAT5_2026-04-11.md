@@ -37,7 +37,7 @@ Interpretation:
 | supported-device screening | `21/25` targets passed under `--series ql`; `DX10`, `DY10`, `ZR10`, and `V100` failed with `0x7E43` twice |
 | supported-device soak | two `180` second runs passed with no protocol errors on the screened `21` target subset |
 | native random read/write | `0403`, `1402` returned `0x7F23` |
-| native monitor / multi-block | `0801` returned `0x7E40`; after the binary count-width and bit-block packing fixes, both `0406` and `1406` passed |
+| native monitor / multi-block | both `0801` and raw `0802` returned `0x7E40`; after the binary count-width and bit-block packing fixes, both `0406` and `1406` passed |
 | host / module buffer | helper and native buffer probes returned `0x7E40` |
 | qualified access | helper `U3E0\\G10` / `U3E0\\HG20` returned `0x7E40`; native `U3E0\\G10` returned `0x7E43`; native `HG` path is not applicable under `--series ql` |
 
@@ -141,6 +141,7 @@ Observed result:
   - native `random-write-bits` sparse subset `M100`, `M105`, `M110`, `M115`: `0x7F23`
   - restore back to the original `M100..M115` values: pass
 - `0801 probe-monitor`: `probe-monitor: skip register 0x7E40`
+- raw `0802` only via `probe-monitor read-only`: `probe-monitor[read-only]: skip 0x7E40`
 - `0406 probe-multi-block`: moved to the capture-driven recheck section after the binary count fix
 - `1406 probe-multi-block`: moved to the capture-driven recheck section after the binary count fix
 

@@ -302,7 +302,7 @@ void print_usage() {
       "  mcprotocol_cli [options] probe-write-all\n"
       "  mcprotocol_cli [options] probe-random-write-bits\n"
       "  mcprotocol_cli [options] probe-multi-block [mixed|word-only|bit-only|word-a|word-b|bit-a|bit-b]\n"
-      "  mcprotocol_cli [options] probe-monitor\n"
+      "  mcprotocol_cli [options] probe-monitor [read-only]\n"
       "  mcprotocol_cli [options] probe-host-buffer\n"
       "  mcprotocol_cli [options] probe-module-buffer\n"
       "  mcprotocol_cli [options] probe-write-host-buffer\n"
@@ -331,6 +331,7 @@ void print_usage() {
       "  read-qualified-words / write-qualified-words use the practical 0601/1601 helper path.\n"
       "  read-native-qualified-words / write-native-qualified-words are native probes for unresolved extended-device access.\n"
       "  probe-multi-block defaults to mixed; pass word-only/bit-only or a single block mode to isolate 1406 verification.\n"
+      "  probe-monitor read-only sends raw 0802 without client-side monitor registration state.\n"
       "  random-read / random-write-* / probe-random-write-bits / probe-multi-block / probe-monitor expose native probe results directly.\n");
 }
 
@@ -746,6 +747,13 @@ void on_tx_end(void* user) {
   return mcprotocol::serial::ok_status();
 }
 
+[[nodiscard]] std::span<const std::byte> as_const_byte_span(std::span<const std::uint8_t> bytes) noexcept {
+  return {
+      reinterpret_cast<const std::byte*>(bytes.data()),
+      bytes.size(),
+  };
+}
+
 void dump_frame_bytes(std::string_view label, std::span<const std::byte> bytes) {
   std::fprintf(stderr, "%.*s[%zu] hex:", static_cast<int>(label.size()), label.data(), bytes.size());
   for (const std::byte value : bytes) {
@@ -865,6 +873,132 @@ void dump_frame_bytes(std::string_view label, std::span<const std::byte> bytes) 
   }
 
   return state.status;
+}
+
+[[nodiscard]] Status run_raw_request(
+    const ProtocolConfig& config,
+    PosixSerialPort& port,
+    bool rts_toggle,
+    std::span<const std::uint8_t> request_data,
+    mcprotocol::serial::RawResponseFrame& out_frame,
+    bool dump_frames = false) {
+  std::array<std::uint8_t, mcprotocol::serial::kMaxRequestFrameBytes> tx_frame {};
+  std::size_t tx_size = 0;
+  Status status = mcprotocol::serial::FrameCodec::encode_request(config, request_data, tx_frame, tx_size);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = discard_stale_rx(port);
+  if (!status.ok()) {
+    return status;
+  }
+
+  const std::span<const std::uint8_t> tx_bytes(tx_frame.data(), tx_size);
+  if (dump_frames || g_dump_frames) {
+    dump_frame_bytes("tx", as_const_byte_span(tx_bytes));
+  }
+
+  if (rts_toggle) {
+    status = port.set_rts(true);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+
+  status = port.write_all(as_const_byte_span(tx_bytes));
+  if (status.ok()) {
+    status = port.drain_tx();
+  }
+
+  if (rts_toggle) {
+    const Status rts_status = port.set_rts(false);
+    if (status.ok()) {
+      status = rts_status;
+    }
+  }
+  if (!status.ok()) {
+    return status;
+  }
+
+  std::array<std::uint8_t, mcprotocol::serial::kMaxResponseFrameBytes> rx_frame {};
+  std::size_t rx_size = 0;
+  const std::uint32_t response_deadline_ms = now_ms() + config.timeout.response_timeout_ms;
+  std::uint32_t inter_byte_deadline_ms = response_deadline_ms;
+  bool saw_rx = false;
+
+  std::array<std::byte, 256> rx_chunk {};
+  while (true) {
+    const std::uint32_t current_ms = now_ms();
+    if ((!saw_rx && current_ms >= response_deadline_ms) || (saw_rx && current_ms >= inter_byte_deadline_ms)) {
+      return mcprotocol::serial::make_status(
+          StatusCode::Timeout,
+          saw_rx ? "Timed out while waiting for the rest of the response"
+                 : "Timed out while waiting for a response");
+    }
+
+    std::size_t bytes_read = 0;
+    status = port.read_some(rx_chunk, 50, bytes_read);
+    if (!status.ok()) {
+      return status;
+    }
+    if (bytes_read == 0U) {
+      continue;
+    }
+
+    const std::span<const std::byte> rx_chunk_bytes(rx_chunk.data(), bytes_read);
+    if (dump_frames || g_dump_frames) {
+      dump_frame_bytes("rx", rx_chunk_bytes);
+    }
+
+    if ((rx_size + bytes_read) > rx_frame.size()) {
+      return mcprotocol::serial::make_status(StatusCode::BufferTooSmall, "Receive frame buffer overflow");
+    }
+    std::memcpy(
+        rx_frame.data() + rx_size,
+        reinterpret_cast<const std::uint8_t*>(rx_chunk_bytes.data()),
+        bytes_read);
+    rx_size += bytes_read;
+    saw_rx = true;
+    inter_byte_deadline_ms = now_ms() + config.timeout.inter_byte_timeout_ms;
+
+    const mcprotocol::serial::DecodeResult decode =
+        mcprotocol::serial::FrameCodec::decode_response(config, std::span<const std::uint8_t>(rx_frame.data(), rx_size));
+    if (decode.status == mcprotocol::serial::DecodeStatus::Complete) {
+      out_frame = decode.frame;
+      if (decode.frame.type == mcprotocol::serial::ResponseType::PlcError) {
+        return mcprotocol::serial::make_status(
+            StatusCode::PlcError,
+            "PLC returned an error",
+            decode.frame.error_code);
+      }
+      return mcprotocol::serial::ok_status();
+    }
+    if (decode.status == mcprotocol::serial::DecodeStatus::Error) {
+      return decode.error;
+    }
+  }
+}
+
+[[nodiscard]] Status run_read_monitor_raw(
+    const ProtocolConfig& config,
+    PosixSerialPort& port,
+    bool rts_toggle,
+    mcprotocol::serial::RawResponseFrame& out_frame,
+    bool dump_frames = false) {
+  std::array<std::uint8_t, mcprotocol::serial::kMaxRequestDataBytes> request_data {};
+  std::size_t request_size = 0;
+  const Status status = mcprotocol::serial::CommandCodec::encode_read_monitor(config, request_data, request_size);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_raw_request(
+      config,
+      port,
+      rts_toggle,
+      std::span<const std::uint8_t>(request_data.data(), request_size),
+      out_frame,
+      dump_frames);
 }
 
 void print_status_error(const char* prefix, Status status) {
@@ -2467,6 +2601,31 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ProbeMonitor: {
+      const std::string_view probe_mode =
+          options.command_argc == 0 ? std::string_view {} : std::string_view(options.command_argv[0]);
+      if (!probe_mode.empty() && !equals_ignore_case(probe_mode, "read-only") &&
+          !equals_ignore_case(probe_mode, "read")) {
+        std::fprintf(stderr, "probe-monitor mode must be omitted or 'read-only'\n");
+        return 2;
+      }
+      if (!probe_mode.empty()) {
+        mcprotocol::serial::RawResponseFrame frame {};
+        status = run_read_monitor_raw(options.protocol, port, options.rts_toggle, frame, options.dump_frames);
+        if (!status.ok()) {
+          std::printf("probe-monitor[read-only]: skip ");
+          if (status.code == StatusCode::PlcError) {
+            std::printf("0x%04X\n", status.plc_error_code);
+          } else {
+            std::printf("%s\n", status.message);
+          }
+          return 1;
+        }
+
+        const char* response_kind = frame.type == mcprotocol::serial::ResponseType::SuccessData ? "data" : "nodata";
+        std::printf("probe-monitor[read-only]=ok response=%s bytes=%zu\n", response_kind, frame.response_size);
+        return 0;
+      }
+
       const std::array<RandomReadItem, 4> items {{
           {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}, .double_word = false},
           {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 105}, .double_word = false},

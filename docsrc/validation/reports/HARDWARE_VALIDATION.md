@@ -87,7 +87,7 @@ Additional validated target:
 | Random write bits | native `1402` | native ng | `0x7F23`; FX5U focused probe confirmed single-item, dense, and sparse `M100..M115` cases all fail while the same dense pattern passes under contiguous `1401` |
 | Multi-block read | native `0406` | native pass | after the binary block-count fix based on capture and manual re-read, `probe-multi-block` read passed natively |
 | Multi-block write | native `1406` | native pass | after the follow-up binary bit-block pair-order fix, `probe-multi-block[mixed]` passed natively with restore |
-| Monitor register/read | native `0801/0802` | native ng / hold | `0801` register path returned `0x7E40` |
+| Monitor register/read | native `0801/0802` | native ng / hold | `0801` register path returned `0x7E40`; raw `0802` via `probe-monitor read-only` also returned `0x7E40` |
 
 Additional validated target:
 

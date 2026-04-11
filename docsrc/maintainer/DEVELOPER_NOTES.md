@@ -66,7 +66,8 @@ Do not assume the remaining failures are caused by forgetting the PLC family sel
 `2026-04-11` FX5U follow-up also showed a second boundary: matching `--series ql` was necessary but
 not sufficient to unlock buffer or qualified paths. `FX5UC-32MT/D` passed contiguous `D100` /
 `M100` reads and a screened `21`-target contiguous soak under `--series ql`, but host-buffer,
-module-buffer, helper-qualified, and native-qualified probes returned `0x7E40` or `0x7E43`.
+module-buffer, helper-qualified, and native-qualified probes returned `0x7E40` or `0x7E43`. Monitor was also ng as a family:
+`0801` register and raw `0802` read-only both returned `0x7E40`.
 Do not project the C24-era helper/buffer workflow onto FX targets without revalidation.
 
 The same date also produced a concrete binary multi-block fix. TAK capture in `cap/write.txt`
