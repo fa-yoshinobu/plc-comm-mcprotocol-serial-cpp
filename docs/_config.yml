@@ -1,0 +1,9 @@
+title: plc-comm-mcprotocol-serial-cpp
+description: Minimal GitHub Pages entry for the MC protocol serial C++ library.
+theme: jekyll-theme-primer
+markdown: GFM
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: true
