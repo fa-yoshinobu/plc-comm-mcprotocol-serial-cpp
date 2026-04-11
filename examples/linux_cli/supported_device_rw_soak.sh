@@ -16,37 +16,43 @@ duration_sec="${MCPROTOCOL_DURATION_SEC:-180}"
 response_timeout_ms="${MCPROTOCOL_RESPONSE_TIMEOUT_MS:-}"
 inter_byte_timeout_ms="${MCPROTOCOL_INTER_BYTE_TIMEOUT_MS:-}"
 
-# These families completed non-low-address read/write/read/restore command
-# screening without protocol-level errors. Some values may be overwritten again
-# by the PLC program while RUN is active, so this soak treats readback mismatch
-# as observation data instead of a hard failure.
-targets=(
-  "bit:STS10"
-  "bit:STC10"
-  "word:STN10"
-  "bit:TS10"
-  "bit:TC10"
-  "word:TN10"
-  "bit:CS10"
-  "bit:CC10"
-  "word:CN10"
-  "bit:SB10"
-  "word:SW10"
-  "bit:DX10"
-  "bit:DY10"
-  "word:ZR10"
-  "bit:X10"
-  "bit:Y10"
-  "bit:M100"
-  "bit:L100"
-  "bit:F100"
-  "bit:V100"
-  "bit:B10"
-  "word:D100"
-  "word:W10"
-  "word:Z10"
-  "word:R100"
-)
+targets_override="${MCPROTOCOL_TARGETS:-}"
+
+if [[ -n "${targets_override}" ]]; then
+  read -r -a targets <<<"${targets_override}"
+else
+  # These families completed non-low-address read/write/read/restore command
+  # screening without protocol-level errors. Some values may be overwritten again
+  # by the PLC program while RUN is active, so this soak treats readback mismatch
+  # as observation data instead of a hard failure.
+  targets=(
+    "bit:STS10"
+    "bit:STC10"
+    "word:STN10"
+    "bit:TS10"
+    "bit:TC10"
+    "word:TN10"
+    "bit:CS10"
+    "bit:CC10"
+    "word:CN10"
+    "bit:SB10"
+    "word:SW10"
+    "bit:DX10"
+    "bit:DY10"
+    "word:ZR10"
+    "bit:X10"
+    "bit:Y10"
+    "bit:M100"
+    "bit:L100"
+    "bit:F100"
+    "bit:V100"
+    "bit:B10"
+    "word:D100"
+    "word:W10"
+    "word:Z10"
+    "word:R100"
+  )
+fi
 
 common_args=(
   --device "${device}"

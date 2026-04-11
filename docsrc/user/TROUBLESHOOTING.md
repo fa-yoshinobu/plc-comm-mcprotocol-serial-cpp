@@ -65,9 +65,26 @@ Known example from `2026-04-11`:
 
 - `L26CPU-BT + LJ71C24 + Format5/Binary` required `--series ql`
 - the same setup under `--series iqr` returned `0x7F22` even for `read-words D100 1` and `read-bits M100 1`
+- `FX5UC-32MT/D + Format5/Binary + 38400 / 8E2` also required `--series ql`
+- the same FX setup under `--series iqr` returned `0x7E40` even for `read-words D100 1` and `read-bits M100 1`
 
 If you changed the PLC CPU or serial module family, rerun `cpu-model` first and then pick the
 matching `--series` before diagnosing anything else.
+
+## `0x7E40` or `0x7E43` on `FX5UC-32MT/D`
+
+On the `2026-04-11` FX5U validation target:
+
+- `--series iqr` caused contiguous `D100` / `M100` reads to fail with `0x7E40`
+- `--series ql` was the practical setting
+- `DX10`, `DY10`, `ZR10`, and `V100` still failed with `0x7E43` even under `--series ql`
+- host-buffer, module-buffer, and `U3E0\\...` qualified probes also returned `0x7E40` or `0x7E43`
+
+If you are trying to reproduce the validated FX5U contiguous soak, use:
+
+```bash
+./examples/linux_cli/fx5u_supported_device_rw_soak.sh
+```
 
 ## MCU board compiles but never receives data
 

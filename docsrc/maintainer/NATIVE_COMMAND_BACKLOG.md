@@ -22,6 +22,7 @@ Validated setup:
 
 - `RJ71C24-R2 / RS-232C / 19200 / 8E1 / MC Protocol Format4 ASCII / CRLF / sum-check off / station 0`
 - `LJ71C24 / RS-232C / 28800 / 8E2 / MC Protocol Format5 Binary / sum-check on / station 0 / L26CPU-BT / --series ql`
+- `FX5UC-32MT/D / RS-232C / 38400 / 8E2 / MC Protocol Format5 Binary / sum-check on / station 0 / --series ql`
 
 Unresolved native command families:
 
@@ -43,6 +44,7 @@ Qualified-device follow-up:
 - `write-native-qualified-words 'U3E0\\HG20' 0x1234 --series iqr`: timeout
 - `2026-04-11` Format5/Binary spot recheck: helper `U3E0\\G10=0x83BD`, helper `U3E0\\HG20=0x0000`, native `U3E0\\G10=0x0000`, native `U3E0\\HG20=0x4031`
 - `2026-04-11` `LJ71C24 + L26CPU-BT + --series ql`: helper `U3E0\\G10=0x0000`, helper `U3E0\\HG20` read/write/restore passed, native `U3E0\\G10` read/write returned `0x4030`, native `HG` path was not applicable outside iQ-R
+- `2026-04-11` `FX5UC-32MT/D + --series ql`: helper `U3E0\\G10` and `U3E0\\HG20` returned `0x7E40`, native `U3E0\\G10` read/write returned `0x7E43`, native `HG` path was not applicable outside iQ-R
 - `2026-04-11` Format5/Binary status-word recheck: helper-visible `U3E0\\G599`, `U3E0\\G600`, and `U3E0\\G31998..32003` stayed `0x0000` even after native `0x7F23` and `0x4031` probes
 - No validated native qualified write effect yet
 
@@ -61,7 +63,13 @@ Qualified-device follow-up:
   failed with the same PLC end codes.
 - Match `--series` to the actual CPU family before interpreting PLC end codes. On `2026-04-11`,
   `L26CPU-BT` with `--series iqr` caused even contiguous `D100` / `M100` reads to fail with
-  `0x7F22`, while the same setup passed under `--series ql`.
+  `0x7F22`, while the same setup passed under `--series ql`. On the same date,
+  `FX5UC-32MT/D` with `--series iqr` caused contiguous `D100` / `M100` reads to fail with
+  `0x7E40`, while the same setup passed under `--series ql`.
+- Do not assume the Q/L-era supported contiguous device subset applies unchanged to FX targets. On
+  `2026-04-11`, `DX10`, `DY10`, `ZR10`, and `V100` returned `0x7E43` on `FX5UC-32MT/D` even
+  though the screened `21`-target subset completed a `180` second contiguous soak without protocol
+  errors.
 - Do not treat a native qualified success code as proof of semantic correctness. On `2026-04-11`
   under `Format5 / Binary / 28800 / 8E2 / sum-check on`, native `U3E0\\G10` returned `0x0000`
   while the helper path still returned `0x83BD`.

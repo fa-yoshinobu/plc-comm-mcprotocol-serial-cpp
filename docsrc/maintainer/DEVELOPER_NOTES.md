@@ -63,6 +63,12 @@ This matters because the current hardware problem is not proven to be an encoder
 to iQ-R subcommands on the wire, while contiguous `0401/1401` traffic still passed with `0002/0003`.
 Do not assume the remaining failures are caused by forgetting the PLC family selection.
 
+`2026-04-11` FX5U follow-up also showed a second boundary: matching `--series ql` was necessary but
+not sufficient to unlock buffer or qualified paths. `FX5UC-32MT/D` passed contiguous `D100` /
+`M100` reads and a screened `21`-target contiguous soak under `--series ql`, but host-buffer,
+module-buffer, helper-qualified, and native-qualified probes returned `0x7E40` or `0x7E43`.
+Do not project the C24-era helper/buffer workflow onto FX targets without revalidation.
+
 ## Validation Reporting Rule
 
 When adding new hardware results:

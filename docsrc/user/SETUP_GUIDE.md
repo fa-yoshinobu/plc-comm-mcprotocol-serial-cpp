@@ -33,6 +33,24 @@ Do not reuse `--series iqr` on this L-series target. On `2026-04-11`, even conti
 `read-words D100 1` and `read-bits M100 1` failed with `0x7F22` until the CLI family selection was
 switched to `ql`.
 
+## Additional Verified Setup
+
+- PLC CPU: Mitsubishi iQ-F `FX5UC-32MT/D`
+- Link: `RS-232C`
+- Communication protocol: `MC protocol (Format 5)`
+- Code: Binary
+- Sum check: `on`
+- Station number: `0`
+- Serial line: `38400 bps / 8E2`
+- CLI family selection: `--series ql`
+
+Do not reuse `--series iqr` on this FX target. On `2026-04-11`, even contiguous
+`read-words D100 1` and `read-bits M100 1` failed with `0x7E40` under `iqr`.
+
+Also do not assume the full `supported_device_rw_soak.sh` target set applies unchanged. On
+`2026-04-11`, `DX10`, `DY10`, `ZR10`, and `V100` failed with `0x7E43`, so use
+`../../examples/linux_cli/fx5u_supported_device_rw_soak.sh` for the validated FX5U contiguous soak.
+
 ## Build
 
 ```bash
