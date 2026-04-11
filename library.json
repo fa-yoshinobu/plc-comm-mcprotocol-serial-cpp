@@ -1,0 +1,64 @@
+{
+  "name": "mcprotocol-serial-cpp",
+  "version": "0.1.1",
+  "description": "MC protocol serial C++ library for MCU-oriented environments with fixed caller-owned buffers and async request flow.",
+  "keywords": [
+    "mcprotocol",
+    "melsec",
+    "plc",
+    "serial",
+    "uart",
+    "embedded",
+    "platformio",
+    "arduino",
+    "esp32-c3",
+    "rp2040",
+    "rs232c",
+    "rs485"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp.git"
+  },
+  "authors": [
+    {
+      "name": "fa-yoshinobu",
+      "maintainer": true
+    }
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp",
+  "frameworks": "*",
+  "platforms": "*",
+  "headers": [
+    "mcprotocol_serial.hpp"
+  ],
+  "build": {
+    "includeDir": "include",
+    "srcFilter": [
+      "+<src/client.cpp>",
+      "+<src/codec.cpp>",
+      "-<src/posix_serial.cpp>"
+    ],
+    "flags": [
+      "-std=gnu++17",
+      "-fno-exceptions",
+      "-fno-rtti"
+    ]
+  },
+  "export": {
+    "exclude": [
+      ".github",
+      ".pio",
+      ".platformio",
+      ".tools",
+      "build",
+      "docsrc",
+      "docs",
+      "scripts",
+      "tests",
+      "tools",
+      "*.bat"
+    ]
+  }
+}
