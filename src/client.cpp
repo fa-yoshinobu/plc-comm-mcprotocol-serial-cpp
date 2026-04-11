@@ -99,7 +99,9 @@ struct StreamDecodeResult {
     if (candidate.status == DecodeStatus::Incomplete) {
       if (offset == 0U) {
         first_candidate_incomplete = true;
-        break;
+        if (config.code_mode == CodeMode::Binary) {
+          break;
+        }
       }
       continue;
     }
