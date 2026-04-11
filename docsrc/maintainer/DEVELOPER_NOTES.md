@@ -29,8 +29,9 @@ On the current validated setup, `read-qualified-words` and `write-qualified-word
 practical `U...\\G...` / `U...\\HG...` path because they reuse the validated `0601/1601`
 module-buffer path.
 
-Keep `read-native-qualified-words` and `write-native-qualified-words` separate as validation probes
-until native extended-device access is revalidated on hardware.
+Native qualified access is not a supported workflow in this repository. Keep
+`read-native-qualified-words` and `write-native-qualified-words` separate as diagnostic probes only,
+and do not describe them as a supported `U...` access path.
 
 ## C24 Recovery Discipline
 

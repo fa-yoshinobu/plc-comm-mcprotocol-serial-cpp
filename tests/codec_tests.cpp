@@ -14,6 +14,7 @@
 namespace {
 
 using mcprotocol::serial::AsciiFormat;
+using mcprotocol::serial::BatchReadBitsRequest;
 using mcprotocol::serial::BatchReadWordsRequest;
 using mcprotocol::serial::BatchWriteBitsRequest;
 using mcprotocol::serial::BatchWriteWordsRequest;
@@ -36,6 +37,8 @@ using mcprotocol::serial::PlcSeries;
 using mcprotocol::serial::ProtocolConfig;
 using mcprotocol::serial::QualifiedBufferDeviceKind;
 using mcprotocol::serial::QualifiedBufferWordDevice;
+using mcprotocol::serial::RandomReadItem;
+using mcprotocol::serial::RandomReadRequest;
 using mcprotocol::serial::RandomWriteBitItem;
 using mcprotocol::serial::RandomWriteWordItem;
 using mcprotocol::serial::RouteConfig;
@@ -46,7 +49,9 @@ using mcprotocol::serial::decode_qualified_buffer_word_values;
 using mcprotocol::serial::highlevel::make_batch_read_words_request;
 using mcprotocol::serial::highlevel::make_batch_write_bits_request;
 using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+using mcprotocol::serial::highlevel::make_random_read_item;
 using mcprotocol::serial::highlevel::make_random_write_bit_item;
+using mcprotocol::serial::highlevel::make_random_write_word_item;
 using mcprotocol::serial::highlevel::parse_device_address;
 using mcprotocol::serial::make_qualified_buffer_read_words_request;
 using mcprotocol::serial::make_qualified_buffer_write_words_request;
@@ -268,6 +273,21 @@ void test_high_level_parse_device_address() {
   assert(address.code == mcprotocol::serial::DeviceCode::X);
   assert(address.number == 0x1AU);
 
+  status = parse_device_address("SM100", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::SM);
+  assert(address.number == 100U);
+
+  status = parse_device_address("SD200", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::SD);
+  assert(address.number == 200U);
+
+  status = parse_device_address("LZ10", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::LZ);
+  assert(address.number == 10U);
+
   status = parse_device_address("", address);
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
@@ -306,6 +326,74 @@ void test_high_level_make_random_bit_item() {
   assert(item.device.code == mcprotocol::serial::DeviceCode::M);
   assert(item.device.number == 105U);
   assert(item.value == BitValue::On);
+}
+
+void test_high_level_make_random_dword_item_defaults() {
+  RandomReadItem read_item {};
+  Status status = make_random_read_item("LZ1", read_item);
+  assert(status.ok());
+  assert(read_item.device.code == mcprotocol::serial::DeviceCode::LZ);
+  assert(read_item.device.number == 1U);
+  assert(read_item.double_word);
+
+  RandomWriteWordItem write_item {};
+  status = make_random_write_word_item("LZ0", 0x12345678U, write_item);
+  assert(status.ok());
+  assert(write_item.device.code == mcprotocol::serial::DeviceCode::LZ);
+  assert(write_item.device.number == 0U);
+  assert(write_item.double_word);
+}
+
+void test_encode_sm_sd_and_lz_device_codes() {
+  const auto config = make_binary_c4_config();
+
+  {
+    const BatchReadBitsRequest request {
+        .head_device = {.code = mcprotocol::serial::DeviceCode::SM, .number = 100},
+        .points = 1,
+    };
+    std::array<std::uint8_t, 32> request_data {};
+    std::size_t request_data_size = 0;
+    Status status = CommandCodec::encode_batch_read_bits(config, request, request_data, request_data_size);
+    assert(status.ok());
+    const std::array<std::uint8_t, 10> expected {0x01, 0x04, 0x01, 0x00, 0x64, 0x00, 0x00, 0x91, 0x01, 0x00};
+    assert(request_data_size == expected.size());
+    assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+  }
+
+  {
+    const BatchReadWordsRequest request {
+        .head_device = {.code = mcprotocol::serial::DeviceCode::SD, .number = 100},
+        .points = 1,
+    };
+    std::array<std::uint8_t, 32> request_data {};
+    std::size_t request_data_size = 0;
+    Status status = CommandCodec::encode_batch_read_words(config, request, request_data, request_data_size);
+    assert(status.ok());
+    const std::array<std::uint8_t, 10> expected {0x01, 0x04, 0x00, 0x00, 0x64, 0x00, 0x00, 0xA9, 0x01, 0x00};
+    assert(request_data_size == expected.size());
+    assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+  }
+
+  {
+    const std::array<RandomReadItem, 1> items {{
+        {.device = {.code = mcprotocol::serial::DeviceCode::LZ, .number = 10}, .double_word = true},
+    }};
+    const RandomReadRequest request {.items = items};
+    std::array<std::uint8_t, 32> request_data {};
+    std::size_t request_data_size = 0;
+    Status status = CommandCodec::encode_random_read(make_binary_c4_iqr_config(), request, request_data, request_data_size);
+    assert(status.ok());
+    const std::array<std::uint8_t, 14> expected {
+        0x03, 0x04, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x0A, 0x00, 0x00, 0x00, 0x62, 0x00};
+    assert(request_data_size == expected.size());
+    assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+
+    request_data_size = 0;
+    status = CommandCodec::encode_random_read(config, request, request_data, request_data_size);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+  }
 }
 
 void test_encode_batch_write_words_ascii_order() {
@@ -1177,6 +1265,8 @@ int main() {
   test_high_level_make_contiguous_requests();
   test_high_level_protocol_presets();
   test_high_level_make_random_bit_item();
+  test_high_level_make_random_dword_item_defaults();
+  test_encode_sm_sd_and_lz_device_codes();
   test_encode_batch_write_words_ascii_order();
   test_encode_extended_batch_read_words_ascii_matches_manual_shape();
   test_encode_extended_batch_read_words_binary_matches_capture_shape();

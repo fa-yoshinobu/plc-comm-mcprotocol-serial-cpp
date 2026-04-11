@@ -70,7 +70,7 @@ Start with these pages instead of reading the whole repository at once.
 - Real-hardware validation now covers `RJ71C24-R2`, `LJ71C24`, `QJ71C24N`, and `FX5UC-32MT/D`.
 - Contiguous access is validated on all current targets.
 - Random, multi-block, and monitor are validated where the target and `--series` combination supports them.
-- Qualified helper access over `0601/1601` is the practical public `U...` path.
+- Qualified helper access over `0601/1601` is the supported public `U...` path.
 
 For the exact PASS / HOLD matrix and the verified serial settings for each target, see
 [HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md).
@@ -78,7 +78,8 @@ For the exact PASS / HOLD matrix and the verified serial settings for each targe
 ## Current Limits
 
 - Some command families are target-dependent and require the right `--series` selection.
-- Native qualified access remains unresolved or semantically inconsistent on several targets.
+- Native qualified access is not part of the supported library workflow. Keep `U...` access on the
+  helper path only.
 - `FX5UC-32MT/D` has additional target-specific limits around host/module buffer and qualified access.
 - Large contiguous `write-words` and `write-bits` are still split automatically to fit fixed request buffers.
 

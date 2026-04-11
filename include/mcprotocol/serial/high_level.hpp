@@ -31,7 +31,7 @@ struct DeviceParseSpec {
   int base;
 };
 
-constexpr std::array<DeviceParseSpec, 26> kDeviceParseSpecs {{
+constexpr std::array<DeviceParseSpec, 29> kDeviceParseSpecs {{
     {"STS", 3U, DeviceCode::STS, 10},
     {"STC", 3U, DeviceCode::STC, 10},
     {"STN", 3U, DeviceCode::STN, 10},
@@ -43,8 +43,11 @@ constexpr std::array<DeviceParseSpec, 26> kDeviceParseSpecs {{
     {"CN", 2U, DeviceCode::CN, 10},
     {"SB", 2U, DeviceCode::SB, 16},
     {"SW", 2U, DeviceCode::SW, 16},
+    {"SM", 2U, DeviceCode::SM, 10},
+    {"SD", 2U, DeviceCode::SD, 10},
     {"DX", 2U, DeviceCode::DX, 16},
     {"DY", 2U, DeviceCode::DY, 16},
+    {"LZ", 2U, DeviceCode::LZ, 10},
     {"ZR", 2U, DeviceCode::ZR, 16},
     {"X", 1U, DeviceCode::X, 16},
     {"Y", 1U, DeviceCode::Y, 16},
@@ -94,6 +97,15 @@ constexpr std::array<DeviceParseSpec, 26> kDeviceParseSpecs {{
 
   out_value = value;
   return true;
+}
+
+[[nodiscard]] constexpr bool is_double_word_device(DeviceCode code) noexcept {
+  switch (code) {
+    case DeviceCode::LZ:
+      return true;
+    default:
+      return false;
+  }
 }
 
 }  // namespace detail
@@ -258,7 +270,7 @@ constexpr std::array<DeviceParseSpec, 26> kDeviceParseSpecs {{
   }
   out_item = RandomReadItem {
       .device = parsed,
-      .double_word = double_word,
+      .double_word = double_word || detail::is_double_word_device(parsed.code),
   };
   return ok_status();
 }
@@ -277,7 +289,7 @@ constexpr std::array<DeviceParseSpec, 26> kDeviceParseSpecs {{
   out_item = RandomWriteWordItem {
       .device = parsed,
       .value = value,
-      .double_word = double_word,
+      .double_word = double_word || detail::is_double_word_device(parsed.code),
   };
   return ok_status();
 }

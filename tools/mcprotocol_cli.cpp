@@ -127,7 +127,7 @@ struct ProbeTarget {
   DeviceAddress device;
 };
 
-constexpr std::array<DeviceParseSpec, 26> kDeviceParseSpecs {{
+constexpr std::array<DeviceParseSpec, 29> kDeviceParseSpecs {{
     {"STS", DeviceCode::STS, 10},
     {"STC", DeviceCode::STC, 10},
     {"STN", DeviceCode::STN, 10},
@@ -139,8 +139,11 @@ constexpr std::array<DeviceParseSpec, 26> kDeviceParseSpecs {{
     {"CN", DeviceCode::CN, 10},
     {"SB", DeviceCode::SB, 16},
     {"SW", DeviceCode::SW, 16},
+    {"SM", DeviceCode::SM, 10},
+    {"SD", DeviceCode::SD, 10},
     {"DX", DeviceCode::DX, 16},
     {"DY", DeviceCode::DY, 16},
+    {"LZ", DeviceCode::LZ, 10},
     {"ZR", DeviceCode::ZR, 16},
     {"X", DeviceCode::X, 16},
     {"Y", DeviceCode::Y, 16},
@@ -333,7 +336,7 @@ void print_usage() {
       "  recover-c24 sends ASCII EOT CRLF by default; pass cl to send CL CRLF.\n"
       "  Use recover-c24 after timeout or mixed-response states on C24 ASCII links; no reply is expected.\n"
       "  read-qualified-words / write-qualified-words use the practical 0601/1601 helper path.\n"
-      "  read-native-qualified-words / write-native-qualified-words are native probes for unresolved extended-device access.\n"
+      "  read-native-qualified-words / write-native-qualified-words are unsupported diagnostic probes, not a supported workflow.\n"
       "  probe-multi-block defaults to mixed; pass word-only/bit-only or a single block mode to isolate 1406 verification.\n"
       "  probe-monitor read-only sends raw 0802 without client-side monitor registration state.\n"
       "  random-read / random-write-* / probe-random-* / probe-multi-block / probe-monitor expose native probe results directly.\n");
@@ -1067,6 +1070,7 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
     case DeviceCode::Y:
     case DeviceCode::M:
     case DeviceCode::L:
+    case DeviceCode::SM:
     case DeviceCode::F:
     case DeviceCode::V:
     case DeviceCode::B:
@@ -1082,17 +1086,28 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
     case DeviceCode::DY:
       return true;
     case DeviceCode::D:
+    case DeviceCode::SD:
     case DeviceCode::W:
     case DeviceCode::TN:
     case DeviceCode::STN:
     case DeviceCode::CN:
     case DeviceCode::SW:
+    case DeviceCode::LZ:
     case DeviceCode::Z:
     case DeviceCode::R:
     case DeviceCode::ZR:
       return false;
   }
   return false;
+}
+
+[[nodiscard]] constexpr bool is_double_word_device(DeviceCode code) {
+  switch (code) {
+    case DeviceCode::LZ:
+      return true;
+    default:
+      return false;
+  }
 }
 
 [[nodiscard]] bool parse_word_write_arg(std::string_view text, RandomWriteWordItem& out_item) {
@@ -1108,7 +1123,7 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
   }
   out_item.device = device;
   out_item.value = value;
-  out_item.double_word = false;
+  out_item.double_word = is_double_word_device(device.code);
   return true;
 }
 
@@ -3963,7 +3978,7 @@ int main(int argc, char** argv) {
         }
         items[static_cast<std::size_t>(index)] = RandomReadItem {
             .device = device,
-            .double_word = false,
+            .double_word = is_double_word_device(device.code),
         };
       }
 

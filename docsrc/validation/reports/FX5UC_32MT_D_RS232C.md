@@ -24,7 +24,7 @@ This page is the single report for this hardware target.
 | Native `0406/1406` | pass | capture-driven fixes made both pass |
 | Native `0801/0802` | not applicable / unsupported | FX5 serial `3C/4C` command list does not include `0801/0802`; probes returned `0x7E40` |
 | Host/module buffer | not applicable / unresolved | probes returned `0x7E40` |
-| Qualified helper/native access | not applicable / unresolved | helper `U3E0\\G10` / `U3E0\\HG20` returned `0x7E40`; native `U3E0\\G10` returned `0x7E43` |
+| Qualified helper/native access | not applicable / unsupported | helper `U3E0\\G10` / `U3E0\\HG20` returned `0x7E40`; native `U3E0\\G10` returned `0x7E43` |
 | `DX/DY` | inaccessible on this path | observed `0x7E43`; FX5 serial `3C/4C` accessible-device table marks them inaccessible |
 | `V/ZR` | not applicable on this path | FX5 serial `3C/4C` accessible-device table marks them inaccessible |
 

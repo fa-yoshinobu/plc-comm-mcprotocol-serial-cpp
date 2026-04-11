@@ -13,8 +13,8 @@ docs focused on known-good workflows and keep this page for unresolved native be
   validated real-hardware setups instead of known-good workflows.
 - Treat `read-qualified-words` / `write-qualified-words` over `0601/1601` as the practical public
   path for `U...\\G...` / `U...\\HG...` access on the current setup.
-- Keep native qualified commands separate from helper qualified commands in docs, validation logs,
-  and future probe notes.
+- Treat native qualified commands as unsupported diagnostic probes, not as a supported `U...`
+  access path.
 
 ## Active Backlog
 
@@ -34,9 +34,10 @@ Shared native-family holds across the currently validated targets:
 
 Target-specific remaining items:
 
-- `RJ71C24-R2` native qualified access is still unresolved and semantically inconsistent with helper results
-- `LJ71C24` and `QJ71C24N` still hold on native `U3E0\\G...`; native `HG` is not applicable outside iQ-R
-- `FX5UC-32MT/D` still holds on host/module buffer and helper/native qualified access
+- `RJ71C24-R2 + R08CPU / Format5 Binary / --series iqr` still rejects native `LZ` double-word
+  random-read probes with `0x7F23`; local support now treats `LZ` as an iQ-R-only double-word
+  device and rejects Q/L-mode requests before transmit
+- `FX5UC-32MT/D` still holds on host/module buffer access
 
 Resolved enough to remove from the active hold list:
 
@@ -66,28 +67,11 @@ If only `FX5UC-32MT/D` is available:
 
 - treat `0406/1406` as resolved on that target unless a regression appears
 - treat `0403` and `1402` as resolved on that target unless a regression appears
-- do not spend more probe time on FX5U helper/native qualified access until a concrete shape change is identified
+- do not spend more probe time on FX5U host/module buffer access until a concrete shape change is identified
 
 If `RJ71C24-R2`, `LJ71C24`, or `QJ71C24N` become available again:
 
 - re-run native `0406/1406` with the corrected binary encoder
-- re-run the qualified-access probes after the same binary fixes, but keep helper and native results separate
-
-Qualified-device follow-up:
-
-- Helper path over `0601/1601`: usable, but current validated evidence is narrow
-- `U3E0\\HG20` helper single-word read/write/restore: pass
-- `U3E0\\G10` helper spot recheck on `2026-04-11`: `0x83BD`
-- Native extended-device path over `0401/1401 + 0080/0082`: hold
-- `read-native-qualified-words 'U3E0\\G10' 1 --series iqr`: mixed `0x7F22` / timeout across retries
-- `read-native-qualified-words 'U3E0\\HG20' 1 --series iqr`: `0x7F22`
-- `write-native-qualified-words 'U3E0\\HG20' 0x1234 --series iqr`: timeout
-- `2026-04-11` Format5/Binary spot recheck: helper `U3E0\\G10=0x83BD`, helper `U3E0\\HG20=0x0000`, native `U3E0\\G10=0x0000`, native `U3E0\\HG20=0x4031`
-- `2026-04-11` `LJ71C24 + L26CPU-BT + --series ql`: helper `U3E0\\G10=0x0000`, helper `U3E0\\HG20` read/write/restore passed, native `U3E0\\G10` read/write returned `0x4030`, native `HG` path was not applicable outside iQ-R
-- `2026-04-11` `FX5UC-32MT/D + --series ql`: helper `U3E0\\G10` and `U3E0\\HG20` returned `0x7E40`, native `U3E0\\G10` read/write returned `0x7E43`, native `HG` path was not applicable outside iQ-R
-- `2026-04-11` `FX5UC-32MT/D + --series ql`: monitor family remained native ng as a family; `0801` register and raw `0802` read-only both returned `0x7E40`
-- `2026-04-11` Format5/Binary status-word recheck: helper-visible `U3E0\\G599`, `U3E0\\G600`, and `U3E0\\G31998..32003` stayed `0x0000` even after native `0x7F23` and `0x4031` probes
-- No validated native qualified write effect yet
 - `2026-04-11` captured binary `0406` traffic matched the MC manual's binary `0406` layout with
   one-byte `word block count` and one-byte `bit block count`; the repository had been encoding
   those fields as two-byte little-endian words
@@ -138,12 +122,6 @@ Qualified-device follow-up:
   appears. The FX5 communication manual's `3C/4C` command list includes `0403`, `1402`, `0406`,
   and `1406`, but does not list `0801/0802`; `2026-04-11` hardware rechecks returned `0x7E40` on
   both `0801` and raw `0802`.
-- Do not treat a native qualified success code as proof of semantic correctness. On `2026-04-11`
-  under `Format5 / Binary / 28800 / 8E2 / sum-check on`, native `U3E0\\G10` returned `0x0000`
-  while the helper path still returned `0x83BD`.
-- Do not assume the helper-visible C24 status words will capture these native failures. On
-  `2026-04-11`, helper reads of `U3E0\\G599`, `U3E0\\G600`, and `U3E0\\G31998..32003` stayed
-  zero after native `0x7F23` and `0x4031` probes.
 - When C24 ASCII communication times out or returns mixed fragments, send ASCII `EOT CRLF` or
   `CL CRLF` before the next probe to reinitialize the transmission sequence. Treat this as
   transport recovery only, not as evidence that the native command family works.

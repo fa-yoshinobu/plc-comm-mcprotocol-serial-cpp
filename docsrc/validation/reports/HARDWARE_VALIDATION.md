@@ -53,7 +53,7 @@ Validated target:
 | Module buffer read | `0601` | native pass | validated up to `1920` bytes |
 | Module buffer write | `1601` | native pass | real-hardware verify and restore completed |
 | Qualified helper read/write | `read-qualified-words` / `write-qualified-words` over `0601/1601` | helper pass, narrow scope | recommended public path on this setup; `U3E0\\HG20` single-word read/write/restore passed; `2026-04-11` spot recheck `U3E0\\G10=0x83BD` |
-| Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | hold | mixed results across retries; `U3E0\\G10` produced both `0x7F22` and timeout, `U3E0\\HG20` native read returned `0x7F22`, and native `U3E0\\HG20` write timed out; no validated native write effect |
+| Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | unsupported / diagnostic only | helper-only is the supported specification on this target; historical native probes produced `0x7F22`, timeout, `0x4031`, and semantically mismatched success |
 | Random read | native `0403` | native pass | `2026-04-11` focused recheck passed natively under `--series ql`; `--series iqr` still failed with `0x7F23` |
 | Random write words | native `1402` | native pass | `2026-04-11` focused recheck passed natively under `--series ql`; `--series iqr` still failed with `0x7F23` |
 | Random write bits | native `1402` | native pass | `2026-04-11` focused recheck passed natively under `--series ql`; `--series iqr` still failed with `0x7F23` |
@@ -79,7 +79,7 @@ Additional validated target:
 | Host buffer write | `1613` | native ng / not applicable | backup read failed with `0x7E40` |
 | Module buffer read/write | `0601/1601` | native ng / not applicable | `probe-module-buffer` and `probe-write-module-buffer` returned `0x7E40` |
 | Qualified helper read/write | `read-qualified-words` / `write-qualified-words` over `0601/1601` | helper ng / not applicable | helper `U3E0\\G10` and `U3E0\\HG20` returned `0x7E40` |
-| Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | native ng / not applicable | native `U3E0\\G10` returned `0x7E43`; native `HG` path is not applicable under `--series ql` |
+| Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | unsupported / not applicable | native `U3E0\\G10` returned `0x7E43`; native `HG` path is not applicable under `--series ql` |
 | Random read | native `0403` | native pass | `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` focused rechecks passed under `--series ql`; `RJ71C24-R2 --series iqr` still failed and should be treated as a false-negative probe mode. `FX5UC-32MT/D`: after switching non-iQ-R binary word/dword counts from two-byte fields to the one-byte Q/L-era layout used in the binary manual examples, focused single/dense/sparse word/bit probes passed natively |
 | Random write words | native `1402` | native pass | `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` focused rechecks passed under `--series ql`; `RJ71C24-R2 --series iqr` still failed and should be treated as a false-negative probe mode. `FX5UC-32MT/D`: the same non-iQ-R binary one-byte word/dword count fix made focused single/dense/sparse `D100` probes pass natively with restore |
 | Random write bits | native `1402` | native pass | `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` focused rechecks passed under `--series ql`; `RJ71C24-R2 --series iqr` still failed and should be treated as a false-negative probe mode. `FX5UC-32MT/D`: after the binary one-byte count fix from the page `108` example plus unrelated captured binary traffic, a second FX5U recheck isolated pair-swapped bit-address parity inside each two-point unit; correcting that made focused single/dense/sparse `M100..M115` probes pass natively |
@@ -104,7 +104,7 @@ Additional validated target:
 | Host buffer write | `1613` | hold | `probe-write-host-buffer` wrote but verify mismatched at start `0` |
 | Module buffer read/write | `0601/1601` | native pass | `probe-module-buffer` and `probe-write-module-buffer` passed |
 | Qualified helper read/write | `read-qualified-words` / `write-qualified-words` over `0601/1601` | helper pass, narrow scope | helper `U3E0\\G10=0x0000`; helper `U3E0\\HG20` read/write/restore passed |
-| Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | hold / not applicable | native `U3E0\\G10` returned `0x4030`; native `HG` path is not applicable under `--series ql` |
+| Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | unsupported / not applicable | helper-only is the supported specification on this target; native `U3E0\\G10` returned `0x4030`; native `HG` path is not applicable under `--series ql` |
 | Random read | native `0403` | native pass | focused `single/dense/sparse` rechecks passed under `--series ql` |
 | Random write words | native `1402` | native pass | focused `single/dense/sparse` rechecks passed under `--series ql` with restore |
 | Random write bits | native `1402` | native pass | focused `single/dense/sparse` rechecks passed under `--series ql` with restore |
@@ -129,7 +129,7 @@ Additional validated target:
 | Host buffer write | `1613` | hold | `probe-write-host-buffer` wrote but verify mismatched at start `0` |
 | Module buffer read/write | `0601/1601` | native pass | `probe-module-buffer` and `probe-write-module-buffer` passed |
 | Qualified helper read/write | `read-qualified-words` / `write-qualified-words` over `0601/1601` | helper pass, narrow scope | helper `U3E0\\G10=0x1000`; helper `U3E0\\HG20` read/write/restore passed |
-| Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | hold / not applicable | native `U3E0\\G10` returned `0x4030`; native `HG` path is not applicable under `--series ql` |
+| Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | unsupported / not applicable | helper-only is the supported specification on this target; native `U3E0\\G10` returned `0x4030`; native `HG` path is not applicable under `--series ql` |
 | Random read | native `0403` | native pass | focused `single/dense/sparse` rechecks passed under `--series ql` |
 | Random write words | native `1402` | native pass | focused `single/dense/sparse` rechecks passed under `--series ql` with restore |
 | Random write bits | native `1402` | native pass | focused `single/dense/sparse` rechecks passed under `--series ql` with restore |
@@ -156,9 +156,14 @@ Additional validated target:
 
 Target-specific holds:
 
-- native qualified extended-device access on `RJ71C24-R2`
-- native `U3E0\\G...` on `LJ71C24` and `QJ71C24N`
-- host/module buffer and helper/native qualified access on `FX5UC-32MT/D`
+- native `LZ` double-word random-read on `RJ71C24-R2 + R08CPU / Format5 Binary / --series iqr`
+  (`random-read LZ0`, `LZ1`, and `LZ0 LZ1` returned `0x7F23` on `2026-04-11`; local support now
+  treats `LZ` as an iQ-R-only double-word device and rejects Q/L-mode requests before transmit)
+- host/module buffer access on `FX5UC-32MT/D`
+
+Unsupported / diagnostic-only items:
+
+- native qualified access is helper-only by specification and is not tracked as an active hold
 
 ## Maintainer Note
 
@@ -170,4 +175,5 @@ The library now pins native request-data shapes for `0403`, `1402`, `0406`, `140
 - `RJ71C24-R2 --series iqr` remains useful as a probe mode, but it produces false negatives for random and monitor traffic on that target
 - `FX5UC-32MT/D` now passes native `0403`, `1402`, `0406`, and `1406` after the documented host-side compatibility fixes
 - the FX5 communication manual's serial `3C/4C` command list does not include `0801/0802`, so that target's repeated `0x7E40` monitor result should be treated as unsupported behavior rather than an unresolved encoder bug
-- qualified helper commands and native qualified probes should stay documented as separate paths
+- qualified helper commands and native qualified probes should stay documented as separate paths, with
+  native qualified marked unsupported by specification

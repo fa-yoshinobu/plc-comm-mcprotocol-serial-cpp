@@ -29,15 +29,17 @@ struct DeviceSpec {
   bool bit_device;
 };
 
-constexpr std::array<DeviceSpec, 28> kDeviceSpecs {{
+constexpr std::array<DeviceSpec, 31> kDeviceSpecs {{
     {DeviceCode::X, "X", "X", 0x9C, 0x009C, true, true},
     {DeviceCode::Y, "Y", "Y", 0x9D, 0x009D, true, true},
     {DeviceCode::M, "M", "M", 0x90, 0x0090, false, true},
     {DeviceCode::L, "L", "L", 0x92, 0x0092, false, true},
+    {DeviceCode::SM, "SM", "SM", 0x91, 0x0091, false, true},
     {DeviceCode::F, "F", "F", 0x93, 0x0093, false, true},
     {DeviceCode::V, "V", "V", 0x94, 0x0094, false, true},
     {DeviceCode::B, "B", "B", 0xA0, 0x00A0, true, true},
     {DeviceCode::D, "D", "D", 0xA8, 0x00A8, false, false},
+    {DeviceCode::SD, "SD", "SD", 0xA9, 0x00A9, false, false},
     {DeviceCode::W, "W", "W", 0xB4, 0x00B4, true, false},
     {DeviceCode::TS, "TS", "TS", 0xC1, 0x00C1, false, true},
     {DeviceCode::TC, "TC", "TC", 0xC0, 0x00C0, false, true},
@@ -53,6 +55,7 @@ constexpr std::array<DeviceSpec, 28> kDeviceSpecs {{
     {DeviceCode::S, "S", "S", 0x98, 0x0098, false, true},
     {DeviceCode::DX, "DX", "DX", 0xA2, 0x00A2, true, true},
     {DeviceCode::DY, "DY", "DY", 0xA3, 0x00A3, true, true},
+    {DeviceCode::LZ, "LZ", "LZ", 0x62, 0x0062, false, false},
     {DeviceCode::Z, "Z", "Z", 0xCC, 0x00CC, false, false},
     {DeviceCode::R, "R", "R", 0xAF, 0x00AF, false, false},
     {DeviceCode::ZR, "ZR", "ZR", 0xB0, 0x00B0, true, false},
@@ -866,6 +869,74 @@ class ByteWriter {
   return ok_status();
 }
 
+[[nodiscard]] constexpr bool is_double_word_device_code(DeviceCode code) noexcept {
+  switch (code) {
+    case DeviceCode::LZ:
+      return true;
+    default:
+      return false;
+  }
+}
+
+[[nodiscard]] constexpr bool is_iq_r_only_device_code(DeviceCode code) noexcept {
+  switch (code) {
+    case DeviceCode::LZ:
+      return true;
+    default:
+      return false;
+  }
+}
+
+[[nodiscard]] Status validate_word_device(const ProtocolConfig& config, const DeviceAddress& device, const char* message)
+    noexcept {
+  const DeviceSpec* spec = find_device_spec(device.code);
+  if (spec == nullptr || is_double_word_device_code(device.code)) {
+    return invalid_argument(message);
+  }
+  if (is_iq_r_only_device_code(device.code) && !is_iq_r_series(config)) {
+    return invalid_argument(message);
+  }
+  return ok_status();
+}
+
+[[nodiscard]] Status validate_random_read_item_device(
+    const ProtocolConfig& config,
+    const RandomReadItem& item,
+    const char* word_message,
+    const char* dword_message) noexcept {
+  const DeviceSpec* spec = find_device_spec(item.device.code);
+  if (spec == nullptr) {
+    return invalid_argument(item.double_word ? dword_message : word_message);
+  }
+  if (is_double_word_device_code(item.device.code) != item.double_word &&
+      is_double_word_device_code(item.device.code)) {
+    return invalid_argument(item.double_word ? dword_message : word_message);
+  }
+  if (is_iq_r_only_device_code(item.device.code) && !is_iq_r_series(config)) {
+    return invalid_argument(item.double_word ? dword_message : word_message);
+  }
+  return ok_status();
+}
+
+[[nodiscard]] Status validate_random_write_word_item_device(
+    const ProtocolConfig& config,
+    const RandomWriteWordItem& item,
+    const char* word_message,
+    const char* dword_message) noexcept {
+  const DeviceSpec* spec = find_device_spec(item.device.code);
+  if (spec == nullptr) {
+    return invalid_argument(item.double_word ? dword_message : word_message);
+  }
+  if (is_double_word_device_code(item.device.code) != item.double_word &&
+      is_double_word_device_code(item.device.code)) {
+    return invalid_argument(item.double_word ? dword_message : word_message);
+  }
+  if (is_iq_r_only_device_code(item.device.code) && !is_iq_r_series(config)) {
+    return invalid_argument(item.double_word ? dword_message : word_message);
+  }
+  return ok_status();
+}
+
 [[nodiscard]] Status validate_request_data_size(
     const ProtocolConfig& config,
     std::span<const std::uint8_t> request_data) noexcept {
@@ -1589,6 +1660,11 @@ Status encode_batch_read_words(
     const BatchReadWordsRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status word_status =
+      validate_word_device(config, request.head_device, "Batch read words requires a word device");
+  if (!word_status.ok()) {
+    return word_status;
+  }
   if (request.points == 0U || request.points > kMaxBatchWordPoints) {
     return invalid_argument("Batch read words points must be in range 1..960");
   }
@@ -1722,6 +1798,11 @@ Status encode_batch_write_words(
     const BatchWriteWordsRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status word_status =
+      validate_word_device(config, request.head_device, "Batch write words requires a word device");
+  if (!word_status.ok()) {
+    return word_status;
+  }
   const std::size_t max_points = batch_write_words_point_limit_for_buffer(config);
   if (request.words.empty() || request.words.size() > max_points) {
     return invalid_argument("Batch write words count exceeds supported range for the current buffer/configuration");
@@ -1804,6 +1885,14 @@ Status encode_random_read(
   std::uint16_t word_count = 0;
   std::uint16_t dword_count = 0;
   for (const RandomReadItem& item : request.items) {
+    const Status item_status = validate_random_read_item_device(
+        config,
+        item,
+        "Random read item must be a supported word device",
+        "Random read item must be a supported double-word device");
+    if (!item_status.ok()) {
+      return item_status;
+    }
     item.double_word ? ++dword_count : ++word_count;
   }
 
@@ -1931,6 +2020,14 @@ Status encode_random_write_words(
   std::uint16_t word_count = 0;
   std::uint16_t dword_count = 0;
   for (const RandomWriteWordItem& item : items) {
+    const Status item_status = validate_random_write_word_item_device(
+        config,
+        item,
+        "Random write item must be a supported word device",
+        "Random write item must be a supported double-word device");
+    if (!item_status.ok()) {
+      return item_status;
+    }
     item.double_word ? ++dword_count : ++word_count;
   }
   const std::uint16_t weighted_limit = word_subcommand(config) == 0x0000U ? 1920U : 960U;

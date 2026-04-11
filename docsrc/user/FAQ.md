@@ -24,10 +24,10 @@ Because support is target-dependent.
 - `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` pass native random / multi-block / monitor traffic under `--series ql`
 - `FX5UC-32MT/D` passes native random / multi-block traffic under `--series ql`
 - `FX5UC-32MT/D` monitor `0801/0802` is treated as unsupported on serial `3C/4C`
-- native qualified access is still unresolved or target-limited
+- native qualified access is not a supported workflow
 
 For practical qualified-device access, use `read-qualified-words` / `write-qualified-words` where
-the helper path is validated.
+the helper path is validated. Treat native qualified commands as diagnostic probes only.
 
 ## Can I shrink memory usage for small firmware builds?
 
