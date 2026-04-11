@@ -24,25 +24,55 @@ Validated setup:
 - `LJ71C24 / RS-232C / 28800 / 8E2 / MC Protocol Format5 Binary / sum-check on / station 0 / L26CPU-BT / --series ql`
 - `FX5UC-32MT/D / RS-232C / 38400 / 8E2 / MC Protocol Format5 Binary / sum-check on / station 0 / --series ql`
 
-Unresolved native command families:
+### Remaining Snapshot
 
-- `0403` random read: native ng, PLC end code `0x7F22`, unchanged after `2026-04-11` `--series iqr` recheck (`0403 0002`)
-- `2026-04-11` `FX5UC-32MT/D` focused recheck: both `random-read D100 D105` and
-  `random-read M100 M105` still returned `0x7F23`; additional single-item `random-read D100` and
-  `random-read M100` rechecks also returned `0x7F23`
-- `1402` random write words: native ng, PLC end code `0x7F22`, unchanged after `2026-04-11` `--series iqr` recheck (`1402 0002`)
-- `2026-04-11` `FX5UC-32MT/D` focused recheck: `random-write-words D100=1`,
-  `random-write-words D100=1 D101=2`, and `random-write-words D100=1 D105=2` all returned
-  `0x7F23`
-- `1402` random write bits: native ng, PLC end code `0x7F23`
-- `2026-04-11` `FX5UC-32MT/D` focused recheck: native `random-write-bits` still returned `0x7F23`
-  for single-item `M100=1`, dense `M100..M115`, and sparse `M100/M105/M110/M115` cases even
-  though the same `M100..M115` alternating pattern passed under contiguous `1401`
-- `0406` multi-block read: native ng on the validated `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N`
-  setups; `FX5UC-32MT/D` moved to native pass after the `2026-04-11` binary count-width fix
-- `1406` multi-block write: native ng on `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N`; `FX5UC-32MT/D`
-  moved to native pass after the `2026-04-11` binary count-width and bit-block pair-order fixes
-- `0801/0802` monitor register/read: native ng / hold, `0801` currently `0x7F22`, unchanged after `2026-04-11` `--series iqr` recheck (`0801 0002`)
+Shared native-family holds across the currently validated targets:
+
+- `0403` random read
+  - `RJ71C24-R2 + R08CPU + --series iqr`: `0x7F22`
+  - `LJ71C24 + L26CPU-BT + --series ql`: `0x7F23`
+  - `QJ71C24N + Q06UDVCPU + --series ql`: `0x7F23`
+  - `FX5UC-32MT/D + --series ql`: `0x7F23` on both single-item and multi-item word/bit probes
+- `1402` random write words
+  - `RJ71C24-R2 + R08CPU + --series iqr`: `0x7F22`
+  - `LJ71C24 + L26CPU-BT + --series ql`: `0x7F23`
+  - `QJ71C24N + Q06UDVCPU + --series ql`: `0x7F23`
+  - `FX5UC-32MT/D + --series ql`: `0x7F23` on single-item, dense, and sparse `D100` probes
+- `1402` random write bits
+  - `RJ71C24-R2 + R08CPU + --series iqr`: `0x7F23`
+  - `LJ71C24 + L26CPU-BT + --series ql`: `0x7F23`
+  - `QJ71C24N + Q06UDVCPU + --series ql`: `0x7F23`
+  - `FX5UC-32MT/D + --series ql`: `0x7F23` on `M`, `Y`, and `B`, including single-item, dense, and sparse probes
+- `0801/0802` monitor register/read
+  - `RJ71C24-R2 + R08CPU + --series iqr`: `0801=0x7F22`
+  - `LJ71C24 + L26CPU-BT + --series ql`: `0801=0x7F23`
+  - `QJ71C24N + Q06UDVCPU + --series ql`: `0801=0x7F23`
+  - `FX5UC-32MT/D + --series ql`: `0801=0x7E40`, raw `0802=0x7E40`
+
+Target-specific remaining items:
+
+- `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` still hold on native `0406/1406`
+- `RJ71C24-R2` native qualified access is still unresolved and semantically inconsistent with helper results
+- `LJ71C24` and `QJ71C24N` still hold on native `U3E0\\G...`; native `HG` is not applicable outside iQ-R
+- `FX5UC-32MT/D` still holds on host/module buffer, helper qualified, native qualified, and contiguous `DX`, `DY`, `ZR`, `V`
+
+Resolved enough to remove from the active hold list:
+
+- `FX5UC-32MT/D` native `0406` moved to pass after the binary one-byte block-count fix
+- `FX5UC-32MT/D` native `1406` moved to pass after the binary one-byte block-count fix plus bit-block two-bit-pair reversal
+
+### Next Actions
+
+If only `FX5UC-32MT/D` is available:
+
+- keep focused follow-up on `0403`, `1402`, and `0801/0802`
+- treat `0406/1406` as resolved on that target unless a regression appears
+- do not spend more probe time on FX5U helper/native qualified access until a concrete shape change is identified
+
+If `RJ71C24-R2`, `LJ71C24`, or `QJ71C24N` become available again:
+
+- re-run native `0406/1406` with the corrected binary encoder
+- re-run the qualified-access probes after the same binary fixes, but keep helper and native results separate
 
 Qualified-device follow-up:
 
@@ -97,6 +127,9 @@ Qualified-device follow-up:
   proved otherwise. On `2026-04-11`, the binary request shape was pinned against the manual example
   and an FX5U focused probe still returned `0x7F23` on the same `M100..M115` pattern that passed
   under contiguous `1401`.
+- Treat native `0801/0802` monitor as a family-level hold on FX5U until proved otherwise. On
+  `2026-04-11`, `probe-monitor` returned `0x7E40` on `0801` and `probe-monitor read-only` returned
+  the same `0x7E40` on raw `0802`.
 - Do not treat a native qualified success code as proof of semantic correctness. On `2026-04-11`
   under `Format5 / Binary / 28800 / 8E2 / sum-check on`, native `U3E0\\G10` returned `0x0000`
   while the helper path still returned `0x83BD`.

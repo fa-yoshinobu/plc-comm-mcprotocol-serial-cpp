@@ -156,12 +156,19 @@ Additional validated target:
 
 ## Current HOLD Items
 
+Shared family-level holds:
+
 - native `0403`
-- native `1402`
-- native `0406`
-- native `1406`
+- native `1402` words
+- native `1402` bits
 - native `0801/0802`
-- native qualified extended-device access
+
+Target-specific holds:
+
+- native `0406/1406` on `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N`
+- native qualified extended-device access on `RJ71C24-R2`
+- native `U3E0\\G...` on `LJ71C24` and `QJ71C24N`
+- host/module buffer, helper-qualified, native-qualified, and contiguous `DX/DY/ZR/V` on `FX5UC-32MT/D`
 
 ## Maintainer Note
 
