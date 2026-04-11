@@ -5,6 +5,11 @@ Date: `2026-04-11`
 Audience: maintainers validating the `FX5UC-32MT/D` path under the later `Format5 / Binary`
 settings.
 
+Current-status note:
+
+- use [HARDWARE_VALIDATION.md](HARDWARE_VALIDATION.md) for the canonical current summary
+- keep this page as the dated evidence log that explains how the current FX5U conclusions were reached
+
 ## Target Setup
 
 - PLC CPU: Mitsubishi iQ-F `FX5UC-32MT/D`
@@ -34,10 +39,10 @@ Interpretation:
 | Category | Status |
 |---|---|
 | link bootstrap | `cpu-model` passed with `FX5UC-32MT/D`, `0x4A91` |
-| supported-device screening | `21/25` targets passed under `--series ql`; `DX10`, `DY10`, `ZR10`, and `V100` failed with `0x7E43` twice |
+| supported-device screening | validated `21`-target subset passed under `--series ql`; `DX10` and `DY10` returned `0x7E43`, while `ZR10` and `V100` are now treated as not applicable on this FX target |
 | supported-device soak | two `180` second runs passed with no protocol errors on the screened `21` target subset |
 | native random read/write | `0403`, `1402 words`, and focused `1402 bit` `M` probes now pass natively on this target after the non-iQ-R binary count-width fixes; `1402 bit` additionally needed pair-swapped bit-address correction |
-| native monitor / multi-block | both `0801` and raw `0802` returned `0x7E40`; after the binary count-width and bit-block packing fixes, both `0406` and `1406` passed |
+| native monitor / multi-block | `0406/1406` passed after the binary fixes; `0801/0802` stayed `0x7E40` and are now treated as unsupported on FX5U serial `3C/4C` |
 | host / module buffer | helper and native buffer probes returned `0x7E40` |
 | qualified access | helper `U3E0\\G10` / `U3E0\\HG20` returned `0x7E40`; native `U3E0\\G10` returned `0x7E43`; native `HG` path is not applicable under `--series ql` |
 
@@ -45,21 +50,27 @@ Interpretation:
 
 Observed result:
 
-- `ok=21 fail=4`
+- validated `21`-target subset:
+  `STS10`, `STC10`, `STN10`, `TS10`, `TC10`, `TN10`, `CS10`, `CC10`, `CN10`, `SB10`, `SW10`,
+  `X10`, `Y10`, `M100`, `L100`, `F100`, `B10`, `D100`, `W10`, `Z10`, `R100`
+- exploratory probes outside that subset:
+  `DX10`, `DY10`, `ZR10`, `V100`
 - passing non-low-address targets:
   `STS10`, `STC10`, `STN10`, `TS10`, `TC10`, `TN10`, `CS10`, `CC10`, `CN10`, `SB10`, `SW10`,
   `X10`, `Y10`, `M100`, `L100`, `F100`, `B10`, `D100`, `W10`, `Z10`, `R100`
-- failing targets:
-  `DX10`, `DY10`, `ZR10`, `V100`
-- failing targets all returned PLC error `0x7E43`
-- read-only recheck on the same date:
-  `read-bits DX10 1`, `read-bits DY10 1`, `read-words ZR10 1`, and `read-bits V100 1` all again
-  returned `0x7E43`
+- `DX10` and `DY10` both returned PLC error `0x7E43`
+- the historical `ZR10` and `V100` exploratory probes also returned `0x7E43`, but the FX5
+  communication manual's `3C/4C frame` accessible-device table marks `V` and `ZR` as inaccessible,
+  so they are treated as not applicable on `FX5UC-32MT/D`
 
 Interpretation:
 
 - contiguous access is usable on this target, but the supported device subset is narrower than the
   `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` sets
+- keep `ZR` and `V` out of the FX5U contiguous subset; the FX5 communication manual marks them as
+  inaccessible on serial `3C/4C`
+- `DX` and `DY` also stay out of the validated subset; the same FX manual marks them inaccessible
+  on serial `3C/4C`, which matches the observed `0x7E43`
 - the FX5U soak should stay on the screened `21` target subset unless more device families are
   revalidated
 
@@ -88,7 +99,7 @@ Interpretation:
 
 Observed result:
 
-- TAK capture in `cap/write.txt` showed `0406` binary requests with one-byte `word block count` and
+- captured binary `0406` traffic showed requests with one-byte `word block count` and
   one-byte `bit block count`
 - the repository previously encoded those binary count fields as little-endian words
 - after switching binary `0406/1406` to one-byte block counts and adding codec tests, FX5U
@@ -145,7 +156,7 @@ Observed result:
   - `probe-random-read: word-single=native word-dense=native word-sparse=native bit-single=native bit-dense=native bit-sparse=native`
   - `probe-random-write-words: contiguous=contiguous single=native dense=native sparse=native restore=ok`
 - `1402 random-write-bits`: originally `0x7F23`; after the binary one-byte count fix from page
-  `108` plus unrelated `pak4`, native writes reached success-end-code but still read back as
+  `108` plus unrelated captured binary traffic, native writes reached success-end-code but still read back as
   `verify-mismatch`; a second FX5U-focused recheck then showed the remaining issue was pair-swapped
   bit-address parity inside each two-point unit
 - post-read after both `1402` probes still showed no write effect at `D300..D305` and `M300..M305`
@@ -185,16 +196,16 @@ Interpretation:
   bugs; on FX5U, switching those counts from two-byte fields to the one-byte Q/L-era layout made
   both `probe-random-read` and `probe-random-write-words` pass natively
 - the old binary `1402 bit` count width was a host-side compatibility bug for Q/L-era binary
-  frames; the manual example on page `108` and the unrelated `pak4` capture both use a one-byte
+  frames; the manual example on page `108` and unrelated captured binary traffic both use a one-byte
   bit-access count
 - after correcting that count field, FX5U no longer rejected native `1402 bit` immediately; the
   remaining mismatch was pair-swapped bit-address parity inside each two-point unit
 - after correcting that pair swap in the local encoder, native `1402 bit` passed on FX5U for
   single-item, dense, and sparse probes with restore
-- FX5U therefore no longer has unresolved native random-read or random-write families; its
-  remaining native-family hold is `0801/0802`
-- monitor failures still do not match the `LJ71C24` and `QJ71C24N` end-code mix exactly, so this
-  target should stay documented separately
+- FX5U therefore no longer has unresolved native random-read or random-write families
+- the FX5 communication manual's serial `3C/4C` command list includes `0403`, `1402`, `0406`, and
+  `1406`, but does not list `0801/0802`; treat the repeated `0x7E40` monitor result as
+  target-level unsupported behavior rather than an unresolved host-side encoder bug
 
 ## Buffer and Qualified Access
 
@@ -215,3 +226,26 @@ Interpretation:
 - on this target, the helper `U...` path is not a usable substitute for native qualified access
 - buffer and qualified probes should stay treated as not applicable or unresolved on FX5U until a
   dedicated implementation path is validated
+
+## FX Manual Re-read
+
+Observed result from the FX5 communication manual:
+
+- FX5 serial ports support MC protocol `1C` and QnA-compatible `3C/4C` frames
+- the `3C/4C` command list explicitly includes:
+  - `0403`
+  - `1402`
+  - `0406`
+  - `1406`
+- the same `3C/4C` command list does not list `0801/0802`
+- the `3C/4C` accessible-device table marks `DX`, `DY`, `V`, and `ZR` as inaccessible on this
+  target class
+
+Interpretation:
+
+- `0403`, `1402`, `0406`, and `1406` are now aligned with both the manual and the corrected local
+  encoder
+- `0801/0802` should no longer be described as a generic unresolved native family on FX5U; they
+  are unsupported for this serial `3C/4C` target unless contrary hardware evidence appears
+- `DX`, `DY`, `V`, and `ZR` should be treated as not applicable on this FX target rather than as
+  candidates for additional contiguous soak screening

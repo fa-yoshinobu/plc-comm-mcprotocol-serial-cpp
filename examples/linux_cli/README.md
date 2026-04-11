@@ -17,7 +17,9 @@ Scripts:
 - [fx5u_supported_device_rw_soak.sh](fx5u_supported_device_rw_soak.sh)
   - wraps `supported_device_rw_soak.sh` with the screened FX5U target subset
   - defaults to `38400 / 8E2 / c4-binary / sum-check on / --series ql`
-  - excludes `DX10`, `DY10`, `ZR10`, and `V100`, which returned `0x7E43` on `2026-04-11`
+  - keeps the validated `21`-target FX5U subset
+  - omits `ZR10` and `V100`, which are treated as not applicable on this FX target
+  - excludes `DX10` and `DY10`, which returned `0x7E43` on `2026-04-11`
 
 Default communication settings match the validated setup:
 

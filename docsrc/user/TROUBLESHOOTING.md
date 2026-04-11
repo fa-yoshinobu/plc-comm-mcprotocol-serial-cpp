@@ -77,7 +77,8 @@ On the `2026-04-11` FX5U validation target:
 
 - `--series iqr` caused contiguous `D100` / `M100` reads to fail with `0x7E40`
 - `--series ql` was the practical setting
-- `DX10`, `DY10`, `ZR10`, and `V100` still failed with `0x7E43` even under `--series ql`
+- the FX5 communication manual's serial `3C/4C` accessible-device table marks `DX`, `DY`, `V`, and `ZR` inaccessible on this target class
+- `DX0`, `DX1`, `DY0`, `DY1`, `DX10`, and `DY10` all returned `0x7E43` under `--series ql`
 - host-buffer, module-buffer, and `U3E0\\...` qualified probes also returned `0x7E40` or `0x7E43`
 
 If you are trying to reproduce the validated FX5U contiguous soak, use:

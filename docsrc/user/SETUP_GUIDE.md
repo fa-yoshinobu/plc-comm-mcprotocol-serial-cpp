@@ -47,8 +47,9 @@ switched to `ql`.
 Do not reuse `--series iqr` on this FX target. On `2026-04-11`, even contiguous
 `read-words D100 1` and `read-bits M100 1` failed with `0x7E40` under `iqr`.
 
-Also do not assume the full `supported_device_rw_soak.sh` target set applies unchanged. On
-`2026-04-11`, `DX10`, `DY10`, `ZR10`, and `V100` failed with `0x7E43`, so use
+Also do not assume the full `supported_device_rw_soak.sh` target set applies unchanged. The FX5
+communication manual's serial `3C/4C` accessible-device table marks `DX`, `DY`, `V`, and `ZR`
+inaccessible on this target class, and `DX10` / `DY10` also returned `0x7E43` on `2026-04-11`, so use
 `../../examples/linux_cli/fx5u_supported_device_rw_soak.sh` for the validated FX5U contiguous soak.
 
 ## Build

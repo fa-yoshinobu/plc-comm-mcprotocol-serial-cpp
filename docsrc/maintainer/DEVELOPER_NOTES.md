@@ -72,8 +72,8 @@ module-buffer, helper-qualified, and native-qualified probes returned `0x7E40` o
 `0801` register and raw `0802` read-only both returned `0x7E40`.
 Do not project the C24-era helper/buffer workflow onto FX targets without revalidation.
 
-The same date also produced a concrete binary multi-block fix. TAK capture in `cap/write.txt`
-showed `0406` request frames with one-byte `word block count` and one-byte `bit block count`.
+The same date also produced a concrete binary multi-block fix. Captured binary `0406` traffic
+showed request frames with one-byte `word block count` and one-byte `bit block count`.
 The local implementation had encoded those two fields as little-endian words. After correcting the
 binary `0406/1406` count width and adding codec tests, `FX5UC-32MT/D` `probe-multi-block`
 changed from native rejection to `multi-block-read=ok native`, while `1406` advanced to
@@ -88,7 +88,7 @@ the non-symmetric two-point case, `probe-multi-block[mixed]` reached
 
 `1402` random-write-bits then turned out to be the same kind of host-side compatibility problem,
 but not the same exact field as `1406`. Its binary request shape was first corrected after a page
-`108` manual re-read plus unrelated `pak4` capture showed a one-byte count field for non-iQ-R
+`108` manual re-read plus unrelated captured binary traffic showed a one-byte count field for non-iQ-R
 binary `1402 bit`. After that encoder fix, the focused FX5U probe advanced from `0x7F23` to
 success-end-code with readback mismatch for single-item `M100=1`, dense `M100..M115`, and sparse
 `M100/M105/M110/M115` writes while the same `M100..M115` alternating pattern passed under
