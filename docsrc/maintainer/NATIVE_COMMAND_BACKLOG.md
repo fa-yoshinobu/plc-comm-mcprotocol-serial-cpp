@@ -32,12 +32,12 @@ Shared native-family holds across the currently validated targets:
   - `RJ71C24-R2 + R08CPU + --series iqr`: `0x7F22`
   - `LJ71C24 + L26CPU-BT + --series ql`: `0x7F23`
   - `QJ71C24N + Q06UDVCPU + --series ql`: `0x7F23`
-  - `FX5UC-32MT/D + --series ql`: `0x7F23` on both single-item and multi-item word/bit probes
+  - `FX5UC-32MT/D + --series ql`: `0x7F23` on both single-item and multi-item word/bit probes; dedicated `probe-random-read` also showed contiguous `D100..D105` and `M100..M105` baselines passing
 - `1402` random write words
   - `RJ71C24-R2 + R08CPU + --series iqr`: `0x7F22`
   - `LJ71C24 + L26CPU-BT + --series ql`: `0x7F23`
   - `QJ71C24N + Q06UDVCPU + --series ql`: `0x7F23`
-  - `FX5UC-32MT/D + --series ql`: `0x7F23` on single-item, dense, and sparse `D100` probes
+  - `FX5UC-32MT/D + --series ql`: `0x7F23` on single-item, dense, and sparse `D100` probes; dedicated `probe-random-write-words` showed the same `D100..D105` range passing under contiguous write/restore
 - `1402` random write bits
   - `RJ71C24-R2 + R08CPU + --series iqr`: `0x7F23`
   - `LJ71C24 + L26CPU-BT + --series ql`: `0x7F23`

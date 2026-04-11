@@ -82,8 +82,8 @@ Additional validated target:
 | Module buffer read/write | `0601/1601` | native ng / not applicable | `probe-module-buffer` and `probe-write-module-buffer` returned `0x7E40` |
 | Qualified helper read/write | `read-qualified-words` / `write-qualified-words` over `0601/1601` | helper ng / not applicable | helper `U3E0\\G10` and `U3E0\\HG20` returned `0x7E40` |
 | Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | native ng / not applicable | native `U3E0\\G10` returned `0x7E43`; native `HG` path is not applicable under `--series ql` |
-| Random read | native `0403` | native ng | `0x7F23`; FX5U focused recheck confirmed both single-item and two-item word/bit random reads still fail |
-| Random write words | native `1402` | native ng | `0x7F23`; FX5U focused recheck confirmed single-item, dense, and sparse `D100` writes all fail |
+| Random read | native `0403` | native ng | `0x7F23`; FX5U focused recheck confirmed both single-item and two-item word/bit random reads still fail, while dedicated contiguous `D100..D105` and `M100..M105` baselines passed |
+| Random write words | native `1402` | native ng | `0x7F23`; FX5U focused recheck confirmed single-item, dense, and sparse `D100` writes all fail, while dedicated contiguous `D100..D105` write/restore passed |
 | Random write bits | native `1402` | native ng | `0x7F23`; FX5U focused probe confirmed single-item, dense, and sparse `M100..M115` cases all fail while the same dense pattern passes under contiguous `1401` |
 | Multi-block read | native `0406` | native pass | after the binary block-count fix based on capture and manual re-read, `probe-multi-block` read passed natively |
 | Multi-block write | native `1406` | native pass | after the follow-up binary bit-block pair-order fix, `probe-multi-block[mixed]` passed natively with restore |

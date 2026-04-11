@@ -126,11 +126,20 @@ Observed result:
   - `random-read M100`: `0x7F23`
   - `random-read D100 D105`: `0x7F23`
   - `random-read M100 M105`: `0x7F23`
+- dedicated `probe-random-read` recheck on the same target:
+  - contiguous `read-words D100 6`: pass
+  - contiguous `read-bits M100 6`: pass
+  - native `random-read` single, dense, and sparse word probes: all `0x7F23`
+  - native `random-read` single, dense, and sparse bit probes: all `0x7F23`
 - `1402 random-write-words`: PLC error `0x7F23`
 - focused `1402` word recheck on the same target:
   - `random-write-words D100=1`: `0x7F23`
   - `random-write-words D100=1 D101=2`: `0x7F23`
   - `random-write-words D100=1 D105=2`: `0x7F23`
+- dedicated `probe-random-write-words` recheck on the same target:
+  - contiguous `write-words D100..D105`: pass
+  - native `random-write-words` single, dense, and sparse probes: all `0x7F23`
+  - restore back to the original `D100..D105` values: pass
 - `1402 random-write-bits`: PLC error `0x7F23`
 - post-read after both `1402` probes still showed no write effect at `D300..D305` and `M300..M305`
 - baseline `D300..D305` on this target was `0x0000`, `0x0001`, `0x0002`, `0x0003`, `0x0004`, `0x0005`
@@ -149,9 +158,11 @@ Interpretation:
 
 - the unresolved native random family stays unresolved on this FX target
 - `0403` is not just a mixed `D+M` problem on FX5U; both word-only and bit-only random reads still
-  return `0x7F23`, and the same remains true even for single-item `D100` / `M100`
+  return `0x7F23`, and the same remains true even for single-item `D100` / `M100`; dedicated
+  `probe-random-read` also showed the contiguous `D100..D105` and `M100..M105` baselines passing
 - `1402` word-write is not just a sparse random case on FX5U; single-item, dense adjacent, and
-  sparse `D100` writes all still return `0x7F23`
+  sparse `D100` writes all still return `0x7F23`; dedicated `probe-random-write-words` showed the
+  same `D100..D105` range passing under contiguous `1401`
 - the `1402` bit-write failure is not explained by low addresses, RUN overwrite, or the concrete
   `M100..M115` pattern itself because the same target bits passed under contiguous `1401`; the
   failure also persists for a single-item `M100=1` random write

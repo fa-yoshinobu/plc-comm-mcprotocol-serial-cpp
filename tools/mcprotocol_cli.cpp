@@ -80,6 +80,8 @@ enum class CommandKind : std::uint8_t {
   WriteBits,
   ProbeAll,
   ProbeWriteAll,
+  ProbeRandomRead,
+  ProbeRandomWriteWords,
   ProbeRandomWriteBits,
   ProbeMultiBlock,
   ProbeMonitor,
@@ -300,6 +302,8 @@ void print_usage() {
       "  mcprotocol_cli [options] write-bits DEVICE=0|1 [DEVICE=0|1 ...]\n"
       "  mcprotocol_cli [options] probe-all\n"
       "  mcprotocol_cli [options] probe-write-all\n"
+      "  mcprotocol_cli [options] probe-random-read\n"
+      "  mcprotocol_cli [options] probe-random-write-words\n"
       "  mcprotocol_cli [options] probe-random-write-bits\n"
       "  mcprotocol_cli [options] probe-multi-block [mixed|word-only|bit-only|word-a|word-b|bit-a|bit-b]\n"
       "  mcprotocol_cli [options] probe-monitor [read-only]\n"
@@ -332,7 +336,7 @@ void print_usage() {
       "  read-native-qualified-words / write-native-qualified-words are native probes for unresolved extended-device access.\n"
       "  probe-multi-block defaults to mixed; pass word-only/bit-only or a single block mode to isolate 1406 verification.\n"
       "  probe-monitor read-only sends raw 0802 without client-side monitor registration state.\n"
-      "  random-read / random-write-* / probe-random-write-bits / probe-multi-block / probe-monitor expose native probe results directly.\n");
+      "  random-read / random-write-* / probe-random-* / probe-multi-block / probe-monitor expose native probe results directly.\n");
 }
 
 [[nodiscard]] bool parse_u32(std::string_view text, std::uint32_t& out_value, int base = 10) {
@@ -633,6 +637,10 @@ void print_usage() {
         options.command = CommandKind::ProbeAll;
       } else if (arg == "probe-write-all") {
         options.command = CommandKind::ProbeWriteAll;
+      } else if (arg == "probe-random-read") {
+        options.command = CommandKind::ProbeRandomRead;
+      } else if (arg == "probe-random-write-words") {
+        options.command = CommandKind::ProbeRandomWriteWords;
       } else if (arg == "probe-random-write-bits") {
         options.command = CommandKind::ProbeRandomWriteBits;
       } else if (arg == "probe-multi-block") {
@@ -668,6 +676,8 @@ void print_usage() {
     case CommandKind::CpuModel:
     case CommandKind::ProbeAll:
     case CommandKind::ProbeWriteAll:
+    case CommandKind::ProbeRandomRead:
+    case CommandKind::ProbeRandomWriteWords:
     case CommandKind::ProbeRandomWriteBits:
     case CommandKind::ProbeMultiBlock:
     case CommandKind::ProbeMonitor:
@@ -1345,6 +1355,27 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
   return drive_request(client, port, command_state);
 }
 
+[[nodiscard]] Status run_random_read(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    std::span<const RandomReadItem> items,
+    std::span<std::uint32_t> out_values) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_random_read(
+      now_ms(),
+      RandomReadRequest {.items = items},
+      out_values,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
 [[nodiscard]] Status run_random_write_bits(
     MelsecSerialClient& client,
     PosixSerialPort& port,
@@ -1792,6 +1823,501 @@ int main(int argc, char** argv) {
       }
       std::printf("probe-write-all: success=%zu failed=%zu\n", success_count, failure_count);
       return failure_count == 0U ? 0 : 1;
+    }
+
+    case CommandKind::ProbeRandomRead: {
+      constexpr DeviceAddress kWordHeadDevice {.code = mcprotocol::serial::DeviceCode::D, .number = 100};
+      constexpr DeviceAddress kBitHeadDevice {.code = mcprotocol::serial::DeviceCode::M, .number = 100};
+      std::array<std::uint16_t, 6> contiguous_words {};
+      std::array<BitValue, 6> contiguous_bits {};
+
+      const auto print_probe_status_line = [](std::string_view label, Status status) {
+        std::printf("%.*s=skip ",
+                    static_cast<int>(label.size()),
+                    label.data());
+        if (status.code == StatusCode::PlcError) {
+          std::printf("0x%04X\n", status.plc_error_code);
+        } else {
+          std::printf("%s\n", status.message);
+        }
+      };
+
+      const auto verify_random_word_values = [](std::string_view label,
+                                                std::span<const std::uint16_t> expected,
+                                                std::span<const std::uint32_t> actual) -> bool {
+        for (std::size_t index = 0; index < expected.size(); ++index) {
+          const std::uint16_t actual_word = static_cast<std::uint16_t>(actual[index] & 0xFFFFU);
+          if (actual_word != expected[index]) {
+            std::printf("%.*s-mismatch[%zu] expected=0x%04X read=0x%04X\n",
+                        static_cast<int>(label.size()),
+                        label.data(),
+                        index,
+                        expected[index],
+                        actual_word);
+            return false;
+          }
+        }
+        return true;
+      };
+
+      const auto verify_random_bit_values = [](std::string_view label,
+                                               std::span<const BitValue> expected,
+                                               std::span<const std::uint32_t> actual) -> bool {
+        for (std::size_t index = 0; index < expected.size(); ++index) {
+          const BitValue actual_bit = actual[index] == 0U ? BitValue::Off : BitValue::On;
+          if (actual_bit != expected[index]) {
+            std::printf("%.*s-mismatch[%zu] expected=%u read=%u\n",
+                        static_cast<int>(label.size()),
+                        label.data(),
+                        index,
+                        expected[index] == BitValue::On ? 1U : 0U,
+                        actual_bit == BitValue::On ? 1U : 0U);
+            return false;
+          }
+        }
+        return true;
+      };
+
+      status = run_batch_read_words_group(
+          client,
+          port,
+          command_state,
+          kWordHeadDevice,
+          static_cast<std::uint16_t>(contiguous_words.size()),
+          std::span<std::uint16_t>(contiguous_words.data(), contiguous_words.size()));
+      if (!status.ok()) {
+        print_status_error("probe-random-read contiguous word baseline failed", status);
+        return 1;
+      }
+      std::printf("batch-read-words=ok contiguous D100=0x%04X D105=0x%04X\n",
+                  contiguous_words.front(),
+                  contiguous_words.back());
+
+      status = run_batch_read_bits_group(
+          client,
+          port,
+          command_state,
+          kBitHeadDevice,
+          static_cast<std::uint16_t>(contiguous_bits.size()),
+          std::span<BitValue>(contiguous_bits.data(), contiguous_bits.size()));
+      if (!status.ok()) {
+        print_status_error("probe-random-read contiguous bit baseline failed", status);
+        return 1;
+      }
+      std::printf("batch-read-bits=ok contiguous M100=%u M105=%u\n",
+                  contiguous_bits.front() == BitValue::On ? 1U : 0U,
+                  contiguous_bits.back() == BitValue::On ? 1U : 0U);
+
+      const std::array<RandomReadItem, 1> word_single_items {{
+          {.device = DeviceAddress {.code = DeviceCode::D, .number = 100U}, .double_word = false},
+      }};
+      const std::array<std::uint16_t, 1> word_single_expected {{
+          contiguous_words[0],
+      }};
+      std::array<std::uint32_t, 1> word_single_values {};
+      bool word_single_ok = false;
+      status = run_random_read(
+          client,
+          port,
+          command_state,
+          std::span<const RandomReadItem>(word_single_items.data(), word_single_items.size()),
+          std::span<std::uint32_t>(word_single_values.data(), word_single_values.size()));
+      if (!status.ok()) {
+        print_probe_status_line("random-read-word-single", status);
+      } else if (!verify_random_word_values(
+                     "random-read-word-single",
+                     std::span<const std::uint16_t>(word_single_expected.data(), word_single_expected.size()),
+                     std::span<const std::uint32_t>(word_single_values.data(), word_single_values.size()))) {
+        std::printf("random-read-word-single=skip verify-mismatch\n");
+      } else {
+        word_single_ok = true;
+        std::printf("random-read-word-single=ok native\n");
+      }
+
+      const std::array<RandomReadItem, 2> word_dense_items {{
+          {.device = DeviceAddress {.code = DeviceCode::D, .number = 100U}, .double_word = false},
+          {.device = DeviceAddress {.code = DeviceCode::D, .number = 101U}, .double_word = false},
+      }};
+      const std::array<std::uint16_t, 2> word_dense_expected {{
+          contiguous_words[0],
+          contiguous_words[1],
+      }};
+      std::array<std::uint32_t, 2> word_dense_values {};
+      bool word_dense_ok = false;
+      status = run_random_read(
+          client,
+          port,
+          command_state,
+          std::span<const RandomReadItem>(word_dense_items.data(), word_dense_items.size()),
+          std::span<std::uint32_t>(word_dense_values.data(), word_dense_values.size()));
+      if (!status.ok()) {
+        print_probe_status_line("random-read-word-dense", status);
+      } else if (!verify_random_word_values(
+                     "random-read-word-dense",
+                     std::span<const std::uint16_t>(word_dense_expected.data(), word_dense_expected.size()),
+                     std::span<const std::uint32_t>(word_dense_values.data(), word_dense_values.size()))) {
+        std::printf("random-read-word-dense=skip verify-mismatch\n");
+      } else {
+        word_dense_ok = true;
+        std::printf("random-read-word-dense=ok native\n");
+      }
+
+      const std::array<RandomReadItem, 2> word_sparse_items {{
+          {.device = DeviceAddress {.code = DeviceCode::D, .number = 100U}, .double_word = false},
+          {.device = DeviceAddress {.code = DeviceCode::D, .number = 105U}, .double_word = false},
+      }};
+      const std::array<std::uint16_t, 2> word_sparse_expected {{
+          contiguous_words[0],
+          contiguous_words[5],
+      }};
+      std::array<std::uint32_t, 2> word_sparse_values {};
+      bool word_sparse_ok = false;
+      status = run_random_read(
+          client,
+          port,
+          command_state,
+          std::span<const RandomReadItem>(word_sparse_items.data(), word_sparse_items.size()),
+          std::span<std::uint32_t>(word_sparse_values.data(), word_sparse_values.size()));
+      if (!status.ok()) {
+        print_probe_status_line("random-read-word-sparse", status);
+      } else if (!verify_random_word_values(
+                     "random-read-word-sparse",
+                     std::span<const std::uint16_t>(word_sparse_expected.data(), word_sparse_expected.size()),
+                     std::span<const std::uint32_t>(word_sparse_values.data(), word_sparse_values.size()))) {
+        std::printf("random-read-word-sparse=skip verify-mismatch\n");
+      } else {
+        word_sparse_ok = true;
+        std::printf("random-read-word-sparse=ok native\n");
+      }
+
+      const std::array<RandomReadItem, 1> bit_single_items {{
+          {.device = DeviceAddress {.code = DeviceCode::M, .number = 100U}, .double_word = false},
+      }};
+      const std::array<BitValue, 1> bit_single_expected {{
+          contiguous_bits[0],
+      }};
+      std::array<std::uint32_t, 1> bit_single_values {};
+      bool bit_single_ok = false;
+      status = run_random_read(
+          client,
+          port,
+          command_state,
+          std::span<const RandomReadItem>(bit_single_items.data(), bit_single_items.size()),
+          std::span<std::uint32_t>(bit_single_values.data(), bit_single_values.size()));
+      if (!status.ok()) {
+        print_probe_status_line("random-read-bit-single", status);
+      } else if (!verify_random_bit_values(
+                     "random-read-bit-single",
+                     std::span<const BitValue>(bit_single_expected.data(), bit_single_expected.size()),
+                     std::span<const std::uint32_t>(bit_single_values.data(), bit_single_values.size()))) {
+        std::printf("random-read-bit-single=skip verify-mismatch\n");
+      } else {
+        bit_single_ok = true;
+        std::printf("random-read-bit-single=ok native\n");
+      }
+
+      const std::array<RandomReadItem, 2> bit_dense_items {{
+          {.device = DeviceAddress {.code = DeviceCode::M, .number = 100U}, .double_word = false},
+          {.device = DeviceAddress {.code = DeviceCode::M, .number = 101U}, .double_word = false},
+      }};
+      const std::array<BitValue, 2> bit_dense_expected {{
+          contiguous_bits[0],
+          contiguous_bits[1],
+      }};
+      std::array<std::uint32_t, 2> bit_dense_values {};
+      bool bit_dense_ok = false;
+      status = run_random_read(
+          client,
+          port,
+          command_state,
+          std::span<const RandomReadItem>(bit_dense_items.data(), bit_dense_items.size()),
+          std::span<std::uint32_t>(bit_dense_values.data(), bit_dense_values.size()));
+      if (!status.ok()) {
+        print_probe_status_line("random-read-bit-dense", status);
+      } else if (!verify_random_bit_values(
+                     "random-read-bit-dense",
+                     std::span<const BitValue>(bit_dense_expected.data(), bit_dense_expected.size()),
+                     std::span<const std::uint32_t>(bit_dense_values.data(), bit_dense_values.size()))) {
+        std::printf("random-read-bit-dense=skip verify-mismatch\n");
+      } else {
+        bit_dense_ok = true;
+        std::printf("random-read-bit-dense=ok native\n");
+      }
+
+      const std::array<RandomReadItem, 2> bit_sparse_items {{
+          {.device = DeviceAddress {.code = DeviceCode::M, .number = 100U}, .double_word = false},
+          {.device = DeviceAddress {.code = DeviceCode::M, .number = 105U}, .double_word = false},
+      }};
+      const std::array<BitValue, 2> bit_sparse_expected {{
+          contiguous_bits[0],
+          contiguous_bits[5],
+      }};
+      std::array<std::uint32_t, 2> bit_sparse_values {};
+      bool bit_sparse_ok = false;
+      status = run_random_read(
+          client,
+          port,
+          command_state,
+          std::span<const RandomReadItem>(bit_sparse_items.data(), bit_sparse_items.size()),
+          std::span<std::uint32_t>(bit_sparse_values.data(), bit_sparse_values.size()));
+      if (!status.ok()) {
+        print_probe_status_line("random-read-bit-sparse", status);
+      } else if (!verify_random_bit_values(
+                     "random-read-bit-sparse",
+                     std::span<const BitValue>(bit_sparse_expected.data(), bit_sparse_expected.size()),
+                     std::span<const std::uint32_t>(bit_sparse_values.data(), bit_sparse_values.size()))) {
+        std::printf("random-read-bit-sparse=skip verify-mismatch\n");
+      } else {
+        bit_sparse_ok = true;
+        std::printf("random-read-bit-sparse=ok native\n");
+      }
+
+      std::printf("probe-random-read: word-single=%s word-dense=%s word-sparse=%s bit-single=%s bit-dense=%s bit-sparse=%s\n",
+                  word_single_ok ? "native" : "skip",
+                  word_dense_ok ? "native" : "skip",
+                  word_sparse_ok ? "native" : "skip",
+                  bit_single_ok ? "native" : "skip",
+                  bit_dense_ok ? "native" : "skip",
+                  bit_sparse_ok ? "native" : "skip");
+      return (word_single_ok || word_dense_ok || word_sparse_ok || bit_single_ok || bit_dense_ok || bit_sparse_ok) ? 0 : 1;
+    }
+
+    case CommandKind::ProbeRandomWriteWords: {
+      constexpr DeviceAddress kHeadDevice {.code = mcprotocol::serial::DeviceCode::D, .number = 100};
+      std::array<std::uint16_t, 6> backup_words {};
+      bool backups_valid = false;
+
+      const auto verify_words = [](std::string_view context,
+                                   std::span<const std::uint16_t> expected,
+                                   std::span<const std::uint16_t> actual) -> bool {
+        for (std::size_t index = 0; index < expected.size(); ++index) {
+          if (actual[index] != expected[index]) {
+            std::printf("%.*s-mismatch[%zu] expected=0x%04X read=0x%04X\n",
+                        static_cast<int>(context.size()),
+                        context.data(),
+                        index,
+                        expected[index],
+                        actual[index]);
+            return false;
+          }
+        }
+        return true;
+      };
+
+      const auto print_probe_status_line = [](std::string_view label, Status status) {
+        std::printf("%.*s=skip ",
+                    static_cast<int>(label.size()),
+                    label.data());
+        if (status.code == StatusCode::PlcError) {
+          std::printf("0x%04X\n", status.plc_error_code);
+        } else {
+          std::printf("%s\n", status.message);
+        }
+      };
+
+      const auto restore_originals = [&]() -> bool {
+        if (!backups_valid) {
+          return true;
+        }
+        status = run_batch_write_words_group(
+            client,
+            port,
+            command_state,
+            kHeadDevice,
+            std::span<const std::uint16_t>(backup_words.data(), backup_words.size()));
+        if (!status.ok()) {
+          print_status_error("probe-random-write-words restore failed", status);
+          return false;
+        }
+        return true;
+      };
+
+      status = run_batch_read_words_group(
+          client,
+          port,
+          command_state,
+          kHeadDevice,
+          static_cast<std::uint16_t>(backup_words.size()),
+          std::span<std::uint16_t>(backup_words.data(), backup_words.size()));
+      if (!status.ok()) {
+        print_status_error("probe-random-write-words backup failed", status);
+        return 1;
+      }
+      backups_valid = true;
+
+      const std::array<std::uint16_t, 6> dense_pattern {{
+          0x1111U, 0x2222U, 0x3333U, 0x4444U, 0x5555U, 0x6666U,
+      }};
+      const std::array<std::uint16_t, 2> random_values {{
+          0x1357U, 0x2468U,
+      }};
+      std::array<std::uint16_t, 6> contiguous_verify {};
+      std::array<std::uint16_t, 6> dense_verify {};
+      std::array<std::uint16_t, 6> single_verify {};
+      std::array<std::uint16_t, 6> sparse_verify {};
+      std::array<std::uint16_t, 6> single_expected = backup_words;
+      std::array<std::uint16_t, 6> dense_expected = backup_words;
+      std::array<std::uint16_t, 6> sparse_expected = backup_words;
+      single_expected[0] = random_values[0];
+      dense_expected[0] = random_values[0];
+      dense_expected[1] = random_values[1];
+      sparse_expected[0] = random_values[0];
+      sparse_expected[5] = random_values[1];
+
+      bool contiguous_ok = false;
+      status = run_batch_write_words_group(
+          client,
+          port,
+          command_state,
+          kHeadDevice,
+          std::span<const std::uint16_t>(dense_pattern.data(), dense_pattern.size()));
+      if (!status.ok()) {
+        print_probe_status_line("batch-write-words", status);
+      } else {
+        status = run_batch_read_words_group(
+            client,
+            port,
+            command_state,
+            kHeadDevice,
+            static_cast<std::uint16_t>(contiguous_verify.size()),
+            std::span<std::uint16_t>(contiguous_verify.data(), contiguous_verify.size()));
+        if (!status.ok()) {
+          print_probe_status_line("batch-write-words-verify", status);
+        } else if (!verify_words("batch-write-words", dense_pattern, contiguous_verify)) {
+          std::printf("batch-write-words=skip verify-mismatch\n");
+        } else {
+          contiguous_ok = true;
+          std::printf("batch-write-words=ok contiguous\n");
+        }
+      }
+
+      if (!restore_originals()) {
+        return 1;
+      }
+
+      const std::array<RandomWriteWordItem, 1> single_item {{
+          {.device = DeviceAddress {.code = DeviceCode::D, .number = 100U}, .value = random_values[0], .double_word = false},
+      }};
+      bool random_single_ok = false;
+      status = run_random_write_words(
+          client,
+          port,
+          command_state,
+          std::span<const RandomWriteWordItem>(single_item.data(), single_item.size()));
+      if (!status.ok()) {
+        print_probe_status_line("random-write-words-single", status);
+      } else {
+        status = run_batch_read_words_group(
+            client,
+            port,
+            command_state,
+            kHeadDevice,
+            static_cast<std::uint16_t>(single_verify.size()),
+            std::span<std::uint16_t>(single_verify.data(), single_verify.size()));
+        if (!status.ok()) {
+          print_probe_status_line("random-write-words-single-verify", status);
+        } else if (!verify_words("random-write-words-single", single_expected, single_verify)) {
+          std::printf("random-write-words-single=skip verify-mismatch\n");
+        } else {
+          random_single_ok = true;
+          std::printf("random-write-words-single=ok native\n");
+        }
+      }
+
+      if (!restore_originals()) {
+        return 1;
+      }
+
+      const std::array<RandomWriteWordItem, 2> dense_items {{
+          {.device = DeviceAddress {.code = DeviceCode::D, .number = 100U}, .value = random_values[0], .double_word = false},
+          {.device = DeviceAddress {.code = DeviceCode::D, .number = 101U}, .value = random_values[1], .double_word = false},
+      }};
+      bool random_dense_ok = false;
+      status = run_random_write_words(
+          client,
+          port,
+          command_state,
+          std::span<const RandomWriteWordItem>(dense_items.data(), dense_items.size()));
+      if (!status.ok()) {
+        print_probe_status_line("random-write-words-dense", status);
+      } else {
+        status = run_batch_read_words_group(
+            client,
+            port,
+            command_state,
+            kHeadDevice,
+            static_cast<std::uint16_t>(dense_verify.size()),
+            std::span<std::uint16_t>(dense_verify.data(), dense_verify.size()));
+        if (!status.ok()) {
+          print_probe_status_line("random-write-words-dense-verify", status);
+        } else if (!verify_words("random-write-words-dense", dense_expected, dense_verify)) {
+          std::printf("random-write-words-dense=skip verify-mismatch\n");
+        } else {
+          random_dense_ok = true;
+          std::printf("random-write-words-dense=ok native\n");
+        }
+      }
+
+      if (!restore_originals()) {
+        return 1;
+      }
+
+      const std::array<RandomWriteWordItem, 2> sparse_items {{
+          {.device = DeviceAddress {.code = DeviceCode::D, .number = 100U}, .value = random_values[0], .double_word = false},
+          {.device = DeviceAddress {.code = DeviceCode::D, .number = 105U}, .value = random_values[1], .double_word = false},
+      }};
+      bool random_sparse_ok = false;
+      status = run_random_write_words(
+          client,
+          port,
+          command_state,
+          std::span<const RandomWriteWordItem>(sparse_items.data(), sparse_items.size()));
+      if (!status.ok()) {
+        print_probe_status_line("random-write-words-sparse", status);
+      } else {
+        status = run_batch_read_words_group(
+            client,
+            port,
+            command_state,
+            kHeadDevice,
+            static_cast<std::uint16_t>(sparse_verify.size()),
+            std::span<std::uint16_t>(sparse_verify.data(), sparse_verify.size()));
+        if (!status.ok()) {
+          print_probe_status_line("random-write-words-sparse-verify", status);
+        } else if (!verify_words("random-write-words-sparse", sparse_expected, sparse_verify)) {
+          std::printf("random-write-words-sparse=skip verify-mismatch\n");
+        } else {
+          random_sparse_ok = true;
+          std::printf("random-write-words-sparse=ok native\n");
+        }
+      }
+
+      if (!restore_originals()) {
+        return 1;
+      }
+
+      std::array<std::uint16_t, 6> restore_verify {};
+      status = run_batch_read_words_group(
+          client,
+          port,
+          command_state,
+          kHeadDevice,
+          static_cast<std::uint16_t>(restore_verify.size()),
+          std::span<std::uint16_t>(restore_verify.data(), restore_verify.size()));
+      if (!status.ok()) {
+        print_status_error("probe-random-write-words restore verify failed", status);
+        return 1;
+      }
+      if (!verify_words("probe-random-write-words-restore", backup_words, restore_verify)) {
+        return 1;
+      }
+
+      std::printf("probe-random-write-words: contiguous=%s single=%s dense=%s sparse=%s restore=ok\n",
+                  contiguous_ok ? "contiguous" : "skip",
+                  random_single_ok ? "native" : "skip",
+                  random_dense_ok ? "native" : "skip",
+                  random_sparse_ok ? "native" : "skip");
+      return (random_single_ok || random_dense_ok || random_sparse_ok) ? 0 : 1;
     }
 
     case CommandKind::ProbeRandomWriteBits: {

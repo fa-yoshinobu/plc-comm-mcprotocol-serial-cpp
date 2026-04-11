@@ -482,6 +482,60 @@ void test_encode_random_write_words_ascii_matches_manual() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
+void test_encode_random_read_binary_ql_layout() {
+  const auto config = make_binary_c4_config();
+  const std::array<mcprotocol::serial::RandomReadItem, 2> items {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}, .double_word = false},
+      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 100}, .double_word = false},
+  }};
+
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_random_read(
+      config,
+      mcprotocol::serial::RandomReadRequest {
+          .items = std::span<const mcprotocol::serial::RandomReadItem>(items.data(), items.size()),
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 16> expected {
+      0x03, 0x04, 0x00, 0x00,
+      0x02, 0x00, 0x00, 0x00,
+      0x64, 0x00, 0x00, 0xA8,
+      0x64, 0x00, 0x00, 0x90,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_random_write_words_binary_ql_layout() {
+  const auto config = make_binary_c4_config();
+  const std::array<RandomWriteWordItem, 2> items {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}, .value = 0x0001U, .double_word = false},
+      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 101}, .value = 0x0002U, .double_word = false},
+  }};
+
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_random_write_words(
+      config,
+      std::span<const RandomWriteWordItem>(items.data(), items.size()),
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 20> expected {
+      0x02, 0x14, 0x00, 0x00,
+      0x02, 0x00, 0x00, 0x00,
+      0x64, 0x00, 0x00, 0xA8, 0x01, 0x00,
+      0x65, 0x00, 0x00, 0xA8, 0x02, 0x00,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
 void test_encode_random_write_bits_ascii_matches_manual() {
   const auto config = make_ascii_c4_format4_config();
   const std::array<RandomWriteBitItem, 2> items {{
@@ -1069,6 +1123,8 @@ int main() {
   test_encode_batch_write_words_ascii_limit_matches_buffer();
   test_encode_batch_write_bits_ascii_limit_matches_buffer();
   test_encode_random_write_words_ascii_matches_manual();
+  test_encode_random_read_binary_ql_layout();
+  test_encode_random_write_words_binary_ql_layout();
   test_encode_random_write_bits_ascii_matches_manual();
   test_encode_random_write_bits_ascii_iqr_shape();
   test_encode_random_write_bits_binary_matches_manual();

@@ -93,6 +93,10 @@ word-only `random-read D100 D105` and bit-only `random-read M100 M105`. That kee
 random family in the unresolved family-specific bucket instead of the resolved `1406` packing
 bucket.
 
+Dedicated FX5U `probe-random-read` and `probe-random-write-words` runs then tightened that result:
+the contiguous `D100..D105` and `M100..M105` baselines passed, but the native `0403` single/dense/
+sparse probes and native `1402` word single/dense/sparse probes still all returned `0x7F23`.
+
 ## Validation Reporting Rule
 
 When adding new hardware results:
