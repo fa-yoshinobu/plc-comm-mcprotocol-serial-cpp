@@ -219,12 +219,18 @@ class ByteWriter {
 #endif
 }
 
-[[nodiscard]] constexpr bool is_ascii_format1_family(const ProtocolConfig& config) noexcept {
-  return config.ascii_format == AsciiFormat::Format1 || config.ascii_format == AsciiFormat::Format4;
+[[nodiscard]] constexpr bool is_ascii_enq_family(const ProtocolConfig& config) noexcept {
+  return config.ascii_format == AsciiFormat::Format1 ||
+         config.ascii_format == AsciiFormat::Format2 ||
+         config.ascii_format == AsciiFormat::Format4;
 }
 
 [[nodiscard]] constexpr bool uses_ascii_crlf(const ProtocolConfig& config) noexcept {
   return config.ascii_format == AsciiFormat::Format4;
+}
+
+[[nodiscard]] constexpr std::size_t ascii_block_number_length(const ProtocolConfig& config) noexcept {
+  return (!is_c1_frame(config) && !is_e1_frame(config) && config.ascii_format == AsciiFormat::Format2) ? 2U : 0U;
 }
 
 [[nodiscard]] constexpr std::size_t ascii_route_length(FrameKind frame_kind) noexcept {
@@ -1673,7 +1679,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     out_size = payload_writer.size();
     return ok_status();
   }
-  if (!append_ascii_frame_id(payload_writer, config.frame_kind) ||
+  if ((ascii_block_number_length(config) != 0U &&
+       !append_ascii_hex(payload_writer, config.ascii_block_number, ascii_block_number_length(config))) ||
+      !append_ascii_frame_id(payload_writer, config.frame_kind) ||
       !encode_ascii_route(payload_writer, config) ||
       !payload_writer.append(request_data)) {
     return buffer_too_small("ASCII frame payload buffer is too small");
@@ -1977,9 +1985,10 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
   if (is_ascii_mode(config)) {
     if (!is_e1_frame(config) &&
         config.ascii_format != AsciiFormat::Format1 &&
+        config.ascii_format != AsciiFormat::Format2 &&
         config.ascii_format != AsciiFormat::Format3 &&
         config.ascii_format != AsciiFormat::Format4) {
-      return unsupported("Only ASCII Format1, Format3, and Format4 are supported");
+      return unsupported("Only ASCII Format1, Format2, Format3, and Format4 are supported");
     }
   } else if (!is_c4_frame(config) && !is_e1_frame(config)) {
     return unsupported("Binary mode supports only 4C Format5 or 1E");
@@ -1988,6 +1997,9 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
   if (is_c1_frame(config)) {
     if (!is_ascii_mode(config)) {
       return unsupported("1C frames support only ASCII Format1, Format3, and Format4");
+    }
+    if (config.ascii_format == AsciiFormat::Format2) {
+      return unsupported("1C frames do not support ASCII Format2");
     }
     if (config.route.self_station_enabled) {
       return invalid_argument("1C frame does not use self-station routing");
@@ -2060,7 +2072,7 @@ Status FrameCodec::encode_request(
 
   ByteWriter frame_writer(out_frame);
   if (is_ascii_mode(config)) {
-    if (is_ascii_format1_family(config)) {
+    if (is_ascii_enq_family(config)) {
       if (!frame_writer.push(kAsciiEnq) || !frame_writer.append(std::span<const std::uint8_t>(payload_storage.data(), payload_size))) {
         return buffer_too_small("ASCII request frame buffer is too small");
       }
@@ -2151,9 +2163,9 @@ Status FrameCodec::encode_success_response(
       return payload_status;
     }
 
-    const std::size_t prefix_size = ascii_header_length(config.frame_kind);
+    const std::size_t prefix_size = ascii_block_number_length(config) + ascii_header_length(config.frame_kind);
     ByteWriter writer(out_frame);
-    if (is_ascii_format1_family(config)) {
+    if (is_ascii_enq_family(config)) {
       if (response_data.empty()) {
         if (!writer.push(kAsciiAck) ||
             !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size))) {
@@ -2271,10 +2283,10 @@ Status FrameCodec::encode_error_response(
       return payload_status;
     }
 
-    const std::size_t prefix_size = ascii_header_length(config.frame_kind);
+    const std::size_t prefix_size = ascii_block_number_length(config) + ascii_header_length(config.frame_kind);
     const std::size_t error_width = ascii_error_code_width(config.frame_kind);
     ByteWriter writer(out_frame);
-    if (is_ascii_format1_family(config)) {
+    if (is_ascii_enq_family(config)) {
       if (!writer.push(kAsciiNak) ||
           !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
           !append_ascii_hex(writer, error_code & 0xFFU, error_width)) {
@@ -2477,10 +2489,10 @@ DecodeResult FrameCodec::decode_response(
   }
 
   if (is_ascii_mode(config)) {
-    const std::size_t prefix_size = 1U + ascii_header_length(config.frame_kind);
+    const std::size_t prefix_size = 1U + ascii_block_number_length(config) + ascii_header_length(config.frame_kind);
     const std::size_t terminator_size = uses_ascii_crlf(config) ? 2U : 0U;
     const std::size_t error_width = ascii_error_code_width(config.frame_kind);
-    if (is_ascii_format1_family(config)) {
+    if (is_ascii_enq_family(config)) {
       if (bytes[0] == kAsciiAck) {
         if (bytes.size() < (prefix_size + terminator_size)) {
           return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
@@ -2508,7 +2520,7 @@ DecodeResult FrameCodec::decode_response(
           return DecodeResult {
               .status = DecodeStatus::Error,
               .frame = RawResponseFrame {},
-              .error = parse_error("Failed to parse ASCII Format1/4 error code"),
+              .error = parse_error("Failed to parse ASCII Format1/2/4 error code"),
               .bytes_consumed = prefix_size + error_width + terminator_size,
           };
         }
@@ -2528,7 +2540,7 @@ DecodeResult FrameCodec::decode_response(
         return DecodeResult {
             .status = DecodeStatus::Error,
             .frame = RawResponseFrame {},
-            .error = framing_error("ASCII Format1/4 response must begin with ACK, NAK, or STX"),
+            .error = framing_error("ASCII Format1/2/4 response must begin with ACK, NAK, or STX"),
             .bytes_consumed = 1,
         };
       }
@@ -2553,7 +2565,7 @@ DecodeResult FrameCodec::decode_response(
         return DecodeResult {
             .status = DecodeStatus::Error,
             .frame = RawResponseFrame {},
-            .error = sum_error("ASCII Format1/4 checksum mismatch"),
+            .error = sum_error("ASCII Format1/2/4 checksum mismatch"),
             .bytes_consumed = total_size,
         };
       }
@@ -2564,7 +2576,7 @@ DecodeResult FrameCodec::decode_response(
         return DecodeResult {
             .status = DecodeStatus::Error,
             .frame = RawResponseFrame {},
-            .error = buffer_too_small("ASCII Format1/4 response payload is too large"),
+            .error = buffer_too_small("ASCII Format1/2/4 response payload is too large"),
             .bytes_consumed = total_size,
         };
       }
@@ -5410,6 +5422,7 @@ Status parse_read_host_buffer_response(
           .frame_kind = config.frame_kind,
           .code_mode = config.code_mode,
           .ascii_format = config.ascii_format,
+          .ascii_block_number = config.ascii_block_number,
           .target_series = config.target_series,
           .sum_check_enabled = config.sum_check_enabled,
           .route = config.route,

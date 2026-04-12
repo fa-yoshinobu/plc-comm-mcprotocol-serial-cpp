@@ -464,8 +464,9 @@ void print_usage() {
       "  --rts-cts on|off           Hardware flow control (default: off)\n"
       "  --rts-toggle on|off        Toggle RTS during TX for RS-485 DE control\n"
       "  --dump-frames on|off       Print raw TX/RX frame bytes to stderr (default: off)\n"
-      "  --frame MODE               c4-binary | c4-ascii-f1 | c4-ascii-f3 | c4-ascii-f4 | c3-ascii-f1 | c3-ascii-f3 | c3-ascii-f4 | c2-ascii-f1 | c2-ascii-f3 | c2-ascii-f4 | c1-ascii-f1 | c1-ascii-f3 | c1-ascii-f4 | e1-binary | e1-ascii\n"
+      "  --frame MODE               c4-binary | c4-ascii-f1 | c4-ascii-f2 | c4-ascii-f3 | c4-ascii-f4 | c3-ascii-f1 | c3-ascii-f2 | c3-ascii-f3 | c3-ascii-f4 | c2-ascii-f1 | c2-ascii-f2 | c2-ascii-f3 | c2-ascii-f4 | c1-ascii-f1 | c1-ascii-f3 | c1-ascii-f4 | e1-binary | e1-ascii\n"
       "  --series ql|iqr|qna|a      Target PLC family for device encoding (default: ql)\n"
+      "  --block-no N               ASCII Format2 block number 0..255 (default: 0)\n"
       "  --station N                Station number; non-zero implies multidrop\n"
       "  --self-station N           Self-station number for m:n connections\n"
       "  --sum-check on|off         Enable or disable sum-check (default: on)\n"
@@ -688,6 +689,12 @@ void print_usage() {
     config.ascii_format = AsciiFormat::Format1;
     return true;
   }
+  if (text == "c4-ascii-f2") {
+    config.frame_kind = FrameKind::C4;
+    config.code_mode = CodeMode::Ascii;
+    config.ascii_format = AsciiFormat::Format2;
+    return true;
+  }
   if (text == "c4-ascii-f3") {
     config.frame_kind = FrameKind::C4;
     config.code_mode = CodeMode::Ascii;
@@ -706,6 +713,12 @@ void print_usage() {
     config.ascii_format = AsciiFormat::Format1;
     return true;
   }
+  if (text == "c3-ascii-f2") {
+    config.frame_kind = FrameKind::C3;
+    config.code_mode = CodeMode::Ascii;
+    config.ascii_format = AsciiFormat::Format2;
+    return true;
+  }
   if (text == "c3-ascii-f3") {
     config.frame_kind = FrameKind::C3;
     config.code_mode = CodeMode::Ascii;
@@ -722,6 +735,12 @@ void print_usage() {
     config.frame_kind = FrameKind::C2;
     config.code_mode = CodeMode::Ascii;
     config.ascii_format = AsciiFormat::Format1;
+    return true;
+  }
+  if (text == "c2-ascii-f2") {
+    config.frame_kind = FrameKind::C2;
+    config.code_mode = CodeMode::Ascii;
+    config.ascii_format = AsciiFormat::Format2;
     return true;
   }
   if (text == "c2-ascii-f3") {
@@ -1018,6 +1037,7 @@ void print_usage() {
   options.protocol.frame_kind = FrameKind::C4;
   options.protocol.code_mode = CodeMode::Binary;
   options.protocol.ascii_format = AsciiFormat::Format3;
+  options.protocol.ascii_block_number = 0x00;
   options.protocol.target_series = PlcSeries::Q_L;
   options.protocol.sum_check_enabled = true;
   options.protocol.route.kind = RouteKind::HostStation;
@@ -1075,6 +1095,12 @@ void print_usage() {
       if (!parse_series(argv[++index], options.protocol)) {
         return false;
       }
+    } else if (arg == "--block-no" && (index + 1) < argc) {
+      std::uint32_t value = 0;
+      if (!parse_u32_auto(argv[++index], value) || value > 0xFFU) {
+        return false;
+      }
+      options.protocol.ascii_block_number = static_cast<std::uint8_t>(value);
     } else if (arg == "--station" && (index + 1) < argc) {
       std::uint32_t value = 0;
       if (!parse_u32_auto(argv[++index], value)) {

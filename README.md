@@ -79,6 +79,9 @@ Start with these pages instead of reading the whole repository at once.
   device-memory / block-addressed extended-file-register / special-function-module subset in both
   ASCII and binary on `--series a` and `--series qna`, plus direct extended-file-register
   read/write on `--series a`.
+- For `2C` / `3C` / `4C` ASCII framing, the current implementation supports `Format1`,
+  `Format2`, `Format3`, and `Format4`. `Format2` is the block-numbered `ENQ/ACK/NAK/STX/ETX`
+  variant and maps to `ProtocolConfig::ascii_block_number` or CLI `--block-no`.
 - The codebase also has initial `1C` ASCII support on `--series a` and `--series qna` for
   contiguous device-memory read/write, random write, monitor, module-buffer access,
   extended-file register access, and loopback.

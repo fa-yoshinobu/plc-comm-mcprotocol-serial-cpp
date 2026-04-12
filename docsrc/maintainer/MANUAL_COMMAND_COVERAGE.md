@@ -6,6 +6,7 @@ Scope:
 
 - Primary reference: the Mitsubishi MC protocol serial manual
 - Primary wire scope: serial `2C/3C/4C` frame families plus initial `1C/1E` support
+- Current ASCII wire scope for `2C/3C/4C`: `Format1`, `Format2`, `Format3`, and `Format4`
 - Public library scope: device memory access, buffer memory access, CPU-model, remote control,
   remote password control, loopback, and helper-qualified access over `0601/1601`
 - Out of scope by design unless stated otherwise: label access, file control,

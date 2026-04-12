@@ -143,6 +143,33 @@ ProtocolConfig make_ascii_c2_format3_config() {
   return config;
 }
 
+ProtocolConfig make_ascii_c4_format2_config() {
+  ProtocolConfig config;
+  config.frame_kind = FrameKind::C4;
+  config.code_mode = CodeMode::Ascii;
+  config.ascii_format = AsciiFormat::Format2;
+  config.ascii_block_number = 0x00U;
+  config.target_series = PlcSeries::Q_L;
+  config.sum_check_enabled = true;
+  config.route = RouteConfig {
+      .kind = RouteKind::HostStation,
+      .station_no = 0x00,
+      .network_no = 0x00,
+      .pc_no = 0xFF,
+      .request_destination_module_io_no = 0x03FF,
+      .request_destination_module_station_no = 0x00,
+      .self_station_enabled = false,
+      .self_station_no = 0x00,
+  };
+  return config;
+}
+
+ProtocolConfig make_ascii_c2_format2_config() {
+  ProtocolConfig config = make_ascii_c4_format2_config();
+  config.frame_kind = FrameKind::C2;
+  return config;
+}
+
 ProtocolConfig make_ascii_c4_format4_config() {
   ProtocolConfig config;
   config.frame_kind = FrameKind::C4;
@@ -629,6 +656,10 @@ void test_validate_ascii_c2_config_and_reject_binary() {
   Status status = FrameCodec::validate_config(config);
   assert(status.ok());
 
+  config.ascii_format = AsciiFormat::Format2;
+  status = FrameCodec::validate_config(config);
+  assert(status.ok());
+
   config.code_mode = CodeMode::Binary;
   status = FrameCodec::validate_config(config);
   assert(!status.ok());
@@ -639,6 +670,11 @@ void test_validate_ascii_c1_config_and_reject_binary() {
   ProtocolConfig config = make_ascii_c1_format4_qna_config();
   Status status = FrameCodec::validate_config(config);
   assert(status.ok());
+
+  config.ascii_format = AsciiFormat::Format2;
+  status = FrameCodec::validate_config(config);
+  assert(!status.ok());
+  assert(status.code == StatusCode::UnsupportedConfiguration);
 
   config.code_mode = CodeMode::Binary;
   status = FrameCodec::validate_config(config);
@@ -703,6 +739,89 @@ void test_decode_ascii_c2_format3_data_response() {
   assert(decode.frame.type == mcprotocol::serial::ResponseType::SuccessData);
   assert(decode.frame.response_size == response_data.size());
   assert(std::memcmp(decode.frame.response_data.data(), response_data.data(), response_data.size()) == 0);
+}
+
+void test_encode_ascii_format2_request_inserts_block_number() {
+  auto config = make_ascii_c4_format2_config();
+  config.sum_check_enabled = false;
+  config.ascii_block_number = 0x7AU;
+
+  const BatchReadWordsRequest request {
+      .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100},
+      .points = 1,
+  };
+
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_data_size = 0;
+  Status status = CommandCodec::encode_batch_read_words(config, request, request_data, request_data_size);
+  assert(status.ok());
+
+  std::array<std::uint8_t, 128> frame {};
+  std::size_t frame_size = 0;
+  status = FrameCodec::encode_request(
+      config,
+      std::span<const std::uint8_t>(request_data.data(), request_data_size),
+      frame,
+      frame_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected = "\x05""7AF80000FF03FF000004010000D*0001000001";
+  assert(frame_size == expected.size());
+  assert(std::memcmp(frame.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_ascii_c2_format2_request_uses_short_route_without_frame_id() {
+  auto config = make_ascii_c2_format2_config();
+  config.sum_check_enabled = false;
+  config.ascii_block_number = 0x7AU;
+  config.route.kind = RouteKind::MultidropStation;
+  config.route.station_no = 0x11;
+  config.route.self_station_enabled = true;
+  config.route.self_station_no = 0x05;
+
+  const BatchReadWordsRequest request {
+      .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100},
+      .points = 1,
+  };
+
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_data_size = 0;
+  Status status = CommandCodec::encode_batch_read_words(config, request, request_data, request_data_size);
+  assert(status.ok());
+
+  std::array<std::uint8_t, 128> frame {};
+  std::size_t frame_size = 0;
+  status = FrameCodec::encode_request(
+      config,
+      std::span<const std::uint8_t>(request_data.data(), request_data_size),
+      frame,
+      frame_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected = "\x05""7A110504010000D*0001000001";
+  assert(frame_size == expected.size());
+  assert(std::memcmp(frame.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_decode_ascii_format2_ack_response() {
+  auto config = make_ascii_c4_format2_config();
+  config.sum_check_enabled = false;
+  config.ascii_block_number = 0x7AU;
+  std::array<std::uint8_t, 32> frame {};
+  std::size_t frame_size = 0;
+  Status status = FrameCodec::encode_success_response(config, {}, frame, frame_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected = "\x06""7AF80000FF03FF0000";
+  assert(frame_size == expected.size());
+  assert(std::memcmp(frame.data(), expected.data(), expected.size()) == 0);
+
+  const auto decode = FrameCodec::decode_response(
+      config,
+      std::span<const std::uint8_t>(frame.data(), frame_size));
+  assert(decode.status == DecodeStatus::Complete);
+  assert(decode.frame.type == mcprotocol::serial::ResponseType::SuccessNoData);
+  assert(decode.bytes_consumed == frame_size);
 }
 
 void test_encode_ascii_c1_batch_read_words_qna_request_shape() {
@@ -1837,6 +1956,13 @@ void test_high_level_protocol_presets() {
   assert(config.target_series == PlcSeries::Q_L);
   assert(config.sum_check_enabled);
   assert(config.route.station_no == 0x00);
+
+  const ProtocolConfig ascii_config = mcprotocol::serial::highlevel::make_c4_ascii_format2_protocol();
+  assert(ascii_config.frame_kind == FrameKind::C4);
+  assert(ascii_config.code_mode == CodeMode::Ascii);
+  assert(ascii_config.ascii_format == AsciiFormat::Format2);
+  assert(ascii_config.ascii_block_number == 0x00U);
+  assert(ascii_config.sum_check_enabled);
 }
 
 void test_high_level_make_random_bit_item() {
@@ -4471,6 +4597,9 @@ int main() {
   test_encode_binary_delete_user_frame_request_shape();
   test_validate_ascii_c2_config_and_reject_binary();
   test_validate_ascii_c1_config_and_reject_binary();
+  test_encode_ascii_format2_request_inserts_block_number();
+  test_encode_ascii_c2_format2_request_uses_short_route_without_frame_id();
+  test_decode_ascii_format2_ack_response();
   test_encode_ascii_c2_format3_request_uses_short_route_without_frame_id();
   test_decode_ascii_c2_format3_data_response();
   test_encode_ascii_c1_batch_read_words_qna_request_shape();

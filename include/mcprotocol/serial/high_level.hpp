@@ -167,6 +167,22 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
   return config;
 }
 
+/// \brief Returns a practical default for `Format2 / ASCII / C4`.
+///
+/// `Format2` is the `Format1` style `ENQ/ACK/NAK/STX/ETX` link with an extra 1-byte block
+/// number inserted before the frame ID. The default block number is `0x00`; change
+/// `ProtocolConfig::ascii_block_number` if the host side needs a different value.
+[[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format2_protocol(
+    PlcSeries series = PlcSeries::Q_L) noexcept {
+  ProtocolConfig config = make_c4_ascii_format4_protocol(series);
+  config.ascii_format = AsciiFormat::Format2;
+  config.sum_check_enabled = true;
+  config.route.kind = RouteKind::HostStation;
+  config.route.station_no = 0x00;
+  config.ascii_block_number = 0x00;
+  return config;
+}
+
 /// \brief String-address spec used to build sparse random-read or monitor requests.
 struct RandomReadSpec {
   /// Plain device string such as `D100`, `LZ0`, or `LCN10`.

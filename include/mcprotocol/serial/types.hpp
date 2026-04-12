@@ -169,6 +169,8 @@ enum class CodeMode : std::uint8_t {
 enum class AsciiFormat : std::uint8_t {
   /// ENQ/STX/ETX layout without CR/LF.
   Format1,
+  /// Format1 plus a 1-byte block number used for request/response pairing on `2C/3C/4C`.
+  Format2,
   /// STX-only layout commonly used on serial MC links.
   Format3,
   /// CR/LF terminated layout often used by host-facing bring-up tools.
@@ -325,6 +327,11 @@ struct ProtocolConfig {
   CodeMode code_mode = CodeMode::Binary;
   /// Selected ASCII framing flavor when `code_mode == CodeMode::Ascii`.
   AsciiFormat ascii_format = AsciiFormat::Format3;
+  /// Block number used only by `ASCII Format2` on `2C/3C/4C`.
+  ///
+  /// The external device chooses this value in the range `0x00..0xFF`. It is ignored by
+  /// `Format1`, `Format3`, `Format4`, binary `Format5`, `1C`, and `1E`.
+  std::uint8_t ascii_block_number = 0x00;
   /// PLC family used for device and subcommand differences.
   PlcSeries target_series = PlcSeries::Q_L;
   /// Enables or disables the ASCII/binary sum-check where that frame family supports it.
