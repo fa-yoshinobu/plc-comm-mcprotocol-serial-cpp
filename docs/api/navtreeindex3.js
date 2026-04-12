@@ -1,5 +1,8 @@
 var NAVTREEINDEX3 =
 {
+"platformio__rpipico__arduino__uart_8cpp.html#afe461d27b9c48d5921c00d521181f12f":[18,0,1,4,0,3],
+"platformio__rpipico__arduino__uart_8cpp_source.html":[18,0,1,4,0],
+"posix__serial_8hpp.html":[18,0,2,0,0,5],
 "posix__serial_8hpp_source.html":[18,0,2,0,0,5],
 "qualified__buffer_8hpp.html":[18,0,2,0,0,6],
 "qualified__buffer_8hpp_source.html":[18,0,2,0,0,6],
@@ -246,8 +249,5 @@ var NAVTREEINDEX3 =
 "structmcprotocol_1_1serial_1_1_posix_serial_config.html#aad4b8039ef212926c4b7cb3a7bd8e7fd":[16,0,0,0,18,4],
 "structmcprotocol_1_1serial_1_1_posix_serial_config.html#aad4b8039ef212926c4b7cb3a7bd8e7fd":[17,0,0,0,16,4],
 "structmcprotocol_1_1serial_1_1_posix_serial_config.html#ae770c8b6a05cb98b483166727ce2f186":[16,0,0,0,18,2],
-"structmcprotocol_1_1serial_1_1_posix_serial_config.html#ae770c8b6a05cb98b483166727ce2f186":[17,0,0,0,16,2],
-"structmcprotocol_1_1serial_1_1_protocol_config.html":[16,0,0,0,24],
-"structmcprotocol_1_1serial_1_1_protocol_config.html":[17,0,0,0,22],
-"structmcprotocol_1_1serial_1_1_protocol_config.html#a4648722f0b91ce3d558f89b962072605":[16,0,0,0,24,5]
+"structmcprotocol_1_1serial_1_1_posix_serial_config.html#ae770c8b6a05cb98b483166727ce2f186":[17,0,0,0,16,2]
 };

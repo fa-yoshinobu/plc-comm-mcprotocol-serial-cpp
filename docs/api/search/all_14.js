@@ -4,7 +4,7 @@ var searchData=
   ['qj71c24n_20rs_20232c_20report_1',['QJ71C24N RS-232C Report',['../md_docsrc_2validation_2reports_2_q_j71_c24_n___r_s232_c.html',1,'']]],
   ['qj71c24n_5frs232c_2emd_2',['QJ71C24N_RS232C.md',['../_q_j71_c24_n___r_s232_c_8md.html',1,'']]],
   ['qna_3',['QnA',['../namespacemcprotocol_1_1serial.html#abc734f0164959f34fab347dd491480a2a1eb36288e38674a171f0c83c0e447db3',1,'mcprotocol::serial']]],
-  ['qualified_20g_20hg_20policy_4',['Qualified &lt;span class=&quot;tt&quot;&gt;G/HG&lt;/span&gt; Policy',['../md_docsrc_2maintainer_2_d_e_v_e_l_o_p_e_r___n_o_t_e_s.html#autotoc_md15',1,'']]],
+  ['qualified_20g_20hg_20policy_4',['Qualified &lt;span class=&quot;tt&quot;&gt;G/HG&lt;/span&gt; Policy',['../md_docsrc_2maintainer_2_d_e_v_e_l_o_p_e_r___n_o_t_e_s.html#autotoc_md16',1,'']]],
   ['qualified_5fbuffer_2ehpp_5',['qualified_buffer.hpp',['../qualified__buffer_8hpp.html',1,'']]],
   ['qualified_5fbuffer_5fkind_5fname_6',['qualified_buffer_kind_name',['../namespacemcprotocol_1_1serial.html#aeeb30335b81b19e1d1c6c20e89f51706',1,'mcprotocol::serial']]],
   ['qualified_5fbuffer_5fword_5fto_5fbyte_5faddress_7',['qualified_buffer_word_to_byte_address',['../namespacemcprotocol_1_1serial.html#afb44d52bf13e9d6f00fa815ca9b1d54f',1,'mcprotocol::serial']]],

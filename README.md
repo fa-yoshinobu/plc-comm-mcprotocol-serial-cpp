@@ -26,45 +26,55 @@ The current codebase includes:
 
 ## Start Here
 
-If you are new to this repository, do this first.
+Choose the first path that matches what you are trying to do.
 
-### 1. Build
+### 1. Simplest host-side bring-up
 
-```bash
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
-```
+Start with [host_sync_quickstart.cpp](examples/host_sync_quickstart.cpp) if you want the smallest
+blocking example on Windows or POSIX.
 
-### 2. Try the smallest library entrypoint
+- best first read for host-side use
+- read-only bring-up
+- uses the synchronous `PosixSyncClient` facade
 
-```bash
-cmake --build build --target mcprotocol_example_host_sync
-./build/mcprotocol_example_host_sync
-```
+### 2. Real MCU UART bring-up
 
-That example uses the synchronous host-side facade in
-[host_sync_quickstart.cpp](examples/host_sync_quickstart.cpp).
+Start with [MCU Quickstart](docsrc/user/MCU_QUICKSTART.md) and
+[Examples Index](examples/README.md) if you want to run on `RP2040`, `ESP32-C3`, or
+`Arduino Mega 2560`.
 
-### 3. Choose your entry path
+- board-specific UART samples
+- read-only first step
+- intended for actual `TTL UART -> level shifter -> RS-232C` wiring
 
-- If you want the simplest library example on a host machine, start with
-  [host_sync_quickstart.cpp](examples/host_sync_quickstart.cpp).
-- If you want the low-level MCU state machine, start with [MCU Quickstart](docsrc/user/MCU_QUICKSTART.md).
-- If you need verified target settings and current limits, use
-  [HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md).
+### 3. Low-level async integration
+
+Start with [mcu_async_batch_read.cpp](examples/mcu_async_batch_read.cpp) if you want the async
+state machine directly and plan to integrate your own UART layer or scheduler.
+
+### 4. Confirm the real target settings
+
+Before building against real hardware, confirm the exact serial settings for your target in
+[HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md).
+
+The example projects keep intentionally simple defaults. Those defaults are example defaults, not
+the authority for the current validated settings.
 
 ## Documentation Map
 
-Start with these pages instead of reading the whole repository at once.
+### For Users
 
+- [Examples Index](examples/README.md)
 - [Wiring Guide](docsrc/user/WIRING_GUIDE.md)
 - [MCU Quickstart](docsrc/user/MCU_QUICKSTART.md)
 - [FAQ](docsrc/user/FAQ.md)
-- [Examples Index](examples/README.md)
 - [Hardware Validation Matrix](docsrc/validation/reports/HARDWARE_VALIDATION.md)
 - [Footprint Profiles](docsrc/validation/reports/FOOTPRINT_PROFILES.md)
 - [Generated API Docs](docs/api/index.html)
+
+### For Maintainers
+
+- [Maintainer Docs Index](docsrc/maintainer/README.md)
 - [Developer Notes](docsrc/maintainer/DEVELOPER_NOTES.md)
 - [Manual Command Coverage](docsrc/maintainer/MANUAL_COMMAND_COVERAGE.md)
 - [TODO / Current Follow-up](docsrc/maintainer/TODO.md)
@@ -74,25 +84,18 @@ Start with these pages instead of reading the whole repository at once.
 
 ## What Works Today
 
-- The library supports MC protocol request/response handling for `2C`, `3C`, `4C`, and initial
-  `1E` frame families. `2C` is ASCII-only. `1E` currently supports the chapter-18
-  device-memory / block-addressed extended-file-register / special-function-module subset in both
-  ASCII and binary on `--series a` and `--series qna`, plus direct extended-file-register
-  read/write on `--series a`.
-- For `2C` / `3C` / `4C` ASCII framing, the current implementation supports `Format1`,
-  `Format2`, `Format3`, and `Format4`. `Format2` is the block-numbered `ENQ/ACK/NAK/STX/ETX`
-  variant and maps to `ProtocolConfig::ascii_block_number` or CLI `--block-no`.
-- The codebase also has initial `1C` ASCII support on `--series a` and `--series qna` for
-  contiguous device-memory read/write, random write, monitor, module-buffer access,
-  extended-file register access, and loopback.
-- The codebase includes contiguous, random, multi-block, monitor, host-buffer, module-buffer,
-  CPU-model, remote RUN/STOP/PAUSE/latch-clear, password lock/unlock, error-clear, remote-reset,
-  loopback, user-frame registration/read/delete, C24 global-signal control, transmission-sequence
-  initialization, and CPU-monitoring deregistration command paths.
-- Real-hardware validation now covers `RJ71C24-R2`, `LJ71C24`, `QJ71C24N`, and `FX5UC-32MT/D`.
-- There are currently no active command-family holds on the validated targets.
-- Contiguous access is validated on all current targets.
-- Random, multi-block, and monitor are validated where the target and `--series` combination supports them.
+- The same transport-agnostic core is used by host-side tools and MCU firmware examples.
+- `2C`, `3C`, and `4C` command handling are in place. `2C` is ASCII-only. The codebase also has
+  initial `1C` and `1E` support for narrower subsets.
+- `2C` / `3C` / `4C` ASCII currently support `Format1`, `Format2`, `Format3`, and `Format4`.
+  `Format2` is the block-numbered variant and maps to `ProtocolConfig::ascii_block_number` or
+  CLI `--block-no`.
+- The implemented command families cover the practical device-memory, random, multi-block,
+  monitor, host-buffer, module-buffer, CPU-model, remote-control, password/error, loopback,
+  user-frame, and C24 extras paths described elsewhere in this repo.
+- Real-hardware validation currently covers `RJ71C24-R2`, `LJ71C24`, `QJ71C24N`, and
+  `FX5UC-32MT/D`.
+- There are no active command-family holds on the currently validated targets.
 - Qualified helper access over `0601/1601` is the supported public `U...` path.
 
 For the exact PASS / status matrix and the verified serial settings for each target, see
@@ -103,26 +106,18 @@ For the exact PASS / status matrix and the verified serial settings for each tar
 - This repository does not implement the full MC protocol serial command list. Use
   [MANUAL_COMMAND_COVERAGE.md](docsrc/maintainer/MANUAL_COMMAND_COVERAGE.md) for the exact
   implemented vs. missing command families.
-- `1C` support is currently limited to contiguous device-memory read/write, random write, monitor,
-  module-buffer access, extended-file register access, and loopback. ACPU-common `ER/EW/ET/EM/ME`
-  is available on `PlcSeries::A`, and QnA-common direct `NR/NW` is available on
-  `PlcSeries::QnA`.
-- `1E` support is currently limited to chapter `18`: contiguous device-memory read/write, random
-  write, monitor register/read, block-addressed extended-file-register
-  read/write/random-write/monitor on `--series a` and `--series qna`, direct extended-file-register
-  read/write on `--series a`, and special-function-module buffer read/write. It does not expose
-  CPU-model, host-buffer, remote control, password/error control, loopback, multi-block,
-  qualified helper, or link-direct paths.
+- `1C` and `1E` remain subset implementations. They are useful, but they do not expose the full
+  `3C` / `4C` surface.
 - Some command families are target-dependent and require the right `--series` selection.
-- Native qualified access is not part of the supported library workflow. Keep `U...` access on the
-  helper path only.
+- Native qualified access is not a supported public workflow. Keep `U...` access on the helper
+  path only.
 - `FX5UC-32MT/D` treats `0613/1613/0601/1601` and `0801/0802` as unsupported / not applicable on
-  serial `3C/4C`; qualified access is also not available there.
-- Large contiguous `write-words` and `write-bits` are still split automatically to fit fixed request buffers.
+  serial `3C/4C`.
+- Large contiguous `write-words` and `write-bits` are still split automatically to fit fixed
+  request buffers.
 - The remaining repository follow-up is implementation work for `1612`, `0630`, and `2101`, plus
   hardware validation for `1005` remote latch clear, plus target-dependent validation for `1630` /
-  `1631` remote password unlock/lock on `RJ71C24-R2 + R120PCPU`, where the current focused
-  `--series iqr` checks return `0x7F22`.
+  `1631` remote password unlock/lock on `RJ71C24-R2 + R120PCPU`.
 
 For target-specific limits and current follow-up items, use
 [HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md) and
@@ -194,6 +189,9 @@ mcprotocol::serial::Status status =
 
 Smallest synchronous host-side setup:
 
+This snippet matches [host_sync_quickstart.cpp](examples/host_sync_quickstart.cpp). Treat it as an
+example default, not as the authority for your target's validated serial settings.
+
 ```cpp
 #include <mcprotocol_serial.hpp>
 
@@ -206,11 +204,11 @@ mcprotocol::serial::PosixSerialConfig serial {
 #endif
     .baud_rate = 19200,
     .data_bits = 8,
-    .stop_bits = 1,
+    .stop_bits = 2,
     .parity = 'E',
 };
 
-auto protocol = mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol();
+auto protocol = mcprotocol::serial::highlevel::make_c4_binary_protocol();
 mcprotocol::serial::Status status = plc.open(serial, protocol);
 
 std::array<std::uint16_t, 2> words {};

@@ -2,13 +2,21 @@
 
 Audience: maintainers of this repository.
 
-This repository now follows the same documentation split used in `plc-comm-slmp-cpp-minimal`.
-
 ## Documentation Layout
 
 - `docsrc/user/`: user-facing bring-up and usage
 - `docsrc/validation/reports/`: validation matrix and one consolidated report per hardware target
 - `docsrc/maintainer/`: repository-maintenance notes
+
+## Documentation Boundary
+
+- Keep `docsrc/user/` and the top-level `README.md` focused on current user workflows.
+- Keep unresolved hardware evidence, command coverage detail, and backlog policy in
+  `docsrc/validation/reports/` or `docsrc/maintainer/`.
+- Label sample defaults as sample defaults. Do not describe example-code defaults as the current
+  validated target settings.
+- When the practical settings or follow-up state changes, re-check `README.md`, `docs/index.md`,
+  and `docsrc/user/` for stale current-looking text.
 
 ## Status Terms
 

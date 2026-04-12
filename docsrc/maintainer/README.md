@@ -2,6 +2,12 @@
 
 This section is for implementation notes, command coverage, and current follow-up items.
 
+If you are trying to use the library rather than maintain it, go back to:
+
+- [../../README.md](../../README.md)
+- [../../examples/README.md](../../examples/README.md)
+- [../user/MCU_QUICKSTART.md](../user/MCU_QUICKSTART.md)
+
 Current pages:
 
 - [DEVELOPER_NOTES.md](DEVELOPER_NOTES.md)

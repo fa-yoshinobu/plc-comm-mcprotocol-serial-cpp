@@ -19,7 +19,10 @@ Important points:
 
 - Use an actual `RS-232C` adapter, not a bare `3.3V TTL UART`.
 - `RS-232C` and MCU UART logic levels are different.
-- The validated setup used `RJ71C24-R2`, `RS-232C`, `19200`, `8E1`, `MC Protocol Format4`, `ASCII`, `CR/LF`, `sum-check off`, `station 0`.
+- Do not copy protocol settings from an old sample or old log without checking the current
+  validation matrix.
+- For the exact current settings that were validated on each target, use
+  [../validation/reports/HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md).
 
 ## MCU-side Path
 
@@ -40,6 +43,8 @@ Important points:
 - The PLC side is `RS-232C`.
 - A level shifter is required between them.
 - `RS-485 DE/RE` control is not needed for the validated `RS-232C` setup.
+- The MCU sample projects keep simple example defaults. Treat those as firmware sample defaults,
+  not as the authority for the validated target settings.
 
 ## Before Power-up
 

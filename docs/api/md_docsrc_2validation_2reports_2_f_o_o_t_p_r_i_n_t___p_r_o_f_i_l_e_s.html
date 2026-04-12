@@ -92,9 +92,9 @@ $(function(){initNavTree('md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p
   <div class="headertitle"><div class="title">Footprint Profiles </div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><p><a class="anchor" id="autotoc_md66"></a></p>
+<div class="textblock"><p><a class="anchor" id="autotoc_md69"></a></p>
 <p>This page summarizes the memory-footprint measurements captured on the current reduced and ultra-minimal profiles.</p>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md67"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md70"></a>
 Measured Profiles</h1>
 <table class="markdownTable">
 <tr class="markdownTableHead">
@@ -106,7 +106,7 @@ Measured Profiles</h1>
 <tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone">Ultra-minimal PlatformIO profile  </td><td class="markdownTableBodyRight"><span class="tt">792 B</span>  </td><td class="markdownTableBodyRight"><span class="tt">14,508 B</span>  </td><td class="markdownTableBodyRight"><span class="tt">261,046 B</span>  </td><td class="markdownTableBodyRight"><span class="tt">4,983 B</span>  </td><td class="markdownTableBodyRight"><span class="tt">18,716 B</span>  </td><td class="markdownTableBodyRight"><span class="tt">41,512 B</span>  </td><td class="markdownTableBodyRight"><span class="tt">4,850 B</span>  </td></tr>
 </table>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md68"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md71"></a>
 How The Reduced Profile Shrinks</h1>
 <p>The reduced profile:</p>
 <ul>
@@ -116,7 +116,7 @@ How The Reduced Profile Shrinks</h1>
 <li>compiles out binary, <span class="tt">3C</span>, <span class="tt">2C</span>, <span class="tt">1C</span>, and <span class="tt">1E</span> codec branches</li>
 <li>keeps batch read/write, <span class="tt">cpu-model</span>, and <span class="tt">loopback</span></li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md69"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md72"></a>
 How The Ultra-minimal Profile Shrinks Further</h1>
 <p>The ultra-minimal profile also:</p>
 <ul>
@@ -124,7 +124,7 @@ How The Ultra-minimal Profile Shrinks Further</h1>
 <li>compiles out <span class="tt">loopback</span></li>
 <li>shrinks the fixed request / response / data buffers to <span class="tt">256 / 256 / 128</span></li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md70"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md73"></a>
 Trimming Units</h1>
 <p>Current compile-time trimming works at these units:</p>
 <ul>
@@ -139,7 +139,7 @@ Trimming Units</h1>
 <li>per-device paths inside one family for example, you cannot compile out only <span class="tt">Jn\\...</span> or only <span class="tt">U...</span></li>
 <li>per-series support <span class="tt">IQ-R</span>, <span class="tt">Q/L</span>, <span class="tt">QnA</span>, and <span class="tt">A</span> are still runtime protocol choices, not separate build switches</li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md71"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md74"></a>
 Where The Settings Live</h1>
 <ul>
 <li><span class="tt">platformio.ini</span></li>

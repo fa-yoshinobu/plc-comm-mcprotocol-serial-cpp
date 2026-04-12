@@ -1,9 +1,25 @@
 # FAQ
 
+## Which page should I start with?
+
+- If you want the simplest host-side example, start with [../../examples/README.md](../../examples/README.md)
+  and `host_sync_quickstart.cpp`.
+- If you want to run on a real MCU UART, start with [MCU_QUICKSTART.md](MCU_QUICKSTART.md).
+- If you need the exact validated serial settings for your target, use
+  [../validation/reports/HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md).
+
 ## Is this library Linux-only?
 
 No. The core library is transport-agnostic and the same core code is used for host-side validation
 tools and MCU examples.
+
+## Do the sample defaults equal the validated target settings?
+
+No.
+
+The example projects keep simple starting values so the code stays easy to read. Use
+[../validation/reports/HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md) as
+the authority for the current validated settings of your actual target.
 
 ## Which MCU targets are prepared today?
 
@@ -21,12 +37,10 @@ The new real-UART MCU example is read-only. It repeatedly reads `D100-D103` and 
 
 Because support is target-dependent.
 
-- `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` pass native random / multi-block / monitor traffic under `--series ql`
-- `FX5UC-32MT/D` passes native random / multi-block traffic under `--series ql`
-- `FX5UC-32MT/D` monitor `0801/0802` is treated as unsupported on serial `3C/4C`
-- `RJ71C24-R2 + R120PCPU` `remote-reset` passes once the target-side remote RESET parameter is enabled
-- `RJ71C24-R2 + R120PCPU` `lock` / `unlock` are still unresolved; focused `--series iqr` checks returned `0x7F22`
-- native qualified access is not a supported workflow
+- support depends on the target module and the selected `--series`
+- helper and contiguous paths are often the practical public workflow even when a direct native
+  probe is target-dependent
+- native qualified access is not a supported public workflow
 
 For practical qualified-device access, use `read-qualified-words` / `write-qualified-words` where
 the helper path is validated. Treat native qualified commands as diagnostic probes only.
@@ -63,5 +77,5 @@ The output is generated under `docs/api/`.
 If you want to run Doxygen without CMake, use:
 
 ```bash
-doxygen Doxyfile
+scripts/run_doxygen.bat
 ```

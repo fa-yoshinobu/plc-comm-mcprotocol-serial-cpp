@@ -9,12 +9,16 @@ This page points to the real-UART read-only samples for `RP2040`, `ESP32-C3`, an
 
 The sample:
 
-- configures `MelsecSerialClient` for the validated `RJ71C24-R2` settings
+- configures `MelsecSerialClient` with the sample's own default UART / protocol settings
 - opens the board-specific UART entry used by the sample
 - sends the client's `pending_tx_frame()`
 - calls `notify_tx_complete()` after `flush()`
 - feeds incoming UART bytes into `on_rx_bytes()`
 - performs a read-only batch read of `D100-D103`
+
+Those settings are intentionally simple sample defaults. They are not the authority for the
+current validated settings of every target. Before wiring real hardware, check
+`HARDWARE_VALIDATION.md`.
 
 Sample source:
 
@@ -30,13 +34,19 @@ pio run -e esp32-c3-devkitm-1-uart-example
 pio run -e mega2560-arduino-uart-example
 ```
 
-## Default Sample Assumptions
+## Default Sample Settings
 
+- Serial: `19200 / 8E1`
 - Protocol: `4C ASCII Format4`
 - Terminator: `CR/LF`
 - Sum check: `off`
 - Station: `0`
 - Read-only device range: `D100-D103`
+
+Use this section only to understand what the sample code does by default.
+
+For exact validated target settings, use
+[../validation/reports/HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md).
 
 The board environments also define default UART pins:
 

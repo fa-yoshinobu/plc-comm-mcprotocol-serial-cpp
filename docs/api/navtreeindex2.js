@@ -1,5 +1,8 @@
 var NAVTREEINDEX2 =
 {
+"namespacemcprotocol_1_1serial.html#a27597d44f3ac2679223eeb3ce15a3642a02129bb861061d1a052c592e2dc6b383":[16,0,0,0,63,0],
+"namespacemcprotocol_1_1serial.html#a27597d44f3ac2679223eeb3ce15a3642a09ce1f6a2b9eb2c4734f1c045c4a3a4f":[16,0,0,0,63,30],
+"namespacemcprotocol_1_1serial.html#a27597d44f3ac2679223eeb3ce15a3642a1170748fc5269fead10c68f83205c01a":[16,0,0,0,63,29],
 "namespacemcprotocol_1_1serial.html#a27597d44f3ac2679223eeb3ce15a3642a15fe2c852ab5853ab45c0679b1427e8a":[16,0,0,0,63,28],
 "namespacemcprotocol_1_1serial.html#a27597d44f3ac2679223eeb3ce15a3642a1c2903397d8833382673bab22aa8b937":[16,0,0,0,63,19],
 "namespacemcprotocol_1_1serial.html#a27597d44f3ac2679223eeb3ce15a3642a1f5388690f2c10c5a68ac0b28696fd8b":[16,0,0,0,63,16],
@@ -246,8 +249,5 @@ var NAVTREEINDEX2 =
 "platformio__rpipico__arduino__uart_8cpp.html#a4fc01d736fe50cf5b977f755b675f11d":[18,0,1,4,0,4],
 "platformio__rpipico__arduino__uart_8cpp.html#ac83205779de58aeb623ee451ff4d0bfc":[18,0,1,4,0,2],
 "platformio__rpipico__arduino__uart_8cpp.html#aef3c95a6fcec4a56dc289d4d26418257":[18,0,1,4,0,1],
-"platformio__rpipico__arduino__uart_8cpp.html#afde2ea4d2ea8350b380fa5480ee836ec":[18,0,1,4,0,0],
-"platformio__rpipico__arduino__uart_8cpp.html#afe461d27b9c48d5921c00d521181f12f":[18,0,1,4,0,3],
-"platformio__rpipico__arduino__uart_8cpp_source.html":[18,0,1,4,0],
-"posix__serial_8hpp.html":[18,0,2,0,0,5]
+"platformio__rpipico__arduino__uart_8cpp.html#afde2ea4d2ea8350b380fa5480ee836ec":[18,0,1,4,0,0]
 };

@@ -113,32 +113,41 @@ MC Protocol Serial C++ Library</h1>
 </ul>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md1"></a>
 Start Here</h2>
-<p>If you are new to this repository, do this first.</p>
-<h3>1. Build</h3>
-<div class="fragment"><div class="line">cmake -S . -B build</div>
-<div class="line">cmake --build build</div>
-<div class="line">ctest --test-dir build --output-on-failure</div>
-</div><!-- fragment --><h3>2. Try the smallest library entrypoint</h3>
-<div class="fragment"><div class="line">cmake --build build --target mcprotocol_example_host_sync</div>
-<div class="line">./build/mcprotocol_example_host_sync</div>
-</div><!-- fragment --><p>That example uses the synchronous host-side facade in <a href="examples/host_sync_quickstart.cpp">host_sync_quickstart.cpp</a>.</p>
-<h3>3. Choose your entry path</h3>
+<p>Choose the first path that matches what you are trying to do.</p>
+<h3>1. Simplest host-side bring-up</h3>
+<p>Start with <a href="examples/host_sync_quickstart.cpp">host_sync_quickstart.cpp</a> if you want the smallest blocking example on Windows or POSIX.</p>
 <ul>
-<li>If you want the simplest library example on a host machine, start with <a href="examples/host_sync_quickstart.cpp">host_sync_quickstart.cpp</a>.</li>
-<li>If you want the low-level MCU state machine, start with <a class="el" href="md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html" title="MCU Quickstart">MCU Quickstart</a>.</li>
-<li>If you need verified target settings and current limits, use <a class="el" href="md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html" title="Hardware Validation">HARDWARE_VALIDATION.md</a>.</li>
+<li>best first read for host-side use</li>
+<li>read-only bring-up</li>
+<li>uses the synchronous <span class="tt">PosixSyncClient</span> facade</li>
 </ul>
+<h3>2. Real MCU UART bring-up</h3>
+<p>Start with <a class="el" href="md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html" title="MCU Quickstart">MCU Quickstart</a> and <a class="el" href="dir_d28a4824dc47e487b107a5db32ef43c4.html" title="D:/vscode/plc-comm-mcprotocol-serial-cpp/examples/README.md">Examples Index</a> if you want to run on <span class="tt">RP2040</span>, <span class="tt">ESP32-C3</span>, or <span class="tt">Arduino Mega 2560</span>.</p>
+<ul>
+<li>board-specific UART samples</li>
+<li>read-only first step</li>
+<li>intended for actual <span class="tt">TTL UART -&gt; level shifter -&gt; RS-232C</span> wiring</li>
+</ul>
+<h3>3. Low-level async integration</h3>
+<p>Start with <a href="examples/mcu_async_batch_read.cpp">mcu_async_batch_read.cpp</a> if you want the async state machine directly and plan to integrate your own UART layer or scheduler.</p>
+<h3>4. Confirm the real target settings</h3>
+<p>Before building against real hardware, confirm the exact serial settings for your target in <a class="el" href="md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html" title="Hardware Validation">HARDWARE_VALIDATION.md</a>.</p>
+<p>The example projects keep intentionally simple defaults. Those defaults are example defaults, not the authority for the current validated settings.</p>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md2"></a>
 Documentation Map</h2>
-<p>Start with these pages instead of reading the whole repository at once.</p>
+<h3>For Users</h3>
 <ul>
+<li><a class="el" href="dir_d28a4824dc47e487b107a5db32ef43c4.html" title="D:/vscode/plc-comm-mcprotocol-serial-cpp/examples/README.md">Examples Index</a></li>
 <li><a class="el" href="md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html" title="Wiring Guide">Wiring Guide</a></li>
 <li><a class="el" href="md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html" title="MCU Quickstart">MCU Quickstart</a></li>
 <li><a class="el" href="md_docsrc_2user_2_f_a_q.html" title="FAQ">FAQ</a></li>
-<li><a class="el" href="dir_d28a4824dc47e487b107a5db32ef43c4.html" title="D:/vscode/plc-comm-mcprotocol-serial-cpp/examples/README.md">Examples Index</a></li>
 <li><a class="el" href="md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html" title="Hardware Validation">Hardware Validation Matrix</a></li>
 <li><a class="el" href="md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html" title="Footprint Profiles">Footprint Profiles</a></li>
 <li><a href="docs/api/index.html">Generated API Docs</a></li>
+</ul>
+<h3>For Maintainers</h3>
+<ul>
+<li><a class="el" href="dir_6dd14b0b242757d3e6da0ddfee040431.html" title="D:/vscode/plc-comm-mcprotocol-serial-cpp/docsrc/maintainer/README.md">Maintainer Docs Index</a></li>
 <li><a class="el" href="md_docsrc_2maintainer_2_d_e_v_e_l_o_p_e_r___n_o_t_e_s.html" title="Developer Notes">Developer Notes</a></li>
 <li><a class="el" href="md_docsrc_2maintainer_2_m_a_n_u_a_l___c_o_m_m_a_n_d___c_o_v_e_r_a_g_e.html" title="Manual Command Coverage">Manual Command Coverage</a></li>
 <li><a class="el" href="md_docsrc_2maintainer_2_t_o_d_o.html" title="TODO">TODO / Current Follow-up</a></li>
@@ -149,14 +158,12 @@ Documentation Map</h2>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md3"></a>
 What Works Today</h2>
 <ul>
-<li>The library supports MC protocol request/response handling for <span class="tt">2C</span>, <span class="tt">3C</span>, <span class="tt">4C</span>, and initial <span class="tt">1E</span> frame families. <span class="tt">2C</span> is ASCII-only. <span class="tt">1E</span> currently supports the chapter-18 device-memory / block-addressed extended-file-register / special-function-module subset in both ASCII and binary on <span class="tt">--series a</span> and <span class="tt">--series qna</span>, plus direct extended-file-register read/write on <span class="tt">--series a</span>.</li>
-<li>For <span class="tt">2C</span> / <span class="tt">3C</span> / <span class="tt">4C</span> ASCII framing, the current implementation supports <span class="tt">Format1</span>, <span class="tt">Format2</span>, <span class="tt">Format3</span>, and <span class="tt">Format4</span>. <span class="tt">Format2</span> is the block-numbered <span class="tt">ENQ/ACK/NAK/STX/ETX</span> variant and maps to <span class="tt">ProtocolConfig::ascii_block_number</span> or CLI <span class="tt">--block-no</span>.</li>
-<li>The codebase also has initial <span class="tt">1C</span> ASCII support on <span class="tt">--series a</span> and <span class="tt">--series qna</span> for contiguous device-memory read/write, random write, monitor, module-buffer access, extended-file register access, and loopback.</li>
-<li>The codebase includes contiguous, random, multi-block, monitor, host-buffer, module-buffer, CPU-model, remote RUN/STOP/PAUSE/latch-clear, password lock/unlock, error-clear, remote-reset, loopback, user-frame registration/read/delete, C24 global-signal control, transmission-sequence initialization, and CPU-monitoring deregistration command paths.</li>
-<li>Real-hardware validation now covers <span class="tt">RJ71C24-R2</span>, <span class="tt">LJ71C24</span>, <span class="tt">QJ71C24N</span>, and <span class="tt">FX5UC-32MT/D</span>.</li>
-<li>There are currently no active command-family holds on the validated targets.</li>
-<li>Contiguous access is validated on all current targets.</li>
-<li>Random, multi-block, and monitor are validated where the target and <span class="tt">--series</span> combination supports them.</li>
+<li>The same transport-agnostic core is used by host-side tools and MCU firmware examples.</li>
+<li><span class="tt">2C</span>, <span class="tt">3C</span>, and <span class="tt">4C</span> command handling are in place. <span class="tt">2C</span> is ASCII-only. The codebase also has initial <span class="tt">1C</span> and <span class="tt">1E</span> support for narrower subsets.</li>
+<li><span class="tt">2C</span> / <span class="tt">3C</span> / <span class="tt">4C</span> ASCII currently support <span class="tt">Format1</span>, <span class="tt">Format2</span>, <span class="tt">Format3</span>, and <span class="tt">Format4</span>. <span class="tt">Format2</span> is the block-numbered variant and maps to <span class="tt">ProtocolConfig::ascii_block_number</span> or CLI <span class="tt">--block-no</span>.</li>
+<li>The implemented command families cover the practical device-memory, random, multi-block, monitor, host-buffer, module-buffer, CPU-model, remote-control, password/error, loopback, user-frame, and C24 extras paths described elsewhere in this repo.</li>
+<li>Real-hardware validation currently covers <span class="tt">RJ71C24-R2</span>, <span class="tt">LJ71C24</span>, <span class="tt">QJ71C24N</span>, and <span class="tt">FX5UC-32MT/D</span>.</li>
+<li>There are no active command-family holds on the currently validated targets.</li>
 <li>Qualified helper access over <span class="tt">0601/1601</span> is the supported public <span class="tt">U...</span> path.</li>
 </ul>
 <p>For the exact PASS / status matrix and the verified serial settings for each target, see <a class="el" href="md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html" title="Hardware Validation">HARDWARE_VALIDATION.md</a>.</p>
@@ -164,13 +171,12 @@ What Works Today</h2>
 Current Limits</h2>
 <ul>
 <li>This repository does not implement the full MC protocol serial command list. Use <a class="el" href="md_docsrc_2maintainer_2_m_a_n_u_a_l___c_o_m_m_a_n_d___c_o_v_e_r_a_g_e.html" title="Manual Command Coverage">MANUAL_COMMAND_COVERAGE.md</a> for the exact implemented vs. missing command families.</li>
-<li><span class="tt">1C</span> support is currently limited to contiguous device-memory read/write, random write, monitor, module-buffer access, extended-file register access, and loopback. ACPU-common <span class="tt">ER/EW/ET/EM/ME</span> is available on <span class="tt">PlcSeries::A</span>, and QnA-common direct <span class="tt">NR/NW</span> is available on <span class="tt">PlcSeries::QnA</span>.</li>
-<li><span class="tt">1E</span> support is currently limited to chapter <span class="tt">18</span>: contiguous device-memory read/write, random write, monitor register/read, block-addressed extended-file-register read/write/random-write/monitor on <span class="tt">--series a</span> and <span class="tt">--series qna</span>, direct extended-file-register read/write on <span class="tt">--series a</span>, and special-function-module buffer read/write. It does not expose CPU-model, host-buffer, remote control, password/error control, loopback, multi-block, qualified helper, or link-direct paths.</li>
+<li><span class="tt">1C</span> and <span class="tt">1E</span> remain subset implementations. They are useful, but they do not expose the full <span class="tt">3C</span> / <span class="tt">4C</span> surface.</li>
 <li>Some command families are target-dependent and require the right <span class="tt">--series</span> selection.</li>
-<li>Native qualified access is not part of the supported library workflow. Keep <span class="tt">U...</span> access on the helper path only.</li>
-<li><span class="tt">FX5UC-32MT/D</span> treats <span class="tt">0613/1613/0601/1601</span> and <span class="tt">0801/0802</span> as unsupported / not applicable on serial <span class="tt">3C/4C</span>; qualified access is also not available there.</li>
+<li>Native qualified access is not a supported public workflow. Keep <span class="tt">U...</span> access on the helper path only.</li>
+<li><span class="tt">FX5UC-32MT/D</span> treats <span class="tt">0613/1613/0601/1601</span> and <span class="tt">0801/0802</span> as unsupported / not applicable on serial <span class="tt">3C/4C</span>.</li>
 <li>Large contiguous <span class="tt">write-words</span> and <span class="tt">write-bits</span> are still split automatically to fit fixed request buffers.</li>
-<li>The remaining repository follow-up is implementation work for <span class="tt">1612</span>, <span class="tt">0630</span>, and <span class="tt">2101</span>, plus hardware validation for <span class="tt">1005</span> remote latch clear, plus target-dependent validation for <span class="tt">1630</span> / <span class="tt">1631</span> remote password unlock/lock on <span class="tt">RJ71C24-R2 + R120PCPU</span>, where the current focused <span class="tt">--series iqr</span> checks return <span class="tt">0x7F22</span>.</li>
+<li>The remaining repository follow-up is implementation work for <span class="tt">1612</span>, <span class="tt">0630</span>, and <span class="tt">2101</span>, plus hardware validation for <span class="tt">1005</span> remote latch clear, plus target-dependent validation for <span class="tt">1630</span> / <span class="tt">1631</span> remote password unlock/lock on <span class="tt">RJ71C24-R2 + R120PCPU</span>.</li>
 </ul>
 <p>For target-specific limits and current follow-up items, use <a class="el" href="md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html" title="Hardware Validation">HARDWARE_VALIDATION.md</a> and <a class="el" href="md_docsrc_2maintainer_2_t_o_d_o.html" title="TODO">TODO.md</a>.</p>
 <h2 class="doxsection"><a class="anchor" id="autotoc_md5"></a>
@@ -238,6 +244,7 @@ For MCU Users</h2>
 <div class="ttc" id="astructmcprotocol_1_1serial_1_1_route_config_html_abe9a2876f1d5d6a8f25ce2e90ee060d3"><div class="ttname"><a href="structmcprotocol_1_1serial_1_1_route_config.html#abe9a2876f1d5d6a8f25ce2e90ee060d3">mcprotocol::serial::RouteConfig::station_no</a></div><div class="ttdeci">std::uint8_t station_no</div><div class="ttdoc">Target station number on multidrop serial links.</div><div class="ttdef"><b>Definition</b> <a href="types_8hpp_source.html#l00300">types.hpp:300</a></div></div>
 <div class="ttc" id="astructmcprotocol_1_1serial_1_1_status_html"><div class="ttname"><a href="structmcprotocol_1_1serial_1_1_status.html">mcprotocol::serial::Status</a></div><div class="ttdoc">Result object returned by most public APIs.</div><div class="ttdef"><b>Definition</b> <a href="status_8hpp_source.html#l00026">status.hpp:26</a></div></div>
 </div><!-- fragment --><p>Smallest synchronous host-side setup:</p>
+<p>This snippet matches <a href="examples/host_sync_quickstart.cpp">host_sync_quickstart.cpp</a>. Treat it as an example default, not as the authority for your target's validated serial settings.</p>
 <div class="fragment"><div class="line"><span class="preprocessor">#include &lt;<a class="code" href="mcprotocol__serial_8hpp.html">mcprotocol_serial.hpp</a>&gt;</span></div>
 <div class="line"> </div>
 <div class="line"><a class="code hl_class" href="classmcprotocol_1_1serial_1_1_posix_sync_client.html">mcprotocol::serial::PosixSyncClient</a> plc;</div>
@@ -249,11 +256,11 @@ For MCU Users</h2>
 <div class="line"><span class="preprocessor">#endif</span></div>
 <div class="line">    .baud_rate = 19200,</div>
 <div class="line">    .data_bits = 8,</div>
-<div class="line">    .stop_bits = 1,</div>
+<div class="line">    .stop_bits = 2,</div>
 <div class="line">    .parity = <span class="charliteral">&#39;E&#39;</span>,</div>
 <div class="line">};</div>
 <div class="line"> </div>
-<div class="line"><span class="keyword">auto</span> protocol = <a class="code hl_function" href="namespacemcprotocol_1_1serial_1_1highlevel.html#ab742d4fc876c94a8e6e983e2dd9e29e4">mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol</a>();</div>
+<div class="line"><span class="keyword">auto</span> protocol = <a class="code hl_function" href="namespacemcprotocol_1_1serial_1_1highlevel.html#a4673d28aa459f5457b331f4acbb8a13f">mcprotocol::serial::highlevel::make_c4_binary_protocol</a>();</div>
 <div class="line"><a class="code hl_struct" href="structmcprotocol_1_1serial_1_1_status.html">mcprotocol::serial::Status</a> status = plc.<a class="code hl_function" href="classmcprotocol_1_1serial_1_1_posix_sync_client.html#a96587057716ed528528630ad9447959a">open</a>(serial, protocol);</div>
 <div class="line"> </div>
 <div class="line">std::array&lt;std::uint16_t, 2&gt; words {};</div>
@@ -265,7 +272,6 @@ For MCU Users</h2>
 <div class="ttc" id="aclassmcprotocol_1_1serial_1_1_posix_sync_client_html_a2607f47ef864075b7ff2f0b12ada4daa"><div class="ttname"><a href="classmcprotocol_1_1serial_1_1_posix_sync_client.html#a2607f47ef864075b7ff2f0b12ada4daa">mcprotocol::serial::PosixSyncClient::random_read</a></div><div class="ttdeci">Status random_read(std::span&lt; const highlevel::RandomReadSpec &gt; items, std::span&lt; std::uint32_t &gt; out_values) noexcept</div><div class="ttdoc">Reads sparse word/dword items synchronously from string-address specs.</div></div>
 <div class="ttc" id="aclassmcprotocol_1_1serial_1_1_posix_sync_client_html_a96587057716ed528528630ad9447959a"><div class="ttname"><a href="classmcprotocol_1_1serial_1_1_posix_sync_client.html#a96587057716ed528528630ad9447959a">mcprotocol::serial::PosixSyncClient::open</a></div><div class="ttdeci">Status open(const PosixSerialConfig &amp;serial_config, const ProtocolConfig &amp;protocol_config) noexcept</div><div class="ttdoc">Opens the serial port and configures the underlying MC protocol client.</div></div>
 <div class="ttc" id="aclassmcprotocol_1_1serial_1_1_posix_sync_client_html_af72870791ccec1db30be4721037d2ab6"><div class="ttname"><a href="classmcprotocol_1_1serial_1_1_posix_sync_client.html#af72870791ccec1db30be4721037d2ab6">mcprotocol::serial::PosixSyncClient::read_words</a></div><div class="ttdeci">Status read_words(std::string_view head_device, std::uint16_t points, std::span&lt; std::uint16_t &gt; out_words) noexcept</div><div class="ttdoc">Reads contiguous words synchronously from a string address such as D100.</div></div>
-<div class="ttc" id="anamespacemcprotocol_1_1serial_1_1highlevel_html_ab742d4fc876c94a8e6e983e2dd9e29e4"><div class="ttname"><a href="namespacemcprotocol_1_1serial_1_1highlevel.html#ab742d4fc876c94a8e6e983e2dd9e29e4">mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol</a></div><div class="ttdeci">constexpr ProtocolConfig make_c4_ascii_format4_protocol(PlcSeries series=PlcSeries::Q_L) noexcept</div><div class="ttdoc">Returns a practical default for Format4 / ASCII / C4.</div><div class="ttdef"><b>Definition</b> <a href="high__level_8hpp_source.html#l00149">high_level.hpp:149</a></div></div>
 <div class="ttc" id="astructmcprotocol_1_1serial_1_1_posix_serial_config_html"><div class="ttname"><a href="structmcprotocol_1_1serial_1_1_posix_serial_config.html">mcprotocol::serial::PosixSerialConfig</a></div><div class="ttdoc">Host-side serial-port configuration used by PosixSerialPort.</div><div class="ttdef"><b>Definition</b> <a href="posix__serial_8hpp_source.html#l00016">posix_serial.hpp:16</a></div></div>
 </div><!-- fragment --><p>On Windows, pass <span class="tt">COM3</span>-style names. On POSIX hosts, pass <span class="tt">/dev/ttyUSB0</span>-style device paths.</p>
 <p>Examples:</p>

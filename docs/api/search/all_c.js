@@ -1,23 +1,23 @@
 var searchData=
 [
   ['hardware_20validation_0',['Hardware Validation',['../md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html',1,'']]],
-  ['hardware_20validation_20follow_20up_1',['Hardware Validation Follow-up',['../md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md40',1,'']]],
+  ['hardware_20validation_20follow_20up_1',['Hardware Validation Follow-up',['../md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md41',1,'']]],
   ['hardware_5fvalidation_2emd_2',['HARDWARE_VALIDATION.md',['../_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n_8md.html',1,'']]],
   ['head_5fdevice_3',['head_device',['../structmcprotocol_1_1serial_1_1_link_direct_multi_block_read_block.html#a5b6f19ad6fd267fbed1ac3c57f1d0918',1,'mcprotocol::serial::LinkDirectMultiBlockReadBlock::head_device'],['../structmcprotocol_1_1serial_1_1_link_direct_multi_block_write_block.html#afcb17e81f199bfac4bda9654ae4418de',1,'mcprotocol::serial::LinkDirectMultiBlockWriteBlock::head_device'],['../structmcprotocol_1_1serial_1_1_batch_read_words_request.html#aff7d0a9985f5a4018692c97a3e847585',1,'mcprotocol::serial::BatchReadWordsRequest::head_device'],['../structmcprotocol_1_1serial_1_1_batch_read_bits_request.html#af90fe27b6dc39e516e883bdbd3e37cb2',1,'mcprotocol::serial::BatchReadBitsRequest::head_device'],['../structmcprotocol_1_1serial_1_1_batch_write_words_request.html#a8c8ea457d4024e4dd72ed2972326ed35',1,'mcprotocol::serial::BatchWriteWordsRequest::head_device'],['../structmcprotocol_1_1serial_1_1_batch_write_bits_request.html#a075d6eabf8fcb09fab3de164e9642001',1,'mcprotocol::serial::BatchWriteBitsRequest::head_device'],['../structmcprotocol_1_1serial_1_1_extended_file_register_batch_read_words_request.html#ad92605d95971e9616ed0dac6fca55faf',1,'mcprotocol::serial::ExtendedFileRegisterBatchReadWordsRequest::head_device'],['../structmcprotocol_1_1serial_1_1_extended_file_register_batch_write_words_request.html#ab926e9492cca141bc5722f4535d18636',1,'mcprotocol::serial::ExtendedFileRegisterBatchWriteWordsRequest::head_device'],['../structmcprotocol_1_1serial_1_1_multi_block_read_block.html#a283f3cb0aecf08f166282fe27d83f8dc',1,'mcprotocol::serial::MultiBlockReadBlock::head_device'],['../structmcprotocol_1_1serial_1_1_multi_block_write_block.html#afa6cf4b455cbd988a5b333ab0dcf0a76',1,'mcprotocol::serial::MultiBlockWriteBlock::head_device'],['../structmcprotocol_1_1serial_1_1_multi_block_read_block_result.html#a4e56bacddd9f88833f7dde9f8c9feffa',1,'mcprotocol::serial::MultiBlockReadBlockResult::head_device']]],
   ['head_5fdevice_5fnumber_4',['head_device_number',['../structmcprotocol_1_1serial_1_1_extended_file_register_direct_batch_read_words_request.html#a581b3dfe15fd2c73a2e01bdf47ede837',1,'mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest::head_device_number'],['../structmcprotocol_1_1serial_1_1_extended_file_register_direct_batch_write_words_request.html#a912caddcfd837b0cf159dc2df3b37bb7',1,'mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest::head_device_number']]],
   ['here_5',['Start Here',['../index.html#autotoc_md1',1,'']]],
   ['hg_6',['HG',['../namespacemcprotocol_1_1serial.html#ae5a0f3bf2c92590d4d9b97b43892141faefbfa2b2fcea4f9cfbe3ae9333588857',1,'mcprotocol::serial::HG'],['../namespacemcprotocol_1_1serial.html#a27597d44f3ac2679223eeb3ce15a3642aefbfa2b2fcea4f9cfbe3ae9333588857',1,'mcprotocol::serial::HG']]],
-  ['hg_20policy_7',['Qualified &lt;span class=&quot;tt&quot;&gt;G/HG&lt;/span&gt; Policy',['../md_docsrc_2maintainer_2_d_e_v_e_l_o_p_e_r___n_o_t_e_s.html#autotoc_md15',1,'']]],
+  ['hg_20policy_7',['Qualified &lt;span class=&quot;tt&quot;&gt;G/HG&lt;/span&gt; Policy',['../md_docsrc_2maintainer_2_d_e_v_e_l_o_p_e_r___n_o_t_e_s.html#autotoc_md16',1,'']]],
   ['high_5flevel_2ehpp_8',['high_level.hpp',['../high__level_8hpp.html',1,'']]],
-  ['holds_9',['Native Command Holds',['../md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md38',1,'']]],
-  ['host_20example_10',['1. Simple Host Example',['../dir_d28a4824dc47e487b107a5db32ef43c4.html#autotoc_md102',1,'']]],
-  ['host_20side_20path_11',['Verified Host-side Path',['../md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html#autotoc_md60',1,'']]],
+  ['holds_9',['Native Command Holds',['../md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md39',1,'']]],
+  ['host_20example_10',['1. Simple Host Example',['../dir_d28a4824dc47e487b107a5db32ef43c4.html#autotoc_md106',1,'']]],
+  ['host_20side_20path_11',['Verified Host-side Path',['../md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html#autotoc_md63',1,'']]],
   ['host_5fsync_2ehpp_12',['host_sync.hpp',['../host__sync_8hpp.html',1,'']]],
   ['host_5fsync_5fquickstart_2ecpp_13',['host_sync_quickstart.cpp',['../host__sync__quickstart_8cpp.html',1,'']]],
   ['hostbufferreadrequest_14',['HostBufferReadRequest',['../structmcprotocol_1_1serial_1_1_host_buffer_read_request.html',1,'mcprotocol::serial']]],
   ['hostbufferwriterequest_15',['HostBufferWriteRequest',['../structmcprotocol_1_1serial_1_1_host_buffer_write_request.html',1,'mcprotocol::serial']]],
   ['hoststation_16',['HostStation',['../namespacemcprotocol_1_1serial.html#a29bd83eb7a3c1478f4227d21a873d5c1a66053b16ffec87feeefead4265eeb182',1,'mcprotocol::serial']]],
-  ['how_20do_20i_20generate_20api_20docs_17',['How do I generate API docs?',['../md_docsrc_2user_2_f_a_q.html#autotoc_md51',1,'']]],
-  ['how_20the_20reduced_20profile_20shrinks_18',['How The Reduced Profile Shrinks',['../md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md68',1,'']]],
-  ['how_20the_20ultra_20minimal_20profile_20shrinks_20further_19',['How The Ultra-minimal Profile Shrinks Further',['../md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md69',1,'']]]
+  ['how_20do_20i_20generate_20api_20docs_17',['How do I generate API docs?',['../md_docsrc_2user_2_f_a_q.html#autotoc_md54',1,'']]],
+  ['how_20the_20reduced_20profile_20shrinks_18',['How The Reduced Profile Shrinks',['../md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md71',1,'']]],
+  ['how_20the_20ultra_20minimal_20profile_20shrinks_20further_19',['How The Ultra-minimal Profile Shrinks Further',['../md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md72',1,'']]]
 ];

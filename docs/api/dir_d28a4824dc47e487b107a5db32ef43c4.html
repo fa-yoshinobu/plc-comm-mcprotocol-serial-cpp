@@ -107,10 +107,32 @@ Files</h2></td></tr>
 <tr class="memitem:mcu_5Fasync_5Fbatch_5Fread_2Ecpp" id="r_mcu_5Fasync_5Fbatch_5Fread_2Ecpp"><td class="memItemLeft"><a href="mcu__async__batch__read_8cpp_source.html"><span class="icondoc"><div class="doc-icon"></div></span></a>&#160;</td><td class="memItemRight"><a class="el" href="mcu__async__batch__read_8cpp.html">mcu_async_batch_read.cpp</a></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><h1 class="doxsection"><a class="anchor" id="autotoc_md101"></a>
+<div class="textblock"><h1 class="doxsection"><a class="anchor" id="autotoc_md104"></a>
 Examples</h1>
-<p>Start with the simplest entry that matches your environment.</p>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md102"></a>
+<p>Start here if you want to choose the first sample without reading the whole repository.</p>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md105"></a>
+Pick The First Sample</h1>
+<ul>
+<li><span class="tt"><a class="el" href="host__sync__quickstart_8cpp.html">host_sync_quickstart.cpp</a></span><ul>
+<li>simplest host-side blocking example</li>
+<li>read-only bring-up</li>
+<li>best first read if you are on Windows or a POSIX host</li>
+</ul>
+</li>
+<li><span class="tt">platformio_*_arduino_uart/*.cpp</span><ul>
+<li>real UART firmware examples for <span class="tt">RP2040</span>, <span class="tt">ESP32-C3</span>, and <span class="tt">Arduino Mega 2560</span></li>
+<li>read-only <span class="tt">D100-D103</span></li>
+<li>best first step for actual MCU wiring</li>
+</ul>
+</li>
+<li><span class="tt"><a class="el" href="mcu__async__batch__read_8cpp.html">mcu_async_batch_read.cpp</a></span> and <span class="tt">platformio_*_arduino_async/*.cpp</span><ul>
+<li>lower-level async state-machine examples</li>
+<li>best if you are integrating your own UART driver or scheduler</li>
+</ul>
+</li>
+</ul>
+<p>For exact target settings, do not rely on the sample defaults alone. Use <a class="el" href="md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html" title="Hardware Validation">../docsrc/validation/reports/HARDWARE_VALIDATION.md</a> as the authority.</p>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md106"></a>
 1. Simple Host Example</h1>
 <ul>
 <li><span class="tt"><a class="el" href="host__sync__quickstart_8cpp.html">host_sync_quickstart.cpp</a></span><ul>
@@ -125,7 +147,7 @@ Examples</h1>
 <div class="fragment"><div class="line">cmake -S . -B build</div>
 <div class="line">cmake --build build --target mcprotocol_example_host_sync</div>
 <div class="line">./build/mcprotocol_example_host_sync</div>
-</div><!-- fragment --><h1 class="doxsection"><a class="anchor" id="autotoc_md103"></a>
+</div><!-- fragment --><h1 class="doxsection"><a class="anchor" id="autotoc_md107"></a>
 2. Real MCU UART Example</h1>
 <ul>
 <li><span class="tt"><a class="el" href="platformio__rpipico__arduino__uart_8cpp.html">platformio_rpipico_arduino_uart/platformio_rpipico_arduino_uart.cpp</a></span><ul>
@@ -141,12 +163,13 @@ Examples</h1>
 </ul>
 </li>
 <li>all three are read-only PLC access samples intended for actual UART bring-up through a level shifter</li>
+<li>the example code keeps simple sample defaults; confirm the real target settings in the validation matrix before wiring live hardware</li>
 </ul>
 <p>Build:</p>
 <div class="fragment"><div class="line">pio run -e rpipico-arduino-uart-example</div>
 <div class="line">pio run -e esp32-c3-devkitm-1-uart-example</div>
 <div class="line">pio run -e mega2560-arduino-uart-example</div>
-</div><!-- fragment --><h1 class="doxsection"><a class="anchor" id="autotoc_md104"></a>
+</div><!-- fragment --><h1 class="doxsection"><a class="anchor" id="autotoc_md108"></a>
 3. Advanced Async Examples</h1>
 <ul>
 <li><span class="tt"><a class="el" href="mcu__async__batch__read_8cpp.html">mcu_async_batch_read.cpp</a></span><ul>

@@ -92,9 +92,9 @@ $(function(){initNavTree('md_docsrc_2maintainer_2_r_e_l_e_a_s_e___p_r_o_c_e_s_s.
   <div class="headertitle"><div class="title">Release Process </div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><p><a class="anchor" id="autotoc_md32"></a></p>
+<div class="textblock"><p><a class="anchor" id="autotoc_md33"></a></p>
 <p>This repository uses the tag name as the release trigger.</p>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md33"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md34"></a>
 Files To Update For A Version Bump</h1>
 <ul>
 <li><span class="tt">CMakeLists.txt</span></li>
@@ -104,7 +104,7 @@ Files To Update For A Version Bump</h1>
 <li><span class="tt">library.properties</span></li>
 <li><span class="tt"><a class="el" href="_c_h_a_n_g_e_l_o_g_8md.html">CHANGELOG.md</a></span></li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md34"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md35"></a>
 Local Validation Before Tagging</h1>
 <div class="fragment"><div class="line">cmake -S . -B build</div>
 <div class="line">cmake --build build</div>
@@ -119,12 +119,12 @@ Local Validation Before Tagging</h1>
 <div class="line">pio run -e native-example-ultra-minimal</div>
 <div class="line">pio run -e rpipico-arduino-example-ultra-minimal</div>
 <div class="line">pio run -e esp32-c3-devkitm-1-example-ultra-minimal</div>
-</div><!-- fragment --><h1 class="doxsection"><a class="anchor" id="autotoc_md35"></a>
+</div><!-- fragment --><h1 class="doxsection"><a class="anchor" id="autotoc_md36"></a>
 Tagging</h1>
 <p>Create and push an annotated tag:</p>
 <div class="fragment"><div class="line">git tag -a v0.2.0 -m &quot;v0.2.0&quot;</div>
 <div class="line">git push origin v0.2.0</div>
-</div><!-- fragment --><h1 class="doxsection"><a class="anchor" id="autotoc_md36"></a>
+</div><!-- fragment --><h1 class="doxsection"><a class="anchor" id="autotoc_md37"></a>
 GitHub Automation</h1>
 <p><span class="tt">.github/workflows/release.yml</span> publishes a GitHub release when a <span class="tt">v*</span> tag is pushed. </p>
 </div></div><!-- contents -->

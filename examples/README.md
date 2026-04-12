@@ -1,6 +1,24 @@
 # Examples
 
-Start with the simplest entry that matches your environment.
+Start here if you want to choose the first sample without reading the whole repository.
+
+## Pick The First Sample
+
+- `host_sync_quickstart.cpp`
+  - simplest host-side blocking example
+  - read-only bring-up
+  - best first read if you are on Windows or a POSIX host
+- `platformio_*_arduino_uart/*.cpp`
+  - real UART firmware examples for `RP2040`, `ESP32-C3`, and `Arduino Mega 2560`
+  - read-only `D100-D103`
+  - best first step for actual MCU wiring
+- `mcu_async_batch_read.cpp` and `platformio_*_arduino_async/*.cpp`
+  - lower-level async state-machine examples
+  - best if you are integrating your own UART driver or scheduler
+
+For exact target settings, do not rely on the sample defaults alone. Use
+[../docsrc/validation/reports/HARDWARE_VALIDATION.md](../docsrc/validation/reports/HARDWARE_VALIDATION.md)
+as the authority.
 
 ## 1. Simple Host Example
 
@@ -27,6 +45,8 @@ cmake --build build --target mcprotocol_example_host_sync
 - `platformio_arduino_mega2560_uart/platformio_arduino_mega2560_uart.cpp`
   - Arduino Mega 2560 specific `Serial1` sample
 - all three are read-only PLC access samples intended for actual UART bring-up through a level shifter
+- the example code keeps simple sample defaults; confirm the real target settings in the validation
+  matrix before wiring live hardware
 
 Build:
 

@@ -92,7 +92,7 @@ $(function(){initNavTree('md_docsrc_2maintainer_2_m_a_n_u_a_l___c_o_m_m_a_n_d___
   <div class="headertitle"><div class="title">Manual Command Coverage </div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><p><a class="anchor" id="autotoc_md20"></a></p>
+<div class="textblock"><p><a class="anchor" id="autotoc_md21"></a></p>
 <p>This page tracks which MC protocol serial command families are implemented in this repository.</p>
 <p>Scope:</p>
 <ul>
@@ -102,7 +102,7 @@ $(function(){initNavTree('md_docsrc_2maintainer_2_m_a_n_u_a_l___c_o_m_m_a_n_d___
 <li>Public library scope: device memory access, buffer memory access, CPU-model, remote control, remote password control, loopback, and helper-qualified access over <span class="tt">0601/1601</span></li>
 <li>Out of scope by design unless stated otherwise: label access, file control, serial-module dedicated commands beyond user-frame handling, and the later drive/file memory chapters</li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md21"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md22"></a>
 Summary</h1>
 <ul>
 <li>Device-memory chapter <span class="tt">8</span> is covered as command families: <span class="tt">0401</span>, <span class="tt">1401</span>, <span class="tt">0403</span>, <span class="tt">1402</span>, <span class="tt">0406</span>, <span class="tt">1406</span>, <span class="tt">0801</span>, <span class="tt">0802</span></li>
@@ -112,7 +112,7 @@ Summary</h1>
 <li><span class="tt">1E</span> now has initial chapter <span class="tt">18</span> coverage for device-memory read/write, random write, monitor, extended-file-register access, and special-function-module buffer read/write</li>
 <li>The library does not implement the full MC protocol serial command list</li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md22"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md23"></a>
 Compile-time Trim Scope</h1>
 <p>Compile-time trimming in this repository works at these units:</p>
 <ul>
@@ -127,7 +127,7 @@ Compile-time Trim Scope</h1>
 <li>per-series behavior <span class="tt">IQ-R</span>, <span class="tt">Q/L</span>, <span class="tt">QnA</span>, and <span class="tt">A</span> remain runtime protocol choices</li>
 </ul>
 <p>For target-specific PASS/HOLD results, use <a class="el" href="md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html" title="Hardware Validation">HARDWARE_VALIDATION.md</a>.</p>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md23"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md24"></a>
 2C/3C/4C Coverage Matrix</h1>
 <table class="markdownTable">
 <tr class="markdownTableHead">
@@ -183,7 +183,7 @@ Compile-time Trim Scope</h1>
 <tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone">Chapter 15 drive/file memory  </td><td class="markdownTableBodyNone"><span class="tt">0201</span>..<span class="tt">0206</span>, <span class="tt">0808</span>, <span class="tt">1202</span>..<span class="tt">1207</span>  </td><td class="markdownTableBodyNone">not implemented  </td><td class="markdownTableBodyNone">none  </td><td class="markdownTableBodyNone">No drive/file memory codec/client/public API exists  </td></tr>
 </table>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md24"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md25"></a>
 Important Scope Notes</h1>
 <ul>
 <li><span class="tt">Jn\\...</span> support in this repository is not a separate command family. It is the same chapter <span class="tt">8</span> command set encoded with device extension specification where the target requires it.</li>
@@ -194,7 +194,7 @@ Important Scope Notes</h1>
 <li>"Implemented" in this table means the library has codec/client/public entry points. It does not mean every PLC/serial target accepts that command family.</li>
 <li>Device-level restrictions still apply. Examples: <span class="tt">LTS/LTC/LSTS/LSTC</span> are treated via the documented structured paths, <span class="tt">LTN/LSTN</span> native writes remain blocked, and <span class="tt">FX5UC-32MT/D</span> treats <span class="tt">0801/0802</span> as unsupported on serial <span class="tt">3C/4C</span>.</li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md25"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md26"></a>
 Current Conclusion</h1>
 <ul>
 <li>If the question is "are chapter `8` device-memory command families all present?", the answer is yes for the intended <span class="tt">2C/3C/4C</span> library scope.</li>

@@ -94,7 +94,6 @@ $(function(){initNavTree('md_docsrc_2maintainer_2_d_e_v_e_l_o_p_e_r___n_o_t_e_s.
 <div class="contents">
 <div class="textblock"><p><a class="anchor" id="autotoc_md11"></a></p>
 <p>Audience: maintainers of this repository.</p>
-<p>This repository now follows the same documentation split used in <span class="tt">plc-comm-slmp-cpp-minimal</span>.</p>
 <h1 class="doxsection"><a class="anchor" id="autotoc_md12"></a>
 Documentation Layout</h1>
 <ul>
@@ -103,6 +102,14 @@ Documentation Layout</h1>
 <li><span class="tt">docsrc/maintainer/</span>: repository-maintenance notes</li>
 </ul>
 <h1 class="doxsection"><a class="anchor" id="autotoc_md13"></a>
+Documentation Boundary</h1>
+<ul>
+<li>Keep <span class="tt">docsrc/user/</span> and the top-level <span class="tt">README.md</span> focused on current user workflows.</li>
+<li>Keep unresolved hardware evidence, command coverage detail, and backlog policy in <span class="tt">docsrc/validation/reports/</span> or <span class="tt">docsrc/maintainer/</span>.</li>
+<li>Label sample defaults as sample defaults. Do not describe example-code defaults as the current validated target settings.</li>
+<li>When the practical settings or follow-up state changes, re-check <span class="tt">README.md</span>, <span class="tt">docs/index.md</span>, and <span class="tt">docsrc/user/</span> for stale current-looking text.</li>
+</ul>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md14"></a>
 Status Terms</h1>
 <p>Use these terms consistently in validation reports.</p>
 <ul>
@@ -110,14 +117,14 @@ Status Terms</h1>
 <li><span class="tt">native ng</span>: the direct MC command is rejected by the module or PLC</li>
 <li><span class="tt">hold</span>: not resolved yet, or intentionally excluded from the active probe set</li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md14"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md15"></a>
 Current Native-only Policy</h1>
 <p>On the validated <span class="tt">RJ71C24-R2</span> setup, unsupported native commands should stay failed. Do not add fallback behavior that silently replaces them with other command families.</p>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md15"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md16"></a>
 Qualified <span class="tt">G/HG</span> Policy</h1>
 <p>On the current validated setup, <span class="tt">read-qualified-words</span> and <span class="tt">write-qualified-words</span> are the practical <span class="tt">U...\\G...</span> / <span class="tt">U...\\HG...</span> path because they reuse the validated <span class="tt">0601/1601</span> module-buffer path.</p>
 <p>Native qualified access is not a supported workflow in this repository. Keep <span class="tt">read-native-qualified-words</span> and <span class="tt">write-native-qualified-words</span> separate as diagnostic probes only, and do not describe them as a supported <span class="tt">U...</span> access path.</p>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md16"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md17"></a>
 C24 Recovery Discipline</h1>
 <p>The validated <span class="tt">RJ71C24-R2</span> setup behaves like a strict half-duplex shared UART.</p>
 <ul>
@@ -126,7 +133,7 @@ C24 Recovery Discipline</h1>
 <li>If ASCII Format4 communication times out or returns mixed fragments, send ASCII <span class="tt">EOT CRLF</span> or <span class="tt">CL CRLF</span> before the next probe. This matches the manual's transmission-sequence reset guidance for abnormal communication.</li>
 <li>Do not treat successful recovery after <span class="tt">EOT CRLF</span> or <span class="tt">CL CRLF</span> as evidence that an unresolved native command family is actually supported.</li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md17"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md18"></a>
 Request-Shape Conformance</h1>
 <p>Keep host-side tests aligned with the documented request shapes before blaming hardware:</p>
 <ul>
@@ -135,7 +142,7 @@ Request-Shape Conformance</h1>
 <li>Keep binary non-iQ-R bit and multi-block layouts covered by tests. Count-width and bit-packing mistakes are a common source of false hardware mismatches.</li>
 <li>Revalidate helper/buffer workflows per target. Do not project the C24-era behavior onto FX targets without fresh hardware results.</li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md18"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md19"></a>
 Validation Reporting Rule</h1>
 <p>When adding new hardware results:</p>
 <ol type="1">
@@ -144,7 +151,7 @@ Validation Reporting Rule</h1>
 <li>Keep the top-level <span class="tt">README.md</span> summary short and point to the detailed report.</li>
 <li>Record the native result and PLC end code without masking it with a different command path.</li>
 </ol>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md19"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md20"></a>
 Open Items</h1>
 <p>Track active unresolved items in <a class="el" href="md_docsrc_2maintainer_2_t_o_d_o.html" title="TODO">TODO.md</a>. </p>
 </div></div><!-- contents -->
