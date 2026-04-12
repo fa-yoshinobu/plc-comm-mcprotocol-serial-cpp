@@ -129,12 +129,94 @@ class ByteWriter {
   return config.target_series == PlcSeries::IQ_R;
 }
 
+[[nodiscard]] constexpr bool is_ascii_mode(const ProtocolConfig& config) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_ASCII_MODE
+  return config.code_mode == CodeMode::Ascii;
+#else
+  (void)config;
+  return false;
+#endif
+}
+
+[[nodiscard]] constexpr bool is_binary_mode(const ProtocolConfig& config) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_BINARY_MODE
+  return config.code_mode == CodeMode::Binary;
+#else
+  (void)config;
+  return false;
+#endif
+}
+
+[[nodiscard]] constexpr bool is_frame_kind_enabled(FrameKind frame_kind) noexcept {
+  switch (frame_kind) {
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C4
+    case FrameKind::C4:
+      return true;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C3
+    case FrameKind::C3:
+      return true;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C2
+    case FrameKind::C2:
+      return true;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C1
+    case FrameKind::C1:
+      return true;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
+    case FrameKind::E1:
+      return true;
+#endif
+    default:
+      return false;
+  }
+}
+
+[[nodiscard]] constexpr bool is_c4_frame(const ProtocolConfig& config) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C4
+  return config.frame_kind == FrameKind::C4;
+#else
+  (void)config;
+  return false;
+#endif
+}
+
+[[nodiscard]] constexpr bool is_c3_frame(const ProtocolConfig& config) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C3
+  return config.frame_kind == FrameKind::C3;
+#else
+  (void)config;
+  return false;
+#endif
+}
+
+[[nodiscard]] constexpr bool is_c2_frame(const ProtocolConfig& config) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C2
+  return config.frame_kind == FrameKind::C2;
+#else
+  (void)config;
+  return false;
+#endif
+}
+
 [[nodiscard]] constexpr bool is_c1_frame(const ProtocolConfig& config) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C1
   return config.frame_kind == FrameKind::C1;
+#else
+  (void)config;
+  return false;
+#endif
 }
 
 [[nodiscard]] constexpr bool is_e1_frame(const ProtocolConfig& config) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
   return config.frame_kind == FrameKind::E1;
+#else
+  (void)config;
+  return false;
+#endif
 }
 
 [[nodiscard]] constexpr bool is_ascii_format1_family(const ProtocolConfig& config) noexcept {
@@ -147,16 +229,26 @@ class ByteWriter {
 
 [[nodiscard]] constexpr std::size_t ascii_route_length(FrameKind frame_kind) noexcept {
   switch (frame_kind) {
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C4
     case FrameKind::C4:
       return 14;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C3
     case FrameKind::C3:
       return 8;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C2
     case FrameKind::C2:
       return 4;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C1
     case FrameKind::C1:
       return 4;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
     case FrameKind::E1:
       return 0;
+#endif
     default:
       return 0;
   }
@@ -164,8 +256,12 @@ class ByteWriter {
 
 [[nodiscard]] constexpr std::size_t ascii_frame_id_length(FrameKind frame_kind) noexcept {
   switch (frame_kind) {
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C4
     case FrameKind::C4:
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C3
     case FrameKind::C3:
+#endif
       return 2;
     default:
       return 0;
@@ -177,29 +273,36 @@ class ByteWriter {
 }
 
 [[nodiscard]] constexpr std::size_t ascii_error_code_width(FrameKind frame_kind) noexcept {
-  return frame_kind == FrameKind::C1 || frame_kind == FrameKind::E1 ? 2U : 4U;
+  return ((MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && frame_kind == FrameKind::C1) ||
+          (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && frame_kind == FrameKind::E1))
+             ? 2U
+             : 4U;
 }
 
-[[nodiscard]] constexpr std::string_view ascii_success_end_code(FrameKind frame_kind) noexcept {
-  if (frame_kind == FrameKind::C1) {
+[[nodiscard]] inline std::string_view ascii_success_end_code(FrameKind frame_kind) noexcept {
+  if (MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && frame_kind == FrameKind::C1) {
     return "GG";
   }
-  return frame_kind == FrameKind::E1 ? "00" : "QACK";
+  return (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && frame_kind == FrameKind::E1) ? "00" : "QACK";
 }
 
-[[nodiscard]] constexpr std::string_view ascii_error_end_code(FrameKind frame_kind) noexcept {
-  if (frame_kind == FrameKind::C1) {
+[[nodiscard]] inline std::string_view ascii_error_end_code(FrameKind frame_kind) noexcept {
+  if (MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && frame_kind == FrameKind::C1) {
     return "NN";
   }
-  return frame_kind == FrameKind::E1 ? "5B" : "QNAK";
+  return (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && frame_kind == FrameKind::E1) ? "5B" : "QNAK";
 }
 
 [[nodiscard]] constexpr std::size_t binary_route_length(FrameKind frame_kind) noexcept {
   switch (frame_kind) {
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C4
     case FrameKind::C4:
       return 7;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
     case FrameKind::E1:
       return 0;
+#endif
     default:
       return 0;
   }
@@ -207,10 +310,14 @@ class ByteWriter {
 
 [[nodiscard]] constexpr std::uint8_t frame_id(FrameKind frame_kind) noexcept {
   switch (frame_kind) {
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C4
     case FrameKind::C4:
       return 0xF8;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C3
     case FrameKind::C3:
       return 0xF9;
+#endif
     default:
       return 0x00;
   }
@@ -238,15 +345,15 @@ class ByteWriter {
 }
 
 [[nodiscard]] constexpr std::size_t request_command_header_size(const ProtocolConfig& config) noexcept {
-  return config.code_mode == CodeMode::Ascii ? 8U : 4U;
+  return is_ascii_mode(config) ? 8U : 4U;
 }
 
 [[nodiscard]] constexpr std::size_t request_word_count_size(const ProtocolConfig& config) noexcept {
-  return config.code_mode == CodeMode::Ascii ? 4U : 2U;
+  return is_ascii_mode(config) ? 4U : 2U;
 }
 
 [[nodiscard]] constexpr std::size_t request_device_reference_size(const ProtocolConfig& config) noexcept {
-  return config.code_mode == CodeMode::Ascii ? (ascii_device_code_width(config) + ascii_device_number_width(config))
+  return is_ascii_mode(config) ? (ascii_device_code_width(config) + ascii_device_number_width(config))
                                              : (binary_device_code_width(config) + binary_device_number_width(config));
 }
 
@@ -257,7 +364,7 @@ class ByteWriter {
   if (kMaxRequestDataBytes <= overhead) {
     return 0U;
   }
-  const std::size_t buffer_limit = (kMaxRequestDataBytes - overhead) / (config.code_mode == CodeMode::Ascii ? 4U : 2U);
+  const std::size_t buffer_limit = (kMaxRequestDataBytes - overhead) / (is_ascii_mode(config) ? 4U : 2U);
   return buffer_limit < kMaxBatchWordPoints ? buffer_limit : kMaxBatchWordPoints;
 }
 
@@ -269,9 +376,9 @@ class ByteWriter {
     return 0U;
   }
   const std::size_t remaining = kMaxRequestDataBytes - overhead;
-  const std::size_t buffer_limit = config.code_mode == CodeMode::Ascii ? remaining : (remaining * 2U);
+  const std::size_t buffer_limit = is_ascii_mode(config) ? remaining : (remaining * 2U);
   const std::size_t protocol_limit =
-      config.code_mode == CodeMode::Ascii ? kMaxBatchBitPointsAscii : kMaxBatchBitPointsBinary;
+      is_ascii_mode(config) ? kMaxBatchBitPointsAscii : kMaxBatchBitPointsBinary;
   return buffer_limit < protocol_limit ? buffer_limit : protocol_limit;
 }
 
@@ -317,7 +424,7 @@ class ByteWriter {
 // Some iQ-R serial targets reject Jn\ native 0403/1402/0801 requests unless they use the
 // legacy extension-specification wire format.
 [[nodiscard]] ProtocolConfig link_direct_native_wire_config(const ProtocolConfig& config) noexcept {
-  if (config.code_mode != CodeMode::Binary || !is_iq_r_series(config)) {
+  if (!is_binary_mode(config) || !is_iq_r_series(config)) {
     return config;
   }
 
@@ -456,7 +563,7 @@ class ByteWriter {
   if (is_c1_frame(config)) {
     return false;
   }
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     return append_device_reference_ascii(writer, config, device);
   }
   return append_device_reference_binary(writer, config, device);
@@ -544,7 +651,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (!is_c1_frame(config) && !is_e1_frame(config)) {
     return ok_status();
   }
-  if (is_c1_frame(config) && config.code_mode != CodeMode::Ascii) {
+  if (is_c1_frame(config) && !is_ascii_mode(config)) {
     return make_status(StatusCode::UnsupportedConfiguration, "1C frame supports ASCII only");
   }
   if (!is_c1_supported_series(config.target_series)) {
@@ -692,7 +799,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     std::uint8_t subheader) noexcept {
-  return config.code_mode == CodeMode::Ascii ? append_ascii_hex(writer, subheader, 2U)
+  return is_ascii_mode(config) ? append_ascii_hex(writer, subheader, 2U)
                                              : writer.push(subheader);
 }
 
@@ -704,14 +811,14 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     return false;
   }
   const std::uint16_t encoded = points == 256U ? 0U : points;
-  return config.code_mode == CodeMode::Ascii ? append_ascii_hex(writer, encoded, 2U)
+  return is_ascii_mode(config) ? append_ascii_hex(writer, encoded, 2U)
                                              : writer.push(static_cast<std::uint8_t>(encoded));
 }
 
 [[nodiscard]] bool append_e1_fixed_zero(
     ByteWriter& writer,
     const ProtocolConfig& config) noexcept {
-  return config.code_mode == CodeMode::Ascii ? append_ascii_hex(writer, 0U, 2U)
+  return is_ascii_mode(config) ? append_ascii_hex(writer, 0U, 2U)
                                              : writer.push(0x00U);
 }
 
@@ -763,7 +870,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (code == 0U || !is_c1_supported_device(device.code)) {
     return false;
   }
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     return append_ascii_hex(writer, code, 4U) &&
            append_ascii_hex(writer, device.number, 8U);
   }
@@ -781,7 +888,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (!append_e1_device_reference(writer, config, device)) {
     return false;
   }
-  return config.code_mode == CodeMode::Ascii ? append_ascii_hex(writer, address.block_number, 4U)
+  return is_ascii_mode(config) ? append_ascii_hex(writer, address.block_number, 4U)
                                              : writer.append_le16(address.block_number);
 }
 
@@ -975,7 +1082,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     const LinkDirectDevice& device) noexcept {
   (void)config;
-  if (config.code_mode != CodeMode::Binary) {
+  if (!is_binary_mode(config)) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Link direct device extension is only implemented for binary mode");
@@ -990,7 +1097,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     const LinkDirectDevice& device) noexcept {
   (void)config;
-  if (config.code_mode != CodeMode::Binary) {
+  if (!is_binary_mode(config)) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Link direct device extension is only implemented for binary mode");
@@ -1051,7 +1158,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (device.kind == QualifiedBufferDeviceKind::HG && !is_iq_r_series(config)) {
     return invalid_argument("HG device extension access requires MELSEC iQ-R series");
   }
-  if (config.code_mode == CodeMode::Ascii && device.module_number > 0x0FFFU) {
+  if (is_ascii_mode(config) && device.module_number > 0x0FFFU) {
     return invalid_argument("ASCII device extension specification must be in range 0x000..0xFFF");
   }
   return ok_status();
@@ -1134,7 +1241,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     const QualifiedBufferWordDevice& device) noexcept {
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     return append_extended_device_reference_ascii(writer, config, device);
   }
   return append_extended_device_reference_binary(writer, config, device);
@@ -1150,7 +1257,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (out_words.size() < points) {
     return buffer_too_small("Word output buffer is too small");
   }
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     if (response_data.size() != (static_cast<std::size_t>(points) * 4U)) {
       return parse_error(ascii_error_prefix);
     }
@@ -1201,7 +1308,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (!append_ascii_hex(writer, config.route.station_no, 2)) {
     return false;
   }
-  if (config.frame_kind == FrameKind::C2) {
+  if (is_c2_frame(config)) {
     return append_ascii_hex(writer, config.route.self_station_enabled ? config.route.self_station_no : 0U, 2);
   }
   if (!append_ascii_hex(writer, config.route.network_no, 2)) {
@@ -1210,7 +1317,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (!append_ascii_hex(writer, config.route.pc_no, 2)) {
     return false;
   }
-  if (config.frame_kind == FrameKind::C4) {
+  if (is_c4_frame(config)) {
     if (!append_ascii_hex(writer, config.route.request_destination_module_io_no, 4)) {
       return false;
     }
@@ -1322,7 +1429,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     std::uint16_t command,
     std::uint16_t subcommand) noexcept {
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     return append_ascii_hex(writer, command, 4) && append_ascii_hex(writer, subcommand, 4);
   }
   return writer.append_le16(command) && writer.append_le16(subcommand);
@@ -1332,7 +1439,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     std::uint16_t count) noexcept {
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     return append_ascii_hex(writer, count, 4);
   }
   return writer.append_le16(count);
@@ -1342,7 +1449,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     std::uint16_t count) noexcept {
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     return append_ascii_hex(writer, count, 4);
   }
   return count <= 0xFFU && writer.push(static_cast<std::uint8_t>(count));
@@ -1352,7 +1459,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     std::uint16_t count) noexcept {
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     return append_ascii_hex(writer, count, 4);
   }
   return count <= 0xFFU && writer.push(static_cast<std::uint8_t>(count));
@@ -1362,7 +1469,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     std::uint16_t count) noexcept {
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     return append_ascii_hex(writer, count, 4);
   }
   return count <= 0xFFU && writer.push(static_cast<std::uint8_t>(count));
@@ -1372,7 +1479,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     const DeviceAddress& device) noexcept {
-  if (config.code_mode != CodeMode::Binary || is_iq_r_series(config)) {
+  if (!is_binary_mode(config) || is_iq_r_series(config)) {
     return append_device_reference(writer, config, device);
   }
   DeviceAddress adjusted = device;
@@ -1511,7 +1618,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     std::span<const std::uint16_t> words) noexcept {
   for (const std::uint16_t value : words) {
-    if (config.code_mode == CodeMode::Ascii) {
+    if (is_ascii_mode(config)) {
       if (!append_word_data_ascii(writer, value)) {
         return false;
       }
@@ -1527,7 +1634,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     std::span<const std::byte> bytes) noexcept {
   for (const std::byte value : bytes) {
-    if (config.code_mode == CodeMode::Ascii) {
+    if (is_ascii_mode(config)) {
       if (!append_ascii_hex(writer, static_cast<std::uint8_t>(value), 2)) {
         return false;
       }
@@ -1557,7 +1664,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     out_size = payload_writer.size();
     return ok_status();
   }
-  if (config.frame_kind == FrameKind::C1) {
+  if (is_c1_frame(config)) {
     if (!append_ascii_hex(payload_writer, config.route.station_no, 2) ||
         !payload_writer.append(request_data) ||
         !append_ascii_hex(payload_writer, config.route.pc_no, 2)) {
@@ -1755,7 +1862,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_request_data_size(
     const ProtocolConfig& config,
     std::span<const std::uint8_t> request_data) noexcept {
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     return request_data.size() <= kMaxRequestDataBytes ? ok_status()
                                                        : buffer_too_small("ASCII request data exceeds maximum size");
   }
@@ -1825,7 +1932,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     std::uint8_t value) noexcept {
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     return append_ascii_hex(writer, value, 2U);
   }
   return writer.push(value);
@@ -1859,19 +1966,27 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }  // namespace
 
 Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
-  if (config.code_mode == CodeMode::Ascii) {
+  if (!is_frame_kind_enabled(config.frame_kind)) {
+    return unsupported("Selected frame family is compiled out");
+  }
+
+  if (!is_ascii_mode(config) && !is_binary_mode(config)) {
+    return unsupported("Selected code mode is compiled out");
+  }
+
+  if (is_ascii_mode(config)) {
     if (!is_e1_frame(config) &&
         config.ascii_format != AsciiFormat::Format1 &&
         config.ascii_format != AsciiFormat::Format3 &&
         config.ascii_format != AsciiFormat::Format4) {
       return unsupported("Only ASCII Format1, Format3, and Format4 are supported");
     }
-  } else if (config.frame_kind != FrameKind::C4 && config.frame_kind != FrameKind::E1) {
+  } else if (!is_c4_frame(config) && !is_e1_frame(config)) {
     return unsupported("Binary mode supports only 4C Format5 or 1E");
   }
 
-  if (config.frame_kind == FrameKind::C1) {
-    if (config.code_mode != CodeMode::Ascii) {
+  if (is_c1_frame(config)) {
+    if (!is_ascii_mode(config)) {
       return unsupported("1C frames support only ASCII Format1, Format3, and Format4");
     }
     if (config.route.self_station_enabled) {
@@ -1879,7 +1994,7 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     }
   }
 
-  if (config.frame_kind == FrameKind::E1) {
+  if (is_e1_frame(config)) {
     if (config.route.self_station_enabled) {
       return invalid_argument("1E frame does not use self-station routing");
     }
@@ -1927,7 +2042,7 @@ Status FrameCodec::encode_request(
 
   std::array<std::uint8_t, kMaxRequestFrameBytes> payload_storage {};
   std::size_t payload_size = 0;
-  Status status = (config.code_mode == CodeMode::Ascii)
+  Status status = (is_ascii_mode(config))
                       ? encode_frame_payload_ascii(config, request_data, payload_storage, payload_size)
                       : encode_frame_payload_binary(config, request_data, payload_storage, payload_size);
   if (!status.ok()) {
@@ -1944,7 +2059,7 @@ Status FrameCodec::encode_request(
   }
 
   ByteWriter frame_writer(out_frame);
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     if (is_ascii_format1_family(config)) {
       if (!frame_writer.push(kAsciiEnq) || !frame_writer.append(std::span<const std::uint8_t>(payload_storage.data(), payload_size))) {
         return buffer_too_small("ASCII request frame buffer is too small");
@@ -2028,7 +2143,7 @@ Status FrameCodec::encode_success_response(
     return unsupported("1E test response encoding requires an explicit command-specific subheader");
   }
 
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     std::array<std::uint8_t, kMaxRequestFrameBytes> payload_storage {};
     std::size_t payload_size = 0;
     Status payload_status = encode_frame_payload_ascii(config, {}, payload_storage, payload_size);
@@ -2148,7 +2263,7 @@ Status FrameCodec::encode_error_response(
     return unsupported("1E test response encoding requires an explicit command-specific subheader");
   }
 
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     std::array<std::uint8_t, kMaxRequestFrameBytes> payload_storage {};
     std::size_t payload_size = 0;
     Status payload_status = encode_frame_payload_ascii(config, {}, payload_storage, payload_size);
@@ -2242,7 +2357,7 @@ DecodeResult FrameCodec::decode_response(
 
   if (is_e1_frame(config)) {
     RawResponseFrame frame {};
-    if (config.code_mode == CodeMode::Ascii) {
+    if (is_ascii_mode(config)) {
       if (bytes.size() < 4U) {
         return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
       }
@@ -2361,7 +2476,7 @@ DecodeResult FrameCodec::decode_response(
     };
   }
 
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     const std::size_t prefix_size = 1U + ascii_header_length(config.frame_kind);
     const std::size_t terminator_size = uses_ascii_crlf(config) ? 2U : 0U;
     const std::size_t error_width = ascii_error_code_width(config.frame_kind);
@@ -3037,7 +3152,7 @@ Status encode_batch_read_bits(
     return ok_status();
   }
   const std::uint16_t max_points =
-      config.code_mode == CodeMode::Ascii ? kMaxBatchBitPointsAscii : kMaxBatchBitPointsBinary;
+      is_ascii_mode(config) ? kMaxBatchBitPointsAscii : kMaxBatchBitPointsBinary;
   if (request.points == 0U || request.points > max_points) {
     return invalid_argument("Batch read bits points are out of supported range");
   }
@@ -3067,7 +3182,7 @@ Status encode_link_direct_batch_read_bits(
     return unsupported("1E frame does not define link-direct access");
   }
   const std::uint16_t max_points =
-      config.code_mode == CodeMode::Ascii ? kMaxBatchBitPointsAscii : kMaxBatchBitPointsBinary;
+      is_ascii_mode(config) ? kMaxBatchBitPointsAscii : kMaxBatchBitPointsBinary;
   if (points == 0U || points > max_points) {
     return invalid_argument("Link direct batch read bits points are out of supported range");
   }
@@ -3095,7 +3210,7 @@ Status parse_batch_read_bits_response(
   if (out_bits.size() < request.points) {
     return buffer_too_small("Batch read bits output buffer is too small");
   }
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     const std::size_t expected_size =
         is_e1_frame(config) ? static_cast<std::size_t>(request.points + ((request.points % 2U) == 0U ? 0U : 1U))
                             : static_cast<std::size_t>(request.points);
@@ -3415,7 +3530,7 @@ Status encode_batch_write_bits(
         !append_e1_device_reference(writer, config, request.head_device) ||
         !append_e1_point_count(writer, config, static_cast<std::uint16_t>(request.bits.size())) ||
         !append_e1_fixed_zero(writer, config) ||
-        !(config.code_mode == CodeMode::Ascii ? append_bit_units_ascii(writer, request.bits)
+        !(is_ascii_mode(config) ? append_bit_units_ascii(writer, request.bits)
                                               : append_bit_units_binary(writer, request.bits))) {
       return buffer_too_small("1E batch write bits request buffer is too small");
     }
@@ -3449,7 +3564,7 @@ Status encode_batch_write_bits(
     return buffer_too_small("Batch write bits request buffer is too small");
   }
 
-  const bool ok = (config.code_mode == CodeMode::Ascii)
+  const bool ok = (is_ascii_mode(config))
                       ? append_bit_units_ascii(writer, request.bits)
                       : append_batch_write_bits_binary(writer, request.bits);
   if (!ok) {
@@ -3493,7 +3608,7 @@ Status encode_link_direct_batch_write_bits(
       !append_word_count(writer, config, static_cast<std::uint16_t>(bits.size()))) {
     return buffer_too_small("Link direct batch write bits request buffer is too small");
   }
-  const bool appended = config.code_mode == CodeMode::Ascii
+  const bool appended = is_ascii_mode(config)
                             ? append_bit_units_ascii(writer, bits)
                             : append_batch_write_bits_binary(writer, bits);
   if (!appended) {
@@ -3641,8 +3756,8 @@ Status parse_random_read_response(
 
   std::size_t expected_size = 0;
   for (const RandomReadItem& item : items) {
-    expected_size += item.double_word ? (config.code_mode == CodeMode::Ascii ? 8U : 4U)
-                                      : (config.code_mode == CodeMode::Ascii ? 4U : 2U);
+    expected_size += item.double_word ? (is_ascii_mode(config) ? 8U : 4U)
+                                      : (is_ascii_mode(config) ? 4U : 2U);
   }
   if (response_data.size() != expected_size) {
     return parse_error("Random read response length mismatch");
@@ -3653,7 +3768,7 @@ Status parse_random_read_response(
     if (items[index].double_word) {
       continue;
     }
-    if (config.code_mode == CodeMode::Ascii) {
+    if (is_ascii_mode(config)) {
       if (!parse_ascii_dword(response_data.subspan(cursor, 4U), out_values[index])) {
         return parse_error("Failed to parse random read ASCII word value");
       }
@@ -3672,7 +3787,7 @@ Status parse_random_read_response(
     if (!items[index].double_word) {
       continue;
     }
-    if (config.code_mode == CodeMode::Ascii) {
+    if (is_ascii_mode(config)) {
       if (!parse_ascii_dword(response_data.subspan(cursor, 8U), out_values[index])) {
         return parse_error("Failed to parse random read ASCII double-word value");
       }
@@ -3739,7 +3854,7 @@ Status encode_link_direct_random_write_words(
 
   for (const LinkDirectRandomWriteWordItem& item : items) {
     if (!append_link_direct_device_reference_binary(writer, wire_config, item.device) ||
-        (config.code_mode == CodeMode::Ascii ? !append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))
+        (is_ascii_mode(config) ? !append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))
                                              : !writer.append_le16(static_cast<std::uint16_t>(item.value & 0xFFFFU)))) {
       return buffer_too_small("Link direct random write words request buffer is too small");
     }
@@ -3791,7 +3906,7 @@ Status encode_random_write_words(
         return invalid_argument("1E random write words requires bit-device heads aligned to 16 points");
       }
       if (!append_e1_device_reference(writer, config, item.device) ||
-          !(config.code_mode == CodeMode::Ascii ? append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))
+          !(is_ascii_mode(config) ? append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))
                                                : writer.append_le16(static_cast<std::uint16_t>(item.value & 0xFFFFU)))) {
         return buffer_too_small("1E random write words request buffer is too small");
       }
@@ -3852,7 +3967,7 @@ Status encode_random_write_words(
   for (const RandomWriteWordItem& item : items) {
     if (!item.double_word &&
         (!append_device_reference(writer, config, item.device) ||
-         (config.code_mode == CodeMode::Ascii ? !append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))
+         (is_ascii_mode(config) ? !append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))
                                               : !writer.append_le16(static_cast<std::uint16_t>(item.value & 0xFFFFU))))) {
       return buffer_too_small("Random write words request buffer is too small");
     }
@@ -3863,7 +3978,7 @@ Status encode_random_write_words(
     }
     const bool ok =
         append_device_reference(writer, config, item.device) &&
-        (config.code_mode == CodeMode::Ascii ? append_dword_data_ascii(writer, item.value)
+        (is_ascii_mode(config) ? append_dword_data_ascii(writer, item.value)
                                              : writer.append_le32(item.value, 4U));
     if (!ok) {
       return buffer_too_small("Random write words request buffer is too small");
@@ -3900,7 +4015,7 @@ Status encode_random_write_extended_file_register_words(
         return address_status;
       }
       if (!append_e1_extended_file_register_address(writer, config, item.device) ||
-          !(config.code_mode == CodeMode::Ascii ? append_word_data_ascii(writer, item.value)
+          !(is_ascii_mode(config) ? append_word_data_ascii(writer, item.value)
                                                : writer.append_le16(item.value))) {
         return buffer_too_small("1E extended file-register random write request buffer is too small");
       }
@@ -4012,7 +4127,7 @@ Status encode_random_write_bits(
         return invalid_argument("1E random write bits does not support this device");
       }
       if (!append_e1_device_reference(writer, config, item.device) ||
-          !(config.code_mode == CodeMode::Ascii
+          !(is_ascii_mode(config)
                 ? writer.push(item.value == BitValue::On ? static_cast<std::uint8_t>('1')
                                                          : static_cast<std::uint8_t>('0'))
                 : writer.push(item.value == BitValue::On ? 0x01U : 0x00U))) {
@@ -4069,7 +4184,7 @@ Status encode_random_write_bits(
       return buffer_too_small("Random write bits request buffer is too small");
     }
     const std::uint16_t bit_value = item.value == BitValue::On ? 0x0001U : 0x0000U;
-    const bool ok = config.code_mode == CodeMode::Ascii
+    const bool ok = is_ascii_mode(config)
                         ? (is_iq_r_series(config) ? append_word_data_ascii(writer, bit_value)
                                                   : append_ascii_hex(writer, bit_value, 2U))
                         : (is_iq_r_series(config) ? writer.append_le16(bit_value)
@@ -4118,7 +4233,7 @@ Status encode_link_direct_random_write_bits(
       return buffer_too_small("Link direct random write bits request buffer is too small");
     }
     const std::uint16_t bit_value = item.value == BitValue::On ? 0x0001U : 0x0000U;
-    const bool ok = config.code_mode == CodeMode::Ascii
+    const bool ok = is_ascii_mode(config)
                         ? (is_iq_r_series(wire_config) ? append_word_data_ascii(writer, bit_value)
                                                        : append_ascii_hex(writer, bit_value, 2U))
                         : (is_iq_r_series(wire_config) ? writer.append_le16(bit_value)
@@ -4294,10 +4409,10 @@ Status parse_multi_block_read_response(
   std::size_t total_bits = 0;
   for (const MultiBlockReadBlock& block : blocks) {
     if (block.bit_block) {
-      expected_response_size += static_cast<std::size_t>(block.points) * (config.code_mode == CodeMode::Ascii ? 4U : 2U);
+      expected_response_size += static_cast<std::size_t>(block.points) * (is_ascii_mode(config) ? 4U : 2U);
       total_bits += static_cast<std::size_t>(block.points) * 16U;
     } else {
-      expected_response_size += static_cast<std::size_t>(block.points) * (config.code_mode == CodeMode::Ascii ? 4U : 2U);
+      expected_response_size += static_cast<std::size_t>(block.points) * (is_ascii_mode(config) ? 4U : 2U);
       total_words += block.points;
     }
   }
@@ -4326,7 +4441,7 @@ Status parse_multi_block_read_response(
         .data_count = blocks[index].points,
     };
     for (std::size_t point = 0; point < blocks[index].points; ++point) {
-      if (config.code_mode == CodeMode::Ascii) {
+      if (is_ascii_mode(config)) {
         if (!parse_ascii_word(response_data.subspan(cursor, 4U), out_words[word_offset + point])) {
           return parse_error("Failed to parse multi-block read ASCII word data");
         }
@@ -4354,7 +4469,7 @@ Status parse_multi_block_read_response(
     };
     for (std::size_t point = 0; point < blocks[index].points; ++point) {
       std::uint16_t packed_word = 0;
-      if (config.code_mode == CodeMode::Ascii) {
+      if (is_ascii_mode(config)) {
         if (!parse_ascii_word(response_data.subspan(cursor, 4U), packed_word)) {
           return parse_error("Failed to parse multi-block read ASCII bit data");
         }
@@ -4442,7 +4557,7 @@ Status encode_multi_block_write(
     const bool ok =
         append_device_reference(writer, config, block.head_device) &&
         append_word_count(writer, config, block.points) &&
-        (config.code_mode == CodeMode::Ascii ? append_word_units_from_bits_ascii(writer, block.bits)
+        (is_ascii_mode(config) ? append_word_units_from_bits_ascii(writer, block.bits)
                                              : append_word_units_from_bits_binary(writer, block.bits));
     if (!ok) {
       return buffer_too_small("Multi-block write request buffer is too small");
@@ -4523,7 +4638,7 @@ Status encode_link_direct_multi_block_write(
     const bool ok =
         append_link_direct_device_reference_binary(writer, config, block.head_device) &&
         append_word_count(writer, config, block.points) &&
-        (config.code_mode == CodeMode::Ascii ? append_word_units_from_bits_ascii(writer, block.bits)
+        (is_ascii_mode(config) ? append_word_units_from_bits_ascii(writer, block.bits)
                                              : append_word_units_from_bits_binary_direct(writer, block.bits));
     if (!ok) {
       return buffer_too_small("Link direct multi-block write request buffer is too small");
@@ -4627,8 +4742,8 @@ Status encode_link_direct_register_monitor(
     return buffer_too_small("Link direct monitor registration request buffer is too small");
   }
   if (!patched.append(std::span<const std::uint8_t>(
-          random_request_data.data() + (config.code_mode == CodeMode::Ascii ? 8U : 4U),
-          inner_size - (config.code_mode == CodeMode::Ascii ? 8U : 4U)))) {
+          random_request_data.data() + (is_ascii_mode(config) ? 8U : 4U),
+          inner_size - (is_ascii_mode(config) ? 8U : 4U)))) {
     return buffer_too_small("Link direct monitor registration request buffer is too small");
   }
   out_size = patched.size();
@@ -4713,8 +4828,8 @@ Status encode_register_monitor(
     return buffer_too_small("Monitor registration request buffer is too small");
   }
   if (!patched.append(std::span<const std::uint8_t>(
-          random_request_data.data() + (config.code_mode == CodeMode::Ascii ? 8U : 4U),
-          inner_size - (config.code_mode == CodeMode::Ascii ? 8U : 4U)))) {
+          random_request_data.data() + (is_ascii_mode(config) ? 8U : 4U),
+          inner_size - (is_ascii_mode(config) ? 8U : 4U)))) {
     return buffer_too_small("Monitor registration request buffer is too small");
   }
   out_size = patched.size();
@@ -5086,7 +5201,7 @@ Status parse_read_user_frame_response(
   std::uint16_t registration_data_bytes = 0U;
   std::uint16_t frame_bytes = 0U;
   std::size_t payload_offset = 0U;
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     std::uint32_t registration_parsed = 0U;
     std::uint32_t frame_parsed = 0U;
     if (response_data.size() < 8U ||
@@ -5123,14 +5238,15 @@ Status parse_read_user_frame_response(
 
   out_data.registration_data_bytes = registration_data_bytes;
   out_data.frame_bytes = frame_bytes;
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     for (std::size_t index = 0; index < registration_data_bytes; ++index) {
       std::uint32_t byte_value = 0U;
       if (!parse_ascii_hex(response_data.subspan(payload_offset + (index * 2U), 2U), byte_value) ||
           byte_value > 0xFFU) {
         return parse_error("Failed to parse ASCII user-frame registration data");
       }
-      out_data.registration_data[index] = std::byte {static_cast<std::uint8_t>(byte_value)};
+      out_data.registration_data[index] =
+          static_cast<std::byte>(static_cast<unsigned char>(byte_value));
     }
   } else {
     std::memcpy(out_data.registration_data.data(), response_data.data() + payload_offset, registration_data_bytes);
@@ -5223,7 +5339,7 @@ Status encode_initialize_transmission_sequence(
     const ProtocolConfig& config,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
-  if (config.frame_kind != FrameKind::C4 || config.code_mode != CodeMode::Binary) {
+  if (config.frame_kind != FrameKind::C4 || !is_binary_mode(config)) {
     (void)out_request_data;
     (void)out_size;
     return unsupported(
@@ -5274,7 +5390,7 @@ Status encode_read_host_buffer(
   }
   ByteWriter writer(out_request_data);
   const bool ok = append_command_header(writer, config, 0x0613U, 0x0000U) &&
-                  (config.code_mode == CodeMode::Ascii ? append_ascii_hex(writer, request.start_address, 8)
+                  (is_ascii_mode(config) ? append_ascii_hex(writer, request.start_address, 8)
                                                        : writer.append_le32(request.start_address, 4U)) &&
                   append_word_count(writer, config, request.word_length);
   if (!ok) {
@@ -5320,7 +5436,7 @@ Status encode_write_host_buffer(
   }
   ByteWriter writer(out_request_data);
   const bool ok = append_command_header(writer, config, 0x1613U, 0x0000U) &&
-                  (config.code_mode == CodeMode::Ascii ? append_ascii_hex(writer, request.start_address, 8)
+                  (is_ascii_mode(config) ? append_ascii_hex(writer, request.start_address, 8)
                                                        : writer.append_le32(request.start_address, 4U)) &&
                   append_word_count(writer, config, static_cast<std::uint16_t>(request.words.size())) &&
                   append_word_data(writer, config, request.words);
@@ -5386,11 +5502,11 @@ Status encode_read_module_buffer(
     const std::uint8_t encoded_length =
         request.bytes == 256U ? 0x00U : static_cast<std::uint8_t>(request.bytes);
     const bool ok = append_e1_subheader(writer, config, 0x0EU) &&
-                    (config.code_mode == CodeMode::Ascii ? append_ascii_hex(writer, request.start_address, 6U)
+                    (is_ascii_mode(config) ? append_ascii_hex(writer, request.start_address, 6U)
                                                          : writer.append_le32(request.start_address, 3U)) &&
-                    (config.code_mode == CodeMode::Ascii ? append_ascii_hex(writer, encoded_length, 2U)
+                    (is_ascii_mode(config) ? append_ascii_hex(writer, encoded_length, 2U)
                                                          : writer.push(encoded_length)) &&
-                    (config.code_mode == CodeMode::Ascii ? append_ascii_hex(writer, request.module_number, 2U)
+                    (is_ascii_mode(config) ? append_ascii_hex(writer, request.module_number, 2U)
                                                          : writer.push(static_cast<std::uint8_t>(request.module_number & 0xFFU))) &&
                     append_e1_fixed_zero(writer, config);
     if (!ok) {
@@ -5419,7 +5535,7 @@ Status encode_read_module_buffer(
   }
   ByteWriter writer(out_request_data);
   const bool ok = append_command_header(writer, config, 0x0601U, 0x0000U) &&
-                  (config.code_mode == CodeMode::Ascii ? append_ascii_hex(writer, request.start_address, 8)
+                  (is_ascii_mode(config) ? append_ascii_hex(writer, request.start_address, 8)
                                                        : writer.append_le32(request.start_address, 4U)) &&
                   append_word_count(writer, config, request.bytes) &&
                   append_word_count(writer, config, request.module_number);
@@ -5438,7 +5554,7 @@ Status parse_read_module_buffer_response(
   if (out_bytes.size() < request.bytes) {
     return buffer_too_small("Module buffer output buffer is too small");
   }
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     if (response_data.size() != static_cast<std::size_t>(request.bytes) * 2U) {
       return parse_error("Module buffer ASCII response length mismatch");
     }
@@ -5475,11 +5591,11 @@ Status encode_write_module_buffer(
     const std::uint8_t encoded_length =
         request.bytes.size() == 256U ? 0x00U : static_cast<std::uint8_t>(request.bytes.size());
     const bool ok = append_e1_subheader(writer, config, 0x0FU) &&
-                    (config.code_mode == CodeMode::Ascii ? append_ascii_hex(writer, request.start_address, 6U)
+                    (is_ascii_mode(config) ? append_ascii_hex(writer, request.start_address, 6U)
                                                          : writer.append_le32(request.start_address, 3U)) &&
-                    (config.code_mode == CodeMode::Ascii ? append_ascii_hex(writer, encoded_length, 2U)
+                    (is_ascii_mode(config) ? append_ascii_hex(writer, encoded_length, 2U)
                                                          : writer.push(encoded_length)) &&
-                    (config.code_mode == CodeMode::Ascii ? append_ascii_hex(writer, request.module_number, 2U)
+                    (is_ascii_mode(config) ? append_ascii_hex(writer, request.module_number, 2U)
                                                          : writer.push(static_cast<std::uint8_t>(request.module_number & 0xFFU))) &&
                     append_e1_fixed_zero(writer, config) &&
                     append_byte_data(writer, config, request.bytes);
@@ -5510,7 +5626,7 @@ Status encode_write_module_buffer(
   }
   ByteWriter writer(out_request_data);
   const bool ok = append_command_header(writer, config, 0x1601U, 0x0000U) &&
-                  (config.code_mode == CodeMode::Ascii ? append_ascii_hex(writer, request.start_address, 8)
+                  (is_ascii_mode(config) ? append_ascii_hex(writer, request.start_address, 8)
                                                        : writer.append_le32(request.start_address, 4U)) &&
                   append_word_count(writer, config, static_cast<std::uint16_t>(request.bytes.size())) &&
                   append_word_count(writer, config, request.module_number) &&
@@ -5581,7 +5697,7 @@ Status parse_read_cpu_model_response(
     const ProtocolConfig& config,
     std::span<const std::uint8_t> response_data,
     CpuModelInfo& out_info) noexcept {
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     if (response_data.size() < 20U) {
       return parse_error("ASCII CPU model response must be at least 20 bytes");
     }
@@ -5881,7 +5997,7 @@ Status parse_loopback_response(
     }
     payload_length = ascii_length;
     payload_offset = 2U;
-  } else if (config.code_mode == CodeMode::Ascii) {
+  } else if (is_ascii_mode(config)) {
     std::uint32_t ascii_length = 0;
     if (response_data.size() < 4U || !parse_ascii_hex(response_data.first(4U), ascii_length)) {
       return parse_error("Failed to parse ASCII loopback response length");
@@ -5937,3 +6053,4 @@ Status parse_loopback_response(
 }  // namespace CommandCodec
 
 }  // namespace mcprotocol::serial
+

@@ -23,6 +23,27 @@ Scope:
   extended-file-register access, and special-function-module buffer read/write
 - The library does not implement the full MC protocol serial command list
 
+## Compile-time Trim Scope
+
+Compile-time trimming in this repository works at these units:
+
+- build-target unit
+  host support and CLI can be dropped as separate targets
+- command-family unit
+  random, multi-block, monitor, host-buffer, module-buffer, CPU-model, and loopback each have their
+  own switch
+- codec-family unit
+  ASCII vs binary and `4C` / `3C` / `2C` / `1C` / `1E` each have their own switch
+
+Compile-time trimming does not yet work at these units:
+
+- individual commands inside one family
+  you cannot compile out only `0403` while keeping `1402`
+- per-device variants inside one family
+  you cannot compile out only `Jn\\...` or only helper-qualified `U...`
+- per-series behavior
+  `IQ-R`, `Q/L`, `QnA`, and `A` remain runtime protocol choices
+
 For target-specific PASS/HOLD results, use
 [HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md).
 

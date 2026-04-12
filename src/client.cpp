@@ -32,6 +32,42 @@ namespace {
   return make_status(StatusCode::UnsupportedConfiguration, message);
 }
 
+[[nodiscard]] constexpr bool is_ascii_mode(const ProtocolConfig& config) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_ASCII_MODE
+  return config.code_mode == CodeMode::Ascii;
+#else
+  (void)config;
+  return false;
+#endif
+}
+
+[[nodiscard]] constexpr bool is_binary_mode(const ProtocolConfig& config) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_BINARY_MODE
+  return config.code_mode == CodeMode::Binary;
+#else
+  (void)config;
+  return false;
+#endif
+}
+
+[[nodiscard]] constexpr bool is_c1_frame(const ProtocolConfig& config) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C1
+  return config.frame_kind == FrameKind::C1;
+#else
+  (void)config;
+  return false;
+#endif
+}
+
+[[nodiscard]] constexpr bool is_e1_frame(const ProtocolConfig& config) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
+  return config.frame_kind == FrameKind::E1;
+#else
+  (void)config;
+  return false;
+#endif
+}
+
 [[nodiscard]] std::span<const std::uint8_t> as_u8_span(std::span<const std::byte> bytes) noexcept {
   return {
       reinterpret_cast<const std::uint8_t*>(bytes.data()),
@@ -49,10 +85,10 @@ namespace {
 }
 
 [[nodiscard]] bool is_response_start_byte(const ProtocolConfig& config, std::uint8_t byte) noexcept {
-  if (config.frame_kind == FrameKind::E1) {
+  if (is_e1_frame(config)) {
     return false;
   }
-  if (config.code_mode == CodeMode::Ascii) {
+  if (is_ascii_mode(config)) {
     if (config.ascii_format == AsciiFormat::Format3) {
       return byte == 0x02U;
     }
@@ -131,10 +167,10 @@ struct StreamDecodeResult {
     return result;
   }
 
-  if (config.frame_kind == FrameKind::E1) {
-    const std::size_t subheader_size = config.code_mode == CodeMode::Ascii ? 2U : 1U;
-    const std::size_t minimum_frame_size = subheader_size + (config.code_mode == CodeMode::Ascii ? 2U : 1U);
-    if (config.code_mode == CodeMode::Ascii) {
+  if (is_e1_frame(config)) {
+    const std::size_t subheader_size = is_ascii_mode(config) ? 2U : 1U;
+    const std::size_t minimum_frame_size = subheader_size + (is_ascii_mode(config) ? 2U : 1U);
+    if (is_ascii_mode(config)) {
       const auto expected = ascii_hex_byte(e1_response_subheader);
       for (std::size_t offset = 0; offset < bytes.size(); ++offset) {
         const std::size_t remaining = bytes.size() - offset;
@@ -258,7 +294,7 @@ struct StreamDecodeResult {
     if (candidate.status == DecodeStatus::Incomplete) {
       if (offset == 0U) {
         first_candidate_incomplete = true;
-        if (config.code_mode == CodeMode::Binary) {
+        if (is_binary_mode(config)) {
           break;
         }
       }
@@ -2010,3 +2046,4 @@ Status MelsecSerialClient::async_loopback(
 }
 
 }  // namespace mcprotocol::serial
+

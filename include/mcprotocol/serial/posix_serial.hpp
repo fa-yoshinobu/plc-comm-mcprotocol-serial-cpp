@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 
 #include "mcprotocol/serial/status.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
