@@ -9,6 +9,12 @@
 #include "mcprotocol/serial/posix_serial.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
 
+/// \file host_sync.hpp
+/// \brief Blocking host-side wrapper that drives `MelsecSerialClient` over `PosixSerialPort`.
+///
+/// This header is intended for bring-up tools, validation binaries, and small host utilities. MCU
+/// firmware normally uses `MelsecSerialClient` directly instead of this blocking wrapper.
+
 namespace mcprotocol::serial {
 
 /// \brief Host-side synchronous convenience wrapper built on `PosixSerialPort` and

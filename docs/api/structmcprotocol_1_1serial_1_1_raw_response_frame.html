@@ -101,14 +101,18 @@ $(function(){initNavTree('structmcprotocol_1_1serial_1_1_raw_response_frame.html
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
 <tr class="memitem:a947dd227de3d5ddb5cd915d7954cd1ce" id="r_a947dd227de3d5ddb5cd915d7954cd1ce"><td class="memItemLeft"><a class="el" href="namespacemcprotocol_1_1serial.html#a2207f0c7c464a44c9dd442855b97fbc7">ResponseType</a>&#160;</td><td class="memItemRight"><a class="el" href="#a947dd227de3d5ddb5cd915d7954cd1ce">type</a> = <a class="el" href="namespacemcprotocol_1_1serial.html#a2207f0c7c464a44c9dd442855b97fbc7ab234b50b7c22fa887369303651cc9b9f">ResponseType::SuccessNoData</a></td></tr>
+<tr class="memdesc:a947dd227de3d5ddb5cd915d7954cd1ce"><td class="mdescLeft">&#160;</td><td class="mdescRight">Success-with-data, success-without-data, or PLC-error classification.  <br /></td></tr>
 <tr class="memitem:aa64f9eb1bc840722a66b1afcd9685705" id="r_aa64f9eb1bc840722a66b1afcd9685705"><td class="memItemLeft">std::size_t&#160;</td><td class="memItemRight"><a class="el" href="#aa64f9eb1bc840722a66b1afcd9685705">response_size</a> = 0</td></tr>
+<tr class="memdesc:aa64f9eb1bc840722a66b1afcd9685705"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of valid bytes in <span class="tt"><a class="el" href="#a33a4e2076e3b7652494976219622f9cb" title="Raw response payload bytes with the serial frame already removed.">response_data</a></span>.  <br /></td></tr>
 <tr class="memitem:a2b5c2530d42db7634b6e1a6d2614251a" id="r_a2b5c2530d42db7634b6e1a6d2614251a"><td class="memItemLeft">std::uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a2b5c2530d42db7634b6e1a6d2614251a">error_code</a> = 0</td></tr>
+<tr class="memdesc:a2b5c2530d42db7634b6e1a6d2614251a"><td class="mdescLeft">&#160;</td><td class="mdescRight">PLC error code when <span class="tt"><a class="el" href="#a947dd227de3d5ddb5cd915d7954cd1ce" title="Success-with-data, success-without-data, or PLC-error classification.">type</a> == <a class="el" href="namespacemcprotocol_1_1serial.html#a2207f0c7c464a44c9dd442855b97fbc7aa9dba9987848711545a7aaf23cd4891d" title="PLC-side error response with an end code / error code.">ResponseType::PlcError</a></span>.  <br /></td></tr>
 <tr class="memitem:a33a4e2076e3b7652494976219622f9cb" id="r_a33a4e2076e3b7652494976219622f9cb"><td class="memItemLeft">std::array&lt; std::uint8_t, <a class="el" href="namespacemcprotocol_1_1serial.html#ad5bbd95ce6a751216c94e1e2072425d4">kMaxResponseFrameBytes</a> &gt;&#160;</td><td class="memItemRight"><a class="el" href="#a33a4e2076e3b7652494976219622f9cb">response_data</a> {}</td></tr>
+<tr class="memdesc:a33a4e2076e3b7652494976219622f9cb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Raw response payload bytes with the serial frame already removed.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Raw decoded response frame before command-specific parsing. </p>
 
-<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00024">24</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00036">36</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Member Data Documentation</h2>
 <a id="a2b5c2530d42db7634b6e1a6d2614251a" name="a2b5c2530d42db7634b6e1a6d2614251a"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a2b5c2530d42db7634b6e1a6d2614251a">&#9670;&#160;</a></span>error_code</h2>
@@ -122,7 +126,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00027">27</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
+<p>PLC error code when <span class="tt"><a class="el" href="#a947dd227de3d5ddb5cd915d7954cd1ce" title="Success-with-data, success-without-data, or PLC-error classification.">type</a> == <a class="el" href="namespacemcprotocol_1_1serial.html#a2207f0c7c464a44c9dd442855b97fbc7aa9dba9987848711545a7aaf23cd4891d" title="PLC-side error response with an end code / error code.">ResponseType::PlcError</a></span>. </p>
+
+<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00042">42</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
 
 </div>
 </div>
@@ -138,7 +144,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00028">28</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
+<p>Raw response payload bytes with the serial frame already removed. </p>
+
+<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00044">44</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
 
 </div>
 </div>
@@ -154,7 +162,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00026">26</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
+<p>Number of valid bytes in <span class="tt"><a class="el" href="#a33a4e2076e3b7652494976219622f9cb" title="Raw response payload bytes with the serial frame already removed.">response_data</a></span>. </p>
+
+<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00040">40</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
 
 </div>
 </div>
@@ -170,7 +180,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00025">25</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
+<p>Success-with-data, success-without-data, or PLC-error classification. </p>
+
+<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00038">38</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
 
 </div>
 </div>

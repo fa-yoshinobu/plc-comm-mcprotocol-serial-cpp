@@ -9,6 +9,17 @@
 #include "mcprotocol/serial/qualified_buffer.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
 
+/// \file client.hpp
+/// \brief Asynchronous request-execution state machine for serial MC protocol traffic.
+///
+/// `MelsecSerialClient` sits above `CommandCodec` and `FrameCodec` and below any concrete transport.
+/// It owns no UART implementation itself. The embedding application is responsible for:
+///
+/// - moving bytes from `pending_tx_frame()` to the actual serial port
+/// - calling `notify_tx_complete()` when TX is done
+/// - feeding received bytes back through `on_rx_bytes()`
+/// - calling `poll()` for timeout handling
+
 namespace mcprotocol::serial {
 
 /// \brief Asynchronous MC protocol client for UART / serial integrations.
@@ -20,6 +31,9 @@ namespace mcprotocol::serial {
 /// 4. call `notify_tx_complete()` when TX finishes
 /// 5. feed received bytes with `on_rx_bytes()`
 /// 6. call `poll()` from the main loop or scheduler for timeout handling
+///
+/// Output spans passed to `async_*` requests must remain valid until the completion callback fires
+/// or until the request is cancelled.
 class MelsecSerialClient {
  public:
   MelsecSerialClient() = default;

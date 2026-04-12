@@ -92,6 +92,9 @@ $(function(){initNavTree('types_8hpp.html','',''); });
   <div class="headertitle"><div class="title">types.hpp File Reference</div></div>
 </div><!--header-->
 <div class="contents">
+
+<p>Public request, response, configuration, and callback types for the serial MC protocol library.  
+<a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;array&gt;</code><br />
 <code>#include &lt;cstddef&gt;</code><br />
 <code>#include &lt;cstdint&gt;</code><br />
@@ -113,7 +116,6 @@ Classes</h2></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AExtendedFileRegisterAddress" id="r_mcprotocol_3A_3Aserial_3A_3AExtendedFileRegisterAddress"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_extended_file_register_address.html">mcprotocol::serial::ExtendedFileRegisterAddress</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Extended file-register address using block number plus <span class="tt">R</span> word number.  <a href="structmcprotocol_1_1serial_1_1_extended_file_register_address.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3ABatchReadWordsRequest" id="r_mcprotocol_3A_3Aserial_3A_3ABatchReadWordsRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_batch_read_words_request.html">mcprotocol::serial::BatchReadWordsRequest</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Contiguous word-read request (<span class="tt">0401</span>).  <a href="structmcprotocol_1_1serial_1_1_batch_read_words_request.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3ABatchReadBitsRequest" id="r_mcprotocol_3A_3Aserial_3A_3ABatchReadBitsRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_batch_read_bits_request.html">mcprotocol::serial::BatchReadBitsRequest</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Contiguous bit-read request (<span class="tt">0401</span> bit path).  <a href="structmcprotocol_1_1serial_1_1_batch_read_bits_request.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3ABatchWriteWordsRequest" id="r_mcprotocol_3A_3Aserial_3A_3ABatchWriteWordsRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_batch_write_words_request.html">mcprotocol::serial::BatchWriteWordsRequest</a></td></tr>
@@ -121,7 +123,6 @@ Classes</h2></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3ABatchWriteBitsRequest" id="r_mcprotocol_3A_3Aserial_3A_3ABatchWriteBitsRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_batch_write_bits_request.html">mcprotocol::serial::BatchWriteBitsRequest</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Contiguous bit-write request (<span class="tt">1401</span> bit path).  <a href="structmcprotocol_1_1serial_1_1_batch_write_bits_request.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AExtendedFileRegisterBatchReadWordsRequest" id="r_mcprotocol_3A_3Aserial_3A_3AExtendedFileRegisterBatchReadWordsRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_extended_file_register_batch_read_words_request.html">mcprotocol::serial::ExtendedFileRegisterBatchReadWordsRequest</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Extended file-register batch read (<span class="tt">ER</span> on 1C ACPU-common, chapter-18 block path on 1E).  <a href="structmcprotocol_1_1serial_1_1_extended_file_register_batch_read_words_request.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AExtendedFileRegisterDirectBatchReadWordsRequest" id="r_mcprotocol_3A_3Aserial_3A_3AExtendedFileRegisterDirectBatchReadWordsRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_extended_file_register_direct_batch_read_words_request.html">mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Direct extended file-register batch read (<span class="tt">NR</span> on 1C QnA-common, chapter-18 direct path on 1E).  <a href="structmcprotocol_1_1serial_1_1_extended_file_register_direct_batch_read_words_request.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AExtendedFileRegisterBatchWriteWordsRequest" id="r_mcprotocol_3A_3Aserial_3A_3AExtendedFileRegisterBatchWriteWordsRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_extended_file_register_batch_write_words_request.html">mcprotocol::serial::ExtendedFileRegisterBatchWriteWordsRequest</a></td></tr>
@@ -133,7 +134,6 @@ Classes</h2></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AExtendedFileRegisterMonitorRegistration" id="r_mcprotocol_3A_3Aserial_3A_3AExtendedFileRegisterMonitorRegistration"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_extended_file_register_monitor_registration.html">mcprotocol::serial::ExtendedFileRegisterMonitorRegistration</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Extended file-register monitor registration (<span class="tt">EM</span> on 1C, chapter-18 on 1E).  <a href="structmcprotocol_1_1serial_1_1_extended_file_register_monitor_registration.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3ARandomReadItem" id="r_mcprotocol_3A_3Aserial_3A_3ARandomReadItem"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_random_read_item.html">mcprotocol::serial::RandomReadItem</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">One item inside a native random-read request (<span class="tt">0403</span> or monitor registration).  <a href="structmcprotocol_1_1serial_1_1_random_read_item.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3ARandomReadRequest" id="r_mcprotocol_3A_3Aserial_3A_3ARandomReadRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_random_read_request.html">mcprotocol::serial::RandomReadRequest</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Native random-read request made of sparse word/dword items.  <a href="structmcprotocol_1_1serial_1_1_random_read_request.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3ARandomWriteWordItem" id="r_mcprotocol_3A_3Aserial_3A_3ARandomWriteWordItem"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_random_write_word_item.html">mcprotocol::serial::RandomWriteWordItem</a></td></tr>
@@ -151,9 +151,7 @@ Classes</h2></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AMultiBlockReadBlockResult" id="r_mcprotocol_3A_3Aserial_3A_3AMultiBlockReadBlockResult"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_multi_block_read_block_result.html">mcprotocol::serial::MultiBlockReadBlockResult</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Parsed layout description for one block returned by <span class="tt">parse_multi_block_read_response()</span>.  <a href="structmcprotocol_1_1serial_1_1_multi_block_read_block_result.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AMonitorRegistration" id="r_mcprotocol_3A_3Aserial_3A_3AMonitorRegistration"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_monitor_registration.html">mcprotocol::serial::MonitorRegistration</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Monitor registration payload used by <span class="tt">0801</span>.  <a href="structmcprotocol_1_1serial_1_1_monitor_registration.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AUserFrameReadRequest" id="r_mcprotocol_3A_3Aserial_3A_3AUserFrameReadRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_user_frame_read_request.html">mcprotocol::serial::UserFrameReadRequest</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">User-frame registration-data read request (<span class="tt">0610</span>).  <a href="structmcprotocol_1_1serial_1_1_user_frame_read_request.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AUserFrameRegistrationData" id="r_mcprotocol_3A_3Aserial_3A_3AUserFrameRegistrationData"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_user_frame_registration_data.html">mcprotocol::serial::UserFrameRegistrationData</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">User-frame registration-data payload returned by <span class="tt">0610</span>.  <a href="structmcprotocol_1_1serial_1_1_user_frame_registration_data.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AUserFrameWriteRequest" id="r_mcprotocol_3A_3Aserial_3A_3AUserFrameWriteRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_user_frame_write_request.html">mcprotocol::serial::UserFrameWriteRequest</a></td></tr>
@@ -163,7 +161,6 @@ Classes</h2></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AGlobalSignalControlRequest" id="r_mcprotocol_3A_3Aserial_3A_3AGlobalSignalControlRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_global_signal_control_request.html">mcprotocol::serial::GlobalSignalControlRequest</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">C24 global-signal ON/OFF request (<span class="tt">1618</span>).  <a href="structmcprotocol_1_1serial_1_1_global_signal_control_request.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AHostBufferReadRequest" id="r_mcprotocol_3A_3Aserial_3A_3AHostBufferReadRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_host_buffer_read_request.html">mcprotocol::serial::HostBufferReadRequest</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Host-buffer read request (<span class="tt">0613</span>).  <a href="structmcprotocol_1_1serial_1_1_host_buffer_read_request.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AHostBufferWriteRequest" id="r_mcprotocol_3A_3Aserial_3A_3AHostBufferWriteRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_host_buffer_write_request.html">mcprotocol::serial::HostBufferWriteRequest</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Host-buffer write request (<span class="tt">1613</span>).  <a href="structmcprotocol_1_1serial_1_1_host_buffer_write_request.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AModuleBufferReadRequest" id="r_mcprotocol_3A_3Aserial_3A_3AModuleBufferReadRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_module_buffer_read_request.html">mcprotocol::serial::ModuleBufferReadRequest</a></td></tr>
@@ -171,7 +168,6 @@ Classes</h2></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3AModuleBufferWriteRequest" id="r_mcprotocol_3A_3Aserial_3A_3AModuleBufferWriteRequest"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_module_buffer_write_request.html">mcprotocol::serial::ModuleBufferWriteRequest</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Module-buffer byte write request (<span class="tt">1601</span> helper path).  <a href="structmcprotocol_1_1serial_1_1_module_buffer_write_request.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3ACpuModelInfo" id="r_mcprotocol_3A_3Aserial_3A_3ACpuModelInfo"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_cpu_model_info.html">mcprotocol::serial::CpuModelInfo</a></td></tr>
-<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">CPU-model response payload returned by <span class="tt">cpu-model</span>.  <a href="structmcprotocol_1_1serial_1_1_cpu_model_info.html#details">More...</a><br /></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial_3A_3ARs485Hooks" id="r_mcprotocol_3A_3Aserial_3A_3ARs485Hooks"><td class="memItemLeft">struct &#160;</td><td class="memItemRight"><a class="el" href="structmcprotocol_1_1serial_1_1_rs485_hooks.html">mcprotocol::serial::Rs485Hooks</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Optional RS-485 callbacks used by the async client around TX start/end.  <a href="structmcprotocol_1_1serial_1_1_rs485_hooks.html#details">More...</a><br /></td></tr>
 </table><table class="memberdecls">
@@ -182,6 +178,9 @@ Namespaces</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
+<tr id="define-members-0" class="groupHeader"><td colspan="2"><div class="groupHeader">Compile-time Capacity And Feature Knobs</div></td></tr>
+<tr><td colspan="2" class="ititle"><div class="groupText"><p>These macros are intended for footprint tuning on MCU builds. </p>
+</div></td></tr>
 <tr class="memitem:a826e3a78ff6c39611ad114cee04bedee" id="r_a826e3a78ff6c39611ad114cee04bedee"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a826e3a78ff6c39611ad114cee04bedee">MCPROTOCOL_SERIAL_MAX_REQUEST_FRAME_BYTES</a>&#160;&#160;&#160;4096U</td></tr>
 <tr class="memitem:a972bf76cfbd75a05a4d6007ab953e079" id="r_a972bf76cfbd75a05a4d6007ab953e079"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a972bf76cfbd75a05a4d6007ab953e079">MCPROTOCOL_SERIAL_MAX_RESPONSE_FRAME_BYTES</a>&#160;&#160;&#160;4096U</td></tr>
 <tr class="memitem:adb4e27b062ef6d679832e0ee8c8ec44d" id="r_adb4e27b062ef6d679832e0ee8c8ec44d"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#adb4e27b062ef6d679832e0ee8c8ec44d">MCPROTOCOL_SERIAL_MAX_REQUEST_DATA_BYTES</a>&#160;&#160;&#160;3500U</td></tr>
@@ -199,9 +198,19 @@ Macros</h2></td></tr>
 <tr class="memitem:ad095ed7a2cb9281f95f379f6c87ee275" id="r_ad095ed7a2cb9281f95f379f6c87ee275"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ad095ed7a2cb9281f95f379f6c87ee275">MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:a70cc50f4aefb5efeced1bafcae5f63b9" id="r_a70cc50f4aefb5efeced1bafcae5f63b9"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a70cc50f4aefb5efeced1bafcae5f63b9">MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS</a>&#160;&#160;&#160;1</td></tr>
 <tr class="memitem:a57839f4e032d840f19a4f36bf0293c2b" id="r_a57839f4e032d840f19a4f36bf0293c2b"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a57839f4e032d840f19a4f36bf0293c2b">MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a4af0ac60b028a317726d820847b76e0a" id="r_a4af0ac60b028a317726d820847b76e0a"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a4af0ac60b028a317726d820847b76e0a">MCPROTOCOL_SERIAL_ENABLE_ASCII_MODE</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a2e4e18d031bfcb1837e02479930db474" id="r_a2e4e18d031bfcb1837e02479930db474"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a2e4e18d031bfcb1837e02479930db474">MCPROTOCOL_SERIAL_ENABLE_BINARY_MODE</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:ae998c4939dde14aabdd734aa858065c6" id="r_ae998c4939dde14aabdd734aa858065c6"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#ae998c4939dde14aabdd734aa858065c6">MCPROTOCOL_SERIAL_ENABLE_FRAME_C4</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a50cff6bfd45e1ef9a6ecd2289feca551" id="r_a50cff6bfd45e1ef9a6ecd2289feca551"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a50cff6bfd45e1ef9a6ecd2289feca551">MCPROTOCOL_SERIAL_ENABLE_FRAME_C3</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a9f7bbe3556dd18df89a2365ec06cdb0e" id="r_a9f7bbe3556dd18df89a2365ec06cdb0e"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a9f7bbe3556dd18df89a2365ec06cdb0e">MCPROTOCOL_SERIAL_ENABLE_FRAME_C2</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:a53cb1d4abf42ee27b00016e6101f6137" id="r_a53cb1d4abf42ee27b00016e6101f6137"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#a53cb1d4abf42ee27b00016e6101f6137">MCPROTOCOL_SERIAL_ENABLE_FRAME_C1</a>&#160;&#160;&#160;1</td></tr>
+<tr class="memitem:aa709742f49160979328237c4738a1496" id="r_aa709742f49160979328237c4738a1496"><td class="memItemLeft">#define&#160;</td><td class="memItemRight"><a class="el" href="#aa709742f49160979328237c4738a1496">MCPROTOCOL_SERIAL_ENABLE_FRAME_E1</a>&#160;&#160;&#160;1</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-typedef-members" class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
+<tr id="typedef-members-0" class="groupHeader"><td colspan="2"><div class="groupHeader">Diagnostic And Transport Helper Types</div></td></tr>
+<tr><td colspan="2" class="ititle"><div class="groupText"><p>CPU-model response payload returned by <span class="tt">cpu-model</span>. </p>
+</div></td></tr>
 <tr class="memitem:a4fb13b5bd03ced77d5e8947ab20757eb" id="r_a4fb13b5bd03ced77d5e8947ab20757eb"><td class="memItemLeft">using&#160;</td><td class="memItemRight"><a class="el" href="namespacemcprotocol_1_1serial.html#a4fb13b5bd03ced77d5e8947ab20757eb">mcprotocol::serial::CompletionHandler</a> = void (*)(void* user, <a class="el" href="structmcprotocol_1_1serial_1_1_status.html">Status</a> status)</td></tr>
 <tr class="memdesc:a4fb13b5bd03ced77d5e8947ab20757eb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Completion callback used by the async client.  <br /></td></tr>
 </table><table class="memberdecls">
@@ -334,7 +343,50 @@ Variables</h2></td></tr>
 <tr class="memitem:a4700b25bcfbfdd83f8b19536214d0299" id="r_a4700b25bcfbfdd83f8b19536214d0299"><td class="memItemLeft">constexpr std::size_t&#160;</td><td class="memItemRight"><a class="el" href="namespacemcprotocol_1_1serial.html#a4700b25bcfbfdd83f8b19536214d0299">mcprotocol::serial::kMaxUserFrameRegistrationBytes</a> = 80U</td></tr>
 <tr class="memitem:abe995d4184a4415ae0fe0146e8ab7a83" id="r_abe995d4184a4415ae0fe0146e8ab7a83"><td class="memItemLeft">constexpr std::size_t&#160;</td><td class="memItemRight"><a class="el" href="namespacemcprotocol_1_1serial.html#abe995d4184a4415ae0fe0146e8ab7a83">mcprotocol::serial::kCpuModelNameLength</a> = 16</td></tr>
 </table>
-<a name="doc-define-members" id="doc-define-members"></a><h2 id="header-doc-define-members" class="groupheader">Macro Definition Documentation</h2>
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Public request, response, configuration, and callback types for the serial MC protocol library. </p>
+<p>This header is the main data-model reference for the public API. It defines:</p>
+<ul>
+<li>protocol-selection and routing enums</li>
+<li>static buffer and feature-limit constants</li>
+<li>request/response payload structs used by <span class="tt">MelsecSerialClient</span>, <span class="tt">PosixSyncClient</span>, and <span class="tt">CommandCodec</span></li>
+<li>callback and transport hook types used by host and MCU integrations </li>
+</ul>
+
+<p class="definition">Definition in file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+</div><a name="doc-define-members" id="doc-define-members"></a><h2 id="header-doc-define-members" class="groupheader">Macro Definition Documentation</h2>
+<a id="a4af0ac60b028a317726d820847b76e0a" name="a4af0ac60b028a317726d820847b76e0a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4af0ac60b028a317726d820847b76e0a">&#9670;&#160;</a></span>MCPROTOCOL_SERIAL_ENABLE_ASCII_MODE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define MCPROTOCOL_SERIAL_ENABLE_ASCII_MODE&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00095">95</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+
+</div>
+</div>
+<a id="a2e4e18d031bfcb1837e02479930db474" name="a2e4e18d031bfcb1837e02479930db474"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2e4e18d031bfcb1837e02479930db474">&#9670;&#160;</a></span>MCPROTOCOL_SERIAL_ENABLE_BINARY_MODE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define MCPROTOCOL_SERIAL_ENABLE_BINARY_MODE&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00099">99</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+
+</div>
+</div>
 <a id="a70cc50f4aefb5efeced1bafcae5f63b9" name="a70cc50f4aefb5efeced1bafcae5f63b9"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a70cc50f4aefb5efeced1bafcae5f63b9">&#9670;&#160;</a></span>MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS</h2>
 
@@ -347,7 +399,87 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00074">74</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00087">87</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+
+</div>
+</div>
+<a id="a53cb1d4abf42ee27b00016e6101f6137" name="a53cb1d4abf42ee27b00016e6101f6137"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a53cb1d4abf42ee27b00016e6101f6137">&#9670;&#160;</a></span>MCPROTOCOL_SERIAL_ENABLE_FRAME_C1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define MCPROTOCOL_SERIAL_ENABLE_FRAME_C1&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00115">115</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+
+</div>
+</div>
+<a id="a9f7bbe3556dd18df89a2365ec06cdb0e" name="a9f7bbe3556dd18df89a2365ec06cdb0e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9f7bbe3556dd18df89a2365ec06cdb0e">&#9670;&#160;</a></span>MCPROTOCOL_SERIAL_ENABLE_FRAME_C2</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define MCPROTOCOL_SERIAL_ENABLE_FRAME_C2&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00111">111</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+
+</div>
+</div>
+<a id="a50cff6bfd45e1ef9a6ecd2289feca551" name="a50cff6bfd45e1ef9a6ecd2289feca551"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a50cff6bfd45e1ef9a6ecd2289feca551">&#9670;&#160;</a></span>MCPROTOCOL_SERIAL_ENABLE_FRAME_C3</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define MCPROTOCOL_SERIAL_ENABLE_FRAME_C3&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00107">107</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+
+</div>
+</div>
+<a id="ae998c4939dde14aabdd734aa858065c6" name="ae998c4939dde14aabdd734aa858065c6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae998c4939dde14aabdd734aa858065c6">&#9670;&#160;</a></span>MCPROTOCOL_SERIAL_ENABLE_FRAME_C4</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define MCPROTOCOL_SERIAL_ENABLE_FRAME_C4&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00103">103</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+
+</div>
+</div>
+<a id="aa709742f49160979328237c4738a1496" name="aa709742f49160979328237c4738a1496"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa709742f49160979328237c4738a1496">&#9670;&#160;</a></span>MCPROTOCOL_SERIAL_ENABLE_FRAME_E1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define MCPROTOCOL_SERIAL_ENABLE_FRAME_E1&#160;&#160;&#160;1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00119">119</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -363,7 +495,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00066">66</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00079">79</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -379,7 +511,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00078">78</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00091">91</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -395,7 +527,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00070">70</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00083">83</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -411,7 +543,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00062">62</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00075">75</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -427,7 +559,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00058">58</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00071">71</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -443,7 +575,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00054">54</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00067">67</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -459,7 +591,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00030">30</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00043">43</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -475,7 +607,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00034">34</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00047">47</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -491,7 +623,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00026">26</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00039">39</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -507,7 +639,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00050">50</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00063">63</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -523,7 +655,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00046">46</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00059">59</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -539,7 +671,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00042">42</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00055">55</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -555,7 +687,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00038">38</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00051">51</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -571,7 +703,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00022">22</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00035">35</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -587,7 +719,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00014">14</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00027">27</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -603,7 +735,7 @@ Variables</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00018">18</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00031">31</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>

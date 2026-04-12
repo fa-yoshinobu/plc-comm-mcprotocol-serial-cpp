@@ -95,21 +95,31 @@ $(function(){initNavTree('mcprotocol__serial_8hpp_source.html','',''); });
 <a href="mcprotocol__serial_8hpp.html">Go to the documentation of this file.</a><div class="fragment"><div class="line"><a id="l00001" name="l00001"></a><span class="lineno">    1</span><span class="preprocessor">#pragma once</span></div>
 <div class="line"><a id="l00002" name="l00002"></a><span class="lineno">    2</span></div>
 <div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span> </div>
-<div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span><span class="preprocessor">#include &quot;<a class="code" href="client_8hpp.html">mcprotocol/serial/client.hpp</a>&quot;</span></div>
-<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span><span class="preprocessor">#include &quot;<a class="code" href="codec_8hpp.html">mcprotocol/serial/codec.hpp</a>&quot;</span></div>
-<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span><span class="preprocessor">#include &quot;<a class="code" href="high__level_8hpp.html">mcprotocol/serial/high_level.hpp</a>&quot;</span></div>
-<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span><span class="preprocessor">#include &quot;<a class="code" href="host__sync_8hpp.html">mcprotocol/serial/host_sync.hpp</a>&quot;</span></div>
-<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span><span class="preprocessor">#include &quot;<a class="code" href="link__direct_8hpp.html">mcprotocol/serial/link_direct.hpp</a>&quot;</span></div>
-<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="preprocessor">#include &quot;<a class="code" href="qualified__buffer_8hpp.html">mcprotocol/serial/qualified_buffer.hpp</a>&quot;</span></div>
-<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span><span class="preprocessor">#include &quot;<a class="code" href="types_8hpp.html">mcprotocol/serial/types.hpp</a>&quot;</span></div>
-<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span><span class="preprocessor">#include &quot;<a class="code" href="version_8hpp.html">mcprotocol/serial/version.hpp</a>&quot;</span></div>
-<div class="ttc" id="aclient_8hpp_html"><div class="ttname"><a href="client_8hpp.html">client.hpp</a></div></div>
-<div class="ttc" id="acodec_8hpp_html"><div class="ttname"><a href="codec_8hpp.html">codec.hpp</a></div></div>
+<div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span><span class="preprocessor">#ifndef MCPROTOCOL_SERIAL_ENABLE_HOST_API</span></div>
+<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span><span class="preprocessor">#if defined(ARDUINO)</span></div>
+<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span><span class="preprocessor">#define MCPROTOCOL_SERIAL_ENABLE_HOST_API 0</span></div>
+<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span><span class="preprocessor">#else</span></div>
+<div class="line"><a id="l00018" name="l00018"></a><span class="lineno"><a class="line" href="mcprotocol__serial_8hpp.html#a109f1fe7d14716cf62174a1066da05f3">   18</a></span><span class="preprocessor">#define MCPROTOCOL_SERIAL_ENABLE_HOST_API 1</span></div>
+<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span> </div>
+<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span><span class="preprocessor">#include &quot;<a class="code" href="client_8hpp.html">mcprotocol/serial/client.hpp</a>&quot;</span></div>
+<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span><span class="preprocessor">#include &quot;<a class="code" href="codec_8hpp.html">mcprotocol/serial/codec.hpp</a>&quot;</span></div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">#include &quot;<a class="code" href="high__level_8hpp.html">mcprotocol/serial/high_level.hpp</a>&quot;</span></div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="preprocessor">#if MCPROTOCOL_SERIAL_ENABLE_HOST_API</span></div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span><span class="preprocessor">#include &quot;<a class="code" href="host__sync_8hpp.html">mcprotocol/serial/host_sync.hpp</a>&quot;</span></div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="preprocessor">#endif</span></div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="preprocessor">#include &quot;<a class="code" href="link__direct_8hpp.html">mcprotocol/serial/link_direct.hpp</a>&quot;</span></div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="preprocessor">#include &quot;<a class="code" href="qualified__buffer_8hpp.html">mcprotocol/serial/qualified_buffer.hpp</a>&quot;</span></div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="preprocessor">#include &quot;<a class="code" href="types_8hpp.html">mcprotocol/serial/types.hpp</a>&quot;</span></div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="preprocessor">#include &quot;<a class="code" href="version_8hpp.html">mcprotocol/serial/version.hpp</a>&quot;</span></div>
+<div class="ttc" id="aclient_8hpp_html"><div class="ttname"><a href="client_8hpp.html">client.hpp</a></div><div class="ttdoc">Asynchronous request-execution state machine for serial MC protocol traffic.</div></div>
+<div class="ttc" id="acodec_8hpp_html"><div class="ttname"><a href="codec_8hpp.html">codec.hpp</a></div><div class="ttdoc">Frame-level and command-payload-level encode/decode helpers.</div></div>
 <div class="ttc" id="ahigh__level_8hpp_html"><div class="ttname"><a href="high__level_8hpp.html">high_level.hpp</a></div><div class="ttdoc">Optional string-address helpers and protocol presets for common library entry paths.</div></div>
-<div class="ttc" id="ahost__sync_8hpp_html"><div class="ttname"><a href="host__sync_8hpp.html">host_sync.hpp</a></div></div>
+<div class="ttc" id="ahost__sync_8hpp_html"><div class="ttname"><a href="host__sync_8hpp.html">host_sync.hpp</a></div><div class="ttdoc">Blocking host-side wrapper that drives MelsecSerialClient over PosixSerialPort.</div></div>
 <div class="ttc" id="alink__direct_8hpp_html"><div class="ttname"><a href="link__direct_8hpp.html">link_direct.hpp</a></div></div>
 <div class="ttc" id="aqualified__buffer_8hpp_html"><div class="ttname"><a href="qualified__buffer_8hpp.html">qualified_buffer.hpp</a></div></div>
-<div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div></div>
+<div class="ttc" id="atypes_8hpp_html"><div class="ttname"><a href="types_8hpp.html">types.hpp</a></div><div class="ttdoc">Public request, response, configuration, and callback types for the serial MC protocol library.</div></div>
 <div class="ttc" id="aversion_8hpp_html"><div class="ttname"><a href="version_8hpp.html">version.hpp</a></div></div>
 </div><!-- fragment --></div><!-- contents -->
 </div><!-- doc-content -->

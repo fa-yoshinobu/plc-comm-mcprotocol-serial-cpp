@@ -226,10 +226,11 @@ Public Member Functions</h2></td></tr>
 <li>transmit <span class="tt"><a class="el" href="#a13fbfeb052da8091bfb51c69783ed22e" title="Returns the encoded frame that should be sent to the UART layer.">pending_tx_frame()</a></span> with the board UART layer</li>
 <li>call <span class="tt"><a class="el" href="#acbc59f4dd1f8d9085926b615bce58c72" title="Advances the state machine after the transport finished sending the pending frame.">notify_tx_complete()</a></span> when TX finishes</li>
 <li>feed received bytes with <span class="tt"><a class="el" href="#ae9fe8edbb6d8807a7eb950045de1c57a" title="Feeds received bytes into the response decoder.">on_rx_bytes()</a></span></li>
-<li>call <span class="tt"><a class="el" href="#aabfe7bf7824ce894b932e72e1d8351ce" title="Checks timeouts for the current in-flight request.">poll()</a></span> from the main loop or scheduler for timeout handling </li>
+<li>call <span class="tt"><a class="el" href="#aabfe7bf7824ce894b932e72e1d8351ce" title="Checks timeouts for the current in-flight request.">poll()</a></span> from the main loop or scheduler for timeout handling</li>
 </ol>
+<p>Output spans passed to <span class="tt">async_*</span> requests must remain valid until the completion callback fires or until the request is cancelled. </p>
 
-<p class="definition">Definition at line <a class="el" href="client_8hpp_source.html#l00023">23</a> of file <a class="el" href="client_8hpp_source.html">client.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="client_8hpp_source.html#l00037">37</a> of file <a class="el" href="client_8hpp_source.html">client.hpp</a>.</p>
 </div><a name="doc-constructors" id="doc-constructors"></a><h2 id="header-doc-constructors" class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="a050ca8130002130752899e60fe7ad8a0" name="a050ca8130002130752899e60fe7ad8a0"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a050ca8130002130752899e60fe7ad8a0">&#9670;&#160;</a></span>MelsecSerialClient()</h2>

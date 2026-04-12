@@ -101,14 +101,18 @@ $(function(){initNavTree('structmcprotocol_1_1serial_1_1_decode_result.html','',
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
 <tr class="memitem:a29dba947a4ed817c0958424a30bc27f5" id="r_a29dba947a4ed817c0958424a30bc27f5"><td class="memItemLeft"><a class="el" href="namespacemcprotocol_1_1serial.html#a10ca9df45a12085535dc3602ac9040cf">DecodeStatus</a>&#160;</td><td class="memItemRight"><a class="el" href="#a29dba947a4ed817c0958424a30bc27f5">status</a> = <a class="el" href="namespacemcprotocol_1_1serial.html#a10ca9df45a12085535dc3602ac9040cfa4307e7e7986aa21a4b7c3ef2b5e948f6">DecodeStatus::Incomplete</a></td></tr>
+<tr class="memdesc:a29dba947a4ed817c0958424a30bc27f5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Stream-level decode status.  <br /></td></tr>
 <tr class="memitem:af880dd8d49fd7723b889be657f53155d" id="r_af880dd8d49fd7723b889be657f53155d"><td class="memItemLeft"><a class="el" href="structmcprotocol_1_1serial_1_1_raw_response_frame.html">RawResponseFrame</a>&#160;</td><td class="memItemRight"><a class="el" href="#af880dd8d49fd7723b889be657f53155d">frame</a> {}</td></tr>
+<tr class="memdesc:af880dd8d49fd7723b889be657f53155d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Raw response frame when <span class="tt"><a class="el" href="#a29dba947a4ed817c0958424a30bc27f5" title="Stream-level decode status.">status</a> == <a class="el" href="namespacemcprotocol_1_1serial.html#a10ca9df45a12085535dc3602ac9040cfaae94f80b3ce82062a5dd7815daa04f9d" title="One full frame was decoded successfully.">DecodeStatus::Complete</a></span>.  <br /></td></tr>
 <tr class="memitem:a1d8462c674ed3075912d9721065aa610" id="r_a1d8462c674ed3075912d9721065aa610"><td class="memItemLeft"><a class="el" href="structmcprotocol_1_1serial_1_1_status.html">Status</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1d8462c674ed3075912d9721065aa610">error</a> {}</td></tr>
+<tr class="memdesc:a1d8462c674ed3075912d9721065aa610"><td class="mdescLeft">&#160;</td><td class="mdescRight">Decoder-side error when <span class="tt"><a class="el" href="#a29dba947a4ed817c0958424a30bc27f5" title="Stream-level decode status.">status</a> == <a class="el" href="namespacemcprotocol_1_1serial.html#a10ca9df45a12085535dc3602ac9040cfa902b0d55fddef6f8d651fe1035b7d4bd" title="The byte stream is invalid for the selected frame configuration.">DecodeStatus::Error</a></span>.  <br /></td></tr>
 <tr class="memitem:a96a19029f8cff7d2edca39a99577e7d3" id="r_a96a19029f8cff7d2edca39a99577e7d3"><td class="memItemLeft">std::size_t&#160;</td><td class="memItemRight"><a class="el" href="#a96a19029f8cff7d2edca39a99577e7d3">bytes_consumed</a> = 0</td></tr>
+<tr class="memdesc:a96a19029f8cff7d2edca39a99577e7d3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Number of bytes consumed from the input span.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Result returned by <span class="tt"><a class="el" href="classmcprotocol_1_1serial_1_1_frame_codec.html#a546092c7ffe364b2e3ab871bbab70ee6" title="Decodes one response frame from the front of bytes.">FrameCodec::decode_response()</a></span>. </p>
 
-<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00032">32</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00048">48</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Member Data Documentation</h2>
 <a id="a96a19029f8cff7d2edca39a99577e7d3" name="a96a19029f8cff7d2edca39a99577e7d3"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a96a19029f8cff7d2edca39a99577e7d3">&#9670;&#160;</a></span>bytes_consumed</h2>
@@ -122,7 +126,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00036">36</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
+<p>Number of bytes consumed from the input span. </p>
+
+<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00056">56</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
 
 </div>
 </div>
@@ -138,7 +144,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00035">35</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
+<p>Decoder-side error when <span class="tt"><a class="el" href="#a29dba947a4ed817c0958424a30bc27f5" title="Stream-level decode status.">status</a> == <a class="el" href="namespacemcprotocol_1_1serial.html#a10ca9df45a12085535dc3602ac9040cfa902b0d55fddef6f8d651fe1035b7d4bd" title="The byte stream is invalid for the selected frame configuration.">DecodeStatus::Error</a></span>. </p>
+
+<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00054">54</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
 
 </div>
 </div>
@@ -154,7 +162,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00034">34</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
+<p>Raw response frame when <span class="tt"><a class="el" href="#a29dba947a4ed817c0958424a30bc27f5" title="Stream-level decode status.">status</a> == <a class="el" href="namespacemcprotocol_1_1serial.html#a10ca9df45a12085535dc3602ac9040cfaae94f80b3ce82062a5dd7815daa04f9d" title="One full frame was decoded successfully.">DecodeStatus::Complete</a></span>. </p>
+
+<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00052">52</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
 
 </div>
 </div>
@@ -170,7 +180,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00033">33</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
+<p>Stream-level decode status. </p>
+
+<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00050">50</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
 
 </div>
 </div>

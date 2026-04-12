@@ -101,15 +101,20 @@ $(function(){initNavTree('structmcprotocol_1_1serial_1_1_multi_block_write_block
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
 <tr class="memitem:afa6cf4b455cbd988a5b333ab0dcf0a76" id="r_afa6cf4b455cbd988a5b333ab0dcf0a76"><td class="memItemLeft"><a class="el" href="structmcprotocol_1_1serial_1_1_device_address.html">DeviceAddress</a>&#160;</td><td class="memItemRight"><a class="el" href="#afa6cf4b455cbd988a5b333ab0dcf0a76">head_device</a> {}</td></tr>
+<tr class="memdesc:afa6cf4b455cbd988a5b333ab0dcf0a76"><td class="mdescLeft">&#160;</td><td class="mdescRight">First device in this contiguous block.  <br /></td></tr>
 <tr class="memitem:a0199bad0d74043df7f0369ffe75117d2" id="r_a0199bad0d74043df7f0369ffe75117d2"><td class="memItemLeft">std::uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a0199bad0d74043df7f0369ffe75117d2">points</a> = 0</td></tr>
+<tr class="memdesc:a0199bad0d74043df7f0369ffe75117d2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Point count for this block.  <br /></td></tr>
 <tr class="memitem:a3f7c2ca0480d67bcc17c0d864c940adb" id="r_a3f7c2ca0480d67bcc17c0d864c940adb"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a3f7c2ca0480d67bcc17c0d864c940adb">bit_block</a> = false</td></tr>
+<tr class="memdesc:a3f7c2ca0480d67bcc17c0d864c940adb"><td class="mdescLeft">&#160;</td><td class="mdescRight"><span class="tt">true</span> when <span class="tt"><a class="el" href="#adf2be3e9c04324ff48fda6528b4f89bf" title="Caller-owned bit data for bit blocks.">bits</a></span> is used, <span class="tt">false</span> when <span class="tt"><a class="el" href="#a362b430720b8195b9f6fbd65d6a494c4" title="Caller-owned word data for word blocks.">words</a></span> is used.  <br /></td></tr>
 <tr class="memitem:a362b430720b8195b9f6fbd65d6a494c4" id="r_a362b430720b8195b9f6fbd65d6a494c4"><td class="memItemLeft"><a class="el" href="classstd_1_1span.html">std::span</a>&lt; const std::uint16_t &gt;&#160;</td><td class="memItemRight"><a class="el" href="#a362b430720b8195b9f6fbd65d6a494c4">words</a> {}</td></tr>
+<tr class="memdesc:a362b430720b8195b9f6fbd65d6a494c4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Caller-owned word data for word blocks.  <br /></td></tr>
 <tr class="memitem:adf2be3e9c04324ff48fda6528b4f89bf" id="r_adf2be3e9c04324ff48fda6528b4f89bf"><td class="memItemLeft"><a class="el" href="classstd_1_1span.html">std::span</a>&lt; const <a class="el" href="namespacemcprotocol_1_1serial.html#a3c439197283d0419ecb8dd65f3d0bb5d">BitValue</a> &gt;&#160;</td><td class="memItemRight"><a class="el" href="#adf2be3e9c04324ff48fda6528b4f89bf">bits</a> {}</td></tr>
+<tr class="memdesc:adf2be3e9c04324ff48fda6528b4f89bf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Caller-owned bit data for bit blocks.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>One block inside native multi-block write (<span class="tt">1406</span>). </p>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00358">358</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00494">494</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Member Data Documentation</h2>
 <a id="a3f7c2ca0480d67bcc17c0d864c940adb" name="a3f7c2ca0480d67bcc17c0d864c940adb"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a3f7c2ca0480d67bcc17c0d864c940adb">&#9670;&#160;</a></span>bit_block</h2>
@@ -123,7 +128,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00361">361</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p><span class="tt">true</span> when <span class="tt"><a class="el" href="#adf2be3e9c04324ff48fda6528b4f89bf" title="Caller-owned bit data for bit blocks.">bits</a></span> is used, <span class="tt">false</span> when <span class="tt"><a class="el" href="#a362b430720b8195b9f6fbd65d6a494c4" title="Caller-owned word data for word blocks.">words</a></span> is used. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00500">500</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -139,7 +146,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00363">363</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p>Caller-owned bit data for bit blocks. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00504">504</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -155,7 +164,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00359">359</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p>First device in this contiguous block. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00496">496</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -171,7 +182,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00360">360</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p>Point count for this block. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00498">498</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -187,7 +200,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00362">362</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p>Caller-owned word data for word blocks. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00502">502</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>

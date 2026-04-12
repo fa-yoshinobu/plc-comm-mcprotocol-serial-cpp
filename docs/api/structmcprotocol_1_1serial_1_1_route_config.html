@@ -101,18 +101,27 @@ $(function(){initNavTree('structmcprotocol_1_1serial_1_1_route_config.html','','
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
 <tr class="memitem:a8112eb05e9d40bd39819350a96378209" id="r_a8112eb05e9d40bd39819350a96378209"><td class="memItemLeft"><a class="el" href="namespacemcprotocol_1_1serial.html#a29bd83eb7a3c1478f4227d21a873d5c1">RouteKind</a>&#160;</td><td class="memItemRight"><a class="el" href="#a8112eb05e9d40bd39819350a96378209">kind</a> = <a class="el" href="namespacemcprotocol_1_1serial.html#a29bd83eb7a3c1478f4227d21a873d5c1a66053b16ffec87feeefead4265eeb182">RouteKind::HostStation</a></td></tr>
+<tr class="memdesc:a8112eb05e9d40bd39819350a96378209"><td class="mdescLeft">&#160;</td><td class="mdescRight">Route interpretation used by the selected frame family.  <br /></td></tr>
 <tr class="memitem:abe9a2876f1d5d6a8f25ce2e90ee060d3" id="r_abe9a2876f1d5d6a8f25ce2e90ee060d3"><td class="memItemLeft">std::uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#abe9a2876f1d5d6a8f25ce2e90ee060d3">station_no</a> = 0x00</td></tr>
+<tr class="memdesc:abe9a2876f1d5d6a8f25ce2e90ee060d3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Target station number on multidrop serial links.  <br /></td></tr>
 <tr class="memitem:a165073f13fb147066d4bd592ff24a71f" id="r_a165073f13fb147066d4bd592ff24a71f"><td class="memItemLeft">std::uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a165073f13fb147066d4bd592ff24a71f">network_no</a> = 0x00</td></tr>
+<tr class="memdesc:a165073f13fb147066d4bd592ff24a71f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Network number used by routed <span class="tt">3C/4C</span> requests.  <br /></td></tr>
 <tr class="memitem:aae9ca01d4d20f71bd245cf6e14c25828" id="r_aae9ca01d4d20f71bd245cf6e14c25828"><td class="memItemLeft">std::uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#aae9ca01d4d20f71bd245cf6e14c25828">pc_no</a> = 0xFF</td></tr>
+<tr class="memdesc:aae9ca01d4d20f71bd245cf6e14c25828"><td class="mdescLeft">&#160;</td><td class="mdescRight">PLC number field used by <span class="tt">3C/4C</span> and legacy frame families.  <br /></td></tr>
 <tr class="memitem:a10f91277a097f0a14a20518ec3bff623" id="r_a10f91277a097f0a14a20518ec3bff623"><td class="memItemLeft">std::uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#a10f91277a097f0a14a20518ec3bff623">request_destination_module_io_no</a> = 0x03FF</td></tr>
+<tr class="memdesc:a10f91277a097f0a14a20518ec3bff623"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destination I/O number for the target CPU/module in <span class="tt">3C/4C</span> routing.  <br /></td></tr>
 <tr class="memitem:aa0ca643abd5dcd55c2ae771fd4f28c0e" id="r_aa0ca643abd5dcd55c2ae771fd4f28c0e"><td class="memItemLeft">std::uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#aa0ca643abd5dcd55c2ae771fd4f28c0e">request_destination_module_station_no</a> = 0x00</td></tr>
+<tr class="memdesc:aa0ca643abd5dcd55c2ae771fd4f28c0e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Destination station number for the target CPU/module in <span class="tt">3C/4C</span> routing.  <br /></td></tr>
 <tr class="memitem:a9fe549ada3238941753feb581659c775" id="r_a9fe549ada3238941753feb581659c775"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a9fe549ada3238941753feb581659c775">self_station_enabled</a> = false</td></tr>
+<tr class="memdesc:a9fe549ada3238941753feb581659c775"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enables self-station routing on frame families that support it.  <br /></td></tr>
 <tr class="memitem:a72ae98fdb852810c67962e7290dba285" id="r_a72ae98fdb852810c67962e7290dba285"><td class="memItemLeft">std::uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#a72ae98fdb852810c67962e7290dba285">self_station_no</a> = 0x00</td></tr>
+<tr class="memdesc:a72ae98fdb852810c67962e7290dba285"><td class="mdescLeft">&#160;</td><td class="mdescRight">Self-station number used when <span class="tt"><a class="el" href="#a9fe549ada3238941753feb581659c775" title="Enables self-station routing on frame families that support it.">self_station_enabled</a></span> is true.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Route header fields for serial MC requests. </p>
+<p>The same struct is shared across <span class="tt">2C</span>/<span class="tt">3C</span>/<span class="tt">4C</span>, <span class="tt">1C</span>, and <span class="tt">1E</span>, but not every field is active on every frame family. <span class="tt"><a class="el" href="classmcprotocol_1_1serial_1_1_frame_codec.html#a5825f74de3251a7eb3d17e0faab4e5f1" title="Validates a static protocol configuration before encoding requests.">FrameCodec::validate_config()</a></span> checks the combinations that are legal for the selected frame. </p>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00226">226</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00294">294</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Member Data Documentation</h2>
 <a id="a8112eb05e9d40bd39819350a96378209" name="a8112eb05e9d40bd39819350a96378209"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a8112eb05e9d40bd39819350a96378209">&#9670;&#160;</a></span>kind</h2>
@@ -126,7 +135,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00227">227</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p>Route interpretation used by the selected frame family. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00296">296</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -142,7 +153,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00229">229</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p>Network number used by routed <span class="tt">3C/4C</span> requests. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00300">300</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -158,7 +171,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00230">230</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p>PLC number field used by <span class="tt">3C/4C</span> and legacy frame families. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00302">302</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -174,7 +189,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00231">231</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p>Destination I/O number for the target CPU/module in <span class="tt">3C/4C</span> routing. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00304">304</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -190,7 +207,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00232">232</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p>Destination station number for the target CPU/module in <span class="tt">3C/4C</span> routing. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00306">306</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -206,7 +225,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00233">233</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p>Enables self-station routing on frame families that support it. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00308">308</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -222,7 +243,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00234">234</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p>Self-station number used when <span class="tt"><a class="el" href="#a9fe549ada3238941753feb581659c775" title="Enables self-station routing on frame families that support it.">self_station_enabled</a></span> is true. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00310">310</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -238,7 +261,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00228">228</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p>Target station number on multidrop serial links. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00298">298</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>

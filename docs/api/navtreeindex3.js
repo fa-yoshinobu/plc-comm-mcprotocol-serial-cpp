@@ -1,5 +1,8 @@
 var NAVTREEINDEX3 =
 {
+"status_8hpp.html":[18,0,2,0,0,8],
+"status_8hpp_source.html":[18,0,2,0,0,8],
+"string__view__compat_8hpp.html":[18,0,2,0,0,9],
 "string__view__compat_8hpp_source.html":[18,0,2,0,0,9],
 "structmcprotocol_1_1serial_1_1_batch_read_bits_request.html":[16,0,0,0,28],
 "structmcprotocol_1_1serial_1_1_batch_read_bits_request.html":[17,0,0,0,26],
@@ -246,8 +249,5 @@ var NAVTREEINDEX3 =
 "structmcprotocol_1_1serial_1_1_protocol_config.html#a729ad854bd24c0e504156debabc297f8":[16,0,0,0,24,0],
 "structmcprotocol_1_1serial_1_1_protocol_config.html#a729ad854bd24c0e504156debabc297f8":[17,0,0,0,22,0],
 "structmcprotocol_1_1serial_1_1_protocol_config.html#a764e8824889a5e87d6eae2bb1be58c65":[16,0,0,0,24,3],
-"structmcprotocol_1_1serial_1_1_protocol_config.html#a764e8824889a5e87d6eae2bb1be58c65":[17,0,0,0,22,3],
-"structmcprotocol_1_1serial_1_1_protocol_config.html#a7ab17ca719bfba52e44606ec88e1eb0c":[16,0,0,0,24,5],
-"structmcprotocol_1_1serial_1_1_protocol_config.html#a7ab17ca719bfba52e44606ec88e1eb0c":[17,0,0,0,22,5],
-"structmcprotocol_1_1serial_1_1_protocol_config.html#a9235fe5eb270294905883545f057afc9":[16,0,0,0,24,1]
+"structmcprotocol_1_1serial_1_1_protocol_config.html#a764e8824889a5e87d6eae2bb1be58c65":[17,0,0,0,22,3]
 };

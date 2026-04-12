@@ -101,12 +101,19 @@ $(function(){initNavTree('structmcprotocol_1_1serial_1_1_timeout_config.html',''
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
 <tr class="memitem:a1111c185b665427bbe2fd7840b8ec235" id="r_a1111c185b665427bbe2fd7840b8ec235"><td class="memItemLeft">std::uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#a1111c185b665427bbe2fd7840b8ec235">response_timeout_ms</a> = 5000</td></tr>
+<tr class="memdesc:a1111c185b665427bbe2fd7840b8ec235"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum wait after TX completion before the request is treated as timed out.  <br /></td></tr>
 <tr class="memitem:ab03379952666f9b7a2691336685fcc72" id="r_ab03379952666f9b7a2691336685fcc72"><td class="memItemLeft">std::uint32_t&#160;</td><td class="memItemRight"><a class="el" href="#ab03379952666f9b7a2691336685fcc72">inter_byte_timeout_ms</a> = 250</td></tr>
+<tr class="memdesc:ab03379952666f9b7a2691336685fcc72"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum allowed idle gap between RX bytes once a response has started.  <br /></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Timeout settings used by the frame decoder and async client. </p>
+<p>These values are transport-facing rather than command-facing:</p>
+<ul>
+<li><span class="tt"><a class="el" href="#a1111c185b665427bbe2fd7840b8ec235" title="Maximum wait after TX completion before the request is treated as timed out.">response_timeout_ms</a></span> is the total request timeout once TX finishes</li>
+<li><span class="tt"><a class="el" href="#ab03379952666f9b7a2691336685fcc72" title="Maximum allowed idle gap between RX bytes once a response has started.">inter_byte_timeout_ms</a></span> is the gap timeout while RX is already in progress </li>
+</ul>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00220">220</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00282">282</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Member Data Documentation</h2>
 <a id="ab03379952666f9b7a2691336685fcc72" name="ab03379952666f9b7a2691336685fcc72"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ab03379952666f9b7a2691336685fcc72">&#9670;&#160;</a></span>inter_byte_timeout_ms</h2>
@@ -120,7 +127,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00222">222</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p>Maximum allowed idle gap between RX bytes once a response has started. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00286">286</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -136,7 +145,9 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00221">221</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p>Maximum wait after TX completion before the request is treated as timed out. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00284">284</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>

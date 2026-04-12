@@ -64,6 +64,7 @@ Start with these pages instead of reading the whole repository at once.
 - [Examples Index](examples/README.md)
 - [Hardware Validation Matrix](docsrc/validation/reports/HARDWARE_VALIDATION.md)
 - [Footprint Profiles](docsrc/validation/reports/FOOTPRINT_PROFILES.md)
+- [Generated API Docs](docs/api/index.html)
 - [Developer Notes](docsrc/maintainer/DEVELOPER_NOTES.md)
 - [Manual Command Coverage](docsrc/maintainer/MANUAL_COMMAND_COVERAGE.md)
 - [TODO / Current Follow-up](docsrc/maintainer/TODO.md)

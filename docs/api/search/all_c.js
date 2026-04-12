@@ -8,16 +8,16 @@ var searchData=
   ['hg_5',['HG',['../namespacemcprotocol_1_1serial.html#ae5a0f3bf2c92590d4d9b97b43892141faefbfa2b2fcea4f9cfbe3ae9333588857',1,'mcprotocol::serial::HG'],['../namespacemcprotocol_1_1serial.html#a27597d44f3ac2679223eeb3ce15a3642aefbfa2b2fcea4f9cfbe3ae9333588857',1,'mcprotocol::serial::HG']]],
   ['hg_20policy_6',['Qualified &lt;span class=&quot;tt&quot;&gt;G/HG&lt;/span&gt; Policy',['../md_docsrc_2maintainer_2_d_e_v_e_l_o_p_e_r___n_o_t_e_s.html#autotoc_md15',1,'']]],
   ['high_5flevel_2ehpp_7',['high_level.hpp',['../high__level_8hpp.html',1,'']]],
-  ['hold_20items_8',['Current HOLD Items',['../md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md77',1,'']]],
-  ['holds_9',['Native Command Holds',['../md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md37',1,'']]],
-  ['host_20example_10',['1. Simple Host Example',['../dir_d28a4824dc47e487b107a5db32ef43c4.html#autotoc_md99',1,'']]],
-  ['host_20side_20path_11',['Verified Host-side Path',['../md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html#autotoc_md58',1,'']]],
+  ['hold_20items_8',['Current HOLD Items',['../md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md79',1,'']]],
+  ['holds_9',['Native Command Holds',['../md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md38',1,'']]],
+  ['host_20example_10',['1. Simple Host Example',['../dir_d28a4824dc47e487b107a5db32ef43c4.html#autotoc_md101',1,'']]],
+  ['host_20side_20path_11',['Verified Host-side Path',['../md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html#autotoc_md59',1,'']]],
   ['host_5fsync_2ehpp_12',['host_sync.hpp',['../host__sync_8hpp.html',1,'']]],
   ['host_5fsync_5fquickstart_2ecpp_13',['host_sync_quickstart.cpp',['../host__sync__quickstart_8cpp.html',1,'']]],
   ['hostbufferreadrequest_14',['HostBufferReadRequest',['../structmcprotocol_1_1serial_1_1_host_buffer_read_request.html',1,'mcprotocol::serial']]],
   ['hostbufferwriterequest_15',['HostBufferWriteRequest',['../structmcprotocol_1_1serial_1_1_host_buffer_write_request.html',1,'mcprotocol::serial']]],
   ['hoststation_16',['HostStation',['../namespacemcprotocol_1_1serial.html#a29bd83eb7a3c1478f4227d21a873d5c1a66053b16ffec87feeefead4265eeb182',1,'mcprotocol::serial']]],
-  ['how_20do_20i_20generate_20api_20docs_17',['How do I generate API docs?',['../md_docsrc_2user_2_f_a_q.html#autotoc_md49',1,'']]],
-  ['how_20the_20reduced_20profile_20shrinks_18',['How The Reduced Profile Shrinks',['../md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md66',1,'']]],
-  ['how_20the_20ultra_20minimal_20profile_20shrinks_20further_19',['How The Ultra-minimal Profile Shrinks Further',['../md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md67',1,'']]]
+  ['how_20do_20i_20generate_20api_20docs_17',['How do I generate API docs?',['../md_docsrc_2user_2_f_a_q.html#autotoc_md50',1,'']]],
+  ['how_20the_20reduced_20profile_20shrinks_18',['How The Reduced Profile Shrinks',['../md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md67',1,'']]],
+  ['how_20the_20ultra_20minimal_20profile_20shrinks_20further_19',['How The Ultra-minimal Profile Shrinks Further',['../md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md68',1,'']]]
 ];

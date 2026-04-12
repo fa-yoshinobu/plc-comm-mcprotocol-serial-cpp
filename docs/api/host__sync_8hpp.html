@@ -92,6 +92,9 @@ $(function(){initNavTree('host__sync_8hpp.html','',''); });
   <div class="headertitle"><div class="title">host_sync.hpp File Reference</div></div>
 </div><!--header-->
 <div class="contents">
+
+<p>Blocking host-side wrapper that drives <span class="tt">MelsecSerialClient</span> over <span class="tt">PosixSerialPort</span>.  
+<a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;array&gt;</code><br />
 <code>#include &lt;cstddef&gt;</code><br />
 <code>#include &lt;cstdint&gt;</code><br />
@@ -112,7 +115,12 @@ Namespaces</h2></td></tr>
 <tr class="memitem:mcprotocol" id="r_mcprotocol"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacemcprotocol.html">mcprotocol</a></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial" id="r_mcprotocol_3A_3Aserial"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacemcprotocol_1_1serial.html">mcprotocol::serial</a></td></tr>
 </table>
-</div><!-- contents -->
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Blocking host-side wrapper that drives <span class="tt">MelsecSerialClient</span> over <span class="tt">PosixSerialPort</span>. </p>
+<p>This header is intended for bring-up tools, validation binaries, and small host utilities. MCU firmware normally uses <span class="tt">MelsecSerialClient</span> directly instead of this blocking wrapper. </p>
+
+<p class="definition">Definition in file <a class="el" href="host__sync_8hpp_source.html">host_sync.hpp</a>.</p>
+</div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

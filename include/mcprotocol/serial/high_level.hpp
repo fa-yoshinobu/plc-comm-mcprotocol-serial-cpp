@@ -169,24 +169,34 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
 
 /// \brief String-address spec used to build sparse random-read or monitor requests.
 struct RandomReadSpec {
+  /// Plain device string such as `D100`, `LZ0`, or `LCN10`.
   std::string_view device {};
+  /// `true` when the target should be encoded as a double-word sparse item.
   bool double_word = false;
 };
 
 /// \brief String-address spec used to build sparse random word-write items.
 struct RandomWriteWordSpec {
+  /// Plain device string such as `D100` or `LZ0`.
   std::string_view device {};
+  /// Word or double-word value written to `device`.
   std::uint32_t value = 0;
+  /// `true` when the item should be encoded as a double-word sparse write.
   bool double_word = false;
 };
 
 /// \brief String-address spec used to build sparse random bit-write items.
 struct RandomWriteBitSpec {
+  /// Plain bit-device string such as `M100` or `X10`.
   std::string_view device {};
+  /// Bit value written to `device`.
   BitValue value = BitValue::Off;
 };
 
 /// \brief Parses a plain MC device string such as `D100`, `M100`, `X10`, or `B20`.
+///
+/// This helper is intentionally limited to plain device syntax. It does not parse `Jn\\...` link-
+/// direct addresses or helper-qualified `U...\\G...` addresses.
 [[nodiscard]] inline Status parse_device_address(
     std::string_view text,
     DeviceAddress& out_device) noexcept {
@@ -344,6 +354,9 @@ struct RandomWriteBitSpec {
 }
 
 /// \brief Builds a sparse random-read request from string-address specs.
+///
+/// Use this when you want `0403` style sparse addressing without hand-filling `RandomReadItem`
+/// entries.
 [[nodiscard]] inline Status make_random_read_request(
     std::span<const RandomReadSpec> specs,
     std::span<RandomReadItem> out_items,
@@ -367,6 +380,9 @@ struct RandomWriteBitSpec {
 }
 
 /// \brief Builds a sparse monitor registration payload from string-address specs.
+///
+/// The resulting payload is intended for `0801`. Readback still happens through the normal monitor
+/// read API.
 [[nodiscard]] inline Status make_monitor_registration(
     std::span<const RandomReadSpec> specs,
     std::span<RandomReadItem> out_items,

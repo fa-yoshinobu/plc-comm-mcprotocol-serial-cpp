@@ -92,6 +92,9 @@ $(function(){initNavTree('client_8hpp.html','',''); });
   <div class="headertitle"><div class="title">client.hpp File Reference</div></div>
 </div><!--header-->
 <div class="contents">
+
+<p>Asynchronous request-execution state machine for serial MC protocol traffic.  
+<a href="#details">More...</a></p>
 <div class="textblock"><code>#include &lt;array&gt;</code><br />
 <code>#include &lt;cstddef&gt;</code><br />
 <code>#include &lt;cstdint&gt;</code><br />
@@ -112,7 +115,18 @@ Namespaces</h2></td></tr>
 <tr class="memitem:mcprotocol" id="r_mcprotocol"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacemcprotocol.html">mcprotocol</a></td></tr>
 <tr class="memitem:mcprotocol_3A_3Aserial" id="r_mcprotocol_3A_3Aserial"><td class="memItemLeft">namespace &#160;</td><td class="memItemRight"><a class="el" href="namespacemcprotocol_1_1serial.html">mcprotocol::serial</a></td></tr>
 </table>
-</div><!-- contents -->
+<a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Asynchronous request-execution state machine for serial MC protocol traffic. </p>
+<p><span class="tt">MelsecSerialClient</span> sits above <span class="tt">CommandCodec</span> and <span class="tt">FrameCodec</span> and below any concrete transport. It owns no UART implementation itself. The embedding application is responsible for:</p>
+<ul>
+<li>moving bytes from <span class="tt">pending_tx_frame()</span> to the actual serial port</li>
+<li>calling <span class="tt">notify_tx_complete()</span> when TX is done</li>
+<li>feeding received bytes back through <span class="tt">on_rx_bytes()</span></li>
+<li>calling <span class="tt">poll()</span> for timeout handling </li>
+</ul>
+
+<p class="definition">Definition in file <a class="el" href="client_8hpp_source.html">client.hpp</a>.</p>
+</div></div><!-- contents -->
 </div><!-- doc-content -->
 <div id="page-nav" class="page-nav-panel">
 <div id="page-nav-resize-handle"></div>

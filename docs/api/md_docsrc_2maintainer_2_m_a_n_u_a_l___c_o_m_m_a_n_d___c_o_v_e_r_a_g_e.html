@@ -93,10 +93,10 @@ $(function(){initNavTree('md_docsrc_2maintainer_2_m_a_n_u_a_l___c_o_m_m_a_n_d___
 </div><!--header-->
 <div class="contents">
 <div class="textblock"><p><a class="anchor" id="autotoc_md20"></a></p>
-<p>This page tracks which <span class="tt">sh080008ab</span> command families are implemented in this repository.</p>
+<p>This page tracks which MC protocol serial command families are implemented in this repository.</p>
 <p>Scope:</p>
 <ul>
-<li>Primary manual: <span class="tt">sh080008ab</span></li>
+<li>Primary reference: the Mitsubishi MC protocol serial manual</li>
 <li>Primary wire scope: serial <span class="tt">2C/3C/4C</span> frame families plus initial <span class="tt">1C/1E</span> support</li>
 <li>Public library scope: device memory access, buffer memory access, CPU-model, remote control, remote password control, loopback, and helper-qualified access over <span class="tt">0601/1601</span></li>
 <li>Out of scope by design unless stated otherwise: label access, file control, serial-module dedicated commands beyond user-frame handling, and the later drive/file memory chapters</li>
@@ -109,10 +109,24 @@ Summary</h1>
 <li>Implemented chapter <span class="tt">11</span> families now include <span class="tt">0101</span>, <span class="tt">1001</span>, <span class="tt">1002</span>, <span class="tt">1003</span>, <span class="tt">1005</span>, <span class="tt">1006</span>, <span class="tt">1617</span>, <span class="tt">1630</span>, <span class="tt">1631</span>, and <span class="tt">0619</span></li>
 <li>Implemented chapter <span class="tt">13</span> user-frame families now include <span class="tt">0610</span>, <span class="tt">1610</span>, <span class="tt">1615</span>, <span class="tt">1618</span>, and <span class="tt">0631</span></li>
 <li><span class="tt">1E</span> now has initial chapter <span class="tt">18</span> coverage for device-memory read/write, random write, monitor, extended-file-register access, and special-function-module buffer read/write</li>
-<li>The library does not implement the full <span class="tt">sh080008ab</span> command list</li>
+<li>The library does not implement the full MC protocol serial command list</li>
+</ul>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md22"></a>
+Compile-time Trim Scope</h1>
+<p>Compile-time trimming in this repository works at these units:</p>
+<ul>
+<li>build-target unit host support and CLI can be dropped as separate targets</li>
+<li>command-family unit random, multi-block, monitor, host-buffer, module-buffer, CPU-model, and loopback each have their own switch</li>
+<li>codec-family unit ASCII vs binary and <span class="tt">4C</span> / <span class="tt">3C</span> / <span class="tt">2C</span> / <span class="tt">1C</span> / <span class="tt">1E</span> each have their own switch</li>
+</ul>
+<p>Compile-time trimming does not yet work at these units:</p>
+<ul>
+<li>individual commands inside one family you cannot compile out only <span class="tt">0403</span> while keeping <span class="tt">1402</span></li>
+<li>per-device variants inside one family you cannot compile out only <span class="tt">Jn\\...</span> or only helper-qualified <span class="tt">U...</span></li>
+<li>per-series behavior <span class="tt">IQ-R</span>, <span class="tt">Q/L</span>, <span class="tt">QnA</span>, and <span class="tt">A</span> remain runtime protocol choices</li>
 </ul>
 <p>For target-specific PASS/HOLD results, use <a class="el" href="md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html" title="Hardware Validation">HARDWARE_VALIDATION.md</a>.</p>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md22"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md23"></a>
 2C/3C/4C Coverage Matrix</h1>
 <table class="markdownTable">
 <tr class="markdownTableHead">
@@ -124,7 +138,7 @@ Summary</h1>
 <tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone">Chapter 8 device memory  </td><td class="markdownTableBodyNone"><span class="tt">0403</span> random read  </td><td class="markdownTableBodyNone">implemented  </td><td class="markdownTableBodyNone"><span class="tt">async_random_read</span>, <span class="tt">async_link_direct_random_read</span>, <span class="tt">PosixSyncClient::random_read</span>, CLI  </td><td class="markdownTableBodyNone">Long-device restrictions follow the manual and target validation  </td></tr>
 <tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone">Chapter 8 device memory  </td><td class="markdownTableBodyNone"><span class="tt">1402</span> random write words/bits  </td><td class="markdownTableBodyNone">implemented  </td><td class="markdownTableBodyNone"><span class="tt">async_random_write_words</span>, <span class="tt">async_random_write_bits</span>, link-direct variants, <span class="tt">PosixSyncClient::random_write_word(s)/random_write_bit(s)</span>, CLI  </td><td class="markdownTableBodyNone"><span class="tt">LTN/LSTN</span> native writes stay blocked per manual restrictions  </td></tr>
+<td class="markdownTableBodyNone">Chapter 8 device memory  </td><td class="markdownTableBodyNone"><span class="tt">1402</span> random write words/bits  </td><td class="markdownTableBodyNone">implemented  </td><td class="markdownTableBodyNone"><span class="tt">async_random_write_words</span>, <span class="tt">async_random_write_bits</span>, link-direct variants, <span class="tt">PosixSyncClient::random_write_word(s)/random_write_bit(s)</span>, CLI  </td><td class="markdownTableBodyNone"><span class="tt">LTN/LSTN</span> native writes stay blocked per the serial manual's device-path restrictions  </td></tr>
 <tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone">Chapter 8 device memory  </td><td class="markdownTableBodyNone"><span class="tt">0406</span> multi-block read  </td><td class="markdownTableBodyNone">implemented  </td><td class="markdownTableBodyNone"><span class="tt">async_multi_block_read</span>, <span class="tt">async_link_direct_multi_block_read</span>, CLI  </td><td class="markdownTableBodyNone">Long-device head restrictions follow the manual  </td></tr>
 <tr class="markdownTableRowEven">
@@ -168,7 +182,7 @@ Summary</h1>
 <tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone">Chapter 15 drive/file memory  </td><td class="markdownTableBodyNone"><span class="tt">0201</span>..<span class="tt">0206</span>, <span class="tt">0808</span>, <span class="tt">1202</span>..<span class="tt">1207</span>  </td><td class="markdownTableBodyNone">not implemented  </td><td class="markdownTableBodyNone">none  </td><td class="markdownTableBodyNone">No drive/file memory codec/client/public API exists  </td></tr>
 </table>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md23"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md24"></a>
 Important Scope Notes</h1>
 <ul>
 <li><span class="tt">Jn\\...</span> support in this repository is not a separate command family. It is the same chapter <span class="tt">8</span> command set encoded with device extension specification where the target requires it.</li>
@@ -179,11 +193,11 @@ Important Scope Notes</h1>
 <li>"Implemented" in this table means the library has codec/client/public entry points. It does not mean every PLC/serial target accepts that command family.</li>
 <li>Device-level restrictions still apply. Examples: <span class="tt">LTS/LTC/LSTS/LSTC</span> are treated via the documented structured paths, <span class="tt">LTN/LSTN</span> native writes remain blocked, and <span class="tt">FX5UC-32MT/D</span> treats <span class="tt">0801/0802</span> as unsupported on serial <span class="tt">3C/4C</span>.</li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md24"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md25"></a>
 Current Conclusion</h1>
 <ul>
 <li>If the question is "are chapter `8` device-memory command families all present?", the answer is yes for the intended <span class="tt">2C/3C/4C</span> library scope.</li>
-<li>If the question is "does this repository implement every `sh080008ab` `2C/3C/4C` command?", the answer is no. The main missing families are label access, file control, registered-data commands, network/module extras, and drive/file memory commands. </li>
+<li>If the question is "does this repository implement every MC protocol serial `2C/3C/4C` command?", the answer is no. The main missing families are label access, file control, registered-data commands, network/module extras, and drive/file memory commands. </li>
 </ul>
 </div></div><!-- contents -->
 </div><!-- PageDoc -->
