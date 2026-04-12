@@ -72,7 +72,7 @@ Run:
 cmake --build build --target docs
 ```
 
-The output is generated under `docs/api/`.
+The output is generated under `build/docs/api/`.
 
 If you want to run Doxygen without CMake, use:
 

@@ -1,7 +1,7 @@
 PROJECT_NAME           = "MC Protocol Serial C++"
 PROJECT_NUMBER         = "0.2.0"
 PROJECT_BRIEF          = "MC protocol serial library for MCU-oriented environments"
-OUTPUT_DIRECTORY       = docs
+OUTPUT_DIRECTORY       = build/docs
 CREATE_SUBDIRS         = NO
 
 INPUT                  = README.md \

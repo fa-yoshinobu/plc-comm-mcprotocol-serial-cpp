@@ -70,7 +70,7 @@ the authority for the current validated settings.
 - [FAQ](docsrc/user/FAQ.md)
 - [Hardware Validation Matrix](docsrc/validation/reports/HARDWARE_VALIDATION.md)
 - [Footprint Profiles](docsrc/validation/reports/FOOTPRINT_PROFILES.md)
-- [Generated API Docs](docs/api/index.html)
+- [Generated API Docs](https://fa-yoshinobu.github.io/plc-comm-mcprotocol-serial-cpp/)
 
 ### For Maintainers
 
@@ -371,7 +371,7 @@ Profile behavior:
 - `reduced`: core-only build, smaller buffers, no random/multi-block/monitor/host-buffer/module-buffer, and codec limited to `4C + ASCII`
 - `ultra`: reduced profile plus no `cpu-model`, no `loopback`, and the same `4C + ASCII` codec limit
 
-Non-`full` profiles are treated as core-only by CMake, so host sync and CLI are turned off automatically.
+Non-`full` profiles are treated as core-only by CMake, so host sync and CLI are turned off automatically. If `BUILD_TESTING` is left `ON`, CMake also disables it automatically for these profiles.
 
 ## Docs and CI
 
@@ -381,11 +381,15 @@ Generate API docs:
 cmake --build build --target docs
 ```
 
+The generated HTML is written to `build/docs/api`.
+
 Or run Doxygen directly from the repository root:
 
 ```bash
 doxygen Doxyfile
 ```
+
+That direct run also writes to `build/docs/api`.
 
 Check Markdown links:
 
@@ -406,3 +410,5 @@ GitHub Actions now verifies:
 - Doxygen generation
 - Markdown link checks
 - PlatformIO compile checks for the supported example environments
+
+GitHub Pages publishes the generated API docs from CI artifacts. The generated HTML under `build/docs/api` is not tracked in `main`.

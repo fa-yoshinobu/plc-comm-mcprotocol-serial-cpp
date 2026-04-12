@@ -3,6 +3,7 @@
 /.tools/
 /.pio/
 /.venv-platformio/
+/docs/api/
 /.vscode/
 /.codex
 /cap/

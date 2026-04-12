@@ -152,6 +152,13 @@ endif()
 include(CTest)
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
+if(NOT MCPROTOCOL_FEATURE_PROFILE_NORMALIZED STREQUAL "full" AND BUILD_TESTING)
+  message(STATUS
+    "MCPROTOCOL_FEATURE_PROFILE=${MCPROTOCOL_FEATURE_PROFILE_NORMALIZED} is treated as core-only; "
+    "BUILD_TESTING will be disabled.")
+  set(BUILD_TESTING OFF CACHE BOOL "Build the testing tree." FORCE)
+endif()
+
 if(Python3_Interpreter_FOUND)
   set(MCPROTOCOL_PYTHON_EXECUTABLE ${Python3_EXECUTABLE})
 else()
@@ -198,7 +205,7 @@ set(MCPROTOCOL_DOXYFILE_OUT ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
 configure_file(${MCPROTOCOL_DOXYFILE_IN} ${MCPROTOCOL_DOXYFILE_OUT} @ONLY)
 
 add_custom_target(docs
-  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/docs/api
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/docs/api
   COMMAND ${MCPROTOCOL_DOXYGEN_RUNNER} ${MCPROTOCOL_DOXYFILE_OUT}
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMENT "Generating API documentation with Doxygen"

@@ -1,6 +1,0 @@
-var searchData=
-[
-  ['readme_2emd_0',['README.md',['../docsrc_2maintainer_2_r_e_a_d_m_e_8md.html',1,'(Global Namespace)'],['../docsrc_2_r_e_a_d_m_e_8md.html',1,'(Global Namespace)'],['../docsrc_2user_2_r_e_a_d_m_e_8md.html',1,'(Global Namespace)'],['../docsrc_2validation_2_r_e_a_d_m_e_8md.html',1,'(Global Namespace)'],['../docsrc_2validation_2reports_2_r_e_a_d_m_e_8md.html',1,'(Global Namespace)'],['../examples_2platformio__arduino__mega2560__uart_2_r_e_a_d_m_e_8md.html',1,'(Global Namespace)'],['../examples_2platformio__esp32c3__arduino__async_2_r_e_a_d_m_e_8md.html',1,'(Global Namespace)'],['../examples_2platformio__esp32c3__arduino__uart_2_r_e_a_d_m_e_8md.html',1,'(Global Namespace)'],['../examples_2platformio__rpipico__arduino__async_2_r_e_a_d_m_e_8md.html',1,'(Global Namespace)'],['../examples_2platformio__rpipico__arduino__uart_2_r_e_a_d_m_e_8md.html',1,'(Global Namespace)'],['../examples_2_r_e_a_d_m_e_8md.html',1,'(Global Namespace)'],['../_r_e_a_d_m_e_8md.html',1,'(Global Namespace)']]],
-  ['release_5fprocess_2emd_1',['RELEASE_PROCESS.md',['../_r_e_l_e_a_s_e___p_r_o_c_e_s_s_8md.html',1,'']]],
-  ['rj71c24_5fr2_5frs232c_2emd_2',['RJ71C24_R2_RS232C.md',['../_r_j71_c24___r2___r_s232_c_8md.html',1,'']]]
-];
