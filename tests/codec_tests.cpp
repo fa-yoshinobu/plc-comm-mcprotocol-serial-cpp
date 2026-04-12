@@ -445,7 +445,7 @@ void test_encode_sm_sd_and_lz_device_codes() {
     std::size_t request_data_size = 0;
     Status status = CommandCodec::encode_batch_read_bits(config, request, request_data, request_data_size);
     assert(status.ok());
-    const std::array<std::uint8_t, 10> expected {0x01, 0x04, 0x01, 0x00, 0x64, 0x00, 0x00, 0x91, 0x01, 0x00};
+    const std::array<std::uint8_t, 10> expected {0x01, 0x04, 0x01, 0x00, 0x65, 0x00, 0x00, 0x91, 0x01, 0x00};
     assert(request_data_size == expected.size());
     assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
   }
@@ -459,7 +459,7 @@ void test_encode_sm_sd_and_lz_device_codes() {
     std::size_t request_data_size = 0;
     Status status = CommandCodec::encode_batch_read_bits(config, request, request_data, request_data_size);
     assert(status.ok());
-    const std::array<std::uint8_t, 10> expected {0x01, 0x04, 0x01, 0x00, 0x03, 0x00, 0x00, 0x51, 0x01, 0x00};
+    const std::array<std::uint8_t, 10> expected {0x01, 0x04, 0x01, 0x00, 0x02, 0x00, 0x00, 0x51, 0x01, 0x00};
     assert(request_data_size == expected.size());
     assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
   }
@@ -757,6 +757,30 @@ void test_encode_link_direct_batch_read_bits_binary_single_uses_pair_mate_addres
       0x00, 0x00,
       0x01, 0x00,
       0xF9,
+      0x01, 0x00,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_batch_read_bits_binary_single_uses_pair_mate_address() {
+  const auto config = make_binary_c4_iqr_config();
+  std::array<std::uint8_t, 32> request_data {};
+  std::size_t request_size = 0;
+
+  const Status status = CommandCodec::encode_batch_read_bits(
+      config,
+      BatchReadBitsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0x0010U},
+          .points = 1U,
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 12> expected {
+      0x01, 0x04, 0x03, 0x00,
+      0x11, 0x00, 0x00, 0x00, 0xA0, 0x00,
       0x01, 0x00,
   };
   assert(request_size == expected.size());
@@ -1662,6 +1686,7 @@ int main() {
   test_encode_extended_batch_read_words_binary_module_access_ql_shape();
   test_encode_link_direct_batch_read_words_binary_iqr_matches_manual_shape();
   test_encode_link_direct_batch_read_bits_binary_iqr_matches_manual_shape();
+  test_encode_batch_read_bits_binary_single_uses_pair_mate_address();
   test_encode_link_direct_batch_read_bits_binary_single_uses_pair_mate_address();
   test_encode_link_direct_batch_write_words_binary_iqr_shape();
   test_encode_link_direct_batch_write_bits_binary_iqr_shape();

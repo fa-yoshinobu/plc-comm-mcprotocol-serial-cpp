@@ -845,6 +845,19 @@ class ByteWriter {
   return adjusted;
 }
 
+[[nodiscard]] DeviceAddress effective_batch_read_bits_head_device(
+    const ProtocolConfig& config,
+    const DeviceAddress& head_device,
+    std::uint16_t points) noexcept {
+  if (config.code_mode != CodeMode::Binary || points != 1U) {
+    return head_device;
+  }
+
+  DeviceAddress adjusted = head_device;
+  adjusted.number ^= 1U;
+  return adjusted;
+}
+
 [[maybe_unused]] [[nodiscard]] bool append_word_units_from_bits_ascii(
     ByteWriter& writer,
     std::span<const BitValue> bits) noexcept {
@@ -1871,9 +1884,11 @@ Status encode_batch_read_bits(
   if (request.points == 0U || request.points > max_points) {
     return invalid_argument("Batch read bits points are out of supported range");
   }
+  const DeviceAddress effective_head =
+      effective_batch_read_bits_head_device(config, request.head_device, request.points);
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x0401U, bit_subcommand(config)) ||
-      !append_device_reference(writer, config, request.head_device) ||
+      !append_device_reference(writer, config, effective_head) ||
       !append_word_count(writer, config, request.points)) {
     return buffer_too_small("Batch read bits request buffer is too small");
   }
@@ -1897,9 +1912,7 @@ Status encode_link_direct_batch_read_bits(
     return device_status;
   }
   LinkDirectDevice effective_device = device;
-  if (config.code_mode == CodeMode::Binary && points == 1U) {
-    effective_device.device.number ^= 1U;
-  }
+  effective_device.device = effective_batch_read_bits_head_device(config, device.device, points);
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x0401U, extended_bit_subcommand(config)) ||
       !append_link_direct_device_reference_binary(writer, config, effective_device) ||
