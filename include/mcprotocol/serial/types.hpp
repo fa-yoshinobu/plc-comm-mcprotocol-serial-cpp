@@ -166,6 +166,7 @@ enum class DeviceCode : std::uint8_t {
   LZ,
   Z,
   R,
+  RD,
   ZR,
   G,
   HG

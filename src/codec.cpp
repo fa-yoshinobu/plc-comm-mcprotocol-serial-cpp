@@ -29,7 +29,7 @@ struct DeviceSpec {
   bool bit_device;
 };
 
-constexpr std::array<DeviceSpec, 31> kDeviceSpecs {{
+constexpr std::array<DeviceSpec, 32> kDeviceSpecs {{
     {DeviceCode::X, "X", "X", 0x9C, 0x009C, true, true},
     {DeviceCode::Y, "Y", "Y", 0x9D, 0x009D, true, true},
     {DeviceCode::M, "M", "M", 0x90, 0x0090, false, true},
@@ -58,6 +58,7 @@ constexpr std::array<DeviceSpec, 31> kDeviceSpecs {{
     {DeviceCode::LZ, "LZ", "LZ", 0x62, 0x0062, false, false},
     {DeviceCode::Z, "Z", "Z", 0xCC, 0x00CC, false, false},
     {DeviceCode::R, "R", "R", 0xAF, 0x00AF, false, false},
+    {DeviceCode::RD, "RD", "RD", 0x2C, 0x002C, false, false},
     {DeviceCode::ZR, "ZR", "ZR", 0xB0, 0x00B0, true, false},
     {DeviceCode::G, "G", "G", 0xAB, 0x00AB, false, false},
     {DeviceCode::HG, "HG", "HG", 0x2E, 0x002E, false, false},

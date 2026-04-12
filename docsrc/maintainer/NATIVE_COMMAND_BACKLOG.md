@@ -39,6 +39,26 @@ Target-specific remaining items:
   device and rejects Q/L-mode requests before transmit
 - `FX5UC-32MT/D` still holds on host/module buffer access
 
+### Implementation Gaps
+
+Device/register surfaces still missing from this serial C++ library:
+
+- `LTN` long timer current value
+- `LSTN` long retentive timer current value
+- `LCN` long counter current value
+
+Manual re-read notes:
+
+- `RD` is now implemented as a direct word device (`RD**`, binary `002CH`).
+- `2026-04-12` spot rechecks on `RJ71C24-R2 + R120PCPU / Format5 Binary / --series iqr` showed
+  `read-bits SM0 4`, `read-words SD0 2`, and `read-words RD0 2` all passing.
+- `LTN`, `LSTN`, and `LCN` are actual current-value devices, not just helper aliases.
+- `LTN` / `LSTN` / `LCN` are not ordinary one-word devices; the manual calls out special access
+  rules for long timer / long retentive timer / long counter current values.
+- For `LTN` / `LSTN` / `LCN`, implementation may require special point accounting and result
+  interpretation on top of normal `0401` / `0403` / `1401` / `1402`, not just a bare `DeviceCode`
+  addition.
+
 Resolved enough to remove from the active hold list:
 
 - `FX5UC-32MT/D` native `0403` moved to pass after switching non-iQ-R binary word/dword counts

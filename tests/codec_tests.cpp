@@ -288,6 +288,11 @@ void test_high_level_parse_device_address() {
   assert(address.code == mcprotocol::serial::DeviceCode::LZ);
   assert(address.number == 10U);
 
+  status = parse_device_address("RD20", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::RD);
+  assert(address.number == 20U);
+
   status = parse_device_address("", address);
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
@@ -371,6 +376,20 @@ void test_encode_sm_sd_and_lz_device_codes() {
     Status status = CommandCodec::encode_batch_read_words(config, request, request_data, request_data_size);
     assert(status.ok());
     const std::array<std::uint8_t, 10> expected {0x01, 0x04, 0x00, 0x00, 0x64, 0x00, 0x00, 0xA9, 0x01, 0x00};
+    assert(request_data_size == expected.size());
+    assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+  }
+
+  {
+    const BatchReadWordsRequest request {
+        .head_device = {.code = mcprotocol::serial::DeviceCode::RD, .number = 20},
+        .points = 1,
+    };
+    std::array<std::uint8_t, 32> request_data {};
+    std::size_t request_data_size = 0;
+    Status status = CommandCodec::encode_batch_read_words(config, request, request_data, request_data_size);
+    assert(status.ok());
+    const std::array<std::uint8_t, 10> expected {0x01, 0x04, 0x00, 0x00, 0x14, 0x00, 0x00, 0x2C, 0x01, 0x00};
     assert(request_data_size == expected.size());
     assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
   }

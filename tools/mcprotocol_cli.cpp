@@ -127,7 +127,7 @@ struct ProbeTarget {
   DeviceAddress device;
 };
 
-constexpr std::array<DeviceParseSpec, 29> kDeviceParseSpecs {{
+constexpr std::array<DeviceParseSpec, 30> kDeviceParseSpecs {{
     {"STS", DeviceCode::STS, 10},
     {"STC", DeviceCode::STC, 10},
     {"STN", DeviceCode::STN, 10},
@@ -144,6 +144,7 @@ constexpr std::array<DeviceParseSpec, 29> kDeviceParseSpecs {{
     {"DX", DeviceCode::DX, 16},
     {"DY", DeviceCode::DY, 16},
     {"LZ", DeviceCode::LZ, 10},
+    {"RD", DeviceCode::RD, 10},
     {"ZR", DeviceCode::ZR, 16},
     {"X", DeviceCode::X, 16},
     {"Y", DeviceCode::Y, 16},
@@ -1095,6 +1096,7 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
     case DeviceCode::LZ:
     case DeviceCode::Z:
     case DeviceCode::R:
+    case DeviceCode::RD:
     case DeviceCode::ZR:
       return false;
   }

@@ -60,6 +60,7 @@ Validated target:
 | Multi-block read | native `0406` | native pass | `2026-04-11` recheck on the corrected binary encoder passed with `0406 0002` |
 | Multi-block write | native `1406` | native pass | `2026-04-11` recheck on the corrected binary encoder passed with `1406 0002` and restore |
 | Monitor register/read | native `0801/0802` | native pass | `2026-04-11` focused recheck passed under `--series ql`; `--series iqr` still produced `0801=0x7F23` and raw `0802=0x7155` |
+| iQ-R-only device spot reads | `SM` / `SD` / `RD` / `LZ` | target-dependent | `2026-04-12` `RJ71C24-R2 + R120PCPU / Format5 Binary / --series iqr`: `SM0`, `SD0`, and `RD0` passed; `LZ0`, `LZ1`, and `LZ0 LZ1` random-read probes returned `0x7F23` |
 | Device-family read probe | `probe-all` | pass | `26/26` passed after dropping `RD` from the supported device set |
 | Device-family write probe | `probe-write-all` | pass with exclusions | `25/25` passed after excluding `S` and using `F100` instead of `F0` |
 
@@ -156,9 +157,10 @@ Additional validated target:
 
 Target-specific holds:
 
-- native `LZ` double-word random-read on `RJ71C24-R2 + R08CPU / Format5 Binary / --series iqr`
-  (`random-read LZ0`, `LZ1`, and `LZ0 LZ1` returned `0x7F23` on `2026-04-11`; local support now
-  treats `LZ` as an iQ-R-only double-word device and rejects Q/L-mode requests before transmit)
+- native `LZ` double-word random-read on `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr`
+  (`random-read LZ0`, `LZ1`, and `LZ0 LZ1` returned `0x7F23` on `2026-04-11` and `2026-04-12`;
+  local support now treats `LZ` as an iQ-R-only double-word device and rejects Q/L-mode requests
+  before transmit)
 - host/module buffer access on `FX5UC-32MT/D`
 
 Unsupported / diagnostic-only items:
