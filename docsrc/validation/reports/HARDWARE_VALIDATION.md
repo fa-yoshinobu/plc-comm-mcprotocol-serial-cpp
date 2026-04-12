@@ -157,9 +157,9 @@ Additional validated target:
 
 Target-specific holds:
 
-- native `LZ` double-word random-read on `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr`
-  (`random-read LZ0`, `LZ1`, and `LZ0 LZ1` return `0x7F23`; local support treats `LZ` as an
-  iQ-R-only double-word device and rejects Q/L-mode requests before transmit)
+- native `LZ` double-word access on `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr`
+  still returns `0x7F23` on every manual-listed path tried so far:
+  `0403 random-read`, `1402 random-write-words`, and `0801 register monitor`
 - native `0403` random-read on `LTN`, `LSTN`, and `LCN` on `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr`
   (`random-read LTN0`, `LSTN0`, and `LCN0` return `0x7F23`, while structured/batch reads
   `read-words LTN10 4`, `read-words LSTN10 4`, and `read-words LCN10 2` pass)

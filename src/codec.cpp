@@ -68,7 +68,7 @@ constexpr std::array<DeviceSpec, 41> kDeviceSpecs {{
     {DeviceCode::Z, "Z", "Z", 0xCC, 0x00CC, false, false},
     {DeviceCode::R, "R", "R", 0xAF, 0x00AF, false, false},
     {DeviceCode::RD, "RD", "RD", 0x2C, 0x002C, false, false},
-    {DeviceCode::ZR, "ZR", "ZR", 0xB0, 0x00B0, true, false},
+    {DeviceCode::ZR, "ZR", "ZR", 0xB0, 0x00B0, false, false},
     {DeviceCode::G, "G", "G", 0xAB, 0x00AB, false, false},
     {DeviceCode::HG, "HG", "HG", 0x2E, 0x002E, false, false},
 }};
@@ -813,8 +813,8 @@ class ByteWriter {
     ByteWriter& writer,
     std::span<const BitValue> bits) noexcept {
   for (std::size_t index = 0; index < bits.size(); index += 2U) {
-    const std::uint8_t low = bits[index] == BitValue::On ? 0x01U : 0x00U;
-    const std::uint8_t high = ((index + 1U) < bits.size() && bits[index + 1U] == BitValue::On) ? 0x10U : 0x00U;
+    const std::uint8_t high = bits[index] == BitValue::On ? 0x10U : 0x00U;
+    const std::uint8_t low = ((index + 1U) < bits.size() && bits[index + 1U] == BitValue::On) ? 0x01U : 0x00U;
     if (!writer.push(static_cast<std::uint8_t>(low | high))) {
       return false;
     }
@@ -826,7 +826,7 @@ class ByteWriter {
     ByteWriter& writer,
     std::span<const BitValue> bits) noexcept {
   if (bits.size() == 1U) {
-    // Single-point binary bit writes use the pair-mate address and the high nibble only.
+    // Single-point binary bit writes use the addressed point in the high nibble.
     return writer.push(bits[0] == BitValue::On ? 0x10U : 0x00U);
   }
   return append_bit_units_binary(writer, bits);
@@ -836,26 +836,18 @@ class ByteWriter {
     const ProtocolConfig& config,
     const DeviceAddress& head_device,
     std::span<const BitValue> bits) noexcept {
-  if (config.code_mode != CodeMode::Binary || bits.size() != 1U) {
-    return head_device;
-  }
-
-  DeviceAddress adjusted = head_device;
-  adjusted.number ^= 1U;
-  return adjusted;
+  (void)config;
+  (void)bits;
+  return head_device;
 }
 
 [[nodiscard]] DeviceAddress effective_batch_read_bits_head_device(
     const ProtocolConfig& config,
     const DeviceAddress& head_device,
     std::uint16_t points) noexcept {
-  if (config.code_mode != CodeMode::Binary || points != 1U) {
-    return head_device;
-  }
-
-  DeviceAddress adjusted = head_device;
-  adjusted.number ^= 1U;
-  return adjusted;
+  (void)config;
+  (void)points;
+  return head_device;
 }
 
 [[maybe_unused]] [[nodiscard]] bool append_word_units_from_bits_ascii(
@@ -1962,8 +1954,8 @@ Status parse_batch_read_bits_response(
   }
   for (std::size_t index = 0; index < request.points; ++index) {
     const std::uint8_t packed = response_data[index / 2U];
-    const std::uint8_t nibble = (index % 2U) == 0U ? static_cast<std::uint8_t>(packed & 0x0FU)
-                                                   : static_cast<std::uint8_t>((packed >> 4U) & 0x0FU);
+    const std::uint8_t nibble = (index % 2U) == 0U ? static_cast<std::uint8_t>((packed >> 4U) & 0x0FU)
+                                                   : static_cast<std::uint8_t>(packed & 0x0FU);
     if (nibble > 1U) {
       return parse_error("Batch read bits binary payload contains an invalid bit nibble");
     }

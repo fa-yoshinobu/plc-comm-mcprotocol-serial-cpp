@@ -19,9 +19,13 @@ docs focused on known-good workflows and keep this page for unresolved native be
 ## Active Backlog
 Target-specific remaining items:
 
-- `RJ71C24-R2 + R08CPU / Format5 Binary / --series iqr` still rejects native `LZ` double-word
-  random-read probes with `0x7F23`; local support now treats `LZ` as an iQ-R-only double-word
-  device and rejects Q/L-mode requests before transmit
+- `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr` still rejects native `LZ`
+  double-word access on every manual-listed path tried so far:
+  - `0403 random-read` -> `0x7F23`
+  - `1402 random-write-words` -> `0x7F23`
+  - `0801 register monitor` -> `0x7F23`
+  Local support already treats `LZ` as an iQ-R-only double-word device and rejects Q/L-mode
+  requests before transmit
 - `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr` currently rejects native `0403`
   random-read probes for `LTN`, `LSTN`, and `LCN` with `0x7F23`, even though structured/batch
   reads now work (`read-words LTN10 4`, `read-words LSTN10 4`, `read-words LCN10 2`)
@@ -48,3 +52,8 @@ Device/register surfaces still missing from this serial C++ library:
   fragments during `2026-04-11` revalidation.
 - Match `--series` to the actual CPU family before interpreting PLC end codes.
 - Keep FX5U notes aligned with its serial manual: `0801/0802` unsupported, `DX/DY/V/ZR` outside the validated subset.
+- Do not turn unsupported access paths into backlog items. For long timer / long retentive timer
+  contact+coil devices, keep `LTS/LTC/LSTS/LSTC` on the structured `LTN/LSTN` `0401` path.
+- Re-read the device-specific considerations before assuming that a rejected command family is a
+  bug. `LTN/LSTN/LCN` are not treated as monitor targets here because the manual-listed paths are
+  `0401`, `0403`, and `1402` (`LCN` also `1401`), while `LZ` explicitly lists `0801`.

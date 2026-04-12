@@ -58,7 +58,7 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
     {"LCN", 3U, DeviceCode::LCN, 10},
     {"LZ", 2U, DeviceCode::LZ, 10},
     {"RD", 2U, DeviceCode::RD, 10},
-    {"ZR", 2U, DeviceCode::ZR, 16},
+    {"ZR", 2U, DeviceCode::ZR, 10},
     {"X", 1U, DeviceCode::X, 16},
     {"Y", 1U, DeviceCode::Y, 16},
     {"M", 1U, DeviceCode::M, 10},
