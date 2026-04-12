@@ -9,12 +9,13 @@ Current follow-up items only.
 ## Target-dependent Follow-up
 
 - `RJ71C24-R2 + R120PCPU`: `1630` / `1631` remote password unlock/lock remain unresolved.
-  Focused `--series iqr` checks returned `0x7F22` for both `unlock` and `lock`, while read-only
+  Focused `--series iqr` checks returned `0x7FE7` for a `6`-character `unlock` attempt and
+  `0x7F22` for `lock` plus longer `unlock` attempts (`10` and `32` characters), while read-only
   access such as `cpu-model` and `read-words D0 1` remained available.
 
-## Hardware Validation Follow-up
-
-- `1005`: remote latch clear is implemented but still not hardware-validated in this repo.
+- `RJ71C24-R2 + R120PCPU`: `1005` remote latch clear remains target-dependent.
+  A focused `--series iqr` check returned `0x4013`, while `cpu-model` and `read-words D0 1`
+  still passed immediately afterward.
 
 ## Implementation Gaps
 

@@ -116,8 +116,8 @@ For the exact PASS / status matrix and the verified serial settings for each tar
 - Large contiguous `write-words` and `write-bits` are still split automatically to fit fixed
   request buffers.
 - The remaining repository follow-up is implementation work for `1612`, `0630`, and `2101`, plus
-  hardware validation for `1005` remote latch clear, plus target-dependent validation for `1630` /
-  `1631` remote password unlock/lock on `RJ71C24-R2 + R120PCPU`.
+  target-dependent validation for `1005` remote latch clear and `1630` / `1631` remote password
+  unlock/lock on `RJ71C24-R2 + R120PCPU`.
 
 For target-specific limits and current follow-up items, use
 [HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md) and
