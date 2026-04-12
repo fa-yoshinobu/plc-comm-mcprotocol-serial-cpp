@@ -60,8 +60,7 @@ Validated target:
 | Multi-block read | native `0406` | native pass | `2026-04-11` recheck on the corrected binary encoder passed with `0406 0002` |
 | Multi-block write | native `1406` | native pass | `2026-04-11` recheck on the corrected binary encoder passed with `1406 0002` and restore |
 | Monitor register/read | native `0801/0802` | native pass | `2026-04-11` focused recheck passed under `--series ql`; `--series iqr` still produced `0801=0x7F23` and raw `0802=0x7155` |
-| iQ-R-only device spot reads | `SM` / `SD` / `RD` / `LZ` | target-dependent | `2026-04-12` `RJ71C24-R2 + R120PCPU / Format5 Binary / --series iqr`: `SM0`, `SD0`, and `RD0` passed; `LZ0`, `LZ1`, and `LZ0 LZ1` random-read probes returned `0x7F23` |
-| Long current-value device spot reads | `LTN` / `LSTN` / `LCN` | target-dependent | `2026-04-12` `RJ71C24-R2 + R120PCPU / Format5 Binary / --series iqr`: `read-words LTN0 4`, `read-words LSTN0 4`, and `read-words LCN0 2` passed; `random-read LTN0`, `LSTN0`, and `LCN0` returned `0x7F23` |
+| iQ-R-only spot devices and `Jn\\...` surface | `SM`, `SD`, `RD`, `LZ`, `J1\\...`, `LTN/LSTN/LCN` | target-dependent | current per-device read/write matrix lives in [RJ71C24_R2_RS232C.md](RJ71C24_R2_RS232C.md); use `--series iqr` only for these spot-device checks |
 | Device-family read probe | `probe-all` | pass | `26/26` passed after dropping `RD` from the supported device set |
 | Device-family write probe | `probe-write-all` | pass with exclusions | `25/25` passed after excluding `S` and using `F100` instead of `F0` |
 

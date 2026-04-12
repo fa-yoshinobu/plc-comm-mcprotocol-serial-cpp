@@ -29,7 +29,7 @@ struct DeviceSpec {
   bool bit_device;
 };
 
-constexpr std::array<DeviceSpec, 35> kDeviceSpecs {{
+constexpr std::array<DeviceSpec, 41> kDeviceSpecs {{
     {DeviceCode::X, "X", "X", 0x9C, 0x009C, true, true},
     {DeviceCode::Y, "Y", "Y", 0x9D, 0x009D, true, true},
     {DeviceCode::M, "M", "M", 0x90, 0x0090, false, true},
@@ -55,8 +55,14 @@ constexpr std::array<DeviceSpec, 35> kDeviceSpecs {{
     {DeviceCode::S, "S", "S", 0x98, 0x0098, false, true},
     {DeviceCode::DX, "DX", "DX", 0xA2, 0x00A2, true, true},
     {DeviceCode::DY, "DY", "DY", 0xA3, 0x00A3, true, true},
+    {DeviceCode::LTS, "LTS", "LTS", 0x51, 0x0051, false, true},
+    {DeviceCode::LTC, "LTC", "LTC", 0x50, 0x0050, false, true},
     {DeviceCode::LTN, "LTN", "LTN", 0x52, 0x0052, false, false},
+    {DeviceCode::LSTS, "LSTS", "LSTS", 0x59, 0x0059, false, true},
+    {DeviceCode::LSTC, "LSTC", "LSTC", 0x58, 0x0058, false, true},
     {DeviceCode::LSTN, "LSTN", "LSTN", 0x5A, 0x005A, false, false},
+    {DeviceCode::LCS, "LCS", "LCS", 0x55, 0x0055, false, true},
+    {DeviceCode::LCC, "LCC", "LCC", 0x54, 0x0054, false, true},
     {DeviceCode::LCN, "LCN", "LCN", 0x56, 0x0056, false, false},
     {DeviceCode::LZ, "LZ", "LZ", 0x62, 0x0062, false, false},
     {DeviceCode::Z, "Z", "Z", 0xCC, 0x00CC, false, false},
@@ -233,6 +239,10 @@ class ByteWriter {
   return is_iq_r_series(config) ? 0x0082U : 0x0080U;
 }
 
+[[nodiscard]] constexpr std::uint16_t extended_bit_subcommand(const ProtocolConfig& config) noexcept {
+  return is_iq_r_series(config) ? 0x0083U : 0x0081U;
+}
+
 [[nodiscard]] constexpr std::size_t ascii_device_modification_width(
     const ProtocolConfig& config) noexcept {
   return is_iq_r_series(config) ? 4U : 3U;
@@ -382,6 +392,58 @@ class ByteWriter {
   return device.kind == QualifiedBufferDeviceKind::HG ? DeviceCode::HG : DeviceCode::G;
 }
 
+[[nodiscard]] constexpr bool is_link_direct_bit_device(DeviceCode code) noexcept {
+  switch (code) {
+    case DeviceCode::X:
+    case DeviceCode::Y:
+    case DeviceCode::B:
+    case DeviceCode::SB:
+      return true;
+    default:
+      return false;
+  }
+}
+
+[[nodiscard]] constexpr bool is_link_direct_word_device(DeviceCode code) noexcept {
+  switch (code) {
+    case DeviceCode::W:
+    case DeviceCode::SW:
+      return true;
+    default:
+      return false;
+  }
+}
+
+[[nodiscard]] Status validate_link_direct_word_device(
+    const ProtocolConfig& config,
+    const LinkDirectDevice& device) noexcept {
+  (void)config;
+  if (config.code_mode != CodeMode::Binary) {
+    return make_status(
+        StatusCode::UnsupportedConfiguration,
+        "Link direct device extension is only implemented for binary mode");
+  }
+  if (!is_link_direct_word_device(device.device.code)) {
+    return invalid_argument("Link direct word access requires W or SW");
+  }
+  return ok_status();
+}
+
+[[nodiscard]] Status validate_link_direct_bit_device(
+    const ProtocolConfig& config,
+    const LinkDirectDevice& device) noexcept {
+  (void)config;
+  if (config.code_mode != CodeMode::Binary) {
+    return make_status(
+        StatusCode::UnsupportedConfiguration,
+        "Link direct device extension is only implemented for binary mode");
+  }
+  if (!is_link_direct_bit_device(device.device.code)) {
+    return invalid_argument("Link direct bit access requires X, Y, B, or SB");
+  }
+  return ok_status();
+}
+
 [[nodiscard]] constexpr std::uint8_t qualified_binary_direct_memory(
     const ProtocolConfig& config,
     const QualifiedBufferWordDevice& device) noexcept {
@@ -466,6 +528,19 @@ class ByteWriter {
          writer.push(0x00U) &&
          writer.append_le16(device.module_number) &&
          writer.push(qualified_binary_direct_memory(config, device));
+}
+
+[[nodiscard]] bool append_link_direct_device_reference_binary(
+    ByteWriter& writer,
+    const ProtocolConfig& config,
+    const LinkDirectDevice& device) noexcept {
+  return writer.push(0x00U) &&
+         writer.push(0x00U) &&
+         append_device_reference_binary(writer, config, device.device) &&
+         writer.push(0x00U) &&
+         writer.push(0x00U) &&
+         writer.append_le16(device.network_number) &&
+         writer.push(0xF9U);
 }
 
 [[nodiscard]] bool append_extended_device_reference(
@@ -1708,6 +1783,29 @@ Status encode_extended_batch_read_words(
   return ok_status();
 }
 
+Status encode_link_direct_batch_read_words(
+    const ProtocolConfig& config,
+    const LinkDirectDevice& device,
+    std::uint16_t points,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  if (points == 0U || points > kMaxBatchWordPoints) {
+    return invalid_argument("Link direct batch read words points must be in range 1..960");
+  }
+  const Status device_status = validate_link_direct_word_device(config, device);
+  if (!device_status.ok()) {
+    return device_status;
+  }
+  ByteWriter writer(out_request_data);
+  if (!append_command_header(writer, config, 0x0401U, extended_word_subcommand(config)) ||
+      !append_link_direct_device_reference_binary(writer, config, device) ||
+      !append_word_count(writer, config, points)) {
+    return buffer_too_small("Link direct batch read words request buffer is too small");
+  }
+  out_size = writer.size();
+  return ok_status();
+}
+
 Status parse_batch_read_words_response(
     const ProtocolConfig& config,
     const BatchReadWordsRequest& request,
@@ -1755,6 +1853,31 @@ Status encode_batch_read_bits(
       !append_device_reference(writer, config, request.head_device) ||
       !append_word_count(writer, config, request.points)) {
     return buffer_too_small("Batch read bits request buffer is too small");
+  }
+  out_size = writer.size();
+  return ok_status();
+}
+
+Status encode_link_direct_batch_read_bits(
+    const ProtocolConfig& config,
+    const LinkDirectDevice& device,
+    std::uint16_t points,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  const std::uint16_t max_points =
+      config.code_mode == CodeMode::Ascii ? kMaxBatchBitPointsAscii : kMaxBatchBitPointsBinary;
+  if (points == 0U || points > max_points) {
+    return invalid_argument("Link direct batch read bits points are out of supported range");
+  }
+  const Status device_status = validate_link_direct_bit_device(config, device);
+  if (!device_status.ok()) {
+    return device_status;
+  }
+  ByteWriter writer(out_request_data);
+  if (!append_command_header(writer, config, 0x0401U, extended_bit_subcommand(config)) ||
+      !append_link_direct_device_reference_binary(writer, config, device) ||
+      !append_word_count(writer, config, points)) {
+    return buffer_too_small("Link direct batch read bits request buffer is too small");
   }
   out_size = writer.size();
   return ok_status();
@@ -1825,6 +1948,32 @@ Status encode_batch_write_words(
   return ok_status();
 }
 
+Status encode_link_direct_batch_write_words(
+    const ProtocolConfig& config,
+    const LinkDirectDevice& device,
+    std::span<const std::uint16_t> words,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  const std::size_t max_points = batch_write_words_point_limit_for_buffer(config);
+  if (words.empty() || words.size() > max_points) {
+    return invalid_argument(
+        "Link direct batch write words count exceeds supported range for the current buffer/configuration");
+  }
+  const Status device_status = validate_link_direct_word_device(config, device);
+  if (!device_status.ok()) {
+    return device_status;
+  }
+  ByteWriter writer(out_request_data);
+  if (!append_command_header(writer, config, 0x1401U, extended_word_subcommand(config)) ||
+      !append_link_direct_device_reference_binary(writer, config, device) ||
+      !append_word_count(writer, config, static_cast<std::uint16_t>(words.size())) ||
+      !append_word_data(writer, config, words)) {
+    return buffer_too_small("Link direct batch write words request buffer is too small");
+  }
+  out_size = writer.size();
+  return ok_status();
+}
+
 Status encode_extended_batch_write_words(
     const ProtocolConfig& config,
     const QualifiedBufferWordDevice& device,
@@ -1875,6 +2024,37 @@ Status encode_batch_write_bits(
                       : append_bit_units_binary(writer, request.bits);
   if (!ok) {
     return buffer_too_small("Batch write bits request buffer is too small");
+  }
+  out_size = writer.size();
+  return ok_status();
+}
+
+Status encode_link_direct_batch_write_bits(
+    const ProtocolConfig& config,
+    const LinkDirectDevice& device,
+    std::span<const BitValue> bits,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  const std::size_t max_points = batch_write_bits_point_limit_for_buffer(config);
+  if (bits.empty() || bits.size() > max_points) {
+    return invalid_argument(
+        "Link direct batch write bits count exceeds supported range for the current buffer/configuration");
+  }
+  const Status device_status = validate_link_direct_bit_device(config, device);
+  if (!device_status.ok()) {
+    return device_status;
+  }
+  ByteWriter writer(out_request_data);
+  if (!append_command_header(writer, config, 0x1401U, extended_bit_subcommand(config)) ||
+      !append_link_direct_device_reference_binary(writer, config, device) ||
+      !append_word_count(writer, config, static_cast<std::uint16_t>(bits.size()))) {
+    return buffer_too_small("Link direct batch write bits request buffer is too small");
+  }
+  const bool appended = config.code_mode == CodeMode::Ascii
+                            ? append_bit_units_ascii(writer, bits)
+                            : append_bit_units_binary(writer, bits);
+  if (!appended) {
+    return buffer_too_small("Link direct batch write bits request buffer is too small");
   }
   out_size = writer.size();
   return ok_status();

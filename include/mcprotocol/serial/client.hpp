@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "mcprotocol/serial/codec.hpp"
+#include "mcprotocol/serial/link_direct.hpp"
 #include "mcprotocol/serial/qualified_buffer.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
 
@@ -53,10 +54,28 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
 
+  /// \brief Starts `Jn\\...` link-direct word read over device extension specification.
+  [[nodiscard]] Status async_link_direct_batch_read_words(
+      std::uint32_t now_ms,
+      const LinkDirectDevice& device,
+      std::uint16_t points,
+      std::span<std::uint16_t> out_words,
+      CompletionHandler callback,
+      void* user) noexcept;
+
   /// \brief Starts contiguous bit read (`0401` bit path).
   [[nodiscard]] Status async_batch_read_bits(
       std::uint32_t now_ms,
       const BatchReadBitsRequest& request,
+      std::span<BitValue> out_bits,
+      CompletionHandler callback,
+      void* user) noexcept;
+
+  /// \brief Starts `Jn\\...` link-direct bit read over device extension specification.
+  [[nodiscard]] Status async_link_direct_batch_read_bits(
+      std::uint32_t now_ms,
+      const LinkDirectDevice& device,
+      std::uint16_t points,
       std::span<BitValue> out_bits,
       CompletionHandler callback,
       void* user) noexcept;
@@ -68,10 +87,26 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
 
+  /// \brief Starts `Jn\\...` link-direct contiguous word write over device extension specification.
+  [[nodiscard]] Status async_link_direct_batch_write_words(
+      std::uint32_t now_ms,
+      const LinkDirectDevice& device,
+      std::span<const std::uint16_t> words,
+      CompletionHandler callback,
+      void* user) noexcept;
+
   /// \brief Starts contiguous bit write (`1401` bit path).
   [[nodiscard]] Status async_batch_write_bits(
       std::uint32_t now_ms,
       const BatchWriteBitsRequest& request,
+      CompletionHandler callback,
+      void* user) noexcept;
+
+  /// \brief Starts `Jn\\...` link-direct contiguous bit write over device extension specification.
+  [[nodiscard]] Status async_link_direct_batch_write_bits(
+      std::uint32_t now_ms,
+      const LinkDirectDevice& device,
+      std::span<const BitValue> bits,
       CompletionHandler callback,
       void* user) noexcept;
 

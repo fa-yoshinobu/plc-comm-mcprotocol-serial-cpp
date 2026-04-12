@@ -510,6 +510,32 @@ Status MelsecSerialClient::async_batch_read_words(
   return start_request(now_ms, OperationKind::BatchReadWords, request_size, callback, user);
 }
 
+Status MelsecSerialClient::async_link_direct_batch_read_words(
+    std::uint32_t now_ms,
+    const LinkDirectDevice& device,
+    std::uint16_t points,
+    std::span<std::uint16_t> out_words,
+    CompletionHandler callback,
+    void* user) noexcept {
+  batch_read_words_request_ = BatchReadWordsRequest {
+      .head_device = device.device,
+      .points = points,
+  };
+  out_words_ = out_words;
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_batch_read_words(
+      config_,
+      device,
+      points,
+      request_data_,
+      request_size);
+  if (!status.ok()) {
+    clear_pending_outputs();
+    return status;
+  }
+  return start_request(now_ms, OperationKind::BatchReadWords, request_size, callback, user);
+}
+
 Status MelsecSerialClient::async_batch_read_bits(
     std::uint32_t now_ms,
     const BatchReadBitsRequest& request,
@@ -520,6 +546,32 @@ Status MelsecSerialClient::async_batch_read_bits(
   out_bits_ = out_bits;
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_batch_read_bits(config_, request, request_data_, request_size);
+  if (!status.ok()) {
+    clear_pending_outputs();
+    return status;
+  }
+  return start_request(now_ms, OperationKind::BatchReadBits, request_size, callback, user);
+}
+
+Status MelsecSerialClient::async_link_direct_batch_read_bits(
+    std::uint32_t now_ms,
+    const LinkDirectDevice& device,
+    std::uint16_t points,
+    std::span<BitValue> out_bits,
+    CompletionHandler callback,
+    void* user) noexcept {
+  batch_read_bits_request_ = BatchReadBitsRequest {
+      .head_device = device.device,
+      .points = points,
+  };
+  out_bits_ = out_bits;
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_batch_read_bits(
+      config_,
+      device,
+      points,
+      request_data_,
+      request_size);
   if (!status.ok()) {
     clear_pending_outputs();
     return status;
@@ -540,6 +592,25 @@ Status MelsecSerialClient::async_batch_write_words(
   return start_request(now_ms, OperationKind::BatchWriteWords, request_size, callback, user);
 }
 
+Status MelsecSerialClient::async_link_direct_batch_write_words(
+    std::uint32_t now_ms,
+    const LinkDirectDevice& device,
+    std::span<const std::uint16_t> words,
+    CompletionHandler callback,
+    void* user) noexcept {
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_batch_write_words(
+      config_,
+      device,
+      words,
+      request_data_,
+      request_size);
+  if (!status.ok()) {
+    return status;
+  }
+  return start_request(now_ms, OperationKind::BatchWriteWords, request_size, callback, user);
+}
+
 Status MelsecSerialClient::async_batch_write_bits(
     std::uint32_t now_ms,
     const BatchWriteBitsRequest& request,
@@ -547,6 +618,25 @@ Status MelsecSerialClient::async_batch_write_bits(
     void* user) noexcept {
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_batch_write_bits(config_, request, request_data_, request_size);
+  if (!status.ok()) {
+    return status;
+  }
+  return start_request(now_ms, OperationKind::BatchWriteBits, request_size, callback, user);
+}
+
+Status MelsecSerialClient::async_link_direct_batch_write_bits(
+    std::uint32_t now_ms,
+    const LinkDirectDevice& device,
+    std::span<const BitValue> bits,
+    CompletionHandler callback,
+    void* user) noexcept {
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_batch_write_bits(
+      config_,
+      device,
+      bits,
+      request_data_,
+      request_size);
   if (!status.ok()) {
     return status;
   }

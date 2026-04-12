@@ -6,6 +6,7 @@
 
 #include "mcprotocol/serial/span_compat.hpp"
 
+#include "mcprotocol/serial/link_direct.hpp"
 #include "mcprotocol/serial/qualified_buffer.hpp"
 #include "mcprotocol/serial/types.hpp"
 
@@ -86,6 +87,13 @@ namespace CommandCodec {
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
+[[nodiscard]] Status encode_link_direct_batch_read_words(
+    const ProtocolConfig& config,
+    const LinkDirectDevice& device,
+    std::uint16_t points,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
 [[nodiscard]] Status parse_batch_read_words_response(
     const ProtocolConfig& config,
     const BatchReadWordsRequest& request,
@@ -104,6 +112,13 @@ namespace CommandCodec {
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
+[[nodiscard]] Status encode_link_direct_batch_read_bits(
+    const ProtocolConfig& config,
+    const LinkDirectDevice& device,
+    std::uint16_t points,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
 [[nodiscard]] Status parse_batch_read_bits_response(
     const ProtocolConfig& config,
     const BatchReadBitsRequest& request,
@@ -113,6 +128,13 @@ namespace CommandCodec {
 [[nodiscard]] Status encode_batch_write_words(
     const ProtocolConfig& config,
     const BatchWriteWordsRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_link_direct_batch_write_words(
+    const ProtocolConfig& config,
+    const LinkDirectDevice& device,
+    std::span<const std::uint16_t> words,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
@@ -126,6 +148,13 @@ namespace CommandCodec {
 [[nodiscard]] Status encode_batch_write_bits(
     const ProtocolConfig& config,
     const BatchWriteBitsRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_link_direct_batch_write_bits(
+    const ProtocolConfig& config,
+    const LinkDirectDevice& device,
+    std::span<const BitValue> bits,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 

@@ -9,6 +9,7 @@
 
 #include "mcprotocol/serial/client.hpp"
 #include "mcprotocol/serial/high_level.hpp"
+#include "mcprotocol/serial/link_direct.hpp"
 #include "mcprotocol/serial/qualified_buffer.hpp"
 
 namespace {
@@ -25,6 +26,7 @@ using mcprotocol::serial::CpuModelInfo;
 using mcprotocol::serial::DecodeStatus;
 using mcprotocol::serial::FrameCodec;
 using mcprotocol::serial::FrameKind;
+using mcprotocol::serial::LinkDirectDevice;
 using mcprotocol::serial::MelsecSerialClient;
 using mcprotocol::serial::ModuleBufferReadRequest;
 using mcprotocol::serial::ModuleBufferWriteRequest;
@@ -55,6 +57,7 @@ using mcprotocol::serial::highlevel::make_random_write_word_item;
 using mcprotocol::serial::highlevel::parse_device_address;
 using mcprotocol::serial::make_qualified_buffer_read_words_request;
 using mcprotocol::serial::make_qualified_buffer_write_words_request;
+using mcprotocol::serial::parse_link_direct_device;
 using mcprotocol::serial::parse_qualified_buffer_word_device;
 
 namespace CommandCodec = mcprotocol::serial::CommandCodec;
@@ -308,9 +311,57 @@ void test_high_level_parse_device_address() {
   assert(address.code == mcprotocol::serial::DeviceCode::LCN);
   assert(address.number == 2U);
 
+  status = parse_device_address("LTS3", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::LTS);
+  assert(address.number == 3U);
+
+  status = parse_device_address("LTC4", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::LTC);
+  assert(address.number == 4U);
+
+  status = parse_device_address("LSTS5", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::LSTS);
+  assert(address.number == 5U);
+
+  status = parse_device_address("LSTC6", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::LSTC);
+  assert(address.number == 6U);
+
+  status = parse_device_address("LCS7", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::LCS);
+  assert(address.number == 7U);
+
+  status = parse_device_address("LCC8", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::LCC);
+  assert(address.number == 8U);
+
   status = parse_device_address("", address);
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
+}
+
+void test_parse_link_direct_device_surface() {
+  LinkDirectDevice device {};
+  Status status = parse_link_direct_device("J1\\W100", device);
+  assert(status.ok());
+  assert(device.network_number == 0x0001U);
+  assert(device.device.code == mcprotocol::serial::DeviceCode::W);
+  assert(device.device.number == 0x0100U);
+
+  status = parse_link_direct_device("J00A\\X10", device);
+  assert(status.ok());
+  assert(device.network_number == 0x000AU);
+  assert(device.device.code == mcprotocol::serial::DeviceCode::X);
+  assert(device.device.number == 0x0010U);
+
+  status = parse_link_direct_device("J1\\D100", device);
+  assert(!status.ok());
 }
 
 void test_high_level_make_contiguous_requests() {
@@ -395,6 +446,20 @@ void test_encode_sm_sd_and_lz_device_codes() {
     Status status = CommandCodec::encode_batch_read_bits(config, request, request_data, request_data_size);
     assert(status.ok());
     const std::array<std::uint8_t, 10> expected {0x01, 0x04, 0x01, 0x00, 0x64, 0x00, 0x00, 0x91, 0x01, 0x00};
+    assert(request_data_size == expected.size());
+    assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+  }
+
+  {
+    const BatchReadBitsRequest request {
+        .head_device = {.code = mcprotocol::serial::DeviceCode::LTS, .number = 3},
+        .points = 1,
+    };
+    std::array<std::uint8_t, 32> request_data {};
+    std::size_t request_data_size = 0;
+    Status status = CommandCodec::encode_batch_read_bits(config, request, request_data, request_data_size);
+    assert(status.ok());
+    const std::array<std::uint8_t, 10> expected {0x01, 0x04, 0x01, 0x00, 0x03, 0x00, 0x00, 0x51, 0x01, 0x00};
     assert(request_data_size == expected.size());
     assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
   }
@@ -603,6 +668,135 @@ void test_encode_extended_batch_read_words_binary_module_access_ql_shape() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
   assert(request_data[expected.size()] == 0x01);
   assert(request_data[expected.size() + 1U] == 0x00);
+}
+
+void test_encode_link_direct_batch_read_words_binary_iqr_matches_manual_shape() {
+  const auto config = make_binary_c4_iqr_config();
+  const LinkDirectDevice device {
+      .network_number = 0x0001U,
+      .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U},
+  };
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const Status status = CommandCodec::encode_link_direct_batch_read_words(
+      config,
+      device,
+      1U,
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 19> expected {
+      0x01, 0x04, 0x82, 0x00,
+      0x00, 0x00,
+      0x00, 0x01, 0x00, 0x00,
+      0xB4, 0x00,
+      0x00, 0x00,
+      0x01, 0x00,
+      0xF9,
+      0x01, 0x00,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_link_direct_batch_read_bits_binary_iqr_matches_manual_shape() {
+  const auto config = make_binary_c4_iqr_config();
+  const LinkDirectDevice device {
+      .network_number = 0x0001U,
+      .device = {.code = mcprotocol::serial::DeviceCode::X, .number = 0x0010U},
+  };
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const Status status = CommandCodec::encode_link_direct_batch_read_bits(
+      config,
+      device,
+      4U,
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 19> expected {
+      0x01, 0x04, 0x83, 0x00,
+      0x00, 0x00,
+      0x10, 0x00, 0x00, 0x00,
+      0x9C, 0x00,
+      0x00, 0x00,
+      0x01, 0x00,
+      0xF9,
+      0x04, 0x00,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_link_direct_batch_write_words_binary_iqr_shape() {
+  const auto config = make_binary_c4_iqr_config();
+  const LinkDirectDevice device {
+      .network_number = 0x0001U,
+      .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U},
+  };
+  const std::array<std::uint16_t, 2> words {0x1234U, 0xABCDU};
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const Status status = CommandCodec::encode_link_direct_batch_write_words(
+      config,
+      device,
+      words,
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 23> expected {
+      0x01, 0x14, 0x82, 0x00,
+      0x00, 0x00,
+      0x00, 0x01, 0x00, 0x00,
+      0xB4, 0x00,
+      0x00, 0x00,
+      0x01, 0x00,
+      0xF9,
+      0x02, 0x00,
+      0x34, 0x12,
+      0xCD, 0xAB,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_link_direct_batch_write_bits_binary_iqr_shape() {
+  const auto config = make_binary_c4_iqr_config();
+  const LinkDirectDevice device {
+      .network_number = 0x0001U,
+      .device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0x0000U},
+  };
+  const std::array<BitValue, 4> bits {BitValue::On, BitValue::Off, BitValue::On, BitValue::Off};
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const Status status = CommandCodec::encode_link_direct_batch_write_bits(
+      config,
+      device,
+      bits,
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 21> expected {
+      0x01, 0x14, 0x83, 0x00,
+      0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00,
+      0xA0, 0x00,
+      0x00, 0x00,
+      0x01, 0x00,
+      0xF9,
+      0x04, 0x00,
+      0x01, 0x01,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
 void test_encode_batch_write_words_ascii_limit_matches_buffer() {
@@ -1329,6 +1523,7 @@ int main() {
   test_encode_ascii_format4_request_appends_crlf();
   test_decode_ascii_format4_ack_response();
   test_high_level_parse_device_address();
+  test_parse_link_direct_device_surface();
   test_high_level_make_contiguous_requests();
   test_high_level_protocol_presets();
   test_high_level_make_random_bit_item();
@@ -1339,6 +1534,10 @@ int main() {
   test_encode_extended_batch_read_words_binary_matches_capture_shape();
   test_encode_extended_batch_read_words_binary_hg_matches_capture_shape();
   test_encode_extended_batch_read_words_binary_module_access_ql_shape();
+  test_encode_link_direct_batch_read_words_binary_iqr_matches_manual_shape();
+  test_encode_link_direct_batch_read_bits_binary_iqr_matches_manual_shape();
+  test_encode_link_direct_batch_write_words_binary_iqr_shape();
+  test_encode_link_direct_batch_write_bits_binary_iqr_shape();
   test_encode_batch_write_words_ascii_limit_matches_buffer();
   test_encode_batch_write_bits_ascii_limit_matches_buffer();
   test_encode_random_write_words_ascii_matches_manual();

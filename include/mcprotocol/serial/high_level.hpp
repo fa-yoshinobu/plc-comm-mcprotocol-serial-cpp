@@ -31,7 +31,7 @@ struct DeviceParseSpec {
   int base;
 };
 
-constexpr std::array<DeviceParseSpec, 33> kDeviceParseSpecs {{
+constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
     {"STS", 3U, DeviceCode::STS, 10},
     {"STC", 3U, DeviceCode::STC, 10},
     {"STN", 3U, DeviceCode::STN, 10},
@@ -47,8 +47,14 @@ constexpr std::array<DeviceParseSpec, 33> kDeviceParseSpecs {{
     {"SD", 2U, DeviceCode::SD, 10},
     {"DX", 2U, DeviceCode::DX, 16},
     {"DY", 2U, DeviceCode::DY, 16},
+    {"LTS", 3U, DeviceCode::LTS, 10},
+    {"LTC", 3U, DeviceCode::LTC, 10},
     {"LTN", 3U, DeviceCode::LTN, 10},
+    {"LSTS", 4U, DeviceCode::LSTS, 10},
+    {"LSTC", 4U, DeviceCode::LSTC, 10},
     {"LSTN", 4U, DeviceCode::LSTN, 10},
+    {"LCS", 3U, DeviceCode::LCS, 10},
+    {"LCC", 3U, DeviceCode::LCC, 10},
     {"LCN", 3U, DeviceCode::LCN, 10},
     {"LZ", 2U, DeviceCode::LZ, 10},
     {"RD", 2U, DeviceCode::RD, 10},

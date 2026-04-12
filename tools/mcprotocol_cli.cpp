@@ -11,6 +11,7 @@
 #include <string_view>
 
 #include "mcprotocol/serial/client.hpp"
+#include "mcprotocol/serial/link_direct.hpp"
 #include "mcprotocol/serial/posix_serial.hpp"
 #include "mcprotocol/serial/qualified_buffer.hpp"
 
@@ -31,6 +32,7 @@ using mcprotocol::serial::DeviceCode;
 using mcprotocol::serial::FrameKind;
 using mcprotocol::serial::HostBufferReadRequest;
 using mcprotocol::serial::HostBufferWriteRequest;
+using mcprotocol::serial::LinkDirectDevice;
 using mcprotocol::serial::MelsecSerialClient;
 using mcprotocol::serial::ModuleBufferReadRequest;
 using mcprotocol::serial::ModuleBufferWriteRequest;
@@ -56,6 +58,7 @@ using mcprotocol::serial::decode_qualified_buffer_word_values;
 using mcprotocol::serial::make_qualified_buffer_read_words_request;
 using mcprotocol::serial::make_qualified_buffer_write_words_request;
 using mcprotocol::serial::parse_qualified_buffer_word_device;
+using mcprotocol::serial::parse_link_direct_device;
 using mcprotocol::serial::qualified_buffer_kind_name;
 
 enum class CommandKind : std::uint8_t {
@@ -65,6 +68,10 @@ enum class CommandKind : std::uint8_t {
   Loopback,
   ReadWords,
   ReadBits,
+  ReadLinkDirectWords,
+  ReadLinkDirectBits,
+  WriteLinkDirectWords,
+  WriteLinkDirectBits,
   ReadHostBuffer,
   ReadModuleBuffer,
   ReadQualifiedWords,
@@ -127,7 +134,7 @@ struct ProbeTarget {
   DeviceAddress device;
 };
 
-constexpr std::array<DeviceParseSpec, 33> kDeviceParseSpecs {{
+constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
     {"STS", DeviceCode::STS, 10},
     {"STC", DeviceCode::STC, 10},
     {"STN", DeviceCode::STN, 10},
@@ -143,8 +150,14 @@ constexpr std::array<DeviceParseSpec, 33> kDeviceParseSpecs {{
     {"SD", DeviceCode::SD, 10},
     {"DX", DeviceCode::DX, 16},
     {"DY", DeviceCode::DY, 16},
+    {"LTS", DeviceCode::LTS, 10},
+    {"LTC", DeviceCode::LTC, 10},
     {"LTN", DeviceCode::LTN, 10},
+    {"LSTS", DeviceCode::LSTS, 10},
+    {"LSTC", DeviceCode::LSTC, 10},
     {"LSTN", DeviceCode::LSTN, 10},
+    {"LCS", DeviceCode::LCS, 10},
+    {"LCC", DeviceCode::LCC, 10},
     {"LCN", DeviceCode::LCN, 10},
     {"LZ", DeviceCode::LZ, 10},
     {"RD", DeviceCode::RD, 10},
@@ -294,6 +307,10 @@ void print_usage() {
       "  mcprotocol_cli [options] loopback HEXASCII\n"
       "  mcprotocol_cli [options] read-words DEVICE POINTS\n"
       "  mcprotocol_cli [options] read-bits DEVICE POINTS\n"
+      "  mcprotocol_cli [options] read-link-direct-words J1\\\\W100 POINTS\n"
+      "  mcprotocol_cli [options] read-link-direct-bits J1\\\\X10 POINTS\n"
+      "  mcprotocol_cli [options] write-link-direct-words J1\\\\W100 VALUE [VALUE ...]\n"
+      "  mcprotocol_cli [options] write-link-direct-bits J1\\\\B0 0|1 [0|1 ...]\n"
       "  mcprotocol_cli [options] read-host-buffer START WORDS\n"
       "  mcprotocol_cli [options] read-module-buffer START BYTES MODULE\n"
       "  mcprotocol_cli [options] read-qualified-words U3E0\\\\G0 POINTS\n"
@@ -341,6 +358,7 @@ void print_usage() {
       "  Use recover-c24 after timeout or mixed-response states on C24 ASCII links; no reply is expected.\n"
       "  read-qualified-words / write-qualified-words use the practical 0601/1601 helper path.\n"
       "  read-native-qualified-words / write-native-qualified-words are unsupported diagnostic probes, not a supported workflow.\n"
+      "  read/write-link-direct-* uses binary-only device extension specification for Jn\\\\X/Y/B/W/SB/SW.\n"
       "  probe-multi-block defaults to mixed; pass word-only/bit-only or a single block mode to isolate 1406 verification.\n"
       "  probe-monitor read-only sends raw 0802 without client-side monitor registration state.\n"
       "  random-read / random-write-* / probe-random-* / probe-multi-block / probe-monitor expose native probe results directly.\n");
@@ -614,6 +632,14 @@ void print_usage() {
         options.command = CommandKind::ReadWords;
       } else if (arg == "read-bits") {
         options.command = CommandKind::ReadBits;
+      } else if (arg == "read-link-direct-words") {
+        options.command = CommandKind::ReadLinkDirectWords;
+      } else if (arg == "read-link-direct-bits") {
+        options.command = CommandKind::ReadLinkDirectBits;
+      } else if (arg == "write-link-direct-words") {
+        options.command = CommandKind::WriteLinkDirectWords;
+      } else if (arg == "write-link-direct-bits") {
+        options.command = CommandKind::WriteLinkDirectBits;
       } else if (arg == "read-host-buffer") {
         options.command = CommandKind::ReadHostBuffer;
       } else if (arg == "read-module-buffer") {
@@ -699,12 +725,16 @@ void print_usage() {
       return options.command_argc == 1;
     case CommandKind::ReadWords:
     case CommandKind::ReadBits:
+    case CommandKind::ReadLinkDirectWords:
+    case CommandKind::ReadLinkDirectBits:
     case CommandKind::ReadHostBuffer:
     case CommandKind::ReadQualifiedWords:
     case CommandKind::ReadNativeQualifiedWords:
       return options.command_argc == 2;
     case CommandKind::ReadModuleBuffer:
       return options.command_argc == 3;
+    case CommandKind::WriteLinkDirectWords:
+    case CommandKind::WriteLinkDirectBits:
     case CommandKind::WriteHostBuffer:
       return options.command_argc >= 2;
     case CommandKind::WriteModuleBuffer:
@@ -1246,6 +1276,29 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
   return drive_request(client, port, command_state);
 }
 
+[[nodiscard]] Status run_link_direct_batch_read_words(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const LinkDirectDevice& device,
+    std::uint16_t points,
+    std::span<std::uint16_t> out_values) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_link_direct_batch_read_words(
+      now_ms(),
+      device,
+      points,
+      out_values,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
 [[nodiscard]] Status run_batch_read_word(
     MelsecSerialClient& client,
     PosixSerialPort& port,
@@ -1319,6 +1372,29 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
   return drive_request(client, port, command_state);
 }
 
+[[nodiscard]] Status run_link_direct_batch_read_bits(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const LinkDirectDevice& device,
+    std::uint16_t points,
+    std::span<BitValue> out_values) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_link_direct_batch_read_bits(
+      now_ms(),
+      device,
+      points,
+      out_values,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
 [[nodiscard]] Status run_batch_write_word(
     MelsecSerialClient& client,
     PosixSerialPort& port,
@@ -1327,6 +1403,27 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
     std::uint16_t value) {
   const std::array<std::uint16_t, 1> values {value};
   return run_batch_write_words_group(client, port, command_state, device, values);
+}
+
+[[nodiscard]] Status run_link_direct_batch_write_words(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const LinkDirectDevice& device,
+    std::span<const std::uint16_t> values) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_link_direct_batch_write_words(
+      now_ms(),
+      device,
+      values,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
 }
 
 [[nodiscard]] Status run_batch_write_bits_group(
@@ -1360,6 +1457,27 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
     BitValue value) {
   const std::array<BitValue, 1> values {value};
   return run_batch_write_bits_group(client, port, command_state, device, values);
+}
+
+[[nodiscard]] Status run_link_direct_batch_write_bits(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const LinkDirectDevice& device,
+    std::span<const BitValue> values) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_link_direct_batch_write_bits(
+      now_ms(),
+      device,
+      values,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
 }
 
 [[nodiscard]] Status run_random_write_words(
@@ -3933,6 +4051,41 @@ int main(int argc, char** argv) {
       return 0;
     }
 
+    case CommandKind::ReadLinkDirectWords: {
+      LinkDirectDevice device {};
+      const std::string_view device_arg(options.command_argv[0]);
+      const std::string_view points_arg(options.command_argv[1]);
+      status = parse_link_direct_device(device_arg, device);
+      if (!status.ok()) {
+        print_status_error("Invalid link direct device", status);
+        return 2;
+      }
+      std::uint32_t points = 0;
+      if (!parse_u32(points_arg, points) || points == 0U || points > 960U) {
+        std::fprintf(stderr, "Invalid word count: %.*s\n",
+                     static_cast<int>(points_arg.size()),
+                     points_arg.data());
+        return 2;
+      }
+
+      std::array<std::uint16_t, 960> words {};
+      status = run_link_direct_batch_read_words(
+          client,
+          port,
+          command_state,
+          device,
+          static_cast<std::uint16_t>(points),
+          std::span<std::uint16_t>(words.data(), points));
+      if (!status.ok()) {
+        print_status_error("read-link-direct-words request failed", status);
+        return 1;
+      }
+      for (std::uint32_t index = 0; index < points; ++index) {
+        std::printf("[%u] 0x%04X %u\n", index, words[index], words[index]);
+      }
+      return 0;
+    }
+
     case CommandKind::ReadBits: {
       DeviceAddress device {};
       const std::string_view device_arg(options.command_argv[0]);
@@ -3970,6 +4123,122 @@ int main(int argc, char** argv) {
       for (std::uint32_t index = 0; index < points; ++index) {
         std::printf("[%u] %u\n", index, bits[index] == BitValue::On ? 1U : 0U);
       }
+      return 0;
+    }
+
+    case CommandKind::ReadLinkDirectBits: {
+      LinkDirectDevice device {};
+      const std::string_view device_arg(options.command_argv[0]);
+      const std::string_view points_arg(options.command_argv[1]);
+      status = parse_link_direct_device(device_arg, device);
+      if (!status.ok()) {
+        print_status_error("Invalid link direct device", status);
+        return 2;
+      }
+      std::uint32_t points = 0;
+      if (!parse_u32(points_arg, points) || points == 0U || points > 7904U) {
+        std::fprintf(stderr, "Invalid bit count: %.*s\n",
+                     static_cast<int>(points_arg.size()),
+                     points_arg.data());
+        return 2;
+      }
+
+      std::array<BitValue, 7904> bits {};
+      status = run_link_direct_batch_read_bits(
+          client,
+          port,
+          command_state,
+          device,
+          static_cast<std::uint16_t>(points),
+          std::span<BitValue>(bits.data(), points));
+      if (!status.ok()) {
+        print_status_error("read-link-direct-bits request failed", status);
+        return 1;
+      }
+      for (std::uint32_t index = 0; index < points; ++index) {
+        std::printf("[%u] %u\n", index, bits[index] == BitValue::On ? 1U : 0U);
+      }
+      return 0;
+    }
+
+    case CommandKind::WriteLinkDirectWords: {
+      LinkDirectDevice device {};
+      const std::string_view device_arg(options.command_argv[0]);
+      status = parse_link_direct_device(device_arg, device);
+      if (!status.ok()) {
+        print_status_error("Invalid link direct device", status);
+        return 2;
+      }
+
+      const int word_count = options.command_argc - 1;
+      if (word_count < 1 || word_count > 960) {
+        std::fprintf(stderr, "Invalid link direct word count\n");
+        return 2;
+      }
+
+      std::array<std::uint16_t, 960> words {};
+      for (int index = 0; index < word_count; ++index) {
+        std::uint32_t value = 0;
+        if (!parse_u32_auto(options.command_argv[index + 1], value) || value > 0xFFFFU) {
+          std::fprintf(stderr, "Invalid write-link-direct-words value: %s\n", options.command_argv[index + 1]);
+          return 2;
+        }
+        words[static_cast<std::size_t>(index)] = static_cast<std::uint16_t>(value);
+      }
+
+      status = run_link_direct_batch_write_words(
+          client,
+          port,
+          command_state,
+          device,
+          std::span<const std::uint16_t>(words.data(), static_cast<std::size_t>(word_count)));
+      if (!status.ok()) {
+        print_status_error("write-link-direct-words request failed", status);
+        return 1;
+      }
+      std::printf("write-link-direct-words=ok words=%d\n", word_count);
+      return 0;
+    }
+
+    case CommandKind::WriteLinkDirectBits: {
+      LinkDirectDevice device {};
+      const std::string_view device_arg(options.command_argv[0]);
+      status = parse_link_direct_device(device_arg, device);
+      if (!status.ok()) {
+        print_status_error("Invalid link direct device", status);
+        return 2;
+      }
+
+      const int bit_count = options.command_argc - 1;
+      if (bit_count < 1 || bit_count > 7904) {
+        std::fprintf(stderr, "Invalid link direct bit count\n");
+        return 2;
+      }
+
+      std::array<BitValue, 7904> bits {};
+      for (int index = 0; index < bit_count; ++index) {
+        const std::string_view value_arg(options.command_argv[index + 1]);
+        if (value_arg == "0") {
+          bits[static_cast<std::size_t>(index)] = BitValue::Off;
+        } else if (value_arg == "1") {
+          bits[static_cast<std::size_t>(index)] = BitValue::On;
+        } else {
+          std::fprintf(stderr, "Invalid write-link-direct-bits value: %s\n", options.command_argv[index + 1]);
+          return 2;
+        }
+      }
+
+      status = run_link_direct_batch_write_bits(
+          client,
+          port,
+          command_state,
+          device,
+          std::span<const BitValue>(bits.data(), static_cast<std::size_t>(bit_count)));
+      if (!status.ok()) {
+        print_status_error("write-link-direct-bits request failed", status);
+        return 1;
+      }
+      std::printf("write-link-direct-bits=ok bits=%d\n", bit_count);
       return 0;
     }
 

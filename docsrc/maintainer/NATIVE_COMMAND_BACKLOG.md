@@ -46,7 +46,7 @@ Target-specific remaining items:
 
 Device/register surfaces still missing from this serial C++ library:
 
-- `Jn\\X`, `Jn\\Y`, `Jn\\B`, `Jn\\W`, `Jn\\SB`, `Jn\\SW` address surfaces
+- `Jn\\...` random / multi-block / monitor surfaces
 
 Manual re-read notes:
 
@@ -57,7 +57,18 @@ Manual re-read notes:
 - `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, and `LCC` are implemented in `DeviceCode`, parser, and CLI
   surface.
 - `Jn\\...` prefixed access is not a plain `DeviceCode` gap; it is an address-surface / routing
-  syntax gap and needs its own parser / request-construction design.
+  syntax gap.
+- `2026-04-12` added binary-only `Jn\\...` batch read/write support for `X`, `Y`, `B`, `W`,
+  `SB`, and `SW`.
+- `2026-04-12` spot rechecks on `RJ71C24-R2 + R120PCPU / Format5 Binary / --series iqr` showed:
+  - `read-link-direct-words J1\\W100 2` passed
+  - `read-link-direct-words J1\\SW0 2` passed
+  - `read-link-direct-bits J1\\X0 4` passed
+  - `read-link-direct-bits J1\\Y0 4` passed
+  - `read-link-direct-bits J1\\B0 4` passed
+  - `read-link-direct-bits J1\\SB0 4` passed
+  - `write-link-direct-words J1\\W100 1 2` readback and restore passed
+  - `write-link-direct-bits J1\\B0 1 0 1 0` readback and restore passed
 - `LTN` / `LSTN` / `LCN` are not ordinary one-word devices; the manual calls out special access
   rules for long timer / long retentive timer / long counter current values.
 - `2026-04-12` spot rechecks on `RJ71C24-R2 + R120PCPU / Format5 Binary / --series iqr` showed:
