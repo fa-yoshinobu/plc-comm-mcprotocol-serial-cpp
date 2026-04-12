@@ -1,6 +1,6 @@
 # TODO
 
-Current follow-up items only.
+Current active follow-up items only.
 
 ## Native Command Holds
 
@@ -17,7 +17,9 @@ Current follow-up items only.
   A focused `--series iqr` check returned `0x4013`, while `cpu-model` and `read-words D0 1`
   still passed immediately afterward.
 
-## Implementation Gaps
+## Parked Implementation Gaps
+
+These are known missing surfaces, but they are not active work right now.
 
 - `1612`: serial-module mode switching is still not implemented.
 - `0630`: programmable-controller CPU monitoring register/start is still not implemented.

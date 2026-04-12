@@ -115,9 +115,9 @@ For the exact PASS / status matrix and the verified serial settings for each tar
   serial `3C/4C`.
 - Large contiguous `write-words` and `write-bits` are still split automatically to fit fixed
   request buffers.
-- The remaining repository follow-up is implementation work for `1612`, `0630`, and `2101`, plus
-  target-dependent validation for `1005` remote latch clear and `1630` / `1631` remote password
-  unlock/lock on `RJ71C24-R2 + R120PCPU`.
+- The current active follow-up is target-dependent validation for `1005` remote latch clear and
+  `1630` / `1631` remote password unlock/lock on `RJ71C24-R2 + R120PCPU`. Parked implementation
+  gaps such as `1612`, `0630`, and `2101` remain documented in [TODO.md](docsrc/maintainer/TODO.md).
 
 For target-specific limits and current follow-up items, use
 [HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md) and
