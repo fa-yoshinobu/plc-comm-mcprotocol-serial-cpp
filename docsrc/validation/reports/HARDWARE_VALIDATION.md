@@ -163,7 +163,10 @@ Target-specific holds:
   before transmit)
 - native `0403` random-read on `LTN`, `LSTN`, and `LCN` on `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr`
   (`2026-04-12` spot probes `random-read LTN0`, `LSTN0`, and `LCN0` returned `0x7F23`, while
-  spot batch reads `read-words LTN0 4`, `read-words LSTN0 4`, and `read-words LCN0 2` passed)
+  structured/batch reads `read-words LTN10 4`, `read-words LSTN10 4`, and `read-words LCN10 2` passed)
+- native `1402` random-write-words on `LTN`, `LSTN`, and `LCN` on `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr`
+  still returns `0x7F23` after lifting the local 32-bit CLI guard; `LCN` does work through `1401`
+  batch word write (`write-words LCN10=<low> LCN11=<high>` readback/restore passed on `2026-04-12`)
 - host/module buffer access on `FX5UC-32MT/D`
 
 Unsupported / diagnostic-only items:

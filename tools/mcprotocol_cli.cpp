@@ -4306,7 +4306,8 @@ int main(int argc, char** argv) {
           std::fprintf(stderr, "Invalid random-write-words item: %s\n", options.command_argv[index]);
           return 2;
         }
-        if (items[static_cast<std::size_t>(index)].value > 0xFFFFU) {
+        if (!items[static_cast<std::size_t>(index)].double_word &&
+            items[static_cast<std::size_t>(index)].value > 0xFFFFU) {
           std::fprintf(stderr, "random-write-words value must be 0..65535: %s\n", options.command_argv[index]);
           return 2;
         }

@@ -38,8 +38,11 @@ Target-specific remaining items:
   random-read probes with `0x7F23`; local support now treats `LZ` as an iQ-R-only double-word
   device and rejects Q/L-mode requests before transmit
 - `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr` currently rejects native `0403`
-  random-read probes for `LTN`, `LSTN`, and `LCN` with `0x7F23`, even though spot batch reads now
-  work (`read-words LTN0 4`, `read-words LSTN0 4`, `read-words LCN0 2`)
+  random-read probes for `LTN`, `LSTN`, and `LCN` with `0x7F23`, even though structured/batch
+  reads now work (`read-words LTN10 4`, `read-words LSTN10 4`, `read-words LCN10 2`)
+- `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr` currently rejects native `1402`
+  random-write-words for `LTN`, `LSTN`, and `LCN` with `0x7F23`; `LCN` does work through `1401`
+  batch write (`write-words LCN10=<low> LCN11=<high>` readback/restore passed)
 - `FX5UC-32MT/D` still holds on host/module buffer access
 
 ### Implementation Gaps
@@ -72,10 +75,12 @@ Manual re-read notes:
 - `LTN` / `LSTN` / `LCN` are not ordinary one-word devices; the manual calls out special access
   rules for long timer / long retentive timer / long counter current values.
 - `2026-04-12` spot rechecks on `RJ71C24-R2 + R120PCPU / Format5 Binary / --series iqr` showed:
-  - `read-words LTN0 4` passed
-  - `read-words LSTN0 4` passed
-  - `read-words LCN0 2` passed
-  - `random-read LTN0`, `LSTN0`, and `LCN0` all returned `0x7F23`
+  - `read-words LTN10 4` passed
+  - `read-words LSTN10 4` passed
+  - `read-words LCN10 2` passed
+  - `random-read LTN10`, `LSTN10`, and `LCN10` all returned `0x7F23`
+  - `random-write-words LTN10=...`, `LSTN10=...`, and `LCN10=...` all returned `0x7F23`
+  - `write-words LCN10=<low> LCN11=<high>` passed with readback and restore
 - `LTN` / `LSTN` batch reads are special: one device consumes four words in the response, with the
   current value in the first word and contact/coil bits in the second word.
 - Do not track unsupported access paths as backlog items. Long timer / long retentive timer
