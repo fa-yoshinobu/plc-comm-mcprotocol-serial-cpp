@@ -6133,6 +6133,8 @@ int main(int argc, char** argv) {
         const auto value = values[static_cast<std::size_t>(index)];
         if (is_bit_device(items[static_cast<std::size_t>(index)].device.code)) {
           print_sparse_native_bit_value(options.command_argv[index], value);
+        } else if (items[static_cast<std::size_t>(index)].double_word) {
+          std::printf("%s=0x%08X %u\n", options.command_argv[index], value, value);
         } else {
           const unsigned word = static_cast<unsigned>(value & 0xFFFFU);
           std::printf("%s=0x%04X %u\n", options.command_argv[index], word, word);

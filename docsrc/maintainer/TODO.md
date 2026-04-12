@@ -17,6 +17,11 @@ Current active follow-up items only.
   A focused `--series iqr` check returned `0x4013`, while `cpu-model` and `read-words D0 1`
   still passed immediately afterward.
 
+- `RJ71C24-R2 + R120PCPU`: `LZ1` native `1402` remains target-dependent.
+  Focused `--series iqr` checks returned `random-write-words=ok mode=native`, but an immediate
+  `random-read LZ1` stayed at `1234`; `LZ0` full 32-bit write/readback/restore passed on the same
+  target.
+
 ## Parked Implementation Gaps
 
 These are known missing surfaces, but they are not active work right now.

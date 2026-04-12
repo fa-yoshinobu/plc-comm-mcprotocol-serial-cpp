@@ -55,7 +55,7 @@ For target-specific PASS/HOLD results, use
 | Chapter 8 device memory | `0401` batch read words/bits | implemented | `async_batch_read_words`, `async_batch_read_bits`, `PosixSyncClient::read_words/read_bits`, CLI | `Jn\\...` extension-spec variants also implemented |
 | Chapter 8 device memory | `1401` batch write words/bits | implemented | `async_batch_write_words`, `async_batch_write_bits`, `PosixSyncClient::write_words/write_bits`, CLI | `Jn\\...` extension-spec variants also implemented |
 | Chapter 8 device memory | `0403` random read | implemented | `async_random_read`, `async_link_direct_random_read`, `PosixSyncClient::random_read`, CLI | Long-device restrictions follow the manual and target validation |
-| Chapter 8 device memory | `1402` random write words/bits | implemented | `async_random_write_words`, `async_random_write_bits`, link-direct variants, `PosixSyncClient::random_write_word(s)/random_write_bit(s)`, CLI | `LTN/LSTN` native writes stay blocked per the serial manual's device-path restrictions |
+| Chapter 8 device memory | `1402` random write words/bits | implemented | `async_random_write_words`, `async_random_write_bits`, link-direct variants, `PosixSyncClient::random_write_word(s)/random_write_bit(s)`, CLI | Long-device restrictions follow the manual and target validation; `LCS` stays outside the native random-bit-write path |
 | Chapter 8 device memory | `0406` multi-block read | implemented | `async_multi_block_read`, `async_link_direct_multi_block_read`, CLI | Long-device head restrictions follow the manual |
 | Chapter 8 device memory | `1406` multi-block write | implemented | `async_multi_block_write`, `async_link_direct_multi_block_write`, CLI | Long-device head restrictions follow the manual |
 | Chapter 8 device memory | `0801` monitor register | implemented | `async_register_monitor`, `async_link_direct_register_monitor`, `PosixSyncClient::register_monitor`, CLI | Some targets such as `FX5UC-32MT/D` still reject monitor on serial `3C/4C` |
@@ -102,8 +102,8 @@ For target-specific PASS/HOLD results, use
   mean every PLC/serial target accepts that command family.
 - Device-level restrictions still apply. Examples:
   `LTS/LTC/LSTS/LSTC` are treated via the documented structured paths,
-  `LTN/LSTN` native writes remain blocked, and `FX5UC-32MT/D` treats `0801/0802` as unsupported on
-  serial `3C/4C`.
+  `LCS` stays outside native `1402` random bit write, and `FX5UC-32MT/D` treats `0801/0802` as
+  unsupported on serial `3C/4C`.
 
 ## Current Conclusion
 

@@ -80,8 +80,8 @@ Validated target:
 | Multi-block read | native `0406` | native pass | validated on the current setup |
 | Multi-block write | native `1406` | native pass | validated with restore on the current setup |
 | Monitor register/read | native `0801/0802` | native pass | validated under both `--series ql` and `--series iqr` on the current RJ71C24-R2 targets |
-| iQ-R-only spot devices and `Jn\\...` surface | `SM`, `SD`, `RD`, `LZ`, `J1\\...`, `LTN/LSTN/LCN` | native pass | current per-device read/write matrix lives in [RJ71C24_R2_RS232C.md](RJ71C24_R2_RS232C.md) |
-| Special-device post-control sanity | `SM`, `SD`, `RD`, `LZ`, `LCN`, `J1\\...` under `--series iqr` | native pass | current focused read/write/restore checks pass on the validated target |
+| iQ-R-only spot devices and `Jn\\...` surface | `SM`, `SD`, `RD`, `LZ`, `J1\\...`, `LTN/LSTN/LCN` | native pass with one target-dependent write follow-up | current per-device read/write matrix lives in [RJ71C24_R2_RS232C.md](RJ71C24_R2_RS232C.md); `LZ1` native `1402` remains unresolved on the validated target |
+| Special-device post-control sanity | `SM`, `SD`, `RD`, `LZ`, `LCN`, `J1\\...` under `--series iqr` | native pass with one target-dependent write follow-up | current focused read/write/restore checks pass on the validated target, except `LZ1` native `1402` |
 | User frame / serial-module extras | `0610`, `1610`, `1615`, `1618`, `0631` | native pass, split by link mode | binary recheck on `R120PCPU / RJ71C24-R2 / c4-binary / --series ql` validated `0610/1610`, `1615`, `1618`, and `0631`; `Format1 ASCII`, `Format2 ASCII (4C/3C) / --series ql`, `Format3 ASCII (4C/3C) / --series ql`, and `Format4 ASCII (4C/3C) / --series ql` also validated temporary flash user-frame `0x03E8` register/read/delete plus `0631`; `Format2/3/4 ASCII (4C/3C)` additionally validated `1618` with `global-signal on/off current 0`; missing `0x03E8` and `0x8001` reads returned `0x7E51`; `init-sequence` is not applicable on ASCII links because it requires binary `4C Format5` |
 | Raw module-buffer family | raw `0601/1601` probe path | native ng / target-dependent | on `R120PCPU / RJ71C24-R2 / c4-binary / --series ql`, `probe-module-buffer` returned `0x4043` and `probe-write-module-buffer` failed on the same `0x4043`, while helper `U3E0\\G0` read/write/restore still passed |
 | Device-family read probe | `probe-all` | pass | `26/26` passed after dropping `RD` from the supported device set |
@@ -187,6 +187,9 @@ Target-dependent follow-up:
 - `RJ71C24-R2 + R120PCPU`: `1630` / `1631` currently return `0x7F22` on the focused
   `--series iqr` checks, while read-only access still passes.
 
+- `RJ71C24-R2 + R120PCPU`: `LZ1` native `1402` currently returns `ok` but leaves the current value
+  unchanged on immediate readback, while `LZ0` full 32-bit write/readback/restore passes.
+
 Command-family holds:
 
 - none at the command-family level on the currently validated targets
@@ -199,7 +202,8 @@ Unsupported / diagnostic-only items:
 
 - request encoding now matches the documented MC protocol request shapes used by the validated targets
 - `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` pass the practical native random / write / multi-block / monitor families under `--series ql`
-- `RJ71C24-R2` supports native `0403/1402/0801` on the validated `--series iqr` spot-device path
+- `RJ71C24-R2` supports native `0403/1402/0801` on the validated `--series iqr` spot-device path,
+  with the current focused `LZ1` `1402` behavior still treated as target-dependent
 - `FX5UC-32MT/D` passes native `0403`, `1402`, `0406`, and `1406`
 - `FX5UC-32MT/D` `0801/0802` should be treated as unsupported on serial `3C/4C`
 - qualified helper commands and native qualified probes remain separate paths; native qualified stays unsupported by specification

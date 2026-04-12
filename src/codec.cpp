@@ -1751,10 +1751,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   }
 }
 
-// LTS/LTC/LSTS/LSTC/LCS/LCC are bit-only contact/coil devices for long timers and counters.
-// The MC protocol serial manual restricts 0403 random read and 1402 random write to
-// exclude these devices. They are also excluded from 0406/1406 multi-block along with the
-// other long-device word types (LTN/LSTN/LCN/LZ).
+// LTS/LTC/LSTS/LSTC/LCS/LCC are long timer/counter contact+coil devices.
+// They are excluded from 0403 random read and from 0406/1406 multi-block head-device access.
+// For 1402 random bit write, the serial manual allows LTS/LTC/LSTS/LSTC/LCC but not LCS.
 [[nodiscard]] constexpr bool is_long_contact_coil_device(DeviceCode code) noexcept {
   switch (code) {
     case DeviceCode::LTS:
@@ -1763,19 +1762,6 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     case DeviceCode::LSTC:
     case DeviceCode::LCS:
     case DeviceCode::LCC:
-      return true;
-    default:
-      return false;
-  }
-}
-
-// LTN and LSTN are excluded from 1402 random write in word units.
-// The MC protocol serial manual lists only 0401 batch read and 0403 random read
-// as valid access paths for LTN and LSTN. They are not listed for any write command.
-[[nodiscard]] constexpr bool is_long_timer_current_value_device(DeviceCode code) noexcept {
-  switch (code) {
-    case DeviceCode::LTN:
-    case DeviceCode::LSTN:
       return true;
     default:
       return false;
@@ -1852,9 +1838,6 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     return invalid_argument(item.double_word ? dword_message : word_message);
   }
   if (is_long_contact_coil_device(item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
-  }
-  if (is_long_timer_current_value_device(item.device.code)) {
     return invalid_argument(item.double_word ? dword_message : word_message);
   }
   return ok_status();
@@ -4209,8 +4192,8 @@ Status encode_random_write_bits(
     if (!bit_status.ok()) {
       return bit_status;
     }
-    if (is_long_contact_coil_device(item.device.code)) {
-      return invalid_argument("Random write bits does not support long timer/counter contact or coil devices");
+    if (item.device.code == DeviceCode::LCS) {
+      return invalid_argument("Random write bits does not support the long counter contact device LCS");
     }
   }
 

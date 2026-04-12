@@ -4572,23 +4572,36 @@ void test_encode_random_read_rejects_long_contact_coil_devices() {
   }
 }
 
-// Validate that 1402 random write words rejects LTN and LSTN even with double_word=true.
-// The MC protocol serial manual lists only 0401 and 0403 as valid paths for LTN/LSTN.
-// No write command supports LTN or LSTN.
-void test_encode_random_write_words_rejects_ltn_and_lstn() {
+// Validate that 1402 random write words supports LTN/LSTN as double-word devices on iQ-R.
+void test_encode_random_write_words_allows_ltn_and_lstn() {
   const auto config = make_binary_c4_iqr_config();
-  std::array<std::uint8_t, 64> request_data {};
+  std::array<std::uint8_t, 32> request_data {};
   std::size_t request_size = 0;
 
-  for (const auto code : {mcprotocol::serial::DeviceCode::LTN, mcprotocol::serial::DeviceCode::LSTN}) {
-    const RandomWriteWordItem item {.device = {.code = code, .number = 0}, .value = 0, .double_word = true};
+  struct ExpectedCase {
+    mcprotocol::serial::DeviceCode code;
+    std::array<std::uint8_t, 16> expected;
+  };
+  const std::array<ExpectedCase, 2> cases {{
+      {.code = mcprotocol::serial::DeviceCode::LTN,
+       .expected = {0x02, 0x14, 0x02, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x52, 0x00, 0x40, 0xE2, 0x01, 0x00}},
+      {.code = mcprotocol::serial::DeviceCode::LSTN,
+       .expected = {0x02, 0x14, 0x02, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x5A, 0x00, 0x47, 0x94, 0x03, 0x00}},
+  }};
+  for (const auto& entry : cases) {
+    const RandomWriteWordItem item {
+        .device = {.code = entry.code, .number = 0},
+        .value = entry.code == mcprotocol::serial::DeviceCode::LTN ? 123456U : 234567U,
+        .double_word = true,
+    };
     const Status status = CommandCodec::encode_random_write_words(
         config,
         std::span<const RandomWriteWordItem>(&item, 1),
         request_data,
         request_size);
-    assert(!status.ok());
-    assert(status.code == StatusCode::InvalidArgument);
+    assert(status.ok());
+    assert(request_size == entry.expected.size());
+    assert(std::memcmp(request_data.data(), entry.expected.data(), entry.expected.size()) == 0);
   }
 }
 
@@ -4619,32 +4632,62 @@ void test_encode_random_write_words_rejects_long_contact_coil_devices() {
   }
 }
 
-// Validate that 1402 random write bits rejects long timer/counter contact/coil devices
-// (LTS, LTC, LSTS, LSTC, LCS, LCC). These have bit_device=true in the spec but are
-// excluded from 1402 per the serial manual restriction.
-void test_encode_random_write_bits_rejects_long_contact_coil_devices() {
-  const auto config = make_binary_c4_config();
+// Validate that 1402 random write bits supports the long timer/counter contact/coil devices
+// that the serial manual lists for random bit write and rejects only LCS.
+void test_encode_random_write_bits_long_device_rules() {
+  const auto config = make_binary_c4_iqr_config();
   std::array<std::uint8_t, 64> request_data {};
   std::size_t request_size = 0;
 
-  const mcprotocol::serial::DeviceCode excluded[] = {
+  const mcprotocol::serial::DeviceCode allowed[] = {
       mcprotocol::serial::DeviceCode::LTS,
       mcprotocol::serial::DeviceCode::LTC,
       mcprotocol::serial::DeviceCode::LSTS,
       mcprotocol::serial::DeviceCode::LSTC,
-      mcprotocol::serial::DeviceCode::LCS,
       mcprotocol::serial::DeviceCode::LCC,
   };
-  for (const auto code : excluded) {
+  for (const auto code : allowed) {
     const RandomWriteBitItem item {.device = {.code = code, .number = 0}, .value = BitValue::Off};
     const Status status = CommandCodec::encode_random_write_bits(
         config,
         std::span<const RandomWriteBitItem>(&item, 1),
         request_data,
         request_size);
-    assert(!status.ok());
-    assert(status.code == StatusCode::InvalidArgument);
+    assert(status.ok());
   }
+
+  const RandomWriteBitItem rejected {.device = {.code = mcprotocol::serial::DeviceCode::LCS, .number = 0},
+                                     .value = BitValue::Off};
+  const Status rejected_status = CommandCodec::encode_random_write_bits(
+      config,
+      std::span<const RandomWriteBitItem>(&rejected, 1),
+      request_data,
+      request_size);
+  assert(!rejected_status.ok());
+  assert(rejected_status.code == StatusCode::InvalidArgument);
+}
+
+void test_encode_random_write_bits_binary_iqr_lcc_layout() {
+  const auto config = make_binary_c4_iqr_config();
+  const std::array<RandomWriteBitItem, 1> items {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::LCC, .number = 10}, .value = BitValue::On},
+  }};
+
+  std::array<std::uint8_t, 32> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_random_write_bits(
+      config,
+      std::span<const RandomWriteBitItem>(items.data(), items.size()),
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 13> expected {
+      0x02, 0x14, 0x03, 0x00, 0x01,
+      0x0A, 0x00, 0x00, 0x00, 0x54, 0x00, 0x01, 0x00,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
 // Validate that 0406 multi-block read rejects all long timer/counter/index devices
@@ -4872,9 +4915,10 @@ int main() {
   test_client_ascii_format4_resynchronizes_on_stale_ack();
   test_client_write_rejects_unexpected_success_data();
   test_encode_random_read_rejects_long_contact_coil_devices();
-  test_encode_random_write_words_rejects_ltn_and_lstn();
+  test_encode_random_write_words_allows_ltn_and_lstn();
   test_encode_random_write_words_rejects_long_contact_coil_devices();
-  test_encode_random_write_bits_rejects_long_contact_coil_devices();
+  test_encode_random_write_bits_long_device_rules();
+  test_encode_random_write_bits_binary_iqr_lcc_layout();
   test_encode_multi_block_read_rejects_long_devices_as_head();
   test_encode_multi_block_write_rejects_long_devices_as_head();
 
