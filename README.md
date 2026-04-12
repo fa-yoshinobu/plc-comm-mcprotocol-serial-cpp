@@ -58,6 +58,7 @@ Start with these pages instead of reading the whole repository at once.
 - [Hardware Validation Matrix](docsrc/validation/reports/HARDWARE_VALIDATION.md)
 - [Footprint Profiles](docsrc/validation/reports/FOOTPRINT_PROFILES.md)
 - [Developer Notes](docsrc/maintainer/DEVELOPER_NOTES.md)
+- [TODO](docsrc/maintainer/TODO.md)
 - [Native Command Backlog](docsrc/maintainer/NATIVE_COMMAND_BACKLOG.md)
 - [Release Process](docsrc/maintainer/RELEASE_PROCESS.md)
 - [Changelog](CHANGELOG.md)
@@ -85,7 +86,7 @@ For the exact PASS / HOLD matrix and the verified serial settings for each targe
 
 For target-specific limits, use
 [HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md) and
-[NATIVE_COMMAND_BACKLOG.md](docsrc/maintainer/NATIVE_COMMAND_BACKLOG.md).
+[TODO.md](docsrc/maintainer/TODO.md).
 
 ## For MCU Users
 

@@ -16,29 +16,13 @@ docs focused on known-good workflows and keep this page for unresolved native be
 - Treat native qualified commands as unsupported diagnostic probes, not as a supported `U...`
   access path.
 
-## Active Backlog
-Target-specific remaining items:
+## Active Items
 
-- `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr` still rejects native `LZ`
-  double-word access on every manual-listed path tried so far:
-  - `0403 random-read` -> `0x7F23`
-  - `1402 random-write-words` -> `0x7F23`
-  - `0801 register monitor` -> `0x7F23`
-  Local support already treats `LZ` as an iQ-R-only double-word device and rejects Q/L-mode
-  requests before transmit
-- `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr` currently rejects native `0403`
-  random-read probes for `LTN`, `LSTN`, and `LCN` with `0x7F23`, even though structured/batch
-  reads now work (`read-words LTN10 4`, `read-words LSTN10 4`, `read-words LCN10 2`)
-- `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr` currently rejects native `1402`
-  random-write-words for `LTN`, `LSTN`, and `LCN` with `0x7F23`; `LCN` does work through `1401`
-  batch write (`write-words LCN10=<low> LCN11=<high>` readback/restore passed)
-- `FX5UC-32MT/D` still holds on host/module buffer access
+Track current unresolved items in [TODO.md](TODO.md).
 
-### Implementation Gaps
+## Implementation Gaps
 
-Current repository-level implementation gaps:
-
-- none
+Track current implementation gaps in [TODO.md](TODO.md).
 
 ## Follow-up Rules
 
