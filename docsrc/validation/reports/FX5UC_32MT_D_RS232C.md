@@ -41,7 +41,7 @@ The validated contiguous subset on this target is:
 
 Keep `DX`, `DY`, `V`, and `ZR` out of the FX5U serial `3C/4C` validated subset.
 
-The FX5 communication manual `sh082625engh.pdf` `43.1 List of Commands and Functions`
+The FX5 serial communication manual's `List of Commands and Functions`
 (`3C/4C frame`, printed page `718-719`) lists `0401/1401`, `0403/1402`, `0406/1406`,
 remote control, loopback, and `1617`, but does not list `0613`, `1613`, `0601`, or `1601`.
 

@@ -2,7 +2,7 @@
 
 Audience: users wiring a Linux host or MCU board to a Mitsubishi serial module.
 
-This repository validates protocol behavior, not every cable pinout. Use this page as the high-level wiring plan, then confirm the connector pin numbers in the Mitsubishi module manual and your adapter datasheet.
+This repository validates protocol behavior, not every cable pinout. Use this page as the high-level wiring plan, then confirm the connector pin numbers against your actual module and adapter hardware.
 
 ## Verified Host-side Path
 

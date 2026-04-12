@@ -1644,7 +1644,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 // LTS/LTC/LSTS/LSTC/LCS/LCC are bit-only contact/coil devices for long timers and counters.
-// The MC protocol manual (sh080008ab) restricts 0403 random read and 1402 random write to
+// The MC protocol serial manual restricts 0403 random read and 1402 random write to
 // exclude these devices. They are also excluded from 0406/1406 multi-block along with the
 // other long-device word types (LTN/LSTN/LCN/LZ).
 [[nodiscard]] constexpr bool is_long_contact_coil_device(DeviceCode code) noexcept {
@@ -1662,7 +1662,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 // LTN and LSTN are excluded from 1402 random write in word units.
-// The MC protocol manual (sh080008ab) lists only 0401 batch read and 0403 random read
+// The MC protocol serial manual lists only 0401 batch read and 0403 random read
 // as valid access paths for LTN and LSTN. They are not listed for any write command.
 [[nodiscard]] constexpr bool is_long_timer_current_value_device(DeviceCode code) noexcept {
   switch (code) {

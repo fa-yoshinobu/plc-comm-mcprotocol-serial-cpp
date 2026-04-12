@@ -4269,7 +4269,7 @@ void test_client_link_direct_register_monitor_roundtrip() {
 }
 
 // Validate that 0403 random read rejects long timer/counter contact/coil devices
-// (LTS, LTC, LSTS, LSTC, LCS, LCC). These are not allowed per sh080008ab manual restriction.
+// (LTS, LTC, LSTS, LSTC, LCS, LCC). These are not allowed per the serial manual restriction.
 void test_encode_random_read_rejects_long_contact_coil_devices() {
   const auto config = make_binary_c4_config();
   std::array<std::uint8_t, 64> request_data {};
@@ -4298,7 +4298,7 @@ void test_encode_random_read_rejects_long_contact_coil_devices() {
 }
 
 // Validate that 1402 random write words rejects LTN and LSTN even with double_word=true.
-// The MC protocol manual (sh080008ab) lists only 0401 and 0403 as valid paths for LTN/LSTN.
+// The MC protocol serial manual lists only 0401 and 0403 as valid paths for LTN/LSTN.
 // No write command supports LTN or LSTN.
 void test_encode_random_write_words_rejects_ltn_and_lstn() {
   const auto config = make_binary_c4_iqr_config();
@@ -4346,7 +4346,7 @@ void test_encode_random_write_words_rejects_long_contact_coil_devices() {
 
 // Validate that 1402 random write bits rejects long timer/counter contact/coil devices
 // (LTS, LTC, LSTS, LSTC, LCS, LCC). These have bit_device=true in the spec but are
-// excluded from 1402 per sh080008ab manual restriction.
+// excluded from 1402 per the serial manual restriction.
 void test_encode_random_write_bits_rejects_long_contact_coil_devices() {
   const auto config = make_binary_c4_config();
   std::array<std::uint8_t, 64> request_data {};
@@ -4373,7 +4373,7 @@ void test_encode_random_write_bits_rejects_long_contact_coil_devices() {
 }
 
 // Validate that 0406 multi-block read rejects all long timer/counter/index devices
-// as head devices. Per sh080008ab: LTS/LTC/LTN/LSTS/LSTC/LSTN/LCS/LCC/LCN/LZ all excluded.
+// as head devices. Per the serial manual: LTS/LTC/LTN/LSTS/LSTC/LSTN/LCS/LCC/LCN/LZ all excluded.
 void test_encode_multi_block_read_rejects_long_devices_as_head() {
   const auto config = make_binary_c4_config();
   std::array<std::uint8_t, 256> request_data {};
@@ -4406,7 +4406,7 @@ void test_encode_multi_block_read_rejects_long_devices_as_head() {
 }
 
 // Validate that 1406 multi-block write rejects all long timer/counter/index devices
-// as head devices. Per sh080008ab: LTS/LTC/LTN/LSTS/LSTC/LSTN/LCS/LCC/LCN/LZ all excluded.
+// as head devices. Per the serial manual: LTS/LTC/LTN/LSTS/LSTC/LSTN/LCS/LCC/LCN/LZ all excluded.
 void test_encode_multi_block_write_rejects_long_devices_as_head() {
   const auto config = make_binary_c4_config();
   std::array<std::uint8_t, 256> request_data {};

@@ -1,10 +1,10 @@
 # Manual Command Coverage
 
-This page tracks which `sh080008ab` command families are implemented in this repository.
+This page tracks which MC protocol serial command families are implemented in this repository.
 
 Scope:
 
-- Primary manual: `sh080008ab`
+- Primary reference: the Mitsubishi MC protocol serial manual
 - Primary wire scope: serial `2C/3C/4C` frame families plus initial `1C/1E` support
 - Public library scope: device memory access, buffer memory access, CPU-model, remote control,
   remote password control, loopback, and helper-qualified access over `0601/1601`
@@ -21,7 +21,7 @@ Scope:
 - Implemented chapter `13` user-frame families now include `0610`, `1610`, `1615`, `1618`, and `0631`
 - `1E` now has initial chapter `18` coverage for device-memory read/write, random write, monitor,
   extended-file-register access, and special-function-module buffer read/write
-- The library does not implement the full `sh080008ab` command list
+- The library does not implement the full MC protocol serial command list
 
 For target-specific PASS/HOLD results, use
 [HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md).
@@ -33,7 +33,7 @@ For target-specific PASS/HOLD results, use
 | Chapter 8 device memory | `0401` batch read words/bits | implemented | `async_batch_read_words`, `async_batch_read_bits`, `PosixSyncClient::read_words/read_bits`, CLI | `Jn\\...` extension-spec variants also implemented |
 | Chapter 8 device memory | `1401` batch write words/bits | implemented | `async_batch_write_words`, `async_batch_write_bits`, `PosixSyncClient::write_words/write_bits`, CLI | `Jn\\...` extension-spec variants also implemented |
 | Chapter 8 device memory | `0403` random read | implemented | `async_random_read`, `async_link_direct_random_read`, `PosixSyncClient::random_read`, CLI | Long-device restrictions follow the manual and target validation |
-| Chapter 8 device memory | `1402` random write words/bits | implemented | `async_random_write_words`, `async_random_write_bits`, link-direct variants, `PosixSyncClient::random_write_word(s)/random_write_bit(s)`, CLI | `LTN/LSTN` native writes stay blocked per manual restrictions |
+| Chapter 8 device memory | `1402` random write words/bits | implemented | `async_random_write_words`, `async_random_write_bits`, link-direct variants, `PosixSyncClient::random_write_word(s)/random_write_bit(s)`, CLI | `LTN/LSTN` native writes stay blocked per the serial manual's device-path restrictions |
 | Chapter 8 device memory | `0406` multi-block read | implemented | `async_multi_block_read`, `async_link_direct_multi_block_read`, CLI | Long-device head restrictions follow the manual |
 | Chapter 8 device memory | `1406` multi-block write | implemented | `async_multi_block_write`, `async_link_direct_multi_block_write`, CLI | Long-device head restrictions follow the manual |
 | Chapter 8 device memory | `0801` monitor register | implemented | `async_register_monitor`, `async_link_direct_register_monitor`, `PosixSyncClient::register_monitor`, CLI | Some targets such as `FX5UC-32MT/D` still reject monitor on serial `3C/4C` |
@@ -87,6 +87,6 @@ For target-specific PASS/HOLD results, use
 
 - If the question is "are chapter `8` device-memory command families all present?", the answer is
   yes for the intended `2C/3C/4C` library scope.
-- If the question is "does this repository implement every `sh080008ab` `2C/3C/4C` command?", the
+- If the question is "does this repository implement every MC protocol serial `2C/3C/4C` command?", the
   answer is no. The main missing families are label access, file control, registered-data
   commands, network/module extras, and drive/file memory commands.
