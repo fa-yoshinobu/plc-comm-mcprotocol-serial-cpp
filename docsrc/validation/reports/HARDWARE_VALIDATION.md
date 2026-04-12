@@ -44,6 +44,8 @@ Validated target:
 |---|---|---|---|
 | CPU identification | `cpu-model` | native pass | returns `R08CPU`, `0x4801` |
 | Loopback | `loopback` | native pass | validated on real hardware |
+| Format1 ASCII practical path | `cpu-model`, `loopback`, contiguous `0401/1401`, host-buffer `0613/1613`, qualified helper `0601/1601` | native pass | validated on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format1 ASCII / sum-check on / station 0 / --series ql`; `write-words D10=1 -> read-words D10 1 -> restore`, `write-host-buffer 2 1 -> read-host-buffer 2 1 -> restore`, and `write-qualified-words U3E0\\G0 0x1234 -> read-qualified-words U3E0\\G0 1 -> restore` passed |
+| Format1 ASCII native family | native `0403`, native `1402`, native `0801/0802` | native ng / target-dependent | on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format1 ASCII / sum-check on / station 0 / --series ql`, `random-read D10 M10` and `random-write-words D10=1` returned `0x7F22`, and `probe-monitor` skipped register on `0x7F22` |
 | Clear error information | `1617` via `error-clear` | native pass | validated on `R120PCPU / RJ71C24-R2 / --series iqr` |
 | Remote RUN/STOP/PAUSE | `1001/1002/1003` via `remote-run` / `remote-stop` / `remote-pause` | native pass | validated on `R120PCPU / RJ71C24-R2 / --series iqr` |
 | Remote RESET | `1006` via `remote-reset` | native ng / parameter-dependent | currently returns PLC error `0x408B`; the manual requires the target to be `STOP` and remote RESET to be enabled in the target parameter |

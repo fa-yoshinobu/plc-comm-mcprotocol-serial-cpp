@@ -2915,9 +2915,10 @@ int main(int argc, char** argv) {
 
     case CommandKind::Loopback: {
       std::array<char, mcprotocol::serial::kMaxLoopbackBytes + 1U> echoed {};
+      const char* loopback_text = options.command_argv[0];
       status = client.async_loopback(
           now_ms(),
-          std::string_view(options.command_argv[0]),
+          std::span<const char>(loopback_text, std::strlen(loopback_text)),
           std::span<char>(echoed.data(), echoed.size()),
           request_complete,
           &command_state);
