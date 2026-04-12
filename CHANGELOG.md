@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2 - 2026-04-12
+
+- Split the top-level `README.md` into a shorter overview plus focused user and maintainer docs for
+  library entrypoints, PlatformIO usage, and docs/CI workflow.
+- Added maintainer guardrails for manual-derived protocol rules and difference-first triage.
+- Kept release/build metadata aligned with the current documentation layout.
+
 ## 0.2.1 - 2026-04-12
 
 - Added `SM`, `SD`, `RD`, `LZ`, `LTN`, `LSTN`, `LCN`, `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, and

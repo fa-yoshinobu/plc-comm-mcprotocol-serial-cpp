@@ -1,6 +1,6 @@
 # PlatformIO
 
-Version `0.2.1` includes PlatformIO packaging metadata and simpler host-side entrypoints.
+Version `0.2.2` includes PlatformIO packaging metadata and simpler host-side entrypoints.
 
 ## Main Files
 
