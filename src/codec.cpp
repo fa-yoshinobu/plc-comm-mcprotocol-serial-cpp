@@ -929,6 +929,26 @@ class ByteWriter {
   return true;
 }
 
+[[nodiscard]] bool append_word_units_from_bits_binary_direct(
+    ByteWriter& writer,
+    std::span<const BitValue> bits) noexcept {
+  if ((bits.size() % 16U) != 0U) {
+    return false;
+  }
+  for (std::size_t offset = 0; offset < bits.size(); offset += 16U) {
+    std::uint16_t value = 0;
+    for (std::size_t index = 0; index < 16U; ++index) {
+      if (bits[offset + index] == BitValue::On) {
+        value = static_cast<std::uint16_t>(value | (1U << index));
+      }
+    }
+    if (!writer.append_le16(value)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 [[nodiscard]] bool append_word_data(
     ByteWriter& writer,
     const ProtocolConfig& config,
@@ -2902,7 +2922,7 @@ Status encode_link_direct_multi_block_write(
         append_link_direct_device_reference_binary(writer, config, block.head_device) &&
         append_word_count(writer, config, block.points) &&
         (config.code_mode == CodeMode::Ascii ? append_word_units_from_bits_ascii(writer, block.bits)
-                                             : append_word_units_from_bits_binary(writer, block.bits));
+                                             : append_word_units_from_bits_binary_direct(writer, block.bits));
     if (!ok) {
       return buffer_too_small("Link direct multi-block write request buffer is too small");
     }

@@ -1018,10 +1018,40 @@ void test_encode_link_direct_multi_block_write_binary_iqr_shape() {
       0x06, 0x14, 0x82, 0x00,
       0x01, 0x01,
       0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xB4, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9, 0x02, 0x00, 0x34, 0x12, 0xCD, 0xAB,
-      0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0xA0, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9, 0x01, 0x00, 0xAA, 0x55,
+      0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0xA0, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9, 0x01, 0x00, 0x55, 0xAA,
   };
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_link_direct_multi_block_write_binary_bit_order() {
+  const auto config = make_binary_c4_iqr_config();
+  const std::array<BitValue, 16> bit_values {{
+      BitValue::On, BitValue::Off, BitValue::Off, BitValue::Off,
+      BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+      BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+      BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+  }};
+  const std::array<LinkDirectMultiBlockWriteBlock, 1> blocks {{
+      {.head_device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0x0010U}},
+       .points = 1U,
+       .bit_block = true,
+       .bits = std::span<const BitValue>(bit_values.data(), bit_values.size())},
+  }};
+
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_multi_block_write(
+      config,
+      LinkDirectMultiBlockWriteRequest {
+          .blocks = std::span<const LinkDirectMultiBlockWriteBlock>(blocks.data(), blocks.size()),
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+  assert(request_size >= 2U);
+  assert(request_data[request_size - 2U] == 0x01U);
+  assert(request_data[request_size - 1U] == 0x00U);
 }
 
 void test_encode_link_direct_register_monitor_binary_iqr_shape() {
@@ -2032,6 +2062,7 @@ int main() {
   test_encode_link_direct_random_write_bits_binary_iqr_shape();
   test_encode_link_direct_multi_block_read_binary_iqr_shape();
   test_encode_link_direct_multi_block_write_binary_iqr_shape();
+  test_encode_link_direct_multi_block_write_binary_bit_order();
   test_encode_link_direct_register_monitor_binary_iqr_shape();
   test_encode_batch_write_bits_binary_single_even_uses_addressed_point_and_high_nibble();
   test_encode_batch_write_bits_binary_single_odd_uses_addressed_point_and_high_nibble();
