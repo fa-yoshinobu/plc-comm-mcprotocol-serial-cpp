@@ -158,30 +158,25 @@ Additional validated target:
 Target-specific holds:
 
 - native `LZ` double-word random-read on `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr`
-  (`random-read LZ0`, `LZ1`, and `LZ0 LZ1` returned `0x7F23` on `2026-04-11` and `2026-04-12`;
-  local support now treats `LZ` as an iQ-R-only double-word device and rejects Q/L-mode requests
-  before transmit)
+  (`random-read LZ0`, `LZ1`, and `LZ0 LZ1` return `0x7F23`; local support treats `LZ` as an
+  iQ-R-only double-word device and rejects Q/L-mode requests before transmit)
 - native `0403` random-read on `LTN`, `LSTN`, and `LCN` on `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr`
-  (`2026-04-12` spot probes `random-read LTN0`, `LSTN0`, and `LCN0` returned `0x7F23`, while
-  structured/batch reads `read-words LTN10 4`, `read-words LSTN10 4`, and `read-words LCN10 2` passed)
+  (`random-read LTN0`, `LSTN0`, and `LCN0` return `0x7F23`, while structured/batch reads
+  `read-words LTN10 4`, `read-words LSTN10 4`, and `read-words LCN10 2` pass)
 - native `1402` random-write-words on `LTN`, `LSTN`, and `LCN` on `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr`
-  still returns `0x7F23` after lifting the local 32-bit CLI guard; `LCN` does work through `1401`
-  batch word write (`write-words LCN10=<low> LCN11=<high>` readback/restore passed on `2026-04-12`)
+  still returns `0x7F23`; `LCN` does work through `1401` batch word write
+  (`write-words LCN10=<low> LCN11=<high>` readback/restore pass)
 - host/module buffer access on `FX5UC-32MT/D`
 
 Unsupported / diagnostic-only items:
 
 - native qualified access is helper-only by specification and is not tracked as an active hold
 
-## Maintainer Note
+## Current Interpretation
 
-The library now pins native request-data shapes for `0403`, `1402`, `0406`, `1406`, `0801`, and
-`0802` with host-side tests. At this point, the best current interpretation is:
-
-- request encoding matches the official MC protocol reference examples or documented request structure
-- `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` all pass the practical native random / write / multi-block / monitor families under `--series ql`
-- `RJ71C24-R2 --series iqr` remains useful as a probe mode, but it produces false negatives for random and monitor traffic on that target
-- `FX5UC-32MT/D` now passes native `0403`, `1402`, `0406`, and `1406` after the documented host-side compatibility fixes
-- the FX5 communication manual's serial `3C/4C` command list does not include `0801/0802`, so that target's repeated `0x7E40` monitor result should be treated as unsupported behavior rather than an unresolved encoder bug
-- qualified helper commands and native qualified probes should stay documented as separate paths, with
-  native qualified marked unsupported by specification
+- request encoding now matches the documented MC protocol request shapes used by the validated targets
+- `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` pass the practical native random / write / multi-block / monitor families under `--series ql`
+- `RJ71C24-R2 --series iqr` is a spot-device probe mode, not the general native-family mode
+- `FX5UC-32MT/D` passes native `0403`, `1402`, `0406`, and `1406`
+- `FX5UC-32MT/D` `0801/0802` should be treated as unsupported on serial `3C/4C`
+- qualified helper commands and native qualified probes remain separate paths; native qualified stays unsupported by specification
