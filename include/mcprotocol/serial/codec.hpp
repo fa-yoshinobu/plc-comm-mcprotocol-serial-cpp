@@ -56,6 +56,22 @@ struct DecodeResult {
   std::size_t bytes_consumed = 0;
 };
 
+/// \brief Returns the requested-point value from a sparse native bit result word.
+///
+/// On `2C`/`3C`/`4C`, native sparse bit reads (`0403`) and monitor reads (`0802`) return the
+/// addressed point inside a 16-point mask word. The requested head device is represented by bit `0`
+/// of that returned word.
+[[nodiscard]] constexpr BitValue sparse_native_requested_bit_value(std::uint32_t raw_value) noexcept {
+  return (raw_value & 0x0001U) != 0U ? BitValue::On : BitValue::Off;
+}
+
+/// \brief Returns the raw 16-point mask word from a sparse native bit result.
+///
+/// Keep this raw word visible for diagnostics when the target-specific offset pattern matters.
+[[nodiscard]] constexpr std::uint16_t sparse_native_mask_word(std::uint32_t raw_value) noexcept {
+  return static_cast<std::uint16_t>(raw_value & 0xFFFFU);
+}
+
 /// \brief Frame-level encode/decode helper for complete serial MC frames.
 ///
 /// Use this class when you already have a command payload and only need the outer serial frame

@@ -70,66 +70,67 @@ var NAVTREE =
     [ "TODO", "md_docsrc_2maintainer_2_t_o_d_o.html", [
       [ "Native Command Holds", "md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md38", null ],
       [ "Target-dependent Follow-up", "md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md39", null ],
-      [ "Implementation Gaps", "md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md40", null ],
-      [ "Notes", "md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md41", null ]
+      [ "Hardware Validation Follow-up", "md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md40", null ],
+      [ "Implementation Gaps", "md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md41", null ],
+      [ "Notes", "md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md42", null ]
     ] ],
     [ "FAQ", "md_docsrc_2user_2_f_a_q.html", [
-      [ "Is this library Linux-only?", "md_docsrc_2user_2_f_a_q.html#autotoc_md44", null ],
-      [ "Which MCU targets are prepared today?", "md_docsrc_2user_2_f_a_q.html#autotoc_md45", null ],
-      [ "Is the MCU example safe to run on a live PLC?", "md_docsrc_2user_2_f_a_q.html#autotoc_md46", null ],
-      [ "Why do some native commands still fail on some targets?", "md_docsrc_2user_2_f_a_q.html#autotoc_md47", null ],
-      [ "Can I shrink memory usage for small firmware builds?", "md_docsrc_2user_2_f_a_q.html#autotoc_md48", null ],
-      [ "Where do I look for the exact PASS / status matrix?", "md_docsrc_2user_2_f_a_q.html#autotoc_md49", null ],
-      [ "How do I generate API docs?", "md_docsrc_2user_2_f_a_q.html#autotoc_md50", null ]
+      [ "Is this library Linux-only?", "md_docsrc_2user_2_f_a_q.html#autotoc_md45", null ],
+      [ "Which MCU targets are prepared today?", "md_docsrc_2user_2_f_a_q.html#autotoc_md46", null ],
+      [ "Is the MCU example safe to run on a live PLC?", "md_docsrc_2user_2_f_a_q.html#autotoc_md47", null ],
+      [ "Why do some native commands still fail on some targets?", "md_docsrc_2user_2_f_a_q.html#autotoc_md48", null ],
+      [ "Can I shrink memory usage for small firmware builds?", "md_docsrc_2user_2_f_a_q.html#autotoc_md49", null ],
+      [ "Where do I look for the exact PASS / status matrix?", "md_docsrc_2user_2_f_a_q.html#autotoc_md50", null ],
+      [ "How do I generate API docs?", "md_docsrc_2user_2_f_a_q.html#autotoc_md51", null ]
     ] ],
     [ "MCU Quickstart", "md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html", [
-      [ "What The Sample Does", "md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html#autotoc_md52", null ],
-      [ "Build", "md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html#autotoc_md53", null ],
-      [ "Default Sample Assumptions", "md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html#autotoc_md54", null ],
-      [ "Integration Notes", "md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html#autotoc_md55", null ],
-      [ "Recommended Sequence", "md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html#autotoc_md56", null ]
+      [ "What The Sample Does", "md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html#autotoc_md53", null ],
+      [ "Build", "md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html#autotoc_md54", null ],
+      [ "Default Sample Assumptions", "md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html#autotoc_md55", null ],
+      [ "Integration Notes", "md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html#autotoc_md56", null ],
+      [ "Recommended Sequence", "md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html#autotoc_md57", null ]
     ] ],
     [ "Wiring Guide", "md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html", [
-      [ "Verified Host-side Path", "md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html#autotoc_md59", null ],
-      [ "MCU-side Path", "md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html#autotoc_md60", null ],
-      [ "Before Power-up", "md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html#autotoc_md61", null ],
-      [ "Recommended Bring-up Order", "md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html#autotoc_md62", null ],
-      [ "Related Pages", "md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html#autotoc_md63", null ]
+      [ "Verified Host-side Path", "md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html#autotoc_md60", null ],
+      [ "MCU-side Path", "md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html#autotoc_md61", null ],
+      [ "Before Power-up", "md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html#autotoc_md62", null ],
+      [ "Recommended Bring-up Order", "md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html#autotoc_md63", null ],
+      [ "Related Pages", "md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html#autotoc_md64", null ]
     ] ],
     [ "Footprint Profiles", "md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html", [
-      [ "Measured Profiles", "md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md66", null ],
-      [ "How The Reduced Profile Shrinks", "md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md67", null ],
-      [ "How The Ultra-minimal Profile Shrinks Further", "md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md68", null ],
-      [ "Trimming Units", "md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md69", null ],
-      [ "Where The Settings Live", "md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md70", null ]
+      [ "Measured Profiles", "md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md67", null ],
+      [ "How The Reduced Profile Shrinks", "md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md68", null ],
+      [ "How The Ultra-minimal Profile Shrinks Further", "md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md69", null ],
+      [ "Trimming Units", "md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md70", null ],
+      [ "Where The Settings Live", "md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md71", null ]
     ] ],
     [ "FX5UC-32MT/D RS-232C Report", "md_docsrc_2validation_2reports_2_f_x5_u_c__32_m_t___d___r_s232_c.html", [
-      [ "Target", "md_docsrc_2validation_2reports_2_f_x5_u_c__32_m_t___d___r_s232_c.html#autotoc_md72", null ],
-      [ "Summary", "md_docsrc_2validation_2reports_2_f_x5_u_c__32_m_t___d___r_s232_c.html#autotoc_md73", null ],
-      [ "Device-family Note", "md_docsrc_2validation_2reports_2_f_x5_u_c__32_m_t___d___r_s232_c.html#autotoc_md74", null ]
+      [ "Target", "md_docsrc_2validation_2reports_2_f_x5_u_c__32_m_t___d___r_s232_c.html#autotoc_md73", null ],
+      [ "Summary", "md_docsrc_2validation_2reports_2_f_x5_u_c__32_m_t___d___r_s232_c.html#autotoc_md74", null ],
+      [ "Device-family Note", "md_docsrc_2validation_2reports_2_f_x5_u_c__32_m_t___d___r_s232_c.html#autotoc_md75", null ]
     ] ],
     [ "Hardware Validation", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html", [
-      [ "Validation Flow", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md76", null ],
-      [ "Current Matrix", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md77", null ],
-      [ "Stress / Endurance Snapshot", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md78", null ],
-      [ "Current Follow-up Items", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md79", null ],
-      [ "Current Interpretation", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md80", null ]
+      [ "Validation Flow", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md77", null ],
+      [ "Current Matrix", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md78", null ],
+      [ "Stress / Endurance Snapshot", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md79", null ],
+      [ "Current Follow-up Items", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md80", null ],
+      [ "Current Interpretation", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md81", null ]
     ] ],
     [ "LJ71C24 RS-232C Report", "md_docsrc_2validation_2reports_2_l_j71_c24___r_s232_c.html", [
-      [ "Target", "md_docsrc_2validation_2reports_2_l_j71_c24___r_s232_c.html#autotoc_md82", null ],
-      [ "Summary", "md_docsrc_2validation_2reports_2_l_j71_c24___r_s232_c.html#autotoc_md83", null ],
-      [ "Series Selection Note", "md_docsrc_2validation_2reports_2_l_j71_c24___r_s232_c.html#autotoc_md84", null ]
+      [ "Target", "md_docsrc_2validation_2reports_2_l_j71_c24___r_s232_c.html#autotoc_md83", null ],
+      [ "Summary", "md_docsrc_2validation_2reports_2_l_j71_c24___r_s232_c.html#autotoc_md84", null ],
+      [ "Series Selection Note", "md_docsrc_2validation_2reports_2_l_j71_c24___r_s232_c.html#autotoc_md85", null ]
     ] ],
     [ "QJ71C24N RS-232C Report", "md_docsrc_2validation_2reports_2_q_j71_c24_n___r_s232_c.html", [
-      [ "Target", "md_docsrc_2validation_2reports_2_q_j71_c24_n___r_s232_c.html#autotoc_md86", null ],
-      [ "Summary", "md_docsrc_2validation_2reports_2_q_j71_c24_n___r_s232_c.html#autotoc_md87", null ]
+      [ "Target", "md_docsrc_2validation_2reports_2_q_j71_c24_n___r_s232_c.html#autotoc_md87", null ],
+      [ "Summary", "md_docsrc_2validation_2reports_2_q_j71_c24_n___r_s232_c.html#autotoc_md88", null ]
     ] ],
     [ "RJ71C24-R2 RS-232C Report", "md_docsrc_2validation_2reports_2_r_j71_c24___r2___r_s232_c.html", [
-      [ "Target", "md_docsrc_2validation_2reports_2_r_j71_c24___r2___r_s232_c.html#autotoc_md90", null ],
-      [ "Current Setups", "md_docsrc_2validation_2reports_2_r_j71_c24___r2___r_s232_c.html#autotoc_md91", null ],
-      [ "Current Rules", "md_docsrc_2validation_2reports_2_r_j71_c24___r2___r_s232_c.html#autotoc_md92", null ],
-      [ "Device Matrix (<span class=\"tt\">--series iqr</span>)", "md_docsrc_2validation_2reports_2_r_j71_c24___r2___r_s232_c.html#autotoc_md93", null ],
-      [ "Practical Summary", "md_docsrc_2validation_2reports_2_r_j71_c24___r2___r_s232_c.html#autotoc_md94", null ]
+      [ "Target", "md_docsrc_2validation_2reports_2_r_j71_c24___r2___r_s232_c.html#autotoc_md91", null ],
+      [ "Current Setups", "md_docsrc_2validation_2reports_2_r_j71_c24___r2___r_s232_c.html#autotoc_md92", null ],
+      [ "Current Rules", "md_docsrc_2validation_2reports_2_r_j71_c24___r2___r_s232_c.html#autotoc_md93", null ],
+      [ "Device Matrix (<span class=\"tt\">--series iqr</span>)", "md_docsrc_2validation_2reports_2_r_j71_c24___r2___r_s232_c.html#autotoc_md94", null ],
+      [ "Practical Summary", "md_docsrc_2validation_2reports_2_r_j71_c24___r2___r_s232_c.html#autotoc_md95", null ]
     ] ],
     [ "Namespaces", "namespaces.html", [
       [ "Namespace List", "namespaces.html", "namespaces_dup" ],
@@ -166,9 +167,9 @@ var NAVTREEINDEX =
 [
 "annotated.html",
 "classstd_1_1span.html#a100132ab62eee5c8f227b8ba2144cab2",
-"namespacemcprotocol_1_1serial.html#a27597d44f3ac2679223eeb3ce15a3642a1c2903397d8833382673bab22aa8b937",
-"span__compat_8hpp.html",
-"structmcprotocol_1_1serial_1_1_protocol_config.html#a764e8824889a5e87d6eae2bb1be58c65"
+"namespacemcprotocol_1_1serial.html#a27597d44f3ac2679223eeb3ce15a3642a15fe2c852ab5853ab45c0679b1427e8a",
+"posix__serial_8hpp_source.html",
+"structmcprotocol_1_1serial_1_1_protocol_config.html#a4648722f0b91ce3d558f89b962072605"
 ];
 
 var SYNCONMSG = 'click to disable panel synchronization';

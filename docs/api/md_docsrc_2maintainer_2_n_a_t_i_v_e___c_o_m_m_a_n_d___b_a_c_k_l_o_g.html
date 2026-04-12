@@ -118,7 +118,6 @@ Follow-up Rules</h1>
 <li>Preserve request-shape conformance tests before treating hardware rejection as an encoder bug.</li>
 <li>Record the exact serial settings, PLC model, and native PLC end code for every new result.</li>
 <li>Run shared real-UART probes strictly serially. Parallel access on the same serial port can produce mixed RX fragments and invalidate the result.</li>
-<li>Match <span class="tt">--series</span> to the actual CPU family before interpreting PLC end codes.</li>
 <li>Keep FX5U notes aligned with its serial manual: <span class="tt">0801/0802</span> unsupported, <span class="tt">DX/DY/V/ZR</span> outside the validated subset.</li>
 <li>Do not turn unsupported access paths into backlog items. For long timer / long retentive timer contact+coil devices, keep <span class="tt">LTS/LTC/LSTS/LSTC</span> on the structured <span class="tt">LTN/LSTN</span> <span class="tt">0401</span> path.</li>
 <li>Re-read the device-specific considerations before assuming that a rejected command family is a bug. <span class="tt">LTN/LSTN/LCN</span> are not treated as monitor targets here because the manual-listed paths are <span class="tt">0401</span>, <span class="tt">0403</span>, and <span class="tt">1402</span> (<span class="tt">LCN</span> also <span class="tt">1401</span>), while <span class="tt">LZ</span> explicitly lists <span class="tt">0801</span>. </li>

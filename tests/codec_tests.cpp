@@ -63,6 +63,8 @@ using mcprotocol::serial::RandomWriteBitItem;
 using mcprotocol::serial::RandomWriteWordItem;
 using mcprotocol::serial::RouteConfig;
 using mcprotocol::serial::RouteKind;
+using mcprotocol::serial::sparse_native_mask_word;
+using mcprotocol::serial::sparse_native_requested_bit_value;
 using mcprotocol::serial::Status;
 using mcprotocol::serial::StatusCode;
 using mcprotocol::serial::UserFrameDeleteRequest;
@@ -3456,6 +3458,44 @@ void test_encode_read_monitor_ascii_matches_manual() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
+void test_sparse_native_bit_helpers_match_batch_random_and_monitor_values() {
+  const std::array<BitValue, 16> batch_bits_on_on {{
+      BitValue::On, BitValue::Off, BitValue::Off, BitValue::Off,
+      BitValue::Off, BitValue::On, BitValue::Off, BitValue::Off,
+      BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+      BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+  }};
+  const std::array<std::uint32_t, 2> random_raw_on_on {{
+      0x0021U,
+      0x0001U,
+  }};
+  const std::array<std::uint32_t, 2> monitor_raw_on_on = random_raw_on_on;
+  assert(sparse_native_mask_word(random_raw_on_on[0]) == 0x0021U);
+  assert(sparse_native_mask_word(random_raw_on_on[1]) == 0x0001U);
+  assert(sparse_native_requested_bit_value(random_raw_on_on[0]) == batch_bits_on_on[0]);
+  assert(sparse_native_requested_bit_value(random_raw_on_on[1]) == batch_bits_on_on[5]);
+  assert(sparse_native_requested_bit_value(monitor_raw_on_on[0]) == batch_bits_on_on[0]);
+  assert(sparse_native_requested_bit_value(monitor_raw_on_on[1]) == batch_bits_on_on[5]);
+
+  const std::array<BitValue, 16> batch_bits_off_on {{
+      BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+      BitValue::Off, BitValue::On, BitValue::Off, BitValue::Off,
+      BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+      BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
+  }};
+  const std::array<std::uint32_t, 2> random_raw_off_on {{
+      0x0020U,
+      0x0001U,
+  }};
+  const std::array<std::uint32_t, 2> monitor_raw_off_on = random_raw_off_on;
+  assert(sparse_native_mask_word(random_raw_off_on[0]) == 0x0020U);
+  assert(sparse_native_mask_word(random_raw_off_on[1]) == 0x0001U);
+  assert(sparse_native_requested_bit_value(random_raw_off_on[0]) == batch_bits_off_on[0]);
+  assert(sparse_native_requested_bit_value(random_raw_off_on[1]) == batch_bits_off_on[5]);
+  assert(sparse_native_requested_bit_value(monitor_raw_off_on[0]) == batch_bits_off_on[0]);
+  assert(sparse_native_requested_bit_value(monitor_raw_off_on[1]) == batch_bits_off_on[5]);
+}
+
 void test_parse_multi_block_read_response_ascii_mixed_blocks() {
   const auto config = make_ascii_c4_format4_config();
   const std::array<MultiBlockReadBlock, 3> blocks {{
@@ -4747,6 +4787,7 @@ int main() {
   test_encode_register_monitor_ascii_reuses_random_read_layout();
   test_encode_register_monitor_binary_iqr_layout();
   test_encode_read_monitor_ascii_matches_manual();
+  test_sparse_native_bit_helpers_match_batch_random_and_monitor_values();
   test_parse_multi_block_read_response_ascii_mixed_blocks();
   test_parse_qualified_buffer_word_device_accepts_g_and_hg();
   test_make_qualified_buffer_read_words_request_maps_to_module_buffer();

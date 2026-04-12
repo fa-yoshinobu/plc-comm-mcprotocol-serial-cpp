@@ -177,6 +177,10 @@ Additional validated target:
 
 ## Current Follow-up Items
 
+Hardware validation follow-up:
+
+- `1005`: remote latch clear is implemented but still not hardware-validated in this repo.
+
 Target-dependent follow-up:
 
 - `RJ71C24-R2 + R120PCPU`: `1630` / `1631` currently return `0x7F22` on the focused

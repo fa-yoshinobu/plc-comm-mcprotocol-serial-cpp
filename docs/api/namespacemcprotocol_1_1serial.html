@@ -357,6 +357,10 @@ Enumerations</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-func-members" class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
+<tr class="memitem:a617241f2c880edd1b23ee72088483a09" id="r_a617241f2c880edd1b23ee72088483a09"><td class="memItemLeft">constexpr <a class="el" href="#a3c439197283d0419ecb8dd65f3d0bb5d">BitValue</a>&#160;</td><td class="memItemRight"><a class="el" href="#a617241f2c880edd1b23ee72088483a09">sparse_native_requested_bit_value</a> (std::uint32_t raw_value) noexcept</td></tr>
+<tr class="memdesc:a617241f2c880edd1b23ee72088483a09"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the requested-point value from a sparse native bit result word.  <br /></td></tr>
+<tr class="memitem:acc668bc1e99ca508977a9193604146f1" id="r_acc668bc1e99ca508977a9193604146f1"><td class="memItemLeft">constexpr std::uint16_t&#160;</td><td class="memItemRight"><a class="el" href="#acc668bc1e99ca508977a9193604146f1">sparse_native_mask_word</a> (std::uint32_t raw_value) noexcept</td></tr>
+<tr class="memdesc:acc668bc1e99ca508977a9193604146f1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns the raw 16-point mask word from a sparse native bit result.  <br /></td></tr>
 <tr class="memitem:a1a778ebe51965785748ec23ee6348296" id="r_a1a778ebe51965785748ec23ee6348296"><td class="memItemLeft"><a class="el" href="structmcprotocol_1_1serial_1_1_status.html">Status</a>&#160;</td><td class="memItemRight"><a class="el" href="#a1a778ebe51965785748ec23ee6348296">parse_link_direct_device</a> (<a class="el" href="classstd_1_1string__view.html">std::string_view</a> text, <a class="el" href="structmcprotocol_1_1serial_1_1_link_direct_device.html">LinkDirectDevice</a> &amp;out_device) noexcept</td></tr>
 <tr class="memdesc:a1a778ebe51965785748ec23ee6348296"><td class="mdescLeft">&#160;</td><td class="mdescRight">Parses a <span class="tt">Jn\\...</span> link-direct device string such as <span class="tt">J1\\W100</span> or <span class="tt">J1\\X10</span>.  <br /></td></tr>
 <tr class="memitem:aeeb30335b81b19e1d1c6c20e89f51706" id="r_aeeb30335b81b19e1d1c6c20e89f51706"><td class="memItemLeft">constexpr const char *&#160;</td><td class="memItemRight"><a class="el" href="#aeeb30335b81b19e1d1c6c20e89f51706">qualified_buffer_kind_name</a> (<a class="el" href="#ae5a0f3bf2c92590d4d9b97b43892141f">QualifiedBufferDeviceKind</a> kind) noexcept</td></tr>
@@ -1260,6 +1264,66 @@ Variables</h2></td></tr>
 <p>Converts a qualified word address to the corresponding module-buffer byte address. </p>
 
 <p class="definition">Definition at line <a class="el" href="qualified__buffer_8hpp_source.html#l00034">34</a> of file <a class="el" href="qualified__buffer_8hpp_source.html">qualified_buffer.hpp</a>.</p>
+
+</div>
+</div>
+<a id="acc668bc1e99ca508977a9193604146f1" name="acc668bc1e99ca508977a9193604146f1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acc668bc1e99ca508977a9193604146f1">&#9670;&#160;</a></span>sparse_native_mask_word()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">std::uint16_t mcprotocol::serial::sparse_native_mask_word </td>
+          <td>(</td>
+          <td class="paramtype">std::uint32_t</td>          <td class="paramname"><span class="paramname"><em>raw_value</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel nodiscard">nodiscard</span><span class="mlabel constexpr">constexpr</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Returns the raw 16-point mask word from a sparse native bit result. </p>
+<p>Keep this raw word visible for diagnostics when the target-specific offset pattern matters. </p>
+
+<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00071">71</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
+
+</div>
+</div>
+<a id="a617241f2c880edd1b23ee72088483a09" name="a617241f2c880edd1b23ee72088483a09"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a617241f2c880edd1b23ee72088483a09">&#9670;&#160;</a></span>sparse_native_requested_bit_value()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="#a3c439197283d0419ecb8dd65f3d0bb5d">BitValue</a> mcprotocol::serial::sparse_native_requested_bit_value </td>
+          <td>(</td>
+          <td class="paramtype">std::uint32_t</td>          <td class="paramname"><span class="paramname"><em>raw_value</em></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel nodiscard">nodiscard</span><span class="mlabel constexpr">constexpr</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Returns the requested-point value from a sparse native bit result word. </p>
+<p>On <span class="tt">2C</span>/<span class="tt">3C</span>/<span class="tt">4C</span>, native sparse bit reads (<span class="tt">0403</span>) and monitor reads (<span class="tt">0802</span>) return the addressed point inside a 16-point mask word. The requested head device is represented by bit <span class="tt">0</span> of that returned word. </p>
+
+<p class="definition">Definition at line <a class="el" href="codec_8hpp_source.html#l00064">64</a> of file <a class="el" href="codec_8hpp_source.html">codec.hpp</a>.</p>
 
 </div>
 </div>

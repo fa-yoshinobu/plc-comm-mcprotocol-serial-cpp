@@ -1,5 +1,8 @@
 var NAVTREEINDEX4 =
 {
+"structmcprotocol_1_1serial_1_1_protocol_config.html#a4648722f0b91ce3d558f89b962072605":[17,0,0,0,22,5],
+"structmcprotocol_1_1serial_1_1_protocol_config.html#a729ad854bd24c0e504156debabc297f8":[16,0,0,0,24,1],
+"structmcprotocol_1_1serial_1_1_protocol_config.html#a729ad854bd24c0e504156debabc297f8":[17,0,0,0,22,1],
 "structmcprotocol_1_1serial_1_1_protocol_config.html#a764e8824889a5e87d6eae2bb1be58c65":[16,0,0,0,24,4],
 "structmcprotocol_1_1serial_1_1_protocol_config.html#a764e8824889a5e87d6eae2bb1be58c65":[17,0,0,0,22,4],
 "structmcprotocol_1_1serial_1_1_protocol_config.html#a7ab17ca719bfba52e44606ec88e1eb0c":[16,0,0,0,24,6],

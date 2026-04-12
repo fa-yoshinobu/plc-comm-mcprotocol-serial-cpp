@@ -1,12 +1,12 @@
 var searchData=
 [
   ['w_0',['W',['../namespacemcprotocol_1_1serial.html#a27597d44f3ac2679223eeb3ce15a3642a61e9c06ea9a85a5088a499df6458d276',1,'mcprotocol::serial']]],
-  ['what_20the_20sample_20does_1',['What The Sample Does',['../md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html#autotoc_md52',1,'']]],
+  ['what_20the_20sample_20does_1',['What The Sample Does',['../md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html#autotoc_md53',1,'']]],
   ['what_20works_20today_2',['What Works Today',['../index.html#autotoc_md3',1,'']]],
-  ['where_20do_20i_20look_20for_20the_20exact_20pass_20status_20matrix_3',['Where do I look for the exact PASS / status matrix?',['../md_docsrc_2user_2_f_a_q.html#autotoc_md49',1,'']]],
-  ['where_20the_20settings_20live_4',['Where The Settings Live',['../md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md70',1,'']]],
-  ['which_20mcu_20targets_20are_20prepared_20today_5',['Which MCU targets are prepared today?',['../md_docsrc_2user_2_f_a_q.html#autotoc_md45',1,'']]],
-  ['why_20do_20some_20native_20commands_20still_20fail_20on_20some_20targets_6',['Why do some native commands still fail on some targets?',['../md_docsrc_2user_2_f_a_q.html#autotoc_md47',1,'']]],
+  ['where_20do_20i_20look_20for_20the_20exact_20pass_20status_20matrix_3',['Where do I look for the exact PASS / status matrix?',['../md_docsrc_2user_2_f_a_q.html#autotoc_md50',1,'']]],
+  ['where_20the_20settings_20live_4',['Where The Settings Live',['../md_docsrc_2validation_2reports_2_f_o_o_t_p_r_i_n_t___p_r_o_f_i_l_e_s.html#autotoc_md71',1,'']]],
+  ['which_20mcu_20targets_20are_20prepared_20today_5',['Which MCU targets are prepared today?',['../md_docsrc_2user_2_f_a_q.html#autotoc_md46',1,'']]],
+  ['why_20do_20some_20native_20commands_20still_20fail_20on_20some_20targets_6',['Why do some native commands still fail on some targets?',['../md_docsrc_2user_2_f_a_q.html#autotoc_md48',1,'']]],
   ['wiring_20guide_7',['Wiring Guide',['../md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html',1,'']]],
   ['wiring_5fguide_2emd_8',['WIRING_GUIDE.md',['../_w_i_r_i_n_g___g_u_i_d_e_8md.html',1,'']]],
   ['word_5faddress_9',['word_address',['../structmcprotocol_1_1serial_1_1_qualified_buffer_word_device.html#a9e0c5e4d1284913117942cb967a7a327',1,'mcprotocol::serial::QualifiedBufferWordDevice']]],

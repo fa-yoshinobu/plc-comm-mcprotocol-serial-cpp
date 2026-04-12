@@ -92,7 +92,7 @@ $(function(){initNavTree('md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a
   <div class="headertitle"><div class="title">Hardware Validation </div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><p><a class="anchor" id="autotoc_md75"></a></p>
+<div class="textblock"><p><a class="anchor" id="autotoc_md76"></a></p>
 <p>Audience: maintainers and future validation follow-up work.</p>
 <p>This file is the validation matrix and backlog for the current real-hardware setups.</p>
 <p>Use it together with:</p>
@@ -104,7 +104,7 @@ $(function(){initNavTree('md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a
 <li><a class="el" href="md_docsrc_2validation_2reports_2_q_j71_c24_n___r_s232_c.html" title="QJ71C24N RS-232C Report">QJ71C24N_RS232C.md</a> for the consolidated Q-series target report</li>
 <li><a class="el" href="md_docsrc_2validation_2reports_2_r_j71_c24___r2___r_s232_c.html" title="RJ71C24-R2 RS-232C Report">RJ71C24_R2_RS232C.md</a> for the consolidated iQ-R target report</li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md76"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md77"></a>
 Validation Flow</h1>
 <ol type="1">
 <li>Confirm <span class="tt">cpu-model</span> and <span class="tt">loopback</span> first.</li>
@@ -113,7 +113,7 @@ Validation Flow</h1>
 <li>Distinguish <span class="tt">native pass</span> from <span class="tt">native ng</span>.</li>
 <li>Record PLC error codes for every native rejection.</li>
 </ol>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md77"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md78"></a>
 Current Matrix</h1>
 <h2>Host / Build Validation</h2>
 <table class="markdownTable">
@@ -346,7 +346,7 @@ Current Matrix</h1>
 <tr class="markdownTableRowEven">
 <td class="markdownTableBodyNone">Monitor register/read  </td><td class="markdownTableBodyNone"><span class="tt">0801/0802</span>  </td><td class="markdownTableBodyNone">native pass  </td><td class="markdownTableBodyNone">validated on the current setup  </td></tr>
 </table>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md78"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md79"></a>
 Stress / Endurance Snapshot</h1>
 <table class="markdownTable">
 <tr class="markdownTableHead">
@@ -372,8 +372,12 @@ Stress / Endurance Snapshot</h1>
 <tr class="markdownTableRowEven">
 <td class="markdownTableBodyNone"><span class="tt">extended mixed supported-command soak / 301 seconds</span>  </td><td class="markdownTableBodyNone">pass, <span class="tt">140 cycles</span>, <span class="tt">fail=0</span>  </td></tr>
 </table>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md79"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md80"></a>
 Current Follow-up Items</h1>
+<p>Hardware validation follow-up:</p>
+<ul>
+<li><span class="tt">1005</span>: remote latch clear is implemented but still not hardware-validated in this repo.</li>
+</ul>
 <p>Target-dependent follow-up:</p>
 <ul>
 <li><span class="tt">RJ71C24-R2 + R120PCPU</span>: <span class="tt">1630</span> / <span class="tt">1631</span> currently return <span class="tt">0x7F22</span> on the focused <span class="tt">--series iqr</span> checks, while read-only access still passes.</li>
@@ -386,7 +390,7 @@ Current Follow-up Items</h1>
 <ul>
 <li>native qualified access is helper-only by specification and is not tracked as an active hold</li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md80"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md81"></a>
 Current Interpretation</h1>
 <ul>
 <li>request encoding now matches the documented MC protocol request shapes used by the validated targets</li>

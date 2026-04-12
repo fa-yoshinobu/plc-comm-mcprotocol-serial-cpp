@@ -35,8 +35,8 @@ Track current implementation gaps in [TODO.md](TODO.md).
 - Record the exact serial settings, PLC model, and native PLC end code for every new result.
 - Run shared real-UART probes strictly serially. Parallel access on the same serial port can
   produce mixed RX fragments and invalidate the result.
-- Match `--series` to the actual CPU family before interpreting PLC end codes.
-- Keep FX5U notes aligned with its serial manual: `0801/0802` unsupported, `DX/DY/V/ZR` outside the validated subset.
+- Keep FX5U notes aligned with its serial manual: `0801/0802` unsupported, `DX/DY/V/ZR` outside
+  the validated subset.
 - Do not turn unsupported access paths into backlog items. For long timer / long retentive timer
   contact+coil devices, keep `LTS/LTC/LSTS/LSTC` on the structured `LTN/LSTN` `0401` path.
 - Re-read the device-specific considerations before assuming that a rejected command family is a

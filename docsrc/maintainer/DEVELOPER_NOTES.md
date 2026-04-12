@@ -47,24 +47,15 @@ The validated `RJ71C24-R2` setup behaves like a strict half-duplex shared UART.
 
 ## Request-Shape Conformance
 
-Host-side tests now pin or check these request families:
+Keep host-side tests aligned with the documented request shapes before blaming hardware:
 
-- `1402` random write words against the official MC protocol example
-- `1402` random write bits against the official MC protocol example
-  `Q/L` ASCII `1402 bit` uses `00/01` set-reset bytes, not single-character `0/1`
-  `Q/L` binary `1402 bit` also uses a one-byte bit-access count in the page `108` example; the old
-  local binary test had incorrectly inserted an extra zero byte before the first device reference
-- `0406` multi-block read against the official MC protocol example
-- `0801` register monitor against the documented `0403`-equivalent request layout
-- `0802` read monitor against the documented command structure
-
-This matters because the current hardware problem is not proven to be an encoder bug anymore. The request shapes are now locked down separately from the real-hardware outcome.
-
+- Pin representative `1402`, `0406`, `0801`, and `0802` request layouts against manual-backed
+  fixtures in `tests/codec_tests.cpp`.
 - Match `--series` to the actual CPU family before interpreting PLC end codes.
-- Do not project the C24-era helper/buffer workflow onto FX targets without revalidation.
-- Keep binary non-iQ-R bit and multi-block request layouts aligned with the current manual-backed
-  codec tests. Count-width and bit-packing mistakes have been a recurring source of false hardware
-  mismatches.
+- Keep binary non-iQ-R bit and multi-block layouts covered by tests. Count-width and bit-packing
+  mistakes are a common source of false hardware mismatches.
+- Revalidate helper/buffer workflows per target. Do not project the C24-era behavior onto FX
+  targets without fresh hardware results.
 
 ## Validation Reporting Rule
 

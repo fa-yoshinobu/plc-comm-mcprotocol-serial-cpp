@@ -92,10 +92,10 @@ $(function(){initNavTree('md_docsrc_2user_2_w_i_r_i_n_g___g_u_i_d_e.html','','')
   <div class="headertitle"><div class="title">Wiring Guide </div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><p><a class="anchor" id="autotoc_md58"></a></p>
+<div class="textblock"><p><a class="anchor" id="autotoc_md59"></a></p>
 <p>Audience: users wiring a Linux host or MCU board to a Mitsubishi serial module.</p>
 <p>This repository validates protocol behavior, not every cable pinout. Use this page as the high-level wiring plan, then confirm the connector pin numbers against your actual module and adapter hardware.</p>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md59"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md60"></a>
 Verified Host-side Path</h1>
 <p>Known-good real-hardware validation used this path:</p>
 <div class="fragment"><div class="line">Linux host</div>
@@ -108,7 +108,7 @@ Verified Host-side Path</h1>
 <li><span class="tt">RS-232C</span> and MCU UART logic levels are different.</li>
 <li>The validated setup used <span class="tt">RJ71C24-R2</span>, <span class="tt">RS-232C</span>, <span class="tt">19200</span>, <span class="tt">8E1</span>, <span class="tt">MC Protocol Format4</span>, <span class="tt">ASCII</span>, <span class="tt">CR/LF</span>, <span class="tt">sum-check off</span>, <span class="tt">station 0</span>.</li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md60"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md61"></a>
 MCU-side Path</h1>
 <p>For <span class="tt">ESP32-C3</span>, <span class="tt">RP2040</span>, or similar boards, do not wire <span class="tt">TX/RX</span> directly to the PLC <span class="tt">RS-232C</span> connector.</p>
 <p>Use this shape instead:</p>
@@ -123,7 +123,7 @@ MCU-side Path</h1>
 <li>A level shifter is required between them.</li>
 <li><span class="tt">RS-485 DE/RE</span> control is not needed for the validated <span class="tt">RS-232C</span> setup.</li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md61"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md62"></a>
 Before Power-up</h1>
 <p>Confirm these before sending frames:</p>
 <ul>
@@ -132,7 +132,7 @@ Before Power-up</h1>
 <li>USB debug serial and PLC serial are not accidentally using the same UART pins.</li>
 <li>The PLC port is configured for the exact serial settings you plan to use.</li>
 </ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md62"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md63"></a>
 Recommended Bring-up Order</h1>
 <ol type="1">
 <li>Confirm the target settings in <span class="tt"><a class="el" href="_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n_8md.html">HARDWARE_VALIDATION.md</a></span></li>
@@ -140,7 +140,7 @@ Recommended Bring-up Order</h1>
 <li>Prove a small read-only device range</li>
 <li>Add write traffic only against a safe test area</li>
 </ol>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md63"></a>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md64"></a>
 Related Pages</h1>
 <ul>
 <li><a class="el" href="md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html" title="MCU Quickstart">MCU_QUICKSTART.md</a></li>

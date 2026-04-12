@@ -257,6 +257,8 @@ var namespacemcprotocol_1_1serial =
     [ "parse_qualified_buffer_word_device", "namespacemcprotocol_1_1serial.html#a9bebecb954d117644b7a0cc249dd014d", null ],
     [ "qualified_buffer_kind_name", "namespacemcprotocol_1_1serial.html#aeeb30335b81b19e1d1c6c20e89f51706", null ],
     [ "qualified_buffer_word_to_byte_address", "namespacemcprotocol_1_1serial.html#afb44d52bf13e9d6f00fa815ca9b1d54f", null ],
+    [ "sparse_native_mask_word", "namespacemcprotocol_1_1serial.html#acc668bc1e99ca508977a9193604146f1", null ],
+    [ "sparse_native_requested_bit_value", "namespacemcprotocol_1_1serial.html#a617241f2c880edd1b23ee72088483a09", null ],
     [ "kCpuModelNameLength", "namespacemcprotocol_1_1serial.html#abe995d4184a4415ae0fe0146e8ab7a83", null ],
     [ "kMaxBatchBitPointsAscii", "namespacemcprotocol_1_1serial.html#ab527579ab68c6a765424c7478d29067b", null ],
     [ "kMaxBatchBitPointsBinary", "namespacemcprotocol_1_1serial.html#ab5ac6bdd5a78b33d8c2bd191a6d7f97f", null ],

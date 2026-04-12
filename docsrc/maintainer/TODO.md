@@ -12,6 +12,10 @@ Current follow-up items only.
   Focused `--series iqr` checks returned `0x7F22` for both `unlock` and `lock`, while read-only
   access such as `cpu-model` and `read-words D0 1` remained available.
 
+## Hardware Validation Follow-up
+
+- `1005`: remote latch clear is implemented but still not hardware-validated in this repo.
+
 ## Implementation Gaps
 
 - `1612`: serial-module mode switching is still not implemented.

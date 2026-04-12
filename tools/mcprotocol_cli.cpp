@@ -1746,24 +1746,12 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
   return false;
 }
 
-// Native sparse bit reads (`0403`) and monitor reads (`0802`) on 2C/3C/4C return a
-// 16-point word window whose bit0 corresponds to the requested head device. Treat the
-// requested point as bit0 for CLI comparisons, but keep printing the raw mask so device-
-// local offsets remain visible when diagnosing the wire format.
-[[nodiscard]] constexpr BitValue requested_bit_from_sparse_native_mask(std::uint32_t raw_value) noexcept {
-  return (raw_value & 0x0001U) != 0U ? BitValue::On : BitValue::Off;
-}
-
-[[nodiscard]] constexpr std::uint16_t sparse_native_mask_word(std::uint32_t raw_value) noexcept {
-  return static_cast<std::uint16_t>(raw_value & 0xFFFFU);
-}
-
 void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_value) {
   std::printf("%.*s=%u raw=0x%04X\n",
               static_cast<int>(label.size()),
               label.data(),
-              requested_bit_from_sparse_native_mask(raw_value) == BitValue::On ? 1U : 0U,
-              static_cast<unsigned>(sparse_native_mask_word(raw_value)));
+              mcprotocol::serial::sparse_native_requested_bit_value(raw_value) == BitValue::On ? 1U : 0U,
+              static_cast<unsigned>(mcprotocol::serial::sparse_native_mask_word(raw_value)));
 }
 
 [[nodiscard]] constexpr bool is_double_word_device(DeviceCode code) {
@@ -3319,7 +3307,7 @@ int main(int argc, char** argv) {
                                                std::span<const BitValue> expected,
                                                std::span<const std::uint32_t> actual) -> bool {
         for (std::size_t index = 0; index < expected.size(); ++index) {
-          const BitValue actual_bit = requested_bit_from_sparse_native_mask(actual[index]);
+          const BitValue actual_bit = mcprotocol::serial::sparse_native_requested_bit_value(actual[index]);
           if (actual_bit != expected[index]) {
             std::printf("%.*s-mismatch[%zu] expected=%u read=%u raw=0x%04X\n",
                         static_cast<int>(label.size()),
@@ -3327,7 +3315,7 @@ int main(int argc, char** argv) {
                         index,
                         expected[index] == BitValue::On ? 1U : 0U,
                         actual_bit == BitValue::On ? 1U : 0U,
-                        static_cast<unsigned>(sparse_native_mask_word(actual[index])));
+                        static_cast<unsigned>(mcprotocol::serial::sparse_native_mask_word(actual[index])));
             return false;
           }
         }
@@ -4711,7 +4699,7 @@ int main(int argc, char** argv) {
       for (std::size_t index = 0; index < expected_values.size(); ++index) {
         const bool bit_item = is_bit_device(items[index].device.code);
         const std::uint32_t actual_value =
-            bit_item ? (requested_bit_from_sparse_native_mask(monitor_values[index]) == BitValue::On ? 1U : 0U)
+            bit_item ? (mcprotocol::serial::sparse_native_requested_bit_value(monitor_values[index]) == BitValue::On ? 1U : 0U)
                      : monitor_values[index];
         if (actual_value != expected_values[index]) {
           if (bit_item) {
@@ -4719,7 +4707,7 @@ int main(int argc, char** argv) {
                         index,
                         static_cast<unsigned>(expected_values[index]),
                         static_cast<unsigned>(actual_value),
-                        static_cast<unsigned>(sparse_native_mask_word(monitor_values[index])));
+                        static_cast<unsigned>(mcprotocol::serial::sparse_native_mask_word(monitor_values[index])));
           } else {
             std::printf("probe-monitor: skip verify-mismatch index=%zu expected=%u read=%u\n",
                         index,
@@ -4733,10 +4721,10 @@ int main(int argc, char** argv) {
       std::printf("probe-monitor=ok mode=native D100=%u D105=%u M100=%u(raw=0x%04X) M105=%u(raw=0x%04X)\n",
                   static_cast<unsigned>(monitor_values[0]),
                   static_cast<unsigned>(monitor_values[1]),
-                  requested_bit_from_sparse_native_mask(monitor_values[2]) == BitValue::On ? 1U : 0U,
-                  static_cast<unsigned>(sparse_native_mask_word(monitor_values[2])),
-                  requested_bit_from_sparse_native_mask(monitor_values[3]) == BitValue::On ? 1U : 0U,
-                  static_cast<unsigned>(sparse_native_mask_word(monitor_values[3])));
+                  mcprotocol::serial::sparse_native_requested_bit_value(monitor_values[2]) == BitValue::On ? 1U : 0U,
+                  static_cast<unsigned>(mcprotocol::serial::sparse_native_mask_word(monitor_values[2])),
+                  mcprotocol::serial::sparse_native_requested_bit_value(monitor_values[3]) == BitValue::On ? 1U : 0U,
+                  static_cast<unsigned>(mcprotocol::serial::sparse_native_mask_word(monitor_values[3])));
       return 0;
     }
 

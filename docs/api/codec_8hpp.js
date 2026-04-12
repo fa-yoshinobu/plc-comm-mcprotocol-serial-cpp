@@ -72,5 +72,7 @@ var codec_8hpp =
     [ "mcprotocol::serial::CommandCodec::parse_read_host_buffer_response", "namespacemcprotocol_1_1serial_1_1_command_codec.html#a94c4e5d4d561c9534352301d640320e0", null ],
     [ "mcprotocol::serial::CommandCodec::parse_read_module_buffer_response", "namespacemcprotocol_1_1serial_1_1_command_codec.html#abeb1b2ce455fd8214a261e8349e4e388", null ],
     [ "mcprotocol::serial::CommandCodec::parse_read_monitor_response", "namespacemcprotocol_1_1serial_1_1_command_codec.html#aaadd57fb647c418900bc8590c86b57f1", null ],
-    [ "mcprotocol::serial::CommandCodec::parse_read_user_frame_response", "namespacemcprotocol_1_1serial_1_1_command_codec.html#a79528cd8c55eab81cbbc0e414e9f7258", null ]
+    [ "mcprotocol::serial::CommandCodec::parse_read_user_frame_response", "namespacemcprotocol_1_1serial_1_1_command_codec.html#a79528cd8c55eab81cbbc0e414e9f7258", null ],
+    [ "mcprotocol::serial::sparse_native_mask_word", "namespacemcprotocol_1_1serial.html#acc668bc1e99ca508977a9193604146f1", null ],
+    [ "mcprotocol::serial::sparse_native_requested_bit_value", "namespacemcprotocol_1_1serial.html#a617241f2c880edd1b23ee72088483a09", null ]
 ];

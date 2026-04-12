@@ -128,19 +128,12 @@ C24 Recovery Discipline</h1>
 </ul>
 <h1 class="doxsection"><a class="anchor" id="autotoc_md17"></a>
 Request-Shape Conformance</h1>
-<p>Host-side tests now pin or check these request families:</p>
+<p>Keep host-side tests aligned with the documented request shapes before blaming hardware:</p>
 <ul>
-<li><span class="tt">1402</span> random write words against the official MC protocol example</li>
-<li><span class="tt">1402</span> random write bits against the official MC protocol example <span class="tt">Q/L</span> ASCII <span class="tt">1402 bit</span> uses <span class="tt">00/01</span> set-reset bytes, not single-character <span class="tt">0/1</span> <span class="tt">Q/L</span> binary <span class="tt">1402 bit</span> also uses a one-byte bit-access count in the page <span class="tt">108</span> example; the old local binary test had incorrectly inserted an extra zero byte before the first device reference</li>
-<li><span class="tt">0406</span> multi-block read against the official MC protocol example</li>
-<li><span class="tt">0801</span> register monitor against the documented <span class="tt">0403</span>-equivalent request layout</li>
-<li><span class="tt">0802</span> read monitor against the documented command structure</li>
-</ul>
-<p>This matters because the current hardware problem is not proven to be an encoder bug anymore. The request shapes are now locked down separately from the real-hardware outcome.</p>
-<ul>
+<li>Pin representative <span class="tt">1402</span>, <span class="tt">0406</span>, <span class="tt">0801</span>, and <span class="tt">0802</span> request layouts against manual-backed fixtures in <span class="tt">tests/codec_tests.cpp</span>.</li>
 <li>Match <span class="tt">--series</span> to the actual CPU family before interpreting PLC end codes.</li>
-<li>Do not project the C24-era helper/buffer workflow onto FX targets without revalidation.</li>
-<li>Keep binary non-iQ-R bit and multi-block request layouts aligned with the current manual-backed codec tests. Count-width and bit-packing mistakes have been a recurring source of false hardware mismatches.</li>
+<li>Keep binary non-iQ-R bit and multi-block layouts covered by tests. Count-width and bit-packing mistakes are a common source of false hardware mismatches.</li>
+<li>Revalidate helper/buffer workflows per target. Do not project the C24-era behavior onto FX targets without fresh hardware results.</li>
 </ul>
 <h1 class="doxsection"><a class="anchor" id="autotoc_md18"></a>
 Validation Reporting Rule</h1>
