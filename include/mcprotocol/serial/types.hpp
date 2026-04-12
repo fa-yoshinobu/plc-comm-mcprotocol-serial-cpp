@@ -98,6 +98,7 @@ constexpr std::size_t kMaxMonitorItems =
     static_cast<std::size_t>(MCPROTOCOL_SERIAL_MAX_MONITOR_ITEMS);
 constexpr std::size_t kMaxLoopbackBytes =
     static_cast<std::size_t>(MCPROTOCOL_SERIAL_MAX_LOOPBACK_BYTES);
+constexpr std::size_t kMaxUserFrameRegistrationBytes = 80U;
 constexpr std::size_t kCpuModelNameLength = 16;
 
 /// \brief MC protocol frame family used on the serial link.
@@ -105,7 +106,8 @@ enum class FrameKind : std::uint8_t {
   C4,
   C3,
   C2,
-  C1
+  C1,
+  E1
 };
 
 /// \brief Request/response payload encoding.
@@ -114,7 +116,7 @@ enum class CodeMode : std::uint8_t {
   Binary
 };
 
-/// \brief ASCII formatting variant for `C4` / `C3` serial frames.
+/// \brief ASCII formatting variant for `C4` / `C3` / `C2` serial frames.
 enum class AsciiFormat : std::uint8_t {
   Format1,
   Format3,
@@ -187,6 +189,26 @@ enum class BitValue : std::uint8_t {
   On = 1
 };
 
+/// \brief Conflict-handling mode for remote RUN / PAUSE.
+enum class RemoteOperationMode : std::uint16_t {
+  DoNotExecuteForcibly = 0x0001,
+  ExecuteForcibly = 0x0003
+};
+
+/// \brief Clear scope applied during remote RUN initialization.
+enum class RemoteRunClearMode : std::uint8_t {
+  DoNotClear = 0x00,
+  ClearOutsideLatchRange = 0x01,
+  AllClear = 0x02
+};
+
+/// \brief C24 global-signal selector used by command `1618`.
+enum class GlobalSignalTarget : std::uint8_t {
+  ReceivedSide = 0x00,
+  X1A = 0x01,
+  X1B = 0x02
+};
+
 /// \brief Decoded PLC response class before command-specific parsing.
 enum class ResponseType : std::uint8_t {
   SuccessData,
@@ -229,6 +251,12 @@ struct DeviceAddress {
   std::uint32_t number = 0;
 };
 
+/// \brief Extended file-register address using block number plus `R` word number.
+struct ExtendedFileRegisterAddress {
+  std::uint16_t block_number = 1;
+  std::uint16_t word_number = 0;
+};
+
 /// \brief Contiguous word-read request (`0401`).
 struct BatchReadWordsRequest {
   DeviceAddress head_device {};
@@ -251,6 +279,43 @@ struct BatchWriteWordsRequest {
 struct BatchWriteBitsRequest {
   DeviceAddress head_device {};
   std::span<const BitValue> bits {};
+};
+
+/// \brief Extended file-register batch read (`ER` on 1C ACPU-common, chapter-18 block path on 1E).
+struct ExtendedFileRegisterBatchReadWordsRequest {
+  ExtendedFileRegisterAddress head_device {};
+  std::uint16_t points = 0;
+};
+
+/// \brief Direct extended file-register batch read (`NR` on 1C QnA-common, chapter-18 direct path on 1E).
+struct ExtendedFileRegisterDirectBatchReadWordsRequest {
+  /// \brief `NR/NW` direct address on 1C or the chapter-18 direct `R` address on 1E.
+  std::uint32_t head_device_number = 0;
+  std::uint16_t points = 0;
+};
+
+/// \brief Extended file-register batch write (`EW` on 1C ACPU-common, chapter-18 block path on 1E).
+struct ExtendedFileRegisterBatchWriteWordsRequest {
+  ExtendedFileRegisterAddress head_device {};
+  std::span<const std::uint16_t> words {};
+};
+
+/// \brief Direct extended file-register batch write (`NW` on 1C QnA-common, chapter-18 direct path on 1E).
+struct ExtendedFileRegisterDirectBatchWriteWordsRequest {
+  /// \brief `NR/NW` direct address on 1C or the chapter-18 direct `R` address on 1E.
+  std::uint32_t head_device_number = 0;
+  std::span<const std::uint16_t> words {};
+};
+
+/// \brief One item inside extended file-register random write (`ET` on 1C, chapter-18 on 1E).
+struct ExtendedFileRegisterRandomWriteWordItem {
+  ExtendedFileRegisterAddress device {};
+  std::uint16_t value = 0;
+};
+
+/// \brief Extended file-register monitor registration (`EM` on 1C, chapter-18 on 1E).
+struct ExtendedFileRegisterMonitorRegistration {
+  std::span<const ExtendedFileRegisterAddress> items {};
 };
 
 /// \brief One item inside a native random-read request (`0403` or monitor registration).
@@ -315,6 +380,37 @@ struct MultiBlockReadBlockResult {
 /// \brief Monitor registration payload used by `0801`.
 struct MonitorRegistration {
   std::span<const RandomReadItem> items {};
+};
+
+/// \brief User-frame registration-data read request (`0610`).
+struct UserFrameReadRequest {
+  std::uint16_t frame_no = 0;
+};
+
+/// \brief User-frame registration-data payload returned by `0610`.
+struct UserFrameRegistrationData {
+  std::uint16_t registration_data_bytes = 0;
+  std::uint16_t frame_bytes = 0;
+  std::array<std::byte, kMaxUserFrameRegistrationBytes> registration_data {};
+};
+
+/// \brief User-frame registration-data write request (`1610`, subcommand `0000`).
+struct UserFrameWriteRequest {
+  std::uint16_t frame_no = 0;
+  std::uint16_t frame_bytes = 0;
+  std::span<const std::byte> registration_data {};
+};
+
+/// \brief User-frame registration-data delete request (`1610`, subcommand `0001`).
+struct UserFrameDeleteRequest {
+  std::uint16_t frame_no = 0;
+};
+
+/// \brief C24 global-signal ON/OFF request (`1618`).
+struct GlobalSignalControlRequest {
+  GlobalSignalTarget target = GlobalSignalTarget::ReceivedSide;
+  bool turn_on = false;
+  std::uint8_t station_no = 0;
 };
 
 /// \brief Host-buffer read request (`0613`).

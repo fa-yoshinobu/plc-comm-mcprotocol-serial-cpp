@@ -3,7 +3,8 @@
 Audience: maintainers running real-hardware follow-up on unresolved native command families.
 
 This page replaces the old repository-level TODO list for native command follow-up. Keep normal user
-docs focused on known-good workflows and keep this page for unresolved native behavior.
+docs focused on known-good workflows and keep this page for native-command follow-up policy and
+interpretation.
 
 ## Public Policy
 
@@ -18,7 +19,7 @@ docs focused on known-good workflows and keep this page for unresolved native be
 
 ## Active Items
 
-Track current unresolved items in [TODO.md](TODO.md).
+Track current follow-up items in [TODO.md](TODO.md).
 
 ## Implementation Gaps
 

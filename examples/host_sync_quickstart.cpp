@@ -14,7 +14,11 @@ int main() {
 
   // Replace these values with the settings validated for your actual target.
   PosixSerialConfig serial {
+#if defined(_WIN32)
+      .device_path = "COM3",
+#else
       .device_path = "/dev/ttyUSB0",
+#endif
       .baud_rate = 19200,
       .data_bits = 8,
       .stop_bits = 2,
@@ -38,17 +42,25 @@ int main() {
   }
 
   std::array<std::uint16_t, 2> words {};
-  status = plc.read_words("D100", 2, words);
+  status = plc.read_words("D100", words);
   if (!status.ok()) {
     std::fprintf(stderr, "read_words failed: %s\n", status.message);
     return 1;
   }
 
+  std::uint32_t sparse_d100 = 0;
+  status = plc.random_read("D100", sparse_d100);
+  if (!status.ok()) {
+    std::fprintf(stderr, "random_read failed: %s\n", status.message);
+    return 1;
+  }
+
   std::printf(
-      "sync example ok: model=%s code=0x%04X D100=0x%04X D101=0x%04X\n",
+      "sync example ok: model=%s code=0x%04X D100=0x%04X D101=0x%04X sparseD100=0x%04X\n",
       model.model_name.data(),
       model.model_code,
       words[0],
-      words[1]);
+      words[1],
+      static_cast<std::uint16_t>(sparse_d100 & 0xFFFFU));
   return 0;
 }

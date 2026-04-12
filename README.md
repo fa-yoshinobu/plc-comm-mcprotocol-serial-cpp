@@ -1,5 +1,8 @@
 # MC Protocol Serial C++ Library
 
+[![ci](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/ci.yml)
+[![release](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/release.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/release.yml)
+
 MC protocol serial library for MCU-oriented environments.
 
 This repository is for cases like these:
@@ -41,7 +44,7 @@ That example uses the synchronous host-side facade in
 
 ### 3. Choose your entry path
 
-- If you want the simplest library example on a POSIX host, start with
+- If you want the simplest library example on a host machine, start with
   [host_sync_quickstart.cpp](examples/host_sync_quickstart.cpp).
 - If you want the low-level MCU state machine, start with [MCU Quickstart](docsrc/user/MCU_QUICKSTART.md).
 - If you need verified target settings and current limits, use
@@ -58,33 +61,60 @@ Start with these pages instead of reading the whole repository at once.
 - [Hardware Validation Matrix](docsrc/validation/reports/HARDWARE_VALIDATION.md)
 - [Footprint Profiles](docsrc/validation/reports/FOOTPRINT_PROFILES.md)
 - [Developer Notes](docsrc/maintainer/DEVELOPER_NOTES.md)
-- [TODO](docsrc/maintainer/TODO.md)
+- [Manual Command Coverage](docsrc/maintainer/MANUAL_COMMAND_COVERAGE.md)
+- [TODO / Current Follow-up](docsrc/maintainer/TODO.md)
 - [Native Command Backlog](docsrc/maintainer/NATIVE_COMMAND_BACKLOG.md)
 - [Release Process](docsrc/maintainer/RELEASE_PROCESS.md)
 - [Changelog](CHANGELOG.md)
 
 ## What Works Today
 
-- The library supports serial MC protocol request/response handling for `3C` and `4C` frame families.
+- The library supports MC protocol request/response handling for `2C`, `3C`, `4C`, and initial
+  `1E` frame families. `2C` is ASCII-only. `1E` currently supports the chapter-18
+  device-memory / block-addressed extended-file-register / special-function-module subset in both
+  ASCII and binary on `--series a` and `--series qna`, plus direct extended-file-register
+  read/write on `--series a`.
+- The codebase also has initial `1C` ASCII support on `--series a` and `--series qna` for
+  contiguous device-memory read/write, random write, monitor, module-buffer access,
+  extended-file register access, and loopback.
 - The codebase includes contiguous, random, multi-block, monitor, host-buffer, module-buffer,
-  CPU-model, and loopback command paths.
+  CPU-model, remote RUN/STOP/PAUSE/latch-clear, password lock/unlock, error-clear, remote-reset,
+  loopback, user-frame registration/read/delete, C24 global-signal control, transmission-sequence
+  initialization, and CPU-monitoring deregistration command paths.
 - Real-hardware validation now covers `RJ71C24-R2`, `LJ71C24`, `QJ71C24N`, and `FX5UC-32MT/D`.
+- There are currently no active command-family holds on the validated targets.
 - Contiguous access is validated on all current targets.
 - Random, multi-block, and monitor are validated where the target and `--series` combination supports them.
 - Qualified helper access over `0601/1601` is the supported public `U...` path.
 
-For the exact PASS / HOLD matrix and the verified serial settings for each target, see
+For the exact PASS / status matrix and the verified serial settings for each target, see
 [HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md).
 
 ## Current Limits
 
+- This repository does not implement the full `sh080008ab` command list. Use
+  [MANUAL_COMMAND_COVERAGE.md](docsrc/maintainer/MANUAL_COMMAND_COVERAGE.md) for the exact
+  implemented vs. missing command families.
+- `1C` support is currently limited to contiguous device-memory read/write, random write, monitor,
+  module-buffer access, extended-file register access, and loopback. ACPU-common `ER/EW/ET/EM/ME`
+  is available on `PlcSeries::A`, and QnA-common direct `NR/NW` is available on
+  `PlcSeries::QnA`.
+- `1E` support is currently limited to chapter `18`: contiguous device-memory read/write, random
+  write, monitor register/read, block-addressed extended-file-register
+  read/write/random-write/monitor on `--series a` and `--series qna`, direct extended-file-register
+  read/write on `--series a`, and special-function-module buffer read/write. It does not expose
+  CPU-model, host-buffer, remote control, password/error control, loopback, multi-block,
+  qualified helper, or link-direct paths.
 - Some command families are target-dependent and require the right `--series` selection.
 - Native qualified access is not part of the supported library workflow. Keep `U...` access on the
   helper path only.
-- `FX5UC-32MT/D` has additional target-specific limits around host/module buffer and qualified access.
+- `FX5UC-32MT/D` treats `0613/1613/0601/1601` and `0801/0802` as unsupported / not applicable on
+  serial `3C/4C`; qualified access is also not available there.
 - Large contiguous `write-words` and `write-bits` are still split automatically to fit fixed request buffers.
+- The remaining repository follow-up is implementation work for `1612`, `0630`, and `2101`, plus
+  parameter-dependent `1006 remote-reset` behavior on `RJ71C24-R2 + R120PCPU`.
 
-For target-specific limits, use
+For target-specific limits and current follow-up items, use
 [HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md) and
 [TODO.md](docsrc/maintainer/TODO.md).
 
@@ -104,17 +134,29 @@ They provide:
 
 - baseline `ProtocolConfig` presets
 - string-address parsing such as `D100`, `M100`, `X10`
-- request builders for common contiguous and sparse operations
+- request builders for common contiguous, sparse random, and monitor operations
 
-If you are on Linux and want a synchronous host-side bring-up path, use
+If you want a synchronous host-side bring-up path on Windows or POSIX, use
 [`mcprotocol/serial/host_sync.hpp`](include/mcprotocol/serial/host_sync.hpp).
 It wraps `PosixSerialPort` and `MelsecSerialClient` into a single blocking helper for:
 
 - `cpu-model`
+- `remote_run`
+- `remote_stop`
+- `remote_pause`
+- `remote_latch_clear`
+- `unlock_remote_password`
+- `lock_remote_password`
+- `clear_error_information`
+- `remote_reset`
 - contiguous `read_words`
 - contiguous `read_bits`
 - contiguous `write_words`
 - contiguous `write_bits`
+- sparse `random_read`
+- sparse `random_write_words`
+- sparse `random_write_bits`
+- `register_monitor` and `read_monitor`
 
 The normal workflow is:
 
@@ -128,6 +170,7 @@ The normal workflow is:
 Smallest helper-based setup:
 
 ```cpp
+#include <array>
 #include <mcprotocol_serial.hpp>
 
 mcprotocol::serial::ProtocolConfig config =
@@ -146,7 +189,11 @@ Smallest synchronous host-side setup:
 
 mcprotocol::serial::PosixSyncClient plc;
 mcprotocol::serial::PosixSerialConfig serial {
+#if defined(_WIN32)
+    .device_path = "COM3",
+#else
     .device_path = "/dev/ttyUSB0",
+#endif
     .baud_rate = 19200,
     .data_bits = 8,
     .stop_bits = 1,
@@ -155,7 +202,15 @@ mcprotocol::serial::PosixSerialConfig serial {
 
 auto protocol = mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol();
 mcprotocol::serial::Status status = plc.open(serial, protocol);
+
+std::array<std::uint16_t, 2> words {};
+status = plc.read_words("D100", words);
+
+std::uint32_t d100 = 0;
+status = plc.random_read("D100", d100);
 ```
+
+On Windows, pass `COM3`-style names. On POSIX hosts, pass `/dev/ttyUSB0`-style device paths.
 
 Examples:
 

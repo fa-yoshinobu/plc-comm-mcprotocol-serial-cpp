@@ -24,6 +24,7 @@ Because support is target-dependent.
 - `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` pass native random / multi-block / monitor traffic under `--series ql`
 - `FX5UC-32MT/D` passes native random / multi-block traffic under `--series ql`
 - `FX5UC-32MT/D` monitor `0801/0802` is treated as unsupported on serial `3C/4C`
+- `RJ71C24-R2 + R120PCPU` `remote-reset` is still parameter-dependent and currently returns `0x408B`
 - native qualified access is not a supported workflow
 
 For practical qualified-device access, use `read-qualified-words` / `write-qualified-words` where
@@ -38,7 +39,7 @@ Yes. Use the build-time macros in `platformio.ini` or define them in your own bu
 
 The repository already includes `reduced` and `ultra-minimal` example profiles.
 
-## Where do I look for the exact PASS / NG / HOLD matrix?
+## Where do I look for the exact PASS / status matrix?
 
 Use:
 
@@ -56,7 +57,7 @@ Run:
 cmake --build build --target docs
 ```
 
-The output is generated under `build/docs/doxygen/html`.
+The output is generated under `docs/api/`.
 
 If you want to run Doxygen without CMake, use:
 

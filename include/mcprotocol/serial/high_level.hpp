@@ -167,6 +167,25 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
   return config;
 }
 
+/// \brief String-address spec used to build sparse random-read or monitor requests.
+struct RandomReadSpec {
+  std::string_view device {};
+  bool double_word = false;
+};
+
+/// \brief String-address spec used to build sparse random word-write items.
+struct RandomWriteWordSpec {
+  std::string_view device {};
+  std::uint32_t value = 0;
+  bool double_word = false;
+};
+
+/// \brief String-address spec used to build sparse random bit-write items.
+struct RandomWriteBitSpec {
+  std::string_view device {};
+  BitValue value = BitValue::Off;
+};
+
 /// \brief Parses a plain MC device string such as `D100`, `M100`, `X10`, or `B20`.
 [[nodiscard]] inline Status parse_device_address(
     std::string_view text,
@@ -321,6 +340,91 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
       .device = parsed,
       .value = value,
   };
+  return ok_status();
+}
+
+/// \brief Builds a sparse random-read request from string-address specs.
+[[nodiscard]] inline Status make_random_read_request(
+    std::span<const RandomReadSpec> specs,
+    std::span<RandomReadItem> out_items,
+    RandomReadRequest& out_request) noexcept {
+  if (out_items.size() < specs.size()) {
+    return make_status(StatusCode::BufferTooSmall, "Random read output item buffer is too small");
+  }
+
+  for (std::size_t index = 0; index < specs.size(); ++index) {
+    const Status status =
+        make_random_read_item(specs[index].device, out_items[index], specs[index].double_word);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+
+  out_request = RandomReadRequest {
+      .items = std::span<const RandomReadItem>(out_items.data(), specs.size()),
+  };
+  return ok_status();
+}
+
+/// \brief Builds a sparse monitor registration payload from string-address specs.
+[[nodiscard]] inline Status make_monitor_registration(
+    std::span<const RandomReadSpec> specs,
+    std::span<RandomReadItem> out_items,
+    MonitorRegistration& out_request) noexcept {
+  RandomReadRequest request {};
+  const Status status = make_random_read_request(specs, out_items, request);
+  if (!status.ok()) {
+    return status;
+  }
+
+  out_request = MonitorRegistration {
+      .items = request.items,
+  };
+  return ok_status();
+}
+
+/// \brief Builds sparse random word-write items from string-address specs.
+[[nodiscard]] inline Status make_random_write_word_items(
+    std::span<const RandomWriteWordSpec> specs,
+    std::span<RandomWriteWordItem> out_items,
+    std::span<const RandomWriteWordItem>& out_item_view) noexcept {
+  if (out_items.size() < specs.size()) {
+    return make_status(StatusCode::BufferTooSmall, "Random write word output item buffer is too small");
+  }
+
+  for (std::size_t index = 0; index < specs.size(); ++index) {
+    const Status status = make_random_write_word_item(
+        specs[index].device,
+        specs[index].value,
+        out_items[index],
+        specs[index].double_word);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+
+  out_item_view = std::span<const RandomWriteWordItem>(out_items.data(), specs.size());
+  return ok_status();
+}
+
+/// \brief Builds sparse random bit-write items from string-address specs.
+[[nodiscard]] inline Status make_random_write_bit_items(
+    std::span<const RandomWriteBitSpec> specs,
+    std::span<RandomWriteBitItem> out_items,
+    std::span<const RandomWriteBitItem>& out_item_view) noexcept {
+  if (out_items.size() < specs.size()) {
+    return make_status(StatusCode::BufferTooSmall, "Random write bit output item buffer is too small");
+  }
+
+  for (std::size_t index = 0; index < specs.size(); ++index) {
+    const Status status =
+        make_random_write_bit_item(specs[index].device, specs[index].value, out_items[index]);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+
+  out_item_view = std::span<const RandomWriteBitItem>(out_items.data(), specs.size());
   return ok_status();
 }
 

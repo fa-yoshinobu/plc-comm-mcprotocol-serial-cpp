@@ -18,12 +18,12 @@ This page is the single report for this hardware target.
 | CPU identification | pass | `cpu-model` returns `FX5UC-32MT/D`, `0x4A91` |
 | Contiguous read/write | pass, narrow subset | validated `21`-target subset |
 | Supported-device soak | pass | two `180` second runs passed on the screened subset |
-| Native `0403` | pass | focused word/bit rechecks passed |
-| Native `1402` words | pass | focused word rechecks passed with restore |
-| Native `1402` bits | pass | focused bit rechecks passed with restore |
-| Native `0406/1406` | pass | capture-driven fixes made both pass |
+| Native `0403` | pass | validated on the current setup |
+| Native `1402` words | pass | validated with restore on the current setup |
+| Native `1402` bits | pass | validated with restore on the current setup |
+| Native `0406/1406` | pass | validated with restore on the current setup |
 | Native `0801/0802` | not applicable / unsupported | FX5 serial `3C/4C` command list does not include `0801/0802`; probes returned `0x7E40` |
-| Host/module buffer | not applicable / unresolved | probes returned `0x7E40` |
+| Host/module buffer | not applicable / unsupported | probes returned `0x7E40`, and the FX5 serial `3C/4C` command list does not list `0613`, `1613`, `0601`, or `1601` |
 | Qualified helper/native access | not applicable / unsupported | helper `U3E0\\G10` / `U3E0\\HG20` returned `0x7E40`; native `U3E0\\G10` returned `0x7E43` |
 | `DX/DY` | inaccessible on this path | observed `0x7E43`; FX5 serial `3C/4C` accessible-device table marks them inaccessible |
 | `V/ZR` | not applicable on this path | FX5 serial `3C/4C` accessible-device table marks them inaccessible |
@@ -41,8 +41,8 @@ The validated contiguous subset on this target is:
 
 Keep `DX`, `DY`, `V`, and `ZR` out of the FX5U serial `3C/4C` validated subset.
 
-## Historical Note
+The FX5 communication manual `sh082625engh.pdf` `43.1 List of Commands and Functions`
+(`3C/4C frame`, printed page `718-719`) lists `0401/1401`, `0403/1402`, `0406/1406`,
+remote control, loopback, and `1617`, but does not list `0613`, `1613`, `0601`, or `1601`.
 
-- Earlier native `0403/1402/0406/1406` failures on this target were host-side compatibility bugs.
-- After the documented binary count and bit-packing fixes, those native families pass on FX5U.
-- The canonical matrix is [HARDWARE_VALIDATION.md](HARDWARE_VALIDATION.md).
+The canonical matrix is [HARDWARE_VALIDATION.md](HARDWARE_VALIDATION.md).

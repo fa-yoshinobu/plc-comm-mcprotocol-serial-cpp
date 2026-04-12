@@ -1,5 +1,10 @@
 /build/
+/build_win/
 /.tools/
 /.pio/
+/.venv-platformio/
+/.vscode/
+/.codex
+/cap/
 *.pdf
 *.PDF

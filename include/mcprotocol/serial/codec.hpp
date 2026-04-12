@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "mcprotocol/serial/span_compat.hpp"
+#include "mcprotocol/serial/string_view_compat.hpp"
 
 #include "mcprotocol/serial/link_direct.hpp"
 #include "mcprotocol/serial/qualified_buffer.hpp"
@@ -80,6 +81,18 @@ namespace CommandCodec {
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
+[[nodiscard]] Status encode_read_extended_file_register_words(
+    const ProtocolConfig& config,
+    const ExtendedFileRegisterBatchReadWordsRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_direct_read_extended_file_register_words(
+    const ProtocolConfig& config,
+    const ExtendedFileRegisterDirectBatchReadWordsRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
 [[nodiscard]] Status encode_extended_batch_read_words(
     const ProtocolConfig& config,
     const QualifiedBufferWordDevice& device,
@@ -97,6 +110,12 @@ namespace CommandCodec {
 [[nodiscard]] Status parse_batch_read_words_response(
     const ProtocolConfig& config,
     const BatchReadWordsRequest& request,
+    std::span<const std::uint8_t> response_data,
+    std::span<std::uint16_t> out_words) noexcept;
+
+[[nodiscard]] Status parse_read_extended_file_register_words_response(
+    const ProtocolConfig& config,
+    std::uint16_t points,
     std::span<const std::uint8_t> response_data,
     std::span<std::uint16_t> out_words) noexcept;
 
@@ -128,6 +147,18 @@ namespace CommandCodec {
 [[nodiscard]] Status encode_batch_write_words(
     const ProtocolConfig& config,
     const BatchWriteWordsRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_write_extended_file_register_words(
+    const ProtocolConfig& config,
+    const ExtendedFileRegisterBatchWriteWordsRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_direct_write_extended_file_register_words(
+    const ProtocolConfig& config,
+    const ExtendedFileRegisterDirectBatchWriteWordsRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
@@ -179,6 +210,12 @@ namespace CommandCodec {
 [[nodiscard]] Status encode_random_write_words(
     const ProtocolConfig& config,
     std::span<const RandomWriteWordItem> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_random_write_extended_file_register_words(
+    const ProtocolConfig& config,
+    std::span<const ExtendedFileRegisterRandomWriteWordItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
@@ -238,6 +275,12 @@ namespace CommandCodec {
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
+[[nodiscard]] Status encode_register_extended_file_register_monitor(
+    const ProtocolConfig& config,
+    const ExtendedFileRegisterMonitorRegistration& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
 [[nodiscard]] Status encode_link_direct_register_monitor(
     const ProtocolConfig& config,
     const LinkDirectMonitorRegistration& request,
@@ -249,11 +292,68 @@ namespace CommandCodec {
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
+[[nodiscard]] Status encode_read_monitor(
+    const ProtocolConfig& config,
+    std::span<const RandomReadItem> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_read_extended_file_register_monitor(
+    const ProtocolConfig& config,
+    std::span<const ExtendedFileRegisterAddress> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
 [[nodiscard]] Status parse_read_monitor_response(
     const ProtocolConfig& config,
     std::span<const RandomReadItem> items,
     std::span<const std::uint8_t> response_data,
     std::span<std::uint32_t> out_values) noexcept;
+
+[[nodiscard]] Status parse_read_extended_file_register_monitor_response(
+    const ProtocolConfig& config,
+    std::span<const ExtendedFileRegisterAddress> items,
+    std::span<const std::uint8_t> response_data,
+    std::span<std::uint16_t> out_words) noexcept;
+
+[[nodiscard]] Status encode_read_user_frame(
+    const ProtocolConfig& config,
+    const UserFrameReadRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status parse_read_user_frame_response(
+    const ProtocolConfig& config,
+    std::span<const std::uint8_t> response_data,
+    UserFrameRegistrationData& out_data) noexcept;
+
+[[nodiscard]] Status encode_write_user_frame(
+    const ProtocolConfig& config,
+    const UserFrameWriteRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_delete_user_frame(
+    const ProtocolConfig& config,
+    const UserFrameDeleteRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_control_global_signal(
+    const ProtocolConfig& config,
+    const GlobalSignalControlRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_initialize_transmission_sequence(
+    const ProtocolConfig& config,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_deregister_cpu_monitoring(
+    const ProtocolConfig& config,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
 
 [[nodiscard]] Status encode_read_host_buffer(
     const ProtocolConfig& config,
@@ -300,6 +400,51 @@ namespace CommandCodec {
     const ProtocolConfig& config,
     std::span<const std::uint8_t> response_data,
     CpuModelInfo& out_info) noexcept;
+
+[[nodiscard]] Status encode_remote_run(
+    const ProtocolConfig& config,
+    RemoteOperationMode mode,
+    RemoteRunClearMode clear_mode,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_remote_stop(
+    const ProtocolConfig& config,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_remote_pause(
+    const ProtocolConfig& config,
+    RemoteOperationMode mode,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_remote_latch_clear(
+    const ProtocolConfig& config,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_remote_reset(
+    const ProtocolConfig& config,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_unlock_remote_password(
+    const ProtocolConfig& config,
+    std::string_view remote_password,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_lock_remote_password(
+    const ProtocolConfig& config,
+    std::string_view remote_password,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_clear_error_information(
+    const ProtocolConfig& config,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
 
 [[nodiscard]] Status encode_loopback(
     const ProtocolConfig& config,

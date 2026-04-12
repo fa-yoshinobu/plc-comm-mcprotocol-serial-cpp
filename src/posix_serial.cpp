@@ -227,17 +227,17 @@ Status PosixSerialPort::open(const PosixSerialConfig& config) noexcept {
     close();
   }
 
-  fd_ = ::open(config.device_path.data(), O_RDWR | O_NOCTTY | O_SYNC);
+  fd_ = static_cast<std::intptr_t>(::open(config.device_path.data(), O_RDWR | O_NOCTTY | O_SYNC));
   if (fd_ < 0) {
     return transport_errno("open failed");
   }
 
-  const Status status = configure_termios(fd_, config);
+  const Status status = configure_termios(static_cast<int>(fd_), config);
   if (!status.ok()) {
     close();
     return status;
   }
-  const Status exclusive_status = enable_exclusive_access(fd_);
+  const Status exclusive_status = enable_exclusive_access(static_cast<int>(fd_));
   if (!exclusive_status.ok()) {
     close();
     return exclusive_status;
@@ -247,10 +247,11 @@ Status PosixSerialPort::open(const PosixSerialConfig& config) noexcept {
 
 void PosixSerialPort::close() noexcept {
   if (fd_ >= 0) {
+    const int native_fd = static_cast<int>(fd_);
 #if defined(TIOCNXCL)
-    (void)::ioctl(fd_, TIOCNXCL);
+    (void)::ioctl(native_fd, TIOCNXCL);
 #endif
-    ::close(fd_);
+    ::close(native_fd);
     fd_ = -1;
   }
 }
@@ -259,7 +260,7 @@ bool PosixSerialPort::is_open() const noexcept {
   return fd_ >= 0;
 }
 
-int PosixSerialPort::native_handle() const noexcept {
+std::intptr_t PosixSerialPort::native_handle() const noexcept {
   return fd_;
 }
 
@@ -269,9 +270,10 @@ Status PosixSerialPort::write_all(std::span<const std::byte> bytes) noexcept {
   }
 
   const auto* data = reinterpret_cast<const std::uint8_t*>(bytes.data());
+  const int native_fd = static_cast<int>(fd_);
   std::size_t total_written = 0;
   while (total_written < bytes.size()) {
-    const ssize_t written = ::write(fd_, data + total_written, bytes.size() - total_written);
+    const ssize_t written = ::write(native_fd, data + total_written, bytes.size() - total_written);
     if (written < 0) {
       if (errno == EINTR) {
         continue;
@@ -292,8 +294,9 @@ Status PosixSerialPort::read_some(
     return transport_error("Serial port is not open");
   }
 
+  const int native_fd = static_cast<int>(fd_);
   pollfd descriptor {};
-  descriptor.fd = fd_;
+  descriptor.fd = native_fd;
   descriptor.events = POLLIN;
   const int poll_result = ::poll(&descriptor, 1, timeout_ms);
   if (poll_result < 0) {
@@ -309,7 +312,7 @@ Status PosixSerialPort::read_some(
     return transport_error("Serial port reported an error");
   }
 
-  const ssize_t received = ::read(fd_, buffer.data(), buffer.size());
+  const ssize_t received = ::read(native_fd, buffer.data(), buffer.size());
   if (received < 0) {
     if (errno == EINTR || errno == EAGAIN) {
       return ok_status();
@@ -325,7 +328,7 @@ Status PosixSerialPort::flush_rx() noexcept {
   if (fd_ < 0) {
     return transport_error("Serial port is not open");
   }
-  if (::tcflush(fd_, TCIFLUSH) != 0) {
+  if (::tcflush(static_cast<int>(fd_), TCIFLUSH) != 0) {
     return transport_error("tcflush failed");
   }
   return ok_status();
@@ -335,7 +338,7 @@ Status PosixSerialPort::drain_tx() noexcept {
   if (fd_ < 0) {
     return transport_error("Serial port is not open");
   }
-  if (::tcdrain(fd_) != 0) {
+  if (::tcdrain(static_cast<int>(fd_)) != 0) {
     return transport_error("tcdrain failed");
   }
   return ok_status();
@@ -346,8 +349,9 @@ Status PosixSerialPort::set_rts(bool enabled) noexcept {
     return transport_error("Serial port is not open");
   }
 
+  const int native_fd = static_cast<int>(fd_);
   int modem_bits = 0;
-  if (::ioctl(fd_, TIOCMGET, &modem_bits) != 0) {
+  if (::ioctl(native_fd, TIOCMGET, &modem_bits) != 0) {
     return transport_error("TIOCMGET failed");
   }
   if (enabled) {
@@ -355,7 +359,7 @@ Status PosixSerialPort::set_rts(bool enabled) noexcept {
   } else {
     modem_bits &= ~TIOCM_RTS;
   }
-  if (::ioctl(fd_, TIOCMSET, &modem_bits) != 0) {
+  if (::ioctl(native_fd, TIOCMSET, &modem_bits) != 0) {
     return transport_error("TIOCMSET failed");
   }
   return ok_status();

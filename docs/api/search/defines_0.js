@@ -1,0 +1,27 @@
+var searchData=
+[
+  ['mcprotocol_5fexample_5fdebug_5fbaud_0',['MCPROTOCOL_EXAMPLE_DEBUG_BAUD',['../platformio__arduino__mega2560__uart_8cpp.html#afde2ea4d2ea8350b380fa5480ee836ec',1,'MCPROTOCOL_EXAMPLE_DEBUG_BAUD:&#160;platformio_arduino_mega2560_uart.cpp'],['../platformio__esp32c3__arduino__uart_8cpp.html#afde2ea4d2ea8350b380fa5480ee836ec',1,'MCPROTOCOL_EXAMPLE_DEBUG_BAUD:&#160;platformio_esp32c3_arduino_uart.cpp'],['../platformio__rpipico__arduino__uart_8cpp.html#afde2ea4d2ea8350b380fa5480ee836ec',1,'MCPROTOCOL_EXAMPLE_DEBUG_BAUD:&#160;platformio_rpipico_arduino_uart.cpp']]],
+  ['mcprotocol_5fexample_5fplc_5fbaud_1',['MCPROTOCOL_EXAMPLE_PLC_BAUD',['../platformio__arduino__mega2560__uart_8cpp.html#aef3c95a6fcec4a56dc289d4d26418257',1,'MCPROTOCOL_EXAMPLE_PLC_BAUD:&#160;platformio_arduino_mega2560_uart.cpp'],['../platformio__esp32c3__arduino__uart_8cpp.html#aef3c95a6fcec4a56dc289d4d26418257',1,'MCPROTOCOL_EXAMPLE_PLC_BAUD:&#160;platformio_esp32c3_arduino_uart.cpp'],['../platformio__rpipico__arduino__uart_8cpp.html#aef3c95a6fcec4a56dc289d4d26418257',1,'MCPROTOCOL_EXAMPLE_PLC_BAUD:&#160;platformio_rpipico_arduino_uart.cpp']]],
+  ['mcprotocol_5fexample_5fpoll_5finterval_5fms_2',['MCPROTOCOL_EXAMPLE_POLL_INTERVAL_MS',['../platformio__arduino__mega2560__uart_8cpp.html#ac83205779de58aeb623ee451ff4d0bfc',1,'MCPROTOCOL_EXAMPLE_POLL_INTERVAL_MS:&#160;platformio_arduino_mega2560_uart.cpp'],['../platformio__esp32c3__arduino__uart_8cpp.html#ac83205779de58aeb623ee451ff4d0bfc',1,'MCPROTOCOL_EXAMPLE_POLL_INTERVAL_MS:&#160;platformio_esp32c3_arduino_uart.cpp'],['../platformio__rpipico__arduino__uart_8cpp.html#ac83205779de58aeb623ee451ff4d0bfc',1,'MCPROTOCOL_EXAMPLE_POLL_INTERVAL_MS:&#160;platformio_rpipico_arduino_uart.cpp']]],
+  ['mcprotocol_5fserial_5fenable_5fcpu_5fmodel_5fcommands_3',['MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS',['../types_8hpp.html#a70cc50f4aefb5efeced1bafcae5f63b9',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fenable_5fhost_5fbuffer_5fcommands_4',['MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS',['../types_8hpp.html#a47eeb96bb27152c8bc56e16040e6d882',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fenable_5floopback_5fcommands_5',['MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS',['../types_8hpp.html#a57839f4e032d840f19a4f36bf0293c2b',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fenable_5fmodule_5fbuffer_5fcommands_6',['MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS',['../types_8hpp.html#ad095ed7a2cb9281f95f379f6c87ee275',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fenable_5fmonitor_5fcommands_7',['MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS',['../types_8hpp.html#a4e843dcd394c75cca520d0c4c3a9dad1',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fenable_5fmulti_5fblock_5fcommands_8',['MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS',['../types_8hpp.html#a5c781de50c4909545db1deda8a3a3ddb',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fenable_5frandom_5fcommands_9',['MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS',['../types_8hpp.html#a8aa74bbfe274634233751c804caf56fa',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fmax_5fbatch_5fbit_5fpoints_5fascii_10',['MCPROTOCOL_SERIAL_MAX_BATCH_BIT_POINTS_ASCII',['../types_8hpp.html#a9509740a9a06625cbfdb4829cc3db3cb',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fmax_5fbatch_5fbit_5fpoints_5fbinary_11',['MCPROTOCOL_SERIAL_MAX_BATCH_BIT_POINTS_BINARY',['../types_8hpp.html#a06c615f9ea2ea28040755cc8dcc2f3ad',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fmax_5fbatch_5fword_5fpoints_12',['MCPROTOCOL_SERIAL_MAX_BATCH_WORD_POINTS',['../types_8hpp.html#a66ce144cd71dba30e810f6cb7c208707',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fmax_5floopback_5fbytes_13',['MCPROTOCOL_SERIAL_MAX_LOOPBACK_BYTES',['../types_8hpp.html#a657c78d6675bafa5cbbe32e0819f5ad3',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fmax_5fmonitor_5fitems_14',['MCPROTOCOL_SERIAL_MAX_MONITOR_ITEMS',['../types_8hpp.html#a3962db58709d9f2786b5d78203a7bed3',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fmax_5fmulti_5fblock_5fcount_15',['MCPROTOCOL_SERIAL_MAX_MULTI_BLOCK_COUNT',['../types_8hpp.html#a2352d6b82c39d8ad751a8db31b305c40',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fmax_5frandom_5faccess_5fitems_16',['MCPROTOCOL_SERIAL_MAX_RANDOM_ACCESS_ITEMS',['../types_8hpp.html#abce5d9dfe48435c9d158d0380add227c',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fmax_5frequest_5fdata_5fbytes_17',['MCPROTOCOL_SERIAL_MAX_REQUEST_DATA_BYTES',['../types_8hpp.html#adb4e27b062ef6d679832e0ee8c8ec44d',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fmax_5frequest_5fframe_5fbytes_18',['MCPROTOCOL_SERIAL_MAX_REQUEST_FRAME_BYTES',['../types_8hpp.html#a826e3a78ff6c39611ad114cee04bedee',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fmax_5fresponse_5fframe_5fbytes_19',['MCPROTOCOL_SERIAL_MAX_RESPONSE_FRAME_BYTES',['../types_8hpp.html#a972bf76cfbd75a05a4d6007ab953e079',1,'types.hpp']]],
+  ['mcprotocol_5fserial_5fversion_5fmajor_20',['MCPROTOCOL_SERIAL_VERSION_MAJOR',['../version_8hpp.html#a1e61a3ccef56d31e2689ab5a0f28772e',1,'version.hpp']]],
+  ['mcprotocol_5fserial_5fversion_5fminor_21',['MCPROTOCOL_SERIAL_VERSION_MINOR',['../version_8hpp.html#aac1ddc5a4fc46c5d5cce5450b7dddde1',1,'version.hpp']]],
+  ['mcprotocol_5fserial_5fversion_5fpatch_22',['MCPROTOCOL_SERIAL_VERSION_PATCH',['../version_8hpp.html#adf8236ab71d99f09f8bd2001a810048d',1,'version.hpp']]],
+  ['mcprotocol_5fserial_5fversion_5fstring_23',['MCPROTOCOL_SERIAL_VERSION_STRING',['../version_8hpp.html#ad2dad3dbe34bddab6aad34c86279311e',1,'version.hpp']]]
+];

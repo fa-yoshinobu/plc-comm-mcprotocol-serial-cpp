@@ -61,7 +61,7 @@ struct LinkDirectMultiBlockWriteRequest {
   std::span<const LinkDirectMultiBlockWriteBlock> blocks {};
 };
 
-/// \brief `Jn\\...` monitor registration payload (`0801` + `00C0`).
+/// \brief `Jn\\...` monitor registration payload (`0801` + device extension specification).
 struct LinkDirectMonitorRegistration {
   std::span<const LinkDirectRandomReadItem> items {};
 };

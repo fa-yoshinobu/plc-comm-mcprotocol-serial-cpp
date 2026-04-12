@@ -44,6 +44,9 @@ Validated target:
 |---|---|---|---|
 | CPU identification | `cpu-model` | native pass | returns `R08CPU`, `0x4801` |
 | Loopback | `loopback` | native pass | validated on real hardware |
+| Clear error information | `1617` via `error-clear` | native pass | validated on `R120PCPU / RJ71C24-R2 / --series iqr` |
+| Remote RUN/STOP/PAUSE | `1001/1002/1003` via `remote-run` / `remote-stop` / `remote-pause` | native pass | validated on `R120PCPU / RJ71C24-R2 / --series iqr` |
+| Remote RESET | `1006` via `remote-reset` | native ng / parameter-dependent | currently returns PLC error `0x408B`; the manual requires the target to be `STOP` and remote RESET to be enabled in the target parameter |
 | Contiguous word read | `0401` via `read-words` | native pass | validated up to `960` words |
 | Contiguous word write | `1401` via `write-words` | native pass | validated up to `960` words |
 | Contiguous bit read | `0401` via `read-bits` | native pass | validated up to `3584` bits |
@@ -52,15 +55,17 @@ Validated target:
 | Host buffer write | `1613` | native pass | real-hardware verify and restore completed |
 | Module buffer read | `0601` | native pass | validated up to `1920` bytes |
 | Module buffer write | `1601` | native pass | real-hardware verify and restore completed |
-| Qualified helper read/write | `read-qualified-words` / `write-qualified-words` over `0601/1601` | helper pass, narrow scope | recommended public path on this setup; `U3E0\\HG20` single-word read/write/restore passed; `2026-04-11` spot recheck `U3E0\\G10=0x83BD` |
-| Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | unsupported / diagnostic only | helper-only is the supported specification on this target; historical native probes produced `0x7F22`, timeout, `0x4031`, and semantically mismatched success |
-| Random read | native `0403` | native pass | `2026-04-11` focused recheck passed natively under `--series ql`; `--series iqr` still failed with `0x7F23` |
-| Random write words | native `1402` | native pass | `2026-04-11` focused recheck passed natively under `--series ql`; `--series iqr` still failed with `0x7F23` |
-| Random write bits | native `1402` | native pass | `2026-04-11` focused recheck passed natively under `--series ql`; `--series iqr` still failed with `0x7F23` |
-| Multi-block read | native `0406` | native pass | `2026-04-11` recheck on the corrected binary encoder passed with `0406 0002` |
-| Multi-block write | native `1406` | native pass | `2026-04-11` recheck on the corrected binary encoder passed with `1406 0002` and restore |
-| Monitor register/read | native `0801/0802` | native pass | `2026-04-11` focused recheck passed under `--series ql`; `--series iqr` still produced `0801=0x7F23` and raw `0802=0x7155` |
-| iQ-R-only spot devices and `Jn\\...` surface | `SM`, `SD`, `RD`, `LZ`, `J1\\...`, `LTN/LSTN/LCN` | target-dependent | current per-device read/write matrix lives in [RJ71C24_R2_RS232C.md](RJ71C24_R2_RS232C.md); use `--series iqr` only for these spot-device checks. `Jn\\...` batch read/write are hardware-validated; random / multi-block / monitor are implemented but not yet hardware-validated |
+| Qualified helper read/write | `read-qualified-words` / `write-qualified-words` over `0601/1601` | helper pass, narrow scope | recommended public path on this setup; `U3E0\\HG20` single-word read/write/restore passed |
+| Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | unsupported / diagnostic only | helper-only is the supported specification on this target; native qualified access is not treated as a supported workflow |
+| Random read | native `0403` | native pass | validated under both `--series ql` and `--series iqr` on the current RJ71C24-R2 targets |
+| Random write words | native `1402` | native pass | validated under both `--series ql` and `--series iqr` on the current RJ71C24-R2 targets |
+| Random write bits | native `1402` | native pass | validated under both `--series ql` and `--series iqr` on the current RJ71C24-R2 targets |
+| Multi-block read | native `0406` | native pass | validated on the current setup |
+| Multi-block write | native `1406` | native pass | validated with restore on the current setup |
+| Monitor register/read | native `0801/0802` | native pass | validated under both `--series ql` and `--series iqr` on the current RJ71C24-R2 targets |
+| iQ-R-only spot devices and `Jn\\...` surface | `SM`, `SD`, `RD`, `LZ`, `J1\\...`, `LTN/LSTN/LCN` | native pass | current per-device read/write matrix lives in [RJ71C24_R2_RS232C.md](RJ71C24_R2_RS232C.md) |
+| Special-device post-control sanity | `SM`, `SD`, `RD`, `LZ`, `LCN`, `J1\\...` under `--series iqr` | native pass | current focused read/write/restore checks pass on the validated target |
+| User frame / serial-module extras | `0610`, `1610`, `1615`, `1618`, `0631` | native pass | validated on `R120PCPU / RJ71C24-R2 / --series iqr`; flash user-frame `0x03E8` reads back with matching registration data and `frame-bytes=0`, while buffer-memory frame `0x8001` returns `frame-bytes=5` |
 | Device-family read probe | `probe-all` | pass | `26/26` passed after dropping `RD` from the supported device set |
 | Device-family write probe | `probe-write-all` | pass with exclusions | `25/25` passed after excluding `S` and using `F100` instead of `F0` |
 
@@ -76,17 +81,17 @@ Additional validated target:
 | CPU identification | `cpu-model` | native pass | returns `FX5UC-32MT/D`, `0x4A91` |
 | Contiguous read/write | `0401/1401` via `read-*` / `write-*` | native pass, narrow subset | validated `21`-target subset passed under `--series ql`; the FX5 communication manual's serial `3C/4C` accessible-device table marks `DX`, `DY`, `V`, and `ZR` inaccessible, matching observed `DX10` / `DY10` `0x7E43` probes and the decision to exclude all four from the FX subset |
 | Supported-device soak | `fx5u_supported_device_rw_soak.sh` | pass | two `180` second runs passed with no protocol errors on the screened `21` target subset |
-| Host buffer read | `0613` | native ng / not applicable | `probe-host-buffer` returned `0x7E40` |
-| Host buffer write | `1613` | native ng / not applicable | backup read failed with `0x7E40` |
-| Module buffer read/write | `0601/1601` | native ng / not applicable | `probe-module-buffer` and `probe-write-module-buffer` returned `0x7E40` |
-| Qualified helper read/write | `read-qualified-words` / `write-qualified-words` over `0601/1601` | helper ng / not applicable | helper `U3E0\\G10` and `U3E0\\HG20` returned `0x7E40` |
+| Host buffer read | `0613` | unsupported / not applicable | `probe-host-buffer` returned `0x7E40`, and the FX5 serial `3C/4C` command list does not list `0613` |
+| Host buffer write | `1613` | unsupported / not applicable | backup read failed with `0x7E40`, and the FX5 serial `3C/4C` command list does not list `1613` |
+| Module buffer read/write | `0601/1601` | unsupported / not applicable | `probe-module-buffer` and `probe-write-module-buffer` returned `0x7E40`, and the FX5 serial `3C/4C` command list does not list `0601/1601` |
+| Qualified helper read/write | `read-qualified-words` / `write-qualified-words` over `0601/1601` | unsupported / not applicable | helper `U3E0\\G10` and `U3E0\\HG20` returned `0x7E40` because the underlying `0601/1601` family is not listed on the FX5 serial `3C/4C` command list |
 | Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | unsupported / not applicable | native `U3E0\\G10` returned `0x7E43`; native `HG` path is not applicable under `--series ql` |
-| Random read | native `0403` | native pass | `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` focused rechecks passed under `--series ql`; `RJ71C24-R2 --series iqr` still failed and should be treated as a false-negative probe mode. `FX5UC-32MT/D`: after switching non-iQ-R binary word/dword counts from two-byte fields to the one-byte Q/L-era layout used in the binary manual examples, focused single/dense/sparse word/bit probes passed natively |
-| Random write words | native `1402` | native pass | `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` focused rechecks passed under `--series ql`; `RJ71C24-R2 --series iqr` still failed and should be treated as a false-negative probe mode. `FX5UC-32MT/D`: the same non-iQ-R binary one-byte word/dword count fix made focused single/dense/sparse `D100` probes pass natively with restore |
-| Random write bits | native `1402` | native pass | `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` focused rechecks passed under `--series ql`; `RJ71C24-R2 --series iqr` still failed and should be treated as a false-negative probe mode. `FX5UC-32MT/D`: after the binary one-byte count fix from the page `108` example plus unrelated captured binary traffic, a second FX5U recheck isolated pair-swapped bit-address parity inside each two-point unit; correcting that made focused single/dense/sparse `M100..M115` probes pass natively |
-| Multi-block read | native `0406` | native pass | after the binary block-count fix based on capture and manual re-read, `probe-multi-block` read passed natively |
-| Multi-block write | native `1406` | native pass | after the follow-up binary bit-block pair-order fix, `probe-multi-block[mixed]` passed natively with restore |
-| Monitor register/read | `0801/0802` | target-dependent | `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` focused rechecks passed under `--series ql`; `RJ71C24-R2 --series iqr` still produced `0801=0x7F23`, raw `0802=0x7155`. `FX5UC-32MT/D`: `0801` and raw `0802` both returned `0x7E40`, and the FX5 communication manual's serial `3C/4C` command list does not include `0801/0802` |
+| Random read | native `0403` | native pass | focused single/dense/sparse probes pass under `--series ql` |
+| Random write words | native `1402` | native pass | focused single/dense/sparse probes pass with restore under `--series ql` |
+| Random write bits | native `1402` | native pass | focused single/dense/sparse probes pass with restore under `--series ql` |
+| Multi-block read | native `0406` | native pass | validated on the current setup |
+| Multi-block write | native `1406` | native pass | validated with restore on the current setup |
+| Monitor register/read | `0801/0802` | target-dependent | `0801` and raw `0802` returned `0x7E40`, and the FX5 communication manual's serial `3C/4C` command list does not include `0801/0802` |
 
 Additional validated target:
 
@@ -102,16 +107,16 @@ Additional validated target:
 | Contiguous read/write | `0401/1401` via `read-*` / `write-*` | native pass | supported-device screening `25/25` passed with non-low addresses under `--series ql` |
 | Supported-device soak | `supported_device_rw_soak.sh` | pass | two `180` second runs passed with no protocol errors; bit-family readback often showed RUN overwrite |
 | Host buffer read | `0613` | native pass | `probe-host-buffer` passed |
-| Host buffer write | `1613` | hold | `probe-write-host-buffer` wrote but verify mismatched at start `0` |
+| Host buffer write | `1613` | native pass | writable verification starts at `2`; `start 0/1` stayed unchanged on this target |
 | Module buffer read/write | `0601/1601` | native pass | `probe-module-buffer` and `probe-write-module-buffer` passed |
 | Qualified helper read/write | `read-qualified-words` / `write-qualified-words` over `0601/1601` | helper pass, narrow scope | helper `U3E0\\G10=0x0000`; helper `U3E0\\HG20` read/write/restore passed |
 | Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | unsupported / not applicable | helper-only is the supported specification on this target; native `U3E0\\G10` returned `0x4030`; native `HG` path is not applicable under `--series ql` |
-| Random read | native `0403` | native pass | focused `single/dense/sparse` rechecks passed under `--series ql` |
-| Random write words | native `1402` | native pass | focused `single/dense/sparse` rechecks passed under `--series ql` with restore |
-| Random write bits | native `1402` | native pass | focused `single/dense/sparse` rechecks passed under `--series ql` with restore |
-| Multi-block read | native `0406` | native pass | focused `probe-multi-block[mixed]` recheck passed natively |
-| Multi-block write | native `1406` | native pass | focused `probe-multi-block[mixed]` recheck passed natively with restore |
-| Monitor register/read | `0801/0802` | native pass | focused recheck passed under `--series ql` |
+| Random read | native `0403` | native pass | validated on the current setup |
+| Random write words | native `1402` | native pass | validated with restore on the current setup |
+| Random write bits | native `1402` | native pass | validated with restore on the current setup |
+| Multi-block read | native `0406` | native pass | validated on the current setup |
+| Multi-block write | native `1406` | native pass | validated with restore on the current setup |
+| Monitor register/read | `0801/0802` | native pass | validated on the current setup |
 
 Additional validated target:
 
@@ -127,16 +132,16 @@ Additional validated target:
 | Contiguous read/write | `0401/1401` via `read-*` / `write-*` | native pass | `read-words D100 1` and `read-bits M100 1` passed; supported-device soak passed |
 | Supported-device soak | `supported_device_rw_soak.sh` | pass | one `180` second run passed with no protocol errors; bit-family readback often showed RUN overwrite |
 | Host buffer read | `0613` | native pass | `probe-host-buffer` passed |
-| Host buffer write | `1613` | hold | `probe-write-host-buffer` wrote but verify mismatched at start `0` |
+| Host buffer write | `1613` | native pass | writable verification starts at `2`; `start 0/1` stayed unchanged on this target |
 | Module buffer read/write | `0601/1601` | native pass | `probe-module-buffer` and `probe-write-module-buffer` passed |
 | Qualified helper read/write | `read-qualified-words` / `write-qualified-words` over `0601/1601` | helper pass, narrow scope | helper `U3E0\\G10=0x1000`; helper `U3E0\\HG20` read/write/restore passed |
 | Qualified native read/write | `read-native-qualified-words` / `write-native-qualified-words` over native extended-device access | unsupported / not applicable | helper-only is the supported specification on this target; native `U3E0\\G10` returned `0x4030`; native `HG` path is not applicable under `--series ql` |
-| Random read | native `0403` | native pass | focused `single/dense/sparse` rechecks passed under `--series ql` |
-| Random write words | native `1402` | native pass | focused `single/dense/sparse` rechecks passed under `--series ql` with restore |
-| Random write bits | native `1402` | native pass | focused `single/dense/sparse` rechecks passed under `--series ql` with restore |
-| Multi-block read | native `0406` | native pass | focused `probe-multi-block[mixed]` recheck passed natively |
-| Multi-block write | native `1406` | native pass | focused `probe-multi-block[mixed]` recheck passed natively with restore |
-| Monitor register/read | `0801/0802` | native pass | focused recheck passed under `--series ql` |
+| Random read | native `0403` | native pass | validated on the current setup |
+| Random write words | native `1402` | native pass | validated with restore on the current setup |
+| Random write bits | native `1402` | native pass | validated with restore on the current setup |
+| Multi-block read | native `0406` | native pass | validated on the current setup |
+| Multi-block write | native `1406` | native pass | validated with restore on the current setup |
+| Monitor register/read | `0801/0802` | native pass | validated on the current setup |
 
 ## Stress / Endurance Snapshot
 
@@ -157,16 +162,7 @@ Additional validated target:
 
 Target-specific holds:
 
-- native `LZ` double-word access on `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr`
-  still returns `0x7F23` on every manual-listed path tried so far:
-  `0403 random-read`, `1402 random-write-words`, and `0801 register monitor`
-- native `0403` random-read on `LTN`, `LSTN`, and `LCN` on `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr`
-  (`random-read LTN0`, `LSTN0`, and `LCN0` return `0x7F23`, while structured/batch reads
-  `read-words LTN10 4`, `read-words LSTN10 4`, and `read-words LCN10 2` pass)
-- native `1402` random-write-words on `LTN`, `LSTN`, and `LCN` on `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr`
-  still returns `0x7F23`; `LCN` does work through `1401` batch word write
-  (`write-words LCN10=<low> LCN11=<high>` readback/restore pass)
-- host/module buffer access on `FX5UC-32MT/D`
+- none at the command-family level on the currently validated targets
 
 Unsupported / diagnostic-only items:
 
@@ -176,7 +172,7 @@ Unsupported / diagnostic-only items:
 
 - request encoding now matches the documented MC protocol request shapes used by the validated targets
 - `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` pass the practical native random / write / multi-block / monitor families under `--series ql`
-- `RJ71C24-R2 --series iqr` is a spot-device probe mode, not the general native-family mode
+- `RJ71C24-R2` supports native `0403/1402/0801` on the validated `--series iqr` spot-device path
 - `FX5UC-32MT/D` passes native `0403`, `1402`, `0406`, and `1406`
 - `FX5UC-32MT/D` `0801/0802` should be treated as unsupported on serial `3C/4C`
 - qualified helper commands and native qualified probes remain separate paths; native qualified stays unsupported by specification

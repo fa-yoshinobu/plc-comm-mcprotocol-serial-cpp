@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 
 #include "mcprotocol/serial/status.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
@@ -9,7 +10,10 @@
 
 namespace mcprotocol::serial {
 
-/// \brief POSIX serial-port configuration used by `PosixSerialPort`.
+/// \brief Host-side serial-port configuration used by `PosixSerialPort`.
+///
+/// `device_path` accepts `/dev/...` style paths on POSIX systems and `COM3` or `\\.\COM10`
+/// style names on Windows.
 struct PosixSerialConfig {
   std::string_view device_path {};
   std::uint32_t baud_rate = 9600;
@@ -19,7 +23,7 @@ struct PosixSerialConfig {
   bool rts_cts = false;
 };
 
-/// \brief Minimal blocking POSIX serial-port wrapper used by the Linux CLI tools.
+/// \brief Minimal blocking host-side serial-port wrapper used by the CLI tools.
 ///
 /// This class is not required on MCU targets. It exists so the same request/response codec and
 /// client logic can be exercised from host-side validation tools.
@@ -36,10 +40,10 @@ class PosixSerialPort {
   /// \brief Closes the serial port if it is open.
   void close() noexcept;
 
-  /// \brief Returns whether the file descriptor is currently open.
+  /// \brief Returns whether the serial port is currently open.
   [[nodiscard]] bool is_open() const noexcept;
-  /// \brief Returns the native file descriptor, or `-1` when closed.
-  [[nodiscard]] int native_handle() const noexcept;
+  /// \brief Returns the native handle value, or `-1` when closed.
+  [[nodiscard]] std::intptr_t native_handle() const noexcept;
 
   /// \brief Writes the entire byte range before returning.
   [[nodiscard]] Status write_all(std::span<const std::byte> bytes) noexcept;
@@ -56,7 +60,7 @@ class PosixSerialPort {
   [[nodiscard]] Status set_rts(bool enabled) noexcept;
 
  private:
-  int fd_ = -1;
+  std::intptr_t fd_ = -1;
 };
 
 }  // namespace mcprotocol::serial

@@ -8,6 +8,7 @@ Start with the simplest entry that matches your environment.
   - host-side synchronous wrapper
   - read-only bring-up flow
   - easiest library example to read first
+  - use `COM3` on Windows or `/dev/ttyUSB0` on POSIX hosts
 
 Build and run:
 

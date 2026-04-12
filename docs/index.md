@@ -15,6 +15,7 @@ The maintained documentation lives in the repository itself:
 - [Hardware Validation Matrix](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/blob/main/docsrc/validation/reports/HARDWARE_VALIDATION.md)
 - [Developer Notes](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/blob/main/docsrc/maintainer/DEVELOPER_NOTES.md)
 - [Native Command Backlog](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/blob/main/docsrc/maintainer/NATIVE_COMMAND_BACKLOG.md)
+- [Generated API Docs](api/index.html)
 
 Generated API documentation is produced by the host build:
 
@@ -23,4 +24,4 @@ cmake -S . -B build
 cmake --build build --target docs
 ```
 
-The generated files are written under `build/docs/doxygen/html`.
+The generated API files are written under `docs/api/`.

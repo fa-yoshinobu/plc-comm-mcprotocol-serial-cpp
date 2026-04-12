@@ -7,14 +7,29 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(MCPROTOCOL_BUILD_EXAMPLES "Build compile-checked example programs" ON)
-set(MCPROTOCOL_DOXYGEN_RUNNER ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_doxygen.sh)
+if(WIN32)
+  set(MCPROTOCOL_DOXYGEN_RUNNER ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_doxygen.bat)
+else()
+  set(MCPROTOCOL_DOXYGEN_RUNNER ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_doxygen.sh)
+endif()
 set(MCPROTOCOL_MARKDOWN_LINK_CHECKER ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_markdown_links.py)
+
+set(MCPROTOCOL_SERIAL_PLATFORM_SOURCES)
+if(WIN32)
+  list(APPEND MCPROTOCOL_SERIAL_PLATFORM_SOURCES
+    src/win32_serial.cpp
+  )
+else()
+  list(APPEND MCPROTOCOL_SERIAL_PLATFORM_SOURCES
+    src/posix_serial.cpp
+  )
+endif()
 
 add_library(mcprotocol_serial
   src/client.cpp
   src/codec.cpp
   src/host_sync.cpp
-  src/posix_serial.cpp
+  ${MCPROTOCOL_SERIAL_PLATFORM_SOURCES}
 )
 
 target_include_directories(mcprotocol_serial
@@ -87,7 +102,7 @@ set(MCPROTOCOL_DOXYFILE_OUT ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
 configure_file(${MCPROTOCOL_DOXYFILE_IN} ${MCPROTOCOL_DOXYFILE_OUT} @ONLY)
 
 add_custom_target(docs
-  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/docs/doxygen
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/docs/api
   COMMAND ${MCPROTOCOL_DOXYGEN_RUNNER} ${MCPROTOCOL_DOXYFILE_OUT}
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMENT "Generating API documentation with Doxygen"

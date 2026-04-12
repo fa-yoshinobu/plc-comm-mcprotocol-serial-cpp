@@ -19,6 +19,12 @@ namespace {
 
 bool g_dump_frames = false;
 
+#if defined(_WIN32)
+constexpr const char* kDefaultSerialDevicePath = "COM1";
+#else
+constexpr const char* kDefaultSerialDevicePath = "/dev/ttyUSB0";
+#endif
+
 using mcprotocol::serial::AsciiFormat;
 using mcprotocol::serial::BatchReadBitsRequest;
 using mcprotocol::serial::BatchReadWordsRequest;
@@ -29,7 +35,16 @@ using mcprotocol::serial::CodeMode;
 using mcprotocol::serial::CpuModelInfo;
 using mcprotocol::serial::DeviceAddress;
 using mcprotocol::serial::DeviceCode;
+using mcprotocol::serial::ExtendedFileRegisterAddress;
+using mcprotocol::serial::ExtendedFileRegisterBatchReadWordsRequest;
+using mcprotocol::serial::ExtendedFileRegisterBatchWriteWordsRequest;
+using mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest;
+using mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest;
+using mcprotocol::serial::ExtendedFileRegisterMonitorRegistration;
+using mcprotocol::serial::ExtendedFileRegisterRandomWriteWordItem;
 using mcprotocol::serial::FrameKind;
+using mcprotocol::serial::GlobalSignalControlRequest;
+using mcprotocol::serial::GlobalSignalTarget;
 using mcprotocol::serial::HostBufferReadRequest;
 using mcprotocol::serial::HostBufferWriteRequest;
 using mcprotocol::serial::LinkDirectDevice;
@@ -58,10 +73,16 @@ using mcprotocol::serial::RandomReadItem;
 using mcprotocol::serial::RandomReadRequest;
 using mcprotocol::serial::RandomWriteBitItem;
 using mcprotocol::serial::RandomWriteWordItem;
+using mcprotocol::serial::RemoteOperationMode;
+using mcprotocol::serial::RemoteRunClearMode;
 using mcprotocol::serial::RouteKind;
 using mcprotocol::serial::Rs485Hooks;
 using mcprotocol::serial::Status;
 using mcprotocol::serial::StatusCode;
+using mcprotocol::serial::UserFrameDeleteRequest;
+using mcprotocol::serial::UserFrameReadRequest;
+using mcprotocol::serial::UserFrameRegistrationData;
+using mcprotocol::serial::UserFrameWriteRequest;
 using mcprotocol::serial::decode_qualified_buffer_word_values;
 using mcprotocol::serial::make_qualified_buffer_read_words_request;
 using mcprotocol::serial::make_qualified_buffer_write_words_request;
@@ -72,9 +93,25 @@ using mcprotocol::serial::qualified_buffer_kind_name;
 enum class CommandKind : std::uint8_t {
   None,
   CpuModel,
+  RemoteRun,
+  RemoteStop,
+  RemotePause,
+  RemoteLatchClear,
+  UnlockRemotePassword,
+  LockRemotePassword,
+  ClearError,
+  RemoteReset,
+  GlobalSignal,
+  InitializeTransmissionSequence,
+  DeregisterCpuMonitoring,
   RecoverC24,
   Loopback,
+  ReadUserFrame,
+  WriteUserFrame,
+  DeleteUserFrame,
   ReadWords,
+  ReadFileRegisterWords,
+  ReadFileRegisterWordsDirect,
   ReadBits,
   ReadLinkDirectWords,
   ReadLinkDirectBits,
@@ -98,9 +135,13 @@ enum class CommandKind : std::uint8_t {
   WriteNativeQualifiedWords,
   RandomRead,
   RandomWriteWords,
+  RandomWriteFileRegisterWords,
   RandomWriteBits,
   WriteWords,
+  WriteFileRegisterWords,
+  WriteFileRegisterWordsDirect,
   WriteBits,
+  MonitorFileRegister,
   ProbeAll,
   ProbeWriteAll,
   ProbeRandomRead,
@@ -251,6 +292,8 @@ constexpr std::array<ProbeTarget, 25> kProbeWriteTargets {{
 
 constexpr std::size_t kCliMaxBatchWordPoints = mcprotocol::serial::kMaxBatchWordPoints;
 constexpr std::size_t kCliMaxBatchBitPoints = mcprotocol::serial::kMaxBatchBitPointsAscii;
+constexpr std::size_t kCliMaxExtendedFileRegisterWordPoints = 256U;
+constexpr std::size_t kCliMaxExtendedFileRegisterRandomWriteItems = 40U;
 
 [[nodiscard]] std::uint32_t now_ms() {
   const auto now = std::chrono::steady_clock::now().time_since_epoch();
@@ -314,14 +357,58 @@ constexpr std::size_t kCliMaxBatchBitPoints = mcprotocol::serial::kMaxBatchBitPo
   return buffer_limit < protocol_limit ? buffer_limit : protocol_limit;
 }
 
+[[nodiscard]] constexpr bool cli_is_e1_frame(const ProtocolConfig& config) {
+  return config.frame_kind == FrameKind::E1;
+}
+
+[[nodiscard]] constexpr std::size_t cli_max_extended_file_register_word_points(const ProtocolConfig& config) {
+  return cli_is_e1_frame(config) ? 256U : 64U;
+}
+
+[[nodiscard]] constexpr std::size_t cli_max_extended_file_register_random_write_items(
+    const ProtocolConfig& config) {
+  return cli_is_e1_frame(config) ? 40U : 10U;
+}
+
+[[nodiscard]] constexpr std::uint32_t cli_max_extended_file_register_block_number(
+    const ProtocolConfig& config) {
+  return cli_is_e1_frame(config) ? 0xFFFFU : 999U;
+}
+
+[[nodiscard]] constexpr std::uint32_t cli_max_extended_file_register_word_number(
+    const ProtocolConfig& config) {
+  return cli_is_e1_frame(config) ? 0xFFFFU : 8191U;
+}
+
+[[nodiscard]] constexpr std::uint32_t cli_max_direct_extended_file_register_head_device_number(
+    const ProtocolConfig& config) {
+  return cli_is_e1_frame(config) ? 0xFFFFFFFFU : 9999999U;
+}
+
 void print_usage() {
   std::fprintf(
       stderr,
       "Usage:\n"
       "  mcprotocol_cli [options] cpu-model\n"
+      "  mcprotocol_cli [options] remote-run [no-force|force] [no-clear|outside-latch|all-clear]\n"
+      "  mcprotocol_cli [options] remote-stop\n"
+      "  mcprotocol_cli [options] remote-pause [no-force|force]\n"
+      "  mcprotocol_cli [options] latch-clear\n"
+      "  mcprotocol_cli [options] unlock PASSWORD\n"
+      "  mcprotocol_cli [options] lock PASSWORD\n"
+      "  mcprotocol_cli [options] error-clear\n"
+      "  mcprotocol_cli [options] remote-reset\n"
+      "  mcprotocol_cli [options] global-signal on|off current|x1a|x1b [STATION]\n"
+      "  mcprotocol_cli [options] init-sequence\n"
+      "  mcprotocol_cli [options] deregister-cpu-monitor\n"
       "  mcprotocol_cli [options] recover-c24 [eot|cl]\n"
       "  mcprotocol_cli [options] loopback HEXASCII\n"
+      "  mcprotocol_cli [options] read-user-frame FRAME_NO\n"
+      "  mcprotocol_cli [options] register-user-frame FRAME_NO FRAME_BYTES HEXBYTES\n"
+      "  mcprotocol_cli [options] delete-user-frame FRAME_NO\n"
       "  mcprotocol_cli [options] read-words DEVICE POINTS\n"
+      "  mcprotocol_cli [options] read-file-register BLOCK:RDEVICE POINTS\n"
+      "  mcprotocol_cli [options] read-file-register-direct DEVICE_NO POINTS\n"
       "  mcprotocol_cli [options] read-bits DEVICE POINTS\n"
       "  mcprotocol_cli [options] read-link-direct-words J1\\\\W100 POINTS\n"
       "  mcprotocol_cli [options] read-link-direct-bits J1\\\\X10 POINTS\n"
@@ -345,9 +432,13 @@ void print_usage() {
       "  mcprotocol_cli [options] write-native-qualified-words U3E0\\\\G0 VALUE [VALUE ...]\n"
       "  mcprotocol_cli [options] random-read DEVICE [DEVICE ...]\n"
       "  mcprotocol_cli [options] random-write-words DEVICE=VALUE [DEVICE=VALUE ...]\n"
+      "  mcprotocol_cli [options] random-write-file-register BLOCK:RDEVICE=VALUE [BLOCK:RDEVICE=VALUE ...]\n"
       "  mcprotocol_cli [options] random-write-bits DEVICE=0|1 [DEVICE=0|1 ...]\n"
       "  mcprotocol_cli [options] write-words DEVICE=VALUE [DEVICE=VALUE ...]\n"
+      "  mcprotocol_cli [options] write-file-register BLOCK:RDEVICE VALUE [VALUE ...]\n"
+      "  mcprotocol_cli [options] write-file-register-direct DEVICE_NO VALUE [VALUE ...]\n"
       "  mcprotocol_cli [options] write-bits DEVICE=0|1 [DEVICE=0|1 ...]\n"
+      "  mcprotocol_cli [options] monitor-file-register BLOCK:RDEVICE [BLOCK:RDEVICE ...]\n"
       "  mcprotocol_cli [options] probe-all\n"
       "  mcprotocol_cli [options] probe-write-all\n"
       "  mcprotocol_cli [options] probe-random-read\n"
@@ -361,7 +452,11 @@ void print_usage() {
       "  mcprotocol_cli [options] probe-write-module-buffer\n"
       "\n"
       "Options:\n"
+#if defined(_WIN32)
+      "  --device PATH               Serial device path (default: COM1)\n"
+#else
       "  --device PATH               Serial device path (default: /dev/ttyUSB0)\n"
+#endif
       "  --baud RATE                Baud rate (default: 9600)\n"
       "  --data-bits N              Data bits: 5/6/7/8 (default: 8)\n"
       "  --stop-bits N              Stop bits: 1/2 (default: 1)\n"
@@ -369,8 +464,8 @@ void print_usage() {
       "  --rts-cts on|off           Hardware flow control (default: off)\n"
       "  --rts-toggle on|off        Toggle RTS during TX for RS-485 DE control\n"
       "  --dump-frames on|off       Print raw TX/RX frame bytes to stderr (default: off)\n"
-      "  --frame MODE               c4-binary | c4-ascii-f1 | c4-ascii-f3 | c4-ascii-f4 | c3-ascii-f1 | c3-ascii-f3 | c3-ascii-f4\n"
-      "  --series ql|iqr            Target PLC family for device encoding (default: ql)\n"
+      "  --frame MODE               c4-binary | c4-ascii-f1 | c4-ascii-f3 | c4-ascii-f4 | c3-ascii-f1 | c3-ascii-f3 | c3-ascii-f4 | c2-ascii-f1 | c2-ascii-f3 | c2-ascii-f4 | c1-ascii-f1 | c1-ascii-f3 | c1-ascii-f4 | e1-binary | e1-ascii\n"
+      "  --series ql|iqr|qna|a      Target PLC family for device encoding (default: ql)\n"
       "  --station N                Station number; non-zero implies multidrop\n"
       "  --self-station N           Self-station number for m:n connections\n"
       "  --sum-check on|off         Enable or disable sum-check (default: on)\n"
@@ -378,11 +473,25 @@ void print_usage() {
       "  --inter-byte-timeout-ms N  Inter-byte timeout in milliseconds (default: 250)\n"
       "\n"
       "Notes:\n"
+      "  remote-run defaults to no-force + no-clear. Use force or all-clear only when you intend that effect.\n"
+      "  remote-pause defaults to no-force. remote-stop and latch-clear change PLC state.\n"
+      "  unlock/lock send the configured remote password as ASCII bytes; non-iQ-R targets use exactly 4 chars, iQ-R uses 6..32.\n"
+      "  error-clear sends C24 clear-error-information (1617); it is not the E71 COM.ERR-only variant.\n"
+      "  remote-reset may complete without a response; this CLI treats a pure response-timeout after TX as success.\n"
+      "  global-signal maps to C24 command 1618 on 2C/3C/4C; STATION defaults to 0.\n"
+      "  init-sequence maps to 1615 and is binary 4C format-5 only; some targets complete without replying.\n"
+      "  deregister-cpu-monitor maps to 0631 on 2C/3C/4C and stops chapter-13 CPU monitoring.\n"
       "  recover-c24 sends ASCII EOT CRLF by default; pass cl to send CL CRLF.\n"
       "  Use recover-c24 after timeout or mixed-response states on C24 ASCII links; no reply is expected.\n"
       "  read-qualified-words / write-qualified-words use the practical 0601/1601 helper path.\n"
       "  read-native-qualified-words / write-native-qualified-words are unsupported diagnostic probes, not a supported workflow.\n"
       "  link-direct commands use binary-only device extension specification for Jn\\\\X/Y/B/W/SB/SW.\n"
+      "  c1-ascii-* targets --series a or --series qna. File-register commands also map onto e1-* where chapter-18 supports them.\n"
+      "  loopback maps to TT on c1-ascii-* and 0619 on 2C/3C/4C.\n"
+      "  read/register/delete-user-frame map to 0610/1610 on 2C/3C/4C only; HEXBYTES is raw registration data in hexadecimal.\n"
+      "  e1-* targets --series a or --series qna. E1 exposes chapter-18 device-memory, extended-file-register, and special-function-module commands only.\n"
+      "  read/write/random-write/monitor-file-register use BLOCK:RDEVICE. On c1-ascii-* this is ER/EW/ET/EM/ME; on e1-* it is the chapter-18 block-addressed path.\n"
+      "  read/write-file-register-direct use a direct R-device number. On c1-ascii-* this is QnA-common NR/NW; on e1-* it is the chapter-18 direct path.\n"
       "  multi-block-read-link-direct-bits uses POINTS in 16-bit units.\n"
       "  multi-block-write-link-direct-bits expects a 0/1 bit string whose length is a multiple of 16.\n"
       "  probe-multi-block defaults to mixed; pass word-only/bit-only or a single block mode to isolate 1406 verification.\n"
@@ -404,6 +513,42 @@ void print_usage() {
   return parse_u32(text, out_value, 10);
 }
 
+[[nodiscard]] bool parse_hex_byte_string(
+    std::string_view text,
+    std::span<std::byte> out_bytes,
+    std::size_t& out_size) {
+  out_size = 0U;
+  if (text.empty() || (text.size() % 2U) != 0U) {
+    return false;
+  }
+  const std::size_t byte_count = text.size() / 2U;
+  if (byte_count > out_bytes.size()) {
+    return false;
+  }
+  const auto nibble = [](char ch) noexcept -> int {
+    if (ch >= '0' && ch <= '9') {
+      return ch - '0';
+    }
+    if (ch >= 'A' && ch <= 'F') {
+      return 10 + (ch - 'A');
+    }
+    if (ch >= 'a' && ch <= 'f') {
+      return 10 + (ch - 'a');
+    }
+    return -1;
+  };
+  for (std::size_t index = 0; index < byte_count; ++index) {
+    const int upper = nibble(text[index * 2U]);
+    const int lower = nibble(text[index * 2U + 1U]);
+    if (upper < 0 || lower < 0) {
+      return false;
+    }
+    out_bytes[index] = std::byte {static_cast<std::uint8_t>((upper << 4U) | lower)};
+  }
+  out_size = byte_count;
+  return true;
+}
+
 [[nodiscard]] bool parse_on_off(std::string_view text, bool& out_value) {
   if (text == "on") {
     out_value = true;
@@ -411,6 +556,68 @@ void print_usage() {
   }
   if (text == "off") {
     out_value = false;
+    return true;
+  }
+  return false;
+}
+
+[[nodiscard]] bool parse_global_signal_target(
+    std::string_view text,
+    GlobalSignalTarget& out_target) {
+  if (text == "current" || text == "received" || text == "local") {
+    out_target = GlobalSignalTarget::ReceivedSide;
+    return true;
+  }
+  if (text == "x1a") {
+    out_target = GlobalSignalTarget::X1A;
+    return true;
+  }
+  if (text == "x1b") {
+    out_target = GlobalSignalTarget::X1B;
+    return true;
+  }
+  return false;
+}
+
+[[nodiscard]] const char* global_signal_target_name(GlobalSignalTarget target) {
+  switch (target) {
+    case GlobalSignalTarget::ReceivedSide:
+      return "current";
+    case GlobalSignalTarget::X1A:
+      return "x1a";
+    case GlobalSignalTarget::X1B:
+      return "x1b";
+  }
+  return "unknown";
+}
+
+[[nodiscard]] bool parse_remote_operation_mode(
+    std::string_view text,
+    RemoteOperationMode& out_mode) {
+  if (text == "no-force" || text == "normal" || text == "safe" || text == "0001" || text == "1") {
+    out_mode = RemoteOperationMode::DoNotExecuteForcibly;
+    return true;
+  }
+  if (text == "force" || text == "0003" || text == "3") {
+    out_mode = RemoteOperationMode::ExecuteForcibly;
+    return true;
+  }
+  return false;
+}
+
+[[nodiscard]] bool parse_remote_run_clear_mode(
+    std::string_view text,
+    RemoteRunClearMode& out_clear_mode) {
+  if (text == "no-clear" || text == "none" || text == "00" || text == "0") {
+    out_clear_mode = RemoteRunClearMode::DoNotClear;
+    return true;
+  }
+  if (text == "outside-latch" || text == "outside" || text == "01" || text == "1") {
+    out_clear_mode = RemoteRunClearMode::ClearOutsideLatchRange;
+    return true;
+  }
+  if (text == "all-clear" || text == "all" || text == "02" || text == "2") {
+    out_clear_mode = RemoteRunClearMode::AllClear;
     return true;
   }
   return false;
@@ -511,6 +718,54 @@ void print_usage() {
     config.ascii_format = AsciiFormat::Format4;
     return true;
   }
+  if (text == "c2-ascii-f1") {
+    config.frame_kind = FrameKind::C2;
+    config.code_mode = CodeMode::Ascii;
+    config.ascii_format = AsciiFormat::Format1;
+    return true;
+  }
+  if (text == "c2-ascii-f3") {
+    config.frame_kind = FrameKind::C2;
+    config.code_mode = CodeMode::Ascii;
+    config.ascii_format = AsciiFormat::Format3;
+    return true;
+  }
+  if (text == "c2-ascii-f4") {
+    config.frame_kind = FrameKind::C2;
+    config.code_mode = CodeMode::Ascii;
+    config.ascii_format = AsciiFormat::Format4;
+    return true;
+  }
+  if (text == "c1-ascii-f1") {
+    config.frame_kind = FrameKind::C1;
+    config.code_mode = CodeMode::Ascii;
+    config.ascii_format = AsciiFormat::Format1;
+    return true;
+  }
+  if (text == "c1-ascii-f3") {
+    config.frame_kind = FrameKind::C1;
+    config.code_mode = CodeMode::Ascii;
+    config.ascii_format = AsciiFormat::Format3;
+    return true;
+  }
+  if (text == "c1-ascii-f4") {
+    config.frame_kind = FrameKind::C1;
+    config.code_mode = CodeMode::Ascii;
+    config.ascii_format = AsciiFormat::Format4;
+    return true;
+  }
+  if (text == "e1-binary") {
+    config.frame_kind = FrameKind::E1;
+    config.code_mode = CodeMode::Binary;
+    config.ascii_format = AsciiFormat::Format3;
+    return true;
+  }
+  if (text == "e1-ascii") {
+    config.frame_kind = FrameKind::E1;
+    config.code_mode = CodeMode::Ascii;
+    config.ascii_format = AsciiFormat::Format1;
+    return true;
+  }
   return false;
 }
 
@@ -521,6 +776,14 @@ void print_usage() {
   }
   if (text == "iqr") {
     config.target_series = PlcSeries::IQ_R;
+    return true;
+  }
+  if (text == "qna") {
+    config.target_series = PlcSeries::QnA;
+    return true;
+  }
+  if (text == "a") {
+    config.target_series = PlcSeries::A;
     return true;
   }
   return false;
@@ -751,7 +1014,7 @@ void print_usage() {
 }
 
 [[nodiscard]] bool parse_args(int argc, char** argv, CliOptions& options) {
-  options.serial.device_path = "/dev/ttyUSB0";
+  options.serial.device_path = kDefaultSerialDevicePath;
   options.protocol.frame_kind = FrameKind::C4;
   options.protocol.code_mode = CodeMode::Binary;
   options.protocol.ascii_format = AsciiFormat::Format3;
@@ -845,12 +1108,44 @@ void print_usage() {
     } else if (!arg.empty() && arg.front() != '-') {
       if (arg == "cpu-model" || arg == "read-cpu-model") {
         options.command = CommandKind::CpuModel;
+      } else if (arg == "remote-run" || arg == "run") {
+        options.command = CommandKind::RemoteRun;
+      } else if (arg == "remote-stop" || arg == "stop") {
+        options.command = CommandKind::RemoteStop;
+      } else if (arg == "remote-pause" || arg == "pause") {
+        options.command = CommandKind::RemotePause;
+      } else if (arg == "latch-clear" || arg == "remote-latch-clear") {
+        options.command = CommandKind::RemoteLatchClear;
+      } else if (arg == "unlock" || arg == "password-unlock") {
+        options.command = CommandKind::UnlockRemotePassword;
+      } else if (arg == "lock" || arg == "password-lock") {
+        options.command = CommandKind::LockRemotePassword;
+      } else if (arg == "error-clear" || arg == "clear-error") {
+        options.command = CommandKind::ClearError;
+      } else if (arg == "remote-reset" || arg == "reset") {
+        options.command = CommandKind::RemoteReset;
+      } else if (arg == "global-signal") {
+        options.command = CommandKind::GlobalSignal;
+      } else if (arg == "init-sequence" || arg == "initialize-sequence") {
+        options.command = CommandKind::InitializeTransmissionSequence;
+      } else if (arg == "deregister-cpu-monitor" || arg == "cpu-monitor-deregister") {
+        options.command = CommandKind::DeregisterCpuMonitoring;
       } else if (arg == "recover-c24") {
         options.command = CommandKind::RecoverC24;
       } else if (arg == "loopback") {
         options.command = CommandKind::Loopback;
+      } else if (arg == "read-user-frame") {
+        options.command = CommandKind::ReadUserFrame;
+      } else if (arg == "register-user-frame") {
+        options.command = CommandKind::WriteUserFrame;
+      } else if (arg == "delete-user-frame") {
+        options.command = CommandKind::DeleteUserFrame;
       } else if (arg == "read-words") {
         options.command = CommandKind::ReadWords;
+      } else if (arg == "read-file-register") {
+        options.command = CommandKind::ReadFileRegisterWords;
+      } else if (arg == "read-file-register-direct") {
+        options.command = CommandKind::ReadFileRegisterWordsDirect;
       } else if (arg == "read-bits") {
         options.command = CommandKind::ReadBits;
       } else if (arg == "read-link-direct-words") {
@@ -897,12 +1192,20 @@ void print_usage() {
         options.command = CommandKind::RandomRead;
       } else if (arg == "random-write-words") {
         options.command = CommandKind::RandomWriteWords;
+      } else if (arg == "random-write-file-register") {
+        options.command = CommandKind::RandomWriteFileRegisterWords;
       } else if (arg == "random-write-bits") {
         options.command = CommandKind::RandomWriteBits;
       } else if (arg == "write-words") {
         options.command = CommandKind::WriteWords;
+      } else if (arg == "write-file-register") {
+        options.command = CommandKind::WriteFileRegisterWords;
+      } else if (arg == "write-file-register-direct") {
+        options.command = CommandKind::WriteFileRegisterWordsDirect;
       } else if (arg == "write-bits") {
         options.command = CommandKind::WriteBits;
+      } else if (arg == "monitor-file-register") {
+        options.command = CommandKind::MonitorFileRegister;
       } else if (arg == "probe-all") {
         options.command = CommandKind::ProbeAll;
       } else if (arg == "probe-write-all") {
@@ -944,6 +1247,12 @@ void print_usage() {
 
   switch (options.command) {
     case CommandKind::CpuModel:
+    case CommandKind::RemoteStop:
+    case CommandKind::RemoteLatchClear:
+    case CommandKind::ClearError:
+    case CommandKind::RemoteReset:
+    case CommandKind::InitializeTransmissionSequence:
+    case CommandKind::DeregisterCpuMonitoring:
     case CommandKind::ProbeAll:
     case CommandKind::ProbeWriteAll:
     case CommandKind::ProbeRandomRead:
@@ -956,11 +1265,27 @@ void print_usage() {
     case CommandKind::ProbeWriteHostBuffer:
     case CommandKind::ProbeWriteModuleBuffer:
       return options.command_argc <= 1;
+    case CommandKind::RemoteRun:
+      return options.command_argc <= 2;
+    case CommandKind::RemotePause:
+      return options.command_argc <= 1;
+    case CommandKind::GlobalSignal:
+      return options.command_argc == 2 || options.command_argc == 3;
+    case CommandKind::UnlockRemotePassword:
+    case CommandKind::LockRemotePassword:
+      return options.command_argc == 1;
     case CommandKind::RecoverC24:
       return options.command_argc <= 1;
     case CommandKind::Loopback:
       return options.command_argc == 1;
+    case CommandKind::ReadUserFrame:
+    case CommandKind::DeleteUserFrame:
+      return options.command_argc == 1;
+    case CommandKind::WriteUserFrame:
+      return options.command_argc == 3;
     case CommandKind::ReadWords:
+    case CommandKind::ReadFileRegisterWords:
+    case CommandKind::ReadFileRegisterWordsDirect:
     case CommandKind::ReadBits:
     case CommandKind::ReadLinkDirectWords:
     case CommandKind::ReadLinkDirectBits:
@@ -989,9 +1314,13 @@ void print_usage() {
     case CommandKind::MonitorLinkDirect:
     case CommandKind::RandomRead:
     case CommandKind::RandomWriteWords:
+    case CommandKind::RandomWriteFileRegisterWords:
     case CommandKind::RandomWriteBits:
     case CommandKind::WriteWords:
+    case CommandKind::WriteFileRegisterWords:
+    case CommandKind::WriteFileRegisterWordsDirect:
     case CommandKind::WriteBits:
+    case CommandKind::MonitorFileRegister:
       return options.command_argc >= 1;
     case CommandKind::None:
       return false;
@@ -1057,6 +1386,12 @@ void dump_frame_bytes(std::string_view label, std::span<const std::byte> bytes) 
     std::fputc(std::isprint(ch) ? static_cast<int>(ch) : '.', stderr);
   }
   std::fputc('\n', stderr);
+}
+
+void print_hex_bytes(std::span<const std::byte> bytes) {
+  for (const std::byte value : bytes) {
+    std::printf("%02X", static_cast<unsigned>(std::to_integer<std::uint8_t>(value)));
+  }
 }
 
 [[nodiscard]] bool parse_c24_recovery_kind(
@@ -1429,6 +1764,66 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
   return true;
 }
 
+[[nodiscard]] bool parse_extended_file_register_address(
+    std::string_view text,
+    const ProtocolConfig& config,
+    ExtendedFileRegisterAddress& out_address) {
+  const std::size_t separator_pos = text.find(':');
+  const std::size_t slash_pos = text.find('/');
+  const std::size_t split_pos =
+      separator_pos != std::string_view::npos ? separator_pos : slash_pos;
+  if (split_pos == std::string_view::npos || split_pos == 0U || split_pos == (text.size() - 1U)) {
+    return false;
+  }
+
+  std::uint32_t block_number = 0;
+  if (!parse_u32(text.substr(0, split_pos), block_number)) {
+    return false;
+  }
+  const std::uint32_t max_block_number = cli_max_extended_file_register_block_number(config);
+  if (cli_is_e1_frame(config)) {
+    if (block_number > max_block_number) {
+      return false;
+    }
+  } else if (block_number == 0U || block_number > max_block_number) {
+    return false;
+  }
+
+  std::string_view right = text.substr(split_pos + 1U);
+  if (!right.empty() && (right.front() == 'R' || right.front() == 'r')) {
+    right.remove_prefix(1U);
+  }
+  std::uint32_t word_number = 0;
+  if (!parse_u32(right, word_number) ||
+      word_number > cli_max_extended_file_register_word_number(config)) {
+    return false;
+  }
+
+  out_address.block_number = static_cast<std::uint16_t>(block_number);
+  out_address.word_number = static_cast<std::uint16_t>(word_number);
+  return true;
+}
+
+[[nodiscard]] bool parse_extended_file_register_write_arg(
+    std::string_view text,
+    const ProtocolConfig& config,
+    ExtendedFileRegisterRandomWriteWordItem& out_item) {
+  const std::size_t equal_pos = text.find('=');
+  if (equal_pos == std::string_view::npos || equal_pos == 0U || equal_pos == (text.size() - 1U)) {
+    return false;
+  }
+  std::uint32_t value = 0;
+  ExtendedFileRegisterAddress address {};
+  if (!parse_extended_file_register_address(text.substr(0, equal_pos), config, address) ||
+      !parse_u32_auto(text.substr(equal_pos + 1U), value) ||
+      value > 0xFFFFU) {
+    return false;
+  }
+  out_item.device = address;
+  out_item.value = static_cast<std::uint16_t>(value);
+  return true;
+}
+
 [[nodiscard]] Status run_batch_write_words_group(
     MelsecSerialClient& client,
     PosixSerialPort& port,
@@ -1448,6 +1843,140 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
       &command_state);
   if (!start_status.ok()) {
     return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_read_extended_file_register_words(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const ExtendedFileRegisterBatchReadWordsRequest& request,
+    std::span<std::uint16_t> out_values) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_read_extended_file_register_words(
+      now_ms(),
+      request,
+      out_values,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_direct_read_extended_file_register_words(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const ExtendedFileRegisterDirectBatchReadWordsRequest& request,
+    std::span<std::uint16_t> out_values) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_direct_read_extended_file_register_words(
+      now_ms(),
+      request,
+      out_values,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_write_extended_file_register_words(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const ExtendedFileRegisterBatchWriteWordsRequest& request) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_write_extended_file_register_words(
+      now_ms(),
+      request,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_direct_write_extended_file_register_words(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const ExtendedFileRegisterDirectBatchWriteWordsRequest& request) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_direct_write_extended_file_register_words(
+      now_ms(),
+      request,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_random_write_extended_file_register_words(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    std::span<const ExtendedFileRegisterRandomWriteWordItem> items) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_random_write_extended_file_register_words(
+      now_ms(),
+      items,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_monitor_extended_file_register_words(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const ExtendedFileRegisterMonitorRegistration& request,
+    std::span<std::uint16_t> out_values) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  Status status = client.async_register_extended_file_register_monitor(
+      now_ms(),
+      request,
+      request_complete,
+      &command_state);
+  if (!status.ok()) {
+    return status;
+  }
+  status = drive_request(client, port, command_state);
+  if (!status.ok()) {
+    return status;
+  }
+
+  command_state.done = false;
+  command_state.status = Status {};
+  status = client.async_read_extended_file_register_monitor(
+      now_ms(),
+      out_values,
+      request_complete,
+      &command_state);
+  if (!status.ok()) {
+    return status;
   }
   return drive_request(client, port, command_state);
 }
@@ -2120,6 +2649,250 @@ int main(int argc, char** argv) {
       return 0;
     }
 
+    case CommandKind::RemoteRun: {
+      RemoteOperationMode mode = RemoteOperationMode::DoNotExecuteForcibly;
+      RemoteRunClearMode clear_mode = RemoteRunClearMode::DoNotClear;
+      if (options.command_argc >= 1 &&
+          !parse_remote_operation_mode(options.command_argv[0], mode)) {
+        std::fprintf(stderr, "remote-run mode must be no-force or force\n");
+        return 1;
+      }
+      if (options.command_argc >= 2 &&
+          !parse_remote_run_clear_mode(options.command_argv[1], clear_mode)) {
+        std::fprintf(stderr, "remote-run clear mode must be no-clear, outside-latch, or all-clear\n");
+        return 1;
+      }
+      status = client.async_remote_run(now_ms(), mode, clear_mode, request_complete, &command_state);
+      if (!status.ok()) {
+        print_status_error("Failed to start remote-run request", status);
+        return 1;
+      }
+      status = drive_request(client, port, command_state);
+      if (!status.ok()) {
+        print_status_error("remote-run request failed", status);
+        return 1;
+      }
+      std::printf("remote-run=ok mode=0x%04X clear=0x%02X\n",
+                  static_cast<unsigned>(mode),
+                  static_cast<unsigned>(clear_mode));
+      return 0;
+    }
+
+    case CommandKind::RemoteStop: {
+      status = client.async_remote_stop(now_ms(), request_complete, &command_state);
+      if (!status.ok()) {
+        print_status_error("Failed to start remote-stop request", status);
+        return 1;
+      }
+      status = drive_request(client, port, command_state);
+      if (!status.ok()) {
+        print_status_error("remote-stop request failed", status);
+        return 1;
+      }
+      std::printf("remote-stop=ok\n");
+      return 0;
+    }
+
+    case CommandKind::RemotePause: {
+      RemoteOperationMode mode = RemoteOperationMode::DoNotExecuteForcibly;
+      if (options.command_argc >= 1 &&
+          !parse_remote_operation_mode(options.command_argv[0], mode)) {
+        std::fprintf(stderr, "remote-pause mode must be no-force or force\n");
+        return 1;
+      }
+      status = client.async_remote_pause(now_ms(), mode, request_complete, &command_state);
+      if (!status.ok()) {
+        print_status_error("Failed to start remote-pause request", status);
+        return 1;
+      }
+      status = drive_request(client, port, command_state);
+      if (!status.ok()) {
+        print_status_error("remote-pause request failed", status);
+        return 1;
+      }
+      std::printf("remote-pause=ok mode=0x%04X\n", static_cast<unsigned>(mode));
+      return 0;
+    }
+
+    case CommandKind::RemoteLatchClear: {
+      status = client.async_remote_latch_clear(now_ms(), request_complete, &command_state);
+      if (!status.ok()) {
+        print_status_error("Failed to start latch-clear request", status);
+        return 1;
+      }
+      status = drive_request(client, port, command_state);
+      if (!status.ok()) {
+        print_status_error("latch-clear request failed", status);
+        return 1;
+      }
+      std::printf("latch-clear=ok\n");
+      return 0;
+    }
+
+    case CommandKind::UnlockRemotePassword: {
+      const std::string_view remote_password(options.command_argv[0]);
+      status = client.async_unlock_remote_password(
+          now_ms(),
+          remote_password,
+          request_complete,
+          &command_state);
+      if (!status.ok()) {
+        print_status_error("Failed to start unlock request", status);
+        return 1;
+      }
+      status = drive_request(client, port, command_state);
+      if (!status.ok()) {
+        print_status_error("unlock request failed", status);
+        return 1;
+      }
+      std::printf("unlock=ok length=%zu\n", remote_password.size());
+      return 0;
+    }
+
+    case CommandKind::LockRemotePassword: {
+      const std::string_view remote_password(options.command_argv[0]);
+      status = client.async_lock_remote_password(
+          now_ms(),
+          remote_password,
+          request_complete,
+          &command_state);
+      if (!status.ok()) {
+        print_status_error("Failed to start lock request", status);
+        return 1;
+      }
+      status = drive_request(client, port, command_state);
+      if (!status.ok()) {
+        print_status_error("lock request failed", status);
+        return 1;
+      }
+      std::printf("lock=ok length=%zu\n", remote_password.size());
+      return 0;
+    }
+
+    case CommandKind::ClearError: {
+      status = client.async_clear_error_information(now_ms(), request_complete, &command_state);
+      if (!status.ok()) {
+        print_status_error("Failed to start error-clear request", status);
+        return 1;
+      }
+      status = drive_request(client, port, command_state);
+      if (!status.ok()) {
+        print_status_error("error-clear request failed", status);
+        return 1;
+      }
+      std::printf("error-clear=ok\n");
+      return 0;
+    }
+
+    case CommandKind::RemoteReset: {
+      status = client.async_remote_reset(now_ms(), request_complete, &command_state);
+      if (!status.ok()) {
+        print_status_error("Failed to start remote-reset request", status);
+        return 1;
+      }
+      status = drive_request(client, port, command_state);
+      if (!status.ok()) {
+        print_status_error("remote-reset request failed", status);
+        return 1;
+      }
+      const bool no_response =
+          std::strcmp(status.message, "Remote RESET completed without a response") == 0;
+      std::printf("remote-reset=ok response=%s\n", no_response ? "none" : "ack");
+      return 0;
+    }
+
+    case CommandKind::GlobalSignal: {
+      bool turn_on = false;
+      GlobalSignalTarget target = GlobalSignalTarget::ReceivedSide;
+      std::uint8_t station_no = 0;
+      if (!parse_on_off(std::string_view(options.command_argv[0]), turn_on)) {
+        std::fprintf(stderr, "global-signal state must be on or off\n");
+        return 1;
+      }
+      if (!parse_global_signal_target(std::string_view(options.command_argv[1]), target)) {
+        std::fprintf(stderr, "global-signal target must be current, x1a, or x1b\n");
+        return 1;
+      }
+      if (options.command_argc == 3) {
+        std::uint32_t station_value = 0;
+        if (!parse_u32_auto(std::string_view(options.command_argv[2]), station_value) || station_value > 31U) {
+          std::fprintf(stderr, "global-signal station must be in range 0..31\n");
+          return 1;
+        }
+        station_no = static_cast<std::uint8_t>(station_value);
+      }
+
+      status = client.async_control_global_signal(
+          now_ms(),
+          GlobalSignalControlRequest {
+              .target = target,
+              .turn_on = turn_on,
+              .station_no = station_no,
+          },
+          request_complete,
+          &command_state);
+      if (!status.ok()) {
+        print_status_error("Failed to start global-signal request", status);
+        return 1;
+      }
+      status = drive_request(client, port, command_state);
+      if (!status.ok()) {
+        print_status_error("global-signal request failed", status);
+        return 1;
+      }
+      const bool no_response =
+          std::strcmp(
+              status.message,
+              "Global signal control completed without a response") == 0;
+      std::printf(
+          "global-signal=ok state=%s target=%s station=%u response=%s\n",
+          turn_on ? "on" : "off",
+          global_signal_target_name(target),
+          static_cast<unsigned>(station_no),
+          no_response ? "none" : "ack");
+      return 0;
+    }
+
+    case CommandKind::InitializeTransmissionSequence: {
+      status = client.async_initialize_c24_transmission_sequence(
+          now_ms(),
+          request_complete,
+          &command_state);
+      if (!status.ok()) {
+        print_status_error("Failed to start init-sequence request", status);
+        return 1;
+      }
+      status = drive_request(client, port, command_state);
+      if (!status.ok()) {
+        print_status_error("init-sequence request failed", status);
+        return 1;
+      }
+      const bool no_response =
+          std::strcmp(
+              status.message,
+              "Transmission-sequence initialization completed without a response") == 0;
+      std::printf("init-sequence=ok response=%s\n", no_response ? "none" : "ack");
+      return 0;
+    }
+
+    case CommandKind::DeregisterCpuMonitoring: {
+      status = client.async_deregister_cpu_monitoring(
+          now_ms(),
+          request_complete,
+          &command_state);
+      if (!status.ok()) {
+        print_status_error("Failed to start deregister-cpu-monitor request", status);
+        return 1;
+      }
+      status = drive_request(client, port, command_state);
+      if (!status.ok()) {
+        print_status_error("deregister-cpu-monitor request failed", status);
+        return 1;
+      }
+      std::printf("deregister-cpu-monitor=ok\n");
+      return 0;
+    }
+
     case CommandKind::RecoverC24: {
       std::byte control_code {};
       std::string_view control_name;
@@ -2158,6 +2931,129 @@ int main(int argc, char** argv) {
         return 1;
       }
       std::printf("loopback=%s\n", echoed.data());
+      return 0;
+    }
+
+    case CommandKind::ReadUserFrame: {
+      const std::string_view frame_arg(options.command_argv[0]);
+      std::uint32_t frame_no = 0;
+      if (!parse_u32_auto(frame_arg, frame_no) || frame_no > 0xFFFFU) {
+        std::fprintf(stderr, "Invalid user-frame number: %.*s\n",
+                     static_cast<int>(frame_arg.size()),
+                     frame_arg.data());
+        return 2;
+      }
+
+      UserFrameRegistrationData data {};
+      status = client.async_read_user_frame(
+          now_ms(),
+          UserFrameReadRequest {.frame_no = static_cast<std::uint16_t>(frame_no)},
+          data,
+          request_complete,
+          &command_state);
+      if (!status.ok()) {
+        print_status_error("Failed to start read-user-frame request", status);
+        return 1;
+      }
+      status = drive_request(client, port, command_state);
+      if (!status.ok()) {
+        print_status_error("read-user-frame request failed", status);
+        return 1;
+      }
+
+      std::printf("read-user-frame=ok frame-no=0x%04X registration-data-bytes=%u frame-bytes=%u\n",
+                  static_cast<unsigned>(frame_no),
+                  static_cast<unsigned>(data.registration_data_bytes),
+                  static_cast<unsigned>(data.frame_bytes));
+      std::printf("registration-data=");
+      print_hex_bytes(std::span<const std::byte>(data.registration_data.data(), data.registration_data_bytes));
+      std::printf("\n");
+      return 0;
+    }
+
+    case CommandKind::WriteUserFrame: {
+      const std::string_view frame_arg(options.command_argv[0]);
+      const std::string_view frame_bytes_arg(options.command_argv[1]);
+      const std::string_view registration_arg(options.command_argv[2]);
+      std::uint32_t frame_no = 0;
+      std::uint32_t frame_bytes = 0;
+      if (!parse_u32_auto(frame_arg, frame_no) || frame_no > 0xFFFFU) {
+        std::fprintf(stderr, "Invalid user-frame number: %.*s\n",
+                     static_cast<int>(frame_arg.size()),
+                     frame_arg.data());
+        return 2;
+      }
+      if (!parse_u32_auto(frame_bytes_arg, frame_bytes) || frame_bytes > 0xFFFFU) {
+        std::fprintf(stderr, "Invalid user-frame frame-bytes value: %.*s\n",
+                     static_cast<int>(frame_bytes_arg.size()),
+                     frame_bytes_arg.data());
+        return 2;
+      }
+
+      std::array<std::byte, mcprotocol::serial::kMaxUserFrameRegistrationBytes> registration_data {};
+      std::size_t registration_size = 0U;
+      if (!parse_hex_byte_string(
+              registration_arg,
+              std::span<std::byte>(registration_data.data(), registration_data.size()),
+              registration_size)) {
+        std::fprintf(stderr, "Invalid user-frame registration data: %.*s\n",
+                     static_cast<int>(registration_arg.size()),
+                     registration_arg.data());
+        return 2;
+      }
+
+      status = client.async_write_user_frame(
+          now_ms(),
+          UserFrameWriteRequest {
+              .frame_no = static_cast<std::uint16_t>(frame_no),
+              .frame_bytes = static_cast<std::uint16_t>(frame_bytes),
+              .registration_data = std::span<const std::byte>(registration_data.data(), registration_size),
+          },
+          request_complete,
+          &command_state);
+      if (!status.ok()) {
+        print_status_error("Failed to start register-user-frame request", status);
+        return 1;
+      }
+      status = drive_request(client, port, command_state);
+      if (!status.ok()) {
+        print_status_error("register-user-frame request failed", status);
+        return 1;
+      }
+
+      std::printf("register-user-frame=ok frame-no=0x%04X registration-data-bytes=%zu frame-bytes=%u\n",
+                  static_cast<unsigned>(frame_no),
+                  registration_size,
+                  static_cast<unsigned>(frame_bytes));
+      return 0;
+    }
+
+    case CommandKind::DeleteUserFrame: {
+      const std::string_view frame_arg(options.command_argv[0]);
+      std::uint32_t frame_no = 0;
+      if (!parse_u32_auto(frame_arg, frame_no) || frame_no > 0xFFFFU) {
+        std::fprintf(stderr, "Invalid user-frame number: %.*s\n",
+                     static_cast<int>(frame_arg.size()),
+                     frame_arg.data());
+        return 2;
+      }
+
+      status = client.async_delete_user_frame(
+          now_ms(),
+          UserFrameDeleteRequest {.frame_no = static_cast<std::uint16_t>(frame_no)},
+          request_complete,
+          &command_state);
+      if (!status.ok()) {
+        print_status_error("Failed to start delete-user-frame request", status);
+        return 1;
+      }
+      status = drive_request(client, port, command_state);
+      if (!status.ok()) {
+        print_status_error("delete-user-frame request failed", status);
+        return 1;
+      }
+
+      std::printf("delete-user-frame=ok frame-no=0x%04X\n", static_cast<unsigned>(frame_no));
       return 0;
     }
 
@@ -3833,93 +4729,125 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ProbeWriteHostBuffer: {
-      std::array<std::uint16_t, 1> original {};
-      status = run_read_host_buffer(
-          client,
-          port,
-          command_state,
-          HostBufferReadRequest {.start_address = 0U, .word_length = 1U},
-          std::span<std::uint16_t>(original.data(), original.size()));
-      if (!status.ok()) {
-        print_status_error("probe-write-host-buffer backup failed", status);
-        return 1;
-      }
+      constexpr std::uint16_t kProbeAddressLimit = 16U;
+      Status first_skip_status {};
+      bool recorded_skip_status = false;
+      std::uint16_t first_mismatch_address = 0U;
+      std::uint16_t first_mismatch_expected = 0U;
+      std::uint16_t first_mismatch_read = 0U;
+      bool recorded_mismatch = false;
 
-      const std::array<std::uint16_t, 1> test_value {
-          static_cast<std::uint16_t>(original[0] ^ 0x0001U),
-      };
-      status = run_write_host_buffer(
-          client,
-          port,
-          command_state,
-          HostBufferWriteRequest {
-              .start_address = 0U,
-              .words = std::span<const std::uint16_t>(test_value.data(), test_value.size()),
-          });
-      if (!status.ok()) {
-        std::printf("probe-write-host-buffer: skip ");
-        if (status.code == StatusCode::PlcError) {
-          std::printf("0x%04X\n", status.plc_error_code);
-        } else {
-          std::printf("%s\n", status.message);
+      for (std::uint16_t start_address = 0U; start_address < kProbeAddressLimit; ++start_address) {
+        std::array<std::uint16_t, 1> original {};
+        status = run_read_host_buffer(
+            client,
+            port,
+            command_state,
+            HostBufferReadRequest {.start_address = start_address, .word_length = 1U},
+            std::span<std::uint16_t>(original.data(), original.size()));
+        if (!status.ok()) {
+          print_status_error("probe-write-host-buffer backup failed", status);
+          return 1;
         }
-        return 1;
-      }
 
-      std::array<std::uint16_t, 1> verify {};
-      status = run_read_host_buffer(
-          client,
-          port,
-          command_state,
-          HostBufferReadRequest {.start_address = 0U, .word_length = 1U},
-          std::span<std::uint16_t>(verify.data(), verify.size()));
-      if (!status.ok()) {
-        print_status_error("probe-write-host-buffer verify failed", status);
-        return 1;
-      }
-      if (verify[0] != test_value[0]) {
-        std::printf("probe-write-host-buffer: skip verify-mismatch expected=0x%04X read=0x%04X\n",
-                    test_value[0],
-                    verify[0]);
-        return 1;
-      }
+        const std::array<std::uint16_t, 1> test_value {
+            static_cast<std::uint16_t>(original[0] ^ 0x0001U),
+        };
+        status = run_write_host_buffer(
+            client,
+            port,
+            command_state,
+            HostBufferWriteRequest {
+                .start_address = start_address,
+                .words = std::span<const std::uint16_t>(test_value.data(), test_value.size()),
+            });
+        if (!status.ok()) {
+          if (!recorded_skip_status) {
+            first_skip_status = status;
+            recorded_skip_status = true;
+          }
+          continue;
+        }
 
-      status = run_write_host_buffer(
-          client,
-          port,
-          command_state,
-          HostBufferWriteRequest {
-              .start_address = 0U,
-              .words = std::span<const std::uint16_t>(original.data(), original.size()),
-          });
-      if (!status.ok()) {
-        print_status_error("probe-write-host-buffer restore failed", status);
-        return 1;
-      }
+        std::array<std::uint16_t, 1> verify {};
+        status = run_read_host_buffer(
+            client,
+            port,
+            command_state,
+            HostBufferReadRequest {.start_address = start_address, .word_length = 1U},
+            std::span<std::uint16_t>(verify.data(), verify.size()));
+        if (!status.ok()) {
+          print_status_error("probe-write-host-buffer verify failed", status);
+          return 1;
+        }
+        if (verify[0] != test_value[0]) {
+          if (!recorded_mismatch) {
+            first_mismatch_address = start_address;
+            first_mismatch_expected = test_value[0];
+            first_mismatch_read = verify[0];
+            recorded_mismatch = true;
+          }
+          continue;
+        }
 
-      std::array<std::uint16_t, 1> restored {};
-      status = run_read_host_buffer(
-          client,
-          port,
-          command_state,
-          HostBufferReadRequest {.start_address = 0U, .word_length = 1U},
-          std::span<std::uint16_t>(restored.data(), restored.size()));
-      if (!status.ok()) {
-        print_status_error("probe-write-host-buffer re-read failed", status);
-        return 1;
-      }
-      if (restored[0] != original[0]) {
-        std::printf("probe-write-host-buffer restore-mismatch expected=0x%04X read=0x%04X\n",
+        status = run_write_host_buffer(
+            client,
+            port,
+            command_state,
+            HostBufferWriteRequest {
+                .start_address = start_address,
+                .words = std::span<const std::uint16_t>(original.data(), original.size()),
+            });
+        if (!status.ok()) {
+          print_status_error("probe-write-host-buffer restore failed", status);
+          return 1;
+        }
+
+        std::array<std::uint16_t, 1> restored {};
+        status = run_read_host_buffer(
+            client,
+            port,
+            command_state,
+            HostBufferReadRequest {.start_address = start_address, .word_length = 1U},
+            std::span<std::uint16_t>(restored.data(), restored.size()));
+        if (!status.ok()) {
+          print_status_error("probe-write-host-buffer re-read failed", status);
+          return 1;
+        }
+        if (restored[0] != original[0]) {
+          std::printf(
+              "probe-write-host-buffer restore-mismatch start=%u expected=0x%04X read=0x%04X\n",
+              static_cast<unsigned int>(start_address),
+              original[0],
+              restored[0]);
+          return 1;
+        }
+
+        std::printf("probe-write-host-buffer=ok start=%u 0x%04X->0x%04X->0x%04X\n",
+                    static_cast<unsigned int>(start_address),
                     original[0],
+                    test_value[0],
                     restored[0]);
-        return 1;
+        return 0;
       }
 
-      std::printf("probe-write-host-buffer=ok 0x%04X->0x%04X->0x%04X\n",
-                  original[0],
-                  test_value[0],
-                  restored[0]);
-      return 0;
+      std::printf("probe-write-host-buffer: skip ");
+      if (recorded_mismatch) {
+        std::printf("verify-mismatch start=%u expected=0x%04X read=0x%04X\n",
+                    static_cast<unsigned int>(first_mismatch_address),
+                    first_mismatch_expected,
+                    first_mismatch_read);
+      } else if (recorded_skip_status) {
+        if (first_skip_status.code == StatusCode::PlcError) {
+          std::printf("0x%04X\n", first_skip_status.plc_error_code);
+        } else {
+          std::printf("%s\n", first_skip_status.message);
+        }
+      } else {
+        std::printf("no writable host-buffer word found in range 0..%u\n",
+                    static_cast<unsigned int>(kProbeAddressLimit - 1U));
+      }
+      return 1;
     }
 
     case CommandKind::ProbeWriteModuleBuffer: {
@@ -4410,6 +5338,90 @@ int main(int argc, char** argv) {
       status = drive_request(client, port, command_state);
       if (!status.ok()) {
         print_status_error("read-words request failed", status);
+        return 1;
+      }
+      for (std::uint32_t index = 0; index < points; ++index) {
+        std::printf("[%u] 0x%04X %u\n", index, words[index], words[index]);
+      }
+      return 0;
+    }
+
+    case CommandKind::ReadFileRegisterWords: {
+      ExtendedFileRegisterAddress address {};
+      const std::string_view address_arg(options.command_argv[0]);
+      const std::string_view points_arg(options.command_argv[1]);
+      if (!parse_extended_file_register_address(address_arg, options.protocol, address)) {
+        std::fprintf(
+            stderr,
+            "Invalid file-register address: %.*s\n",
+            static_cast<int>(address_arg.size()),
+            address_arg.data());
+        return 2;
+      }
+      const std::size_t max_points = cli_max_extended_file_register_word_points(options.protocol);
+      std::uint32_t points = 0;
+      if (!parse_u32(points_arg, points) || points == 0U || points > max_points) {
+        std::fprintf(stderr, "Invalid file-register word count: %.*s\n",
+                     static_cast<int>(points_arg.size()),
+                     points_arg.data());
+        return 2;
+      }
+
+      std::array<std::uint16_t, kCliMaxExtendedFileRegisterWordPoints> words {};
+      status = run_read_extended_file_register_words(
+          client,
+          port,
+          command_state,
+          ExtendedFileRegisterBatchReadWordsRequest {
+              .head_device = address,
+              .points = static_cast<std::uint16_t>(points),
+          },
+          std::span<std::uint16_t>(words.data(), points));
+      if (!status.ok()) {
+        print_status_error("read-file-register request failed", status);
+        return 1;
+      }
+      for (std::uint32_t index = 0; index < points; ++index) {
+        std::printf("[%u] 0x%04X %u\n", index, words[index], words[index]);
+      }
+      return 0;
+    }
+
+    case CommandKind::ReadFileRegisterWordsDirect: {
+      const std::string_view head_arg(options.command_argv[0]);
+      const std::string_view points_arg(options.command_argv[1]);
+      const std::uint32_t max_head_device_number =
+          cli_max_direct_extended_file_register_head_device_number(options.protocol);
+      std::uint32_t head_device_number = 0;
+      if (!parse_u32(head_arg, head_device_number) || head_device_number > max_head_device_number) {
+        std::fprintf(
+            stderr,
+            "Invalid direct file-register head device number: %.*s\n",
+            static_cast<int>(head_arg.size()),
+            head_arg.data());
+        return 2;
+      }
+      const std::size_t max_points = cli_max_extended_file_register_word_points(options.protocol);
+      std::uint32_t points = 0;
+      if (!parse_u32(points_arg, points) || points == 0U || points > max_points) {
+        std::fprintf(stderr, "Invalid direct file-register word count: %.*s\n",
+                     static_cast<int>(points_arg.size()),
+                     points_arg.data());
+        return 2;
+      }
+
+      std::array<std::uint16_t, kCliMaxExtendedFileRegisterWordPoints> words {};
+      status = run_direct_read_extended_file_register_words(
+          client,
+          port,
+          command_state,
+          ExtendedFileRegisterDirectBatchReadWordsRequest {
+              .head_device_number = head_device_number,
+              .points = static_cast<std::uint16_t>(points),
+          },
+          std::span<std::uint16_t>(words.data(), points));
+      if (!status.ok()) {
+        print_status_error("read-file-register-direct request failed", status);
         return 1;
       }
       for (std::uint32_t index = 0; index < points; ++index) {
@@ -4929,6 +5941,46 @@ int main(int argc, char** argv) {
       return 0;
     }
 
+    case CommandKind::MonitorFileRegister: {
+      if (options.command_argc > 20) {
+        std::fprintf(stderr, "Too many monitor-file-register items; max is 20\n");
+        return 2;
+      }
+
+      std::array<ExtendedFileRegisterAddress, 20> items {};
+      for (int index = 0; index < options.command_argc; ++index) {
+        if (!parse_extended_file_register_address(
+                options.command_argv[index],
+                options.protocol,
+                items[static_cast<std::size_t>(index)])) {
+          std::fprintf(stderr, "Invalid monitor-file-register item: %s\n", options.command_argv[index]);
+          return 2;
+        }
+      }
+
+      std::array<std::uint16_t, 20> values {};
+      status = run_monitor_extended_file_register_words(
+          client,
+          port,
+          command_state,
+          ExtendedFileRegisterMonitorRegistration {
+              .items = std::span<const ExtendedFileRegisterAddress>(
+                  items.data(),
+                  static_cast<std::size_t>(options.command_argc)),
+          },
+          std::span<std::uint16_t>(values.data(), static_cast<std::size_t>(options.command_argc)));
+      if (!status.ok()) {
+        print_status_error("monitor-file-register request failed", status);
+        return 1;
+      }
+
+      for (int index = 0; index < options.command_argc; ++index) {
+        const auto value = values[static_cast<std::size_t>(index)];
+        std::printf("%s=0x%04X %u\n", options.command_argv[index], value, value);
+      }
+      return 0;
+    }
+
     case CommandKind::MonitorLinkDirect: {
       if (options.command_argc > static_cast<int>(mcprotocol::serial::kMaxMonitorItems)) {
         std::fprintf(stderr, "Too many monitor-link-direct items; max is %zu\n", mcprotocol::serial::kMaxMonitorItems);
@@ -5060,6 +6112,39 @@ int main(int argc, char** argv) {
       return 0;
     }
 
+    case CommandKind::RandomWriteFileRegisterWords: {
+      const std::size_t max_items = cli_max_extended_file_register_random_write_items(options.protocol);
+      if (options.command_argc > static_cast<int>(max_items)) {
+        std::fprintf(stderr, "Too many random-write-file-register items; max is %zu\n", max_items);
+        return 2;
+      }
+
+      std::array<ExtendedFileRegisterRandomWriteWordItem, kCliMaxExtendedFileRegisterRandomWriteItems> items {};
+      for (int index = 0; index < options.command_argc; ++index) {
+        if (!parse_extended_file_register_write_arg(
+                options.command_argv[index],
+                options.protocol,
+                items[static_cast<std::size_t>(index)])) {
+          std::fprintf(stderr, "Invalid random-write-file-register item: %s\n", options.command_argv[index]);
+          return 2;
+        }
+      }
+
+      status = run_random_write_extended_file_register_words(
+          client,
+          port,
+          command_state,
+          std::span<const ExtendedFileRegisterRandomWriteWordItem>(
+              items.data(),
+              static_cast<std::size_t>(options.command_argc)));
+      if (!status.ok()) {
+        print_status_error("random-write-file-register request failed", status);
+        return 1;
+      }
+      std::printf("random-write-file-register=ok\n");
+      return 0;
+    }
+
     case CommandKind::RandomWriteBits: {
       constexpr std::size_t kMaxRandomWriteBitItems = 188;
       if (options.command_argc > static_cast<int>(kMaxRandomWriteBitItems)) {
@@ -5144,6 +6229,100 @@ int main(int argc, char** argv) {
         return 1;
       }
       std::printf("write-words=ok\n");
+      return 0;
+    }
+
+    case CommandKind::WriteFileRegisterWords: {
+      ExtendedFileRegisterAddress head_address {};
+      const std::string_view head_arg(options.command_argv[0]);
+      if (!parse_extended_file_register_address(head_arg, options.protocol, head_address)) {
+        std::fprintf(
+            stderr,
+            "Invalid file-register head address: %.*s\n",
+            static_cast<int>(head_arg.size()),
+            head_arg.data());
+        return 2;
+      }
+      const int word_count = options.command_argc - 1;
+      const std::size_t max_points = cli_max_extended_file_register_word_points(options.protocol);
+      if (word_count <= 0 || static_cast<std::size_t>(word_count) > max_points) {
+        std::fprintf(stderr, "write-file-register word count must be in range 1..%zu\n", max_points);
+        return 2;
+      }
+
+      std::array<std::uint16_t, kCliMaxExtendedFileRegisterWordPoints> words {};
+      for (int index = 0; index < word_count; ++index) {
+        std::uint32_t value = 0;
+        if (!parse_u32_auto(options.command_argv[index + 1], value) || value > 0xFFFFU) {
+          std::fprintf(stderr, "Invalid write-file-register value: %s\n", options.command_argv[index + 1]);
+          return 2;
+        }
+        words[static_cast<std::size_t>(index)] = static_cast<std::uint16_t>(value);
+      }
+
+      status = run_write_extended_file_register_words(
+          client,
+          port,
+          command_state,
+          ExtendedFileRegisterBatchWriteWordsRequest {
+              .head_device = head_address,
+              .words = std::span<const std::uint16_t>(
+                  words.data(),
+                  static_cast<std::size_t>(word_count)),
+          });
+      if (!status.ok()) {
+        print_status_error("write-file-register request failed", status);
+        return 1;
+      }
+      std::printf("write-file-register=ok\n");
+      return 0;
+    }
+
+    case CommandKind::WriteFileRegisterWordsDirect: {
+      const std::string_view head_arg(options.command_argv[0]);
+      const std::uint32_t max_head_device_number =
+          cli_max_direct_extended_file_register_head_device_number(options.protocol);
+      std::uint32_t head_device_number = 0;
+      if (!parse_u32(head_arg, head_device_number) || head_device_number > max_head_device_number) {
+        std::fprintf(
+            stderr,
+            "Invalid direct file-register head device number: %.*s\n",
+            static_cast<int>(head_arg.size()),
+            head_arg.data());
+        return 2;
+      }
+      const int word_count = options.command_argc - 1;
+      const std::size_t max_points = cli_max_extended_file_register_word_points(options.protocol);
+      if (word_count <= 0 || static_cast<std::size_t>(word_count) > max_points) {
+        std::fprintf(stderr, "write-file-register-direct word count must be in range 1..%zu\n", max_points);
+        return 2;
+      }
+
+      std::array<std::uint16_t, kCliMaxExtendedFileRegisterWordPoints> words {};
+      for (int index = 0; index < word_count; ++index) {
+        std::uint32_t value = 0;
+        if (!parse_u32_auto(options.command_argv[index + 1], value) || value > 0xFFFFU) {
+          std::fprintf(stderr, "Invalid write-file-register-direct value: %s\n", options.command_argv[index + 1]);
+          return 2;
+        }
+        words[static_cast<std::size_t>(index)] = static_cast<std::uint16_t>(value);
+      }
+
+      status = run_direct_write_extended_file_register_words(
+          client,
+          port,
+          command_state,
+          ExtendedFileRegisterDirectBatchWriteWordsRequest {
+              .head_device_number = head_device_number,
+              .words = std::span<const std::uint16_t>(
+                  words.data(),
+                  static_cast<std::size_t>(word_count)),
+          });
+      if (!status.ok()) {
+        print_status_error("write-file-register-direct request failed", status);
+        return 1;
+      }
+      std::printf("write-file-register-direct=ok\n");
       return 0;
     }
 
