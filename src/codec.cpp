@@ -1571,7 +1571,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return head_device;
 }
 
-[[maybe_unused]] [[nodiscard]] bool append_word_units_from_bits_ascii(
+[[nodiscard]] bool append_word_units_from_bits_ascii(
     ByteWriter& writer,
     std::span<const BitValue> bits) noexcept {
   if ((bits.size() % 16U) != 0U) {
@@ -1591,27 +1591,6 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return true;
 }
 
-[[maybe_unused]] [[nodiscard]] bool append_word_units_from_bits_binary(
-    ByteWriter& writer,
-    std::span<const BitValue> bits) noexcept {
-  if ((bits.size() % 16U) != 0U) {
-    return false;
-  }
-  for (std::size_t offset = 0; offset < bits.size(); offset += 16U) {
-    std::uint16_t value = 0;
-    for (std::size_t index = 0; index < 16U; ++index) {
-      if (bits[offset + index] == BitValue::On) {
-        // Word-packed bit blocks for the standard binary multi-block path are encoded MSB-first.
-        value = static_cast<std::uint16_t>(value | (1U << (15U - index)));
-      }
-    }
-    if (!writer.append_le16(value)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 [[nodiscard]] bool append_word_units_from_bits_binary_direct(
     ByteWriter& writer,
     std::span<const BitValue> bits) noexcept {
@@ -1622,9 +1601,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     std::uint16_t value = 0;
     for (std::size_t index = 0; index < 16U; ++index) {
       if (bits[offset + index] == BitValue::On) {
-        // Direct/validated binary bit-block paths on current serial targets pack bit 0 into the
-        // least-significant bit of the word. Keep this helper separate from the MSB-first path so
-        // hardware exceptions stay localized.
+        // Manual-backed binary word-unit bit packing uses bit0 -> LSB for the head device.
         value = static_cast<std::uint16_t>(value | (1U << index));
       }
     }
@@ -6117,4 +6094,3 @@ Status parse_loopback_response(
 }  // namespace CommandCodec
 
 }  // namespace mcprotocol::serial
-
