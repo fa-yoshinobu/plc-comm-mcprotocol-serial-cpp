@@ -257,6 +257,7 @@ Enumerations</h2></td></tr>
  }</td></tr>
 <tr class="memdesc:a9dab0fd4d2513a218dcaf08dc8f53cd4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Request/response payload encoding.  <a href="#a9dab0fd4d2513a218dcaf08dc8f53cd4">More...</a><br /></td></tr>
 <tr class="memitem:aa95ab71e8bca3e70b325b76c91b62917" id="r_aa95ab71e8bca3e70b325b76c91b62917"><td class="memItemLeft">enum class &#160;</td><td class="memItemRight"><a class="el" href="#aa95ab71e8bca3e70b325b76c91b62917">AsciiFormat</a> : std::uint8_t { <a class="el" href="#aa95ab71e8bca3e70b325b76c91b62917a285fa8fb8bfa38dee54ea197a54dd2df">Format1</a>
+, <a class="el" href="#aa95ab71e8bca3e70b325b76c91b62917ad10bbaf5d6ca235aaa79e4a2380252da">Format2</a>
 , <a class="el" href="#aa95ab71e8bca3e70b325b76c91b62917acfc4ac8b8866ade25334a666755c9d1e">Format3</a>
 , <a class="el" href="#aa95ab71e8bca3e70b325b76c91b62917a48ac272ef5c522f6a09e8452e3157946">Format4</a>
  }</td></tr>
@@ -408,7 +409,7 @@ Variables</h2></td></tr>
 <p>Completion callback used by the async client. </p>
 <p>The callback receives the original <span class="tt">user</span> pointer and the final request status. </p>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00644">644</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00651">651</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -436,6 +437,8 @@ Variables</h2></td></tr>
 <p>ASCII formatting variant for <span class="tt">C4</span> / <span class="tt">C3</span> / <span class="tt">C2</span> serial frames. </p>
 <table class="fieldtable">
 <tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="aa95ab71e8bca3e70b325b76c91b62917a285fa8fb8bfa38dee54ea197a54dd2df" name="aa95ab71e8bca3e70b325b76c91b62917a285fa8fb8bfa38dee54ea197a54dd2df"></a>Format1&#160;</td><td class="fielddoc"><p>ENQ/STX/ETX layout without CR/LF. </p>
+</td></tr>
+<tr><td class="fieldname"><a id="aa95ab71e8bca3e70b325b76c91b62917ad10bbaf5d6ca235aaa79e4a2380252da" name="aa95ab71e8bca3e70b325b76c91b62917ad10bbaf5d6ca235aaa79e4a2380252da"></a>Format2&#160;</td><td class="fielddoc"><p>Format1 plus a 1-byte block number used for request/response pairing on <span class="tt">2C/3C/4C</span>. </p>
 </td></tr>
 <tr><td class="fieldname"><a id="aa95ab71e8bca3e70b325b76c91b62917acfc4ac8b8866ade25334a666755c9d1e" name="aa95ab71e8bca3e70b325b76c91b62917acfc4ac8b8866ade25334a666755c9d1e"></a>Format3&#160;</td><td class="fielddoc"><p>STX-only layout commonly used on serial MC links. </p>
 </td></tr>
@@ -473,7 +476,7 @@ Variables</h2></td></tr>
 <tr><td class="fieldname"><a id="a3c439197283d0419ecb8dd65f3d0bb5da521c36a31c2762741cf0f8890cbe05e3" name="a3c439197283d0419ecb8dd65f3d0bb5da521c36a31c2762741cf0f8890cbe05e3"></a>On&#160;</td><td class="fielddoc"></td></tr>
 </table>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00241">241</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00243">243</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -608,7 +611,7 @@ Variables</h2></td></tr>
 <tr><td class="fieldname"><a id="a27597d44f3ac2679223eeb3ce15a3642aefbfa2b2fcea4f9cfbe3ae9333588857" name="a27597d44f3ac2679223eeb3ce15a3642aefbfa2b2fcea4f9cfbe3ae9333588857"></a>HG&#160;</td><td class="fielddoc"></td></tr>
 </table>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00196">196</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00198">198</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -677,7 +680,7 @@ Variables</h2></td></tr>
 <tr><td class="fieldname"><a id="a3284da44fb3a8c856806968e635d416ba35b4821a8721418a3a879927adf1d144" name="a3284da44fb3a8c856806968e635d416ba35b4821a8721418a3a879927adf1d144"></a>X1B&#160;</td><td class="fielddoc"></td></tr>
 </table>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00260">260</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00262">262</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -710,7 +713,7 @@ Variables</h2></td></tr>
 <tr><td class="fieldname"><a id="abc734f0164959f34fab347dd491480a2a7fc56270e7a70fa81a5935b72eacbe29" name="abc734f0164959f34fab347dd491480a2a7fc56270e7a70fa81a5935b72eacbe29"></a>A&#160;</td><td class="fielddoc"></td></tr>
 </table>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00179">179</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00181">181</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -770,7 +773,7 @@ Variables</h2></td></tr>
 <tr><td class="fieldname"><a id="a1016962088cd7ce0e607f324fa636707af8e661e75c4ab5a02e2b798a5dbff36d" name="a1016962088cd7ce0e607f324fa636707af8e661e75c4ab5a02e2b798a5dbff36d"></a>ExecuteForcibly&#160;</td><td class="fielddoc"></td></tr>
 </table>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00247">247</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00249">249</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -801,7 +804,7 @@ Variables</h2></td></tr>
 <tr><td class="fieldname"><a id="aeb7f16a6763b2e6a156b05081efc755fa0c529d5a37612fcdc58721f69995e52f" name="aeb7f16a6763b2e6a156b05081efc755fa0c529d5a37612fcdc58721f69995e52f"></a>AllClear&#160;</td><td class="fielddoc"></td></tr>
 </table>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00253">253</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00255">255</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -835,7 +838,7 @@ Variables</h2></td></tr>
 </td></tr>
 </table>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00267">267</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00269">269</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -867,7 +870,7 @@ Variables</h2></td></tr>
 </td></tr>
 </table>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00188">188</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00190">190</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>

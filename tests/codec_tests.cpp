@@ -741,6 +741,26 @@ void test_decode_ascii_c2_format3_data_response() {
   assert(std::memcmp(decode.frame.response_data.data(), response_data.data(), response_data.size()) == 0);
 }
 
+void test_decode_ascii_c2_format3_two_digit_error_response() {
+  auto config = make_ascii_c2_format3_config();
+  config.route.kind = RouteKind::MultidropStation;
+  config.route.station_no = 0x11;
+  config.route.self_station_enabled = true;
+  config.route.self_station_no = 0x05;
+  config.sum_check_enabled = false;
+
+  constexpr std::string_view frame = "\x02""1105NN06\x03";
+  const auto decode = FrameCodec::decode_response(
+      config,
+      std::span<const std::uint8_t>(
+          reinterpret_cast<const std::uint8_t*>(frame.data()),
+          frame.size()));
+  assert(decode.status == DecodeStatus::Complete);
+  assert(decode.frame.type == mcprotocol::serial::ResponseType::PlcError);
+  assert(decode.frame.error_code == 0x0006U);
+  assert(decode.bytes_consumed == frame.size());
+}
+
 void test_encode_ascii_format2_request_inserts_block_number() {
   auto config = make_ascii_c4_format2_config();
   config.sum_check_enabled = false;
@@ -822,6 +842,23 @@ void test_decode_ascii_format2_ack_response() {
   assert(decode.status == DecodeStatus::Complete);
   assert(decode.frame.type == mcprotocol::serial::ResponseType::SuccessNoData);
   assert(decode.bytes_consumed == frame_size);
+}
+
+void test_decode_ascii_c2_format2_two_digit_error_response() {
+  auto config = make_ascii_c2_format2_config();
+  config.sum_check_enabled = false;
+  config.ascii_block_number = 0x7AU;
+
+  constexpr std::string_view frame = "\x15""7A000006";
+  const auto decode = FrameCodec::decode_response(
+      config,
+      std::span<const std::uint8_t>(
+          reinterpret_cast<const std::uint8_t*>(frame.data()),
+          frame.size()));
+  assert(decode.status == DecodeStatus::Complete);
+  assert(decode.frame.type == mcprotocol::serial::ResponseType::PlcError);
+  assert(decode.frame.error_code == 0x0006U);
+  assert(decode.bytes_consumed == frame.size());
 }
 
 void test_encode_ascii_c1_batch_read_words_qna_request_shape() {
@@ -1810,6 +1847,23 @@ void test_decode_ascii_c2_format4_ack_response() {
   assert(decode.status == DecodeStatus::Complete);
   assert(decode.frame.type == mcprotocol::serial::ResponseType::SuccessNoData);
   assert(decode.bytes_consumed == frame_size);
+}
+
+void test_decode_ascii_c2_format4_two_digit_error_response() {
+  auto config = make_ascii_c2_format4_config();
+  config.route.self_station_enabled = false;
+  config.sum_check_enabled = true;
+
+  constexpr std::string_view frame = "\x15""000006\r\n";
+  const auto decode = FrameCodec::decode_response(
+      config,
+      std::span<const std::uint8_t>(
+          reinterpret_cast<const std::uint8_t*>(frame.data()),
+          frame.size()));
+  assert(decode.status == DecodeStatus::Complete);
+  assert(decode.frame.type == mcprotocol::serial::ResponseType::PlcError);
+  assert(decode.frame.error_code == 0x0006U);
+  assert(decode.bytes_consumed == frame.size());
 }
 
 void test_decode_ascii_format4_ack_response() {
@@ -3114,7 +3168,7 @@ void test_encode_random_write_bits_binary_iqr_layout() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
-void test_encode_random_write_bits_binary_matches_observed_ql_wire_behavior() {
+void test_encode_random_write_bits_binary_ql_keeps_device_numbers() {
   const auto config = make_binary_c4_config();
   const std::array<RandomWriteBitItem, 2> items {{
       {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 50}, .value = BitValue::Off},
@@ -3131,8 +3185,8 @@ void test_encode_random_write_bits_binary_matches_observed_ql_wire_behavior() {
   assert(status.ok());
 
   const std::array<std::uint8_t, 15> expected {
-      0x02, 0x14, 0x01, 0x00, 0x02, 0x33, 0x00,
-      0x00, 0x90, 0x00, 0x2E, 0x00, 0x00, 0x9D, 0x01,
+      0x02, 0x14, 0x01, 0x00, 0x02, 0x32, 0x00,
+      0x00, 0x90, 0x00, 0x2F, 0x00, 0x00, 0x9D, 0x01,
   };
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
@@ -3269,7 +3323,7 @@ void test_encode_multi_block_write_binary_uses_single_byte_block_counts() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
-void test_encode_multi_block_write_binary_bit_blocks_reverse_pair_order() {
+void test_encode_multi_block_write_binary_bit_blocks_use_lsb_first_word_packing() {
   const auto config = make_binary_c4_config();
   const std::array<BitValue, 32> bit_values {{
       BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
@@ -3305,7 +3359,7 @@ void test_encode_multi_block_write_binary_bit_blocks_reverse_pair_order() {
       0xC8, 0x00, 0x00, 0x90, 0x02, 0x00,
   };
   const std::array<std::uint8_t, 4> expected_bit_words {
-      0x00, 0x00, 0x84, 0x1C,
+      0x00, 0x00, 0x48, 0x2C,
   };
   assert(request_size == expected.size() + expected_bit_words.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
@@ -4600,8 +4654,10 @@ int main() {
   test_encode_ascii_format2_request_inserts_block_number();
   test_encode_ascii_c2_format2_request_uses_short_route_without_frame_id();
   test_decode_ascii_format2_ack_response();
+  test_decode_ascii_c2_format2_two_digit_error_response();
   test_encode_ascii_c2_format3_request_uses_short_route_without_frame_id();
   test_decode_ascii_c2_format3_data_response();
+  test_decode_ascii_c2_format3_two_digit_error_response();
   test_encode_ascii_c1_batch_read_words_qna_request_shape();
   test_encode_ascii_c1_batch_read_bits_a_request_shape();
   test_encode_ascii_c1_batch_write_words_qna_request_shape();
@@ -4637,6 +4693,7 @@ int main() {
   test_encode_binary_e1_module_buffer_read_request_shape();
   test_encode_ascii_format4_request_appends_crlf();
   test_decode_ascii_c2_format4_ack_response();
+  test_decode_ascii_c2_format4_two_digit_error_response();
   test_decode_ascii_format4_ack_response();
   test_high_level_parse_device_address();
   test_parse_link_direct_device_surface();
@@ -4682,11 +4739,11 @@ int main() {
   test_encode_random_write_bits_ascii_matches_manual();
   test_encode_random_write_bits_ascii_iqr_shape();
   test_encode_random_write_bits_binary_iqr_layout();
-  test_encode_random_write_bits_binary_matches_observed_ql_wire_behavior();
+  test_encode_random_write_bits_binary_ql_keeps_device_numbers();
   test_encode_multi_block_read_ascii_matches_manual();
   test_encode_multi_block_read_binary_matches_capture_counts();
   test_encode_multi_block_write_binary_uses_single_byte_block_counts();
-  test_encode_multi_block_write_binary_bit_blocks_reverse_pair_order();
+  test_encode_multi_block_write_binary_bit_blocks_use_lsb_first_word_packing();
   test_encode_register_monitor_ascii_reuses_random_read_layout();
   test_encode_register_monitor_binary_iqr_layout();
   test_encode_read_monitor_ascii_matches_manual();

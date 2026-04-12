@@ -35,24 +35,34 @@ Use it together with:
 
 Validated target:
 
-- PLC CPU: Mitsubishi iQ-R `R08CPU`
+- PLC CPU: Mitsubishi iQ-R `R120PCPU`
 - Serial module: `RJ71C24-R2`
 - Link: `RS-232C`
-- Settings: `19200 / 8E1 / MC Protocol Format4 ASCII / CRLF / sum-check off / station 0`
+- Current practical ASCII settings: `28800 / 8E2 / station 0`
 
 | Area | Command path | Current status | Notes |
 |---|---|---|---|
-| CPU identification | `cpu-model` | native pass | returns `R08CPU`, `0x4801` |
+| CPU identification | `cpu-model` | native pass | returns `R120PCPU`, `0x4844` |
 | Loopback | `loopback` | native pass | validated on real hardware |
+| Format4 ASCII practical path (`4C` / `3C`) | `cpu-model`, `loopback`, device-family probes, contiguous `0401/1401`, host-buffer `0613/1613`, qualified helper, `1617`, `0610/1610`, `0631`, `1618`, reversible remote control | native pass | validated on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format4 ASCII / CRLF / sum-check on / station 0 / --series ql`; both `c4-ascii-f4` and `c3-ascii-f4` passed `probe-all 26/26`, `probe-write-all 25/25`, `probe-write-host-buffer=ok start=0`, helper `U3E0\\G0` write/read/restore, temporary user-frame `0x03E8` register/read/delete, `deregister-cpu-monitor`, `global-signal on/off current 0`, and `remote-pause` / `remote-stop` / `remote-run no-force no-clear`; `sum-check off` returned `0x7F24` on `4C` and `3C` |
+| Format4 ASCII practical path (`2C`) | `cpu-model`, `error-clear` focused probes | native ng / target-dependent | on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format4 ASCII / CRLF / sum-check on / station 0 / --series ql`, `c2-ascii-f4 cpu-model` and `c2-ascii-f4 error-clear` both returned PLC error `0x0006`; raw responses were `NAK 000006 CRLF` |
 | Format1 ASCII practical path | `cpu-model`, `loopback`, device-family probes, contiguous `0401/1401`, host-buffer `0613/1613`, qualified helper, `1617`, `0610/1610`, `0631`, reversible remote control | native pass | validated on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format1 ASCII / sum-check on / station 0 / --series ql`; `probe-all 26/26`, `probe-write-all 25/25`, `write-words D10=1 -> read-words D10 1 -> restore`, `probe-write-host-buffer=ok start=0`, `write-qualified-words U3E0\\G0 0x1234 -> read-qualified-words U3E0\\G0 1 -> restore`, temporary user-frame `0x03E8` register/read/delete, `deregister-cpu-monitor`, and `remote-pause` / `remote-stop` / `remote-run no-force no-clear` passed |
-| Format2 ASCII practical path | `cpu-model`, `loopback`, device-family probes, contiguous `0401/1401`, host-buffer `0613/1613`, qualified helper, `1617`, `0610/1610`, `0631`, reversible remote control | native pass | validated on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format2 ASCII / sum-check on / station 0 / --series ql`; `probe-all 26/26`, `probe-write-all 25/25`, `probe-write-host-buffer=ok start=0`, `write-qualified-words U3E0\\G0 0x1234 -> read-qualified-words U3E0\\G0 1 -> restore`, temporary user-frame `0x03E8` register/read/delete, `deregister-cpu-monitor`, and `remote-pause` / `remote-stop` / `remote-run no-force no-clear` passed; both block numbers `0x00` and `0x7A` were accepted |
+| Format2 ASCII practical path (`4C` / `3C`) | `cpu-model`, `loopback`, device-family probes, contiguous `0401/1401`, host-buffer `0613/1613`, qualified helper, `1617`, `0610/1610`, `0631`, `1618`, reversible remote control | native pass | validated on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format2 ASCII / sum-check on / station 0 / --series ql`; both `c4-ascii-f2` and `c3-ascii-f2` passed `probe-all 26/26`, `probe-write-all 25/25`, `probe-write-host-buffer=ok start=0`, helper `U3E0\\G0` read/write/restore, temporary user-frame `0x03E8` register/read/delete, `deregister-cpu-monitor`, `global-signal on/off current 0`, and `remote-pause` / `remote-stop` / `remote-run no-force no-clear`; block numbers `0x00` and `0x7A` were accepted on `4C` |
+| Format2 ASCII practical path (`2C`) | `cpu-model`, `error-clear` focused probes | native ng / target-dependent | on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format2 ASCII / sum-check on / station 0 / --series ql`, `c2-ascii-f2 cpu-model` and `c2-ascii-f2 error-clear` both returned PLC error `0x0006`; the same target returned `0x0106` on `c2-ascii-f1 cpu-model`, `0x1606` on `c2-ascii-f1 error-clear`, `0x0006` on `c2-ascii-f3 cpu-model/error-clear`, and timed out on `c2-ascii-f4` |
+| Format3 ASCII practical path (`4C` / `3C`) | `cpu-model`, `loopback`, device-family probes, contiguous `0401/1401`, host-buffer `0613/1613`, qualified helper, `1617`, `0610/1610`, `0631`, `1618`, reversible remote control | native pass | validated on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format3 ASCII / sum-check on / station 0 / --series ql`; both `c4-ascii-f3` and `c3-ascii-f3` passed `probe-all 26/26`, `probe-write-all 25/25`, `probe-write-host-buffer=ok start=0`, helper `U3E0\\G0` read, temporary user-frame `0x03E8` register/read/delete, `deregister-cpu-monitor`, `global-signal on/off current 0`, and `remote-pause` / `remote-stop` / `remote-run no-force no-clear` |
+| Format3 ASCII practical path (`2C`) | `cpu-model`, `error-clear` focused probes | native ng / target-dependent | on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format3 ASCII / sum-check on / station 0 / --series ql`, `c2-ascii-f3 cpu-model` and `c2-ascii-f3 error-clear` both returned short `NN06` frames that now decode as PLC error `0x0006` |
 | Format1 ASCII native family | native `0403`, native `1402`, native `0406/1406`, native `0801/0802` | native ng / target-dependent | on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format1 ASCII / sum-check on / station 0 / --series ql`, native random, multi-block, and monitor probes all returned `0x7F22` |
 | Format1 ASCII raw module-buffer family | raw `0601/1601` probe path | native ng / target-dependent | `probe-module-buffer` and `probe-write-module-buffer` returned `0x4043`, while helper `U3E0\\G0` read/write/restore still passed |
-| Format2 ASCII native family | native `0403`, native `1402`, native `0406/1406`, native `0801/0802` | native ng / target-dependent | on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format2 ASCII / sum-check on / station 0 / --series ql`, native random, multi-block, and monitor probes all returned `0x7F22` |
-| Format2 ASCII raw module-buffer family | raw `0601/1601` probe path | native ng / target-dependent | `probe-module-buffer` and `probe-write-module-buffer` returned `0x4043`, while helper `U3E0\\G0` read/write/restore still passed |
-| Clear error information | `1617` via `error-clear` | native pass | validated on `R120PCPU / RJ71C24-R2` under `--series iqr` and under both `Format1 ASCII / --series ql` and `Format2 ASCII / --series ql` |
-| Remote RUN/STOP/PAUSE | `1001/1002/1003` via `remote-run` / `remote-stop` / `remote-pause` | native pass | validated on `R120PCPU / RJ71C24-R2` under `--series iqr` and under both `Format1 ASCII / --series ql` and `Format2 ASCII / --series ql`; the final `remote-run` restored the original state |
-| Remote RESET | `1006` via `remote-reset` | native ng / parameter-dependent | currently returns PLC error `0x408B`; the manual requires the target to be `STOP` and remote RESET to be enabled in the target parameter |
+| Format4 ASCII native family (`4C` / `3C`) | native `0403`, native `1402`, native `0406/1406`, native `0801/0802` | native ng / target-dependent | on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format4 ASCII / CRLF / sum-check on / station 0 / --series ql`, native random read, native random write words, native `0406/1406`, and native `0801/0802` returned `0x7F22`, while native random write bits returned `0x7F24` |
+| Format4 ASCII raw module-buffer family (`4C` / `3C`) | raw `0601/1601` probe path | native ng / target-dependent | `probe-module-buffer` returned `0x4043` and `probe-write-module-buffer` failed on the same `0x4043`, while helper `U3E0\\G0` still passed |
+| Format2 ASCII native family (`4C` / `3C`) | native `0403`, native `1402`, native `0406/1406`, native `0801/0802` | native ng / target-dependent | on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format2 ASCII / sum-check on / station 0 / --series ql`, native random, multi-block, and monitor probes all returned `0x7F22` |
+| Format2 ASCII raw module-buffer family (`4C` / `3C`) | raw `0601/1601` probe path | native ng / target-dependent | `probe-module-buffer` and `probe-write-module-buffer` returned `0x4043`, while helper `U3E0\\G0` read/write/restore still passed |
+| Format3 ASCII native family (`4C` / `3C`) | native `0403`, native `1402`, native `0406/1406`, native `0801/0802` | native ng / target-dependent | on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format3 ASCII / sum-check on / station 0 / --series ql`, native random read, native random write words, native `0406/1406`, and native `0801/0802` returned `0x7F22`, while native random write bits returned `0x7F23` |
+| Format3 ASCII raw module-buffer family (`4C` / `3C`) | raw `0601/1601` probe path | native ng / target-dependent | `probe-module-buffer` returned `0x4043` and `probe-write-module-buffer` failed on the same `0x4043`, while helper `U3E0\\G0` still passed |
+| Clear error information | `1617` via `error-clear` | native pass | validated on `R120PCPU / RJ71C24-R2` under `--series iqr`, `Format1 ASCII / --series ql`, `Format2 ASCII (4C/3C) / --series ql`, `Format3 ASCII (4C/3C) / --series ql`, and `Format4 ASCII (4C/3C) / --series ql` |
+| Remote RUN/STOP/PAUSE | `1001/1002/1003` via `remote-run` / `remote-stop` / `remote-pause` | native pass | validated on `R120PCPU / RJ71C24-R2` under `--series iqr`, `Format1 ASCII / --series ql`, `Format2 ASCII (4C/3C) / --series ql`, `Format3 ASCII (4C/3C) / --series ql`, and `Format4 ASCII (4C/3C) / --series ql`; the final `remote-run` restored the original state |
+| Remote RESET | `1006` via `remote-reset` | native pass | validated on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format5 Binary / station 0 / --series ql` after enabling the target-side remote RESET parameter; `remote-reset` completed as `ok response=none` and a follow-up `cpu-model` confirmed communication recovery |
+| Remote password unlock/lock | `1630` / `1631` via `unlock` / `lock` | native ng / target-dependent | focused `R120PCPU / RJ71C24-R2 / c4-binary / --series iqr` checks with a `10`-character test password returned `0x7F22` for both `unlock` and `lock`; read-only `cpu-model` and `read-words D0 1` still passed |
 | Contiguous word read | `0401` via `read-words` | native pass | validated up to `960` words |
 | Contiguous word write | `1401` via `write-words` | native pass | validated up to `960` words |
 | Contiguous bit read | `0401` via `read-bits` | native pass | validated up to `3584` bits |
@@ -71,7 +81,8 @@ Validated target:
 | Monitor register/read | native `0801/0802` | native pass | validated under both `--series ql` and `--series iqr` on the current RJ71C24-R2 targets |
 | iQ-R-only spot devices and `Jn\\...` surface | `SM`, `SD`, `RD`, `LZ`, `J1\\...`, `LTN/LSTN/LCN` | native pass | current per-device read/write matrix lives in [RJ71C24_R2_RS232C.md](RJ71C24_R2_RS232C.md) |
 | Special-device post-control sanity | `SM`, `SD`, `RD`, `LZ`, `LCN`, `J1\\...` under `--series iqr` | native pass | current focused read/write/restore checks pass on the validated target |
-| User frame / serial-module extras | `0610`, `1610`, `1615`, `1618`, `0631` | native pass, split by link mode | binary focused recheck validated `0610/1610`, `1615`, `1618`, and `0631`; `Format1/Format2 ASCII / --series ql` also validated temporary flash user-frame `0x03E8` register/read/delete plus `0631`; missing `0x03E8` and `0x8001` reads returned `0x7E51`; `init-sequence` is not applicable on ASCII links because it requires binary `4C Format5` |
+| User frame / serial-module extras | `0610`, `1610`, `1615`, `1618`, `0631` | native pass, split by link mode | binary recheck on `R120PCPU / RJ71C24-R2 / c4-binary / --series ql` validated `0610/1610`, `1615`, `1618`, and `0631`; `Format1 ASCII`, `Format2 ASCII (4C/3C) / --series ql`, `Format3 ASCII (4C/3C) / --series ql`, and `Format4 ASCII (4C/3C) / --series ql` also validated temporary flash user-frame `0x03E8` register/read/delete plus `0631`; `Format2/3/4 ASCII (4C/3C)` additionally validated `1618` with `global-signal on/off current 0`; missing `0x03E8` and `0x8001` reads returned `0x7E51`; `init-sequence` is not applicable on ASCII links because it requires binary `4C Format5` |
+| Raw module-buffer family | raw `0601/1601` probe path | native ng / target-dependent | on `R120PCPU / RJ71C24-R2 / c4-binary / --series ql`, `probe-module-buffer` returned `0x4043` and `probe-write-module-buffer` failed on the same `0x4043`, while helper `U3E0\\G0` read/write/restore still passed |
 | Device-family read probe | `probe-all` | pass | `26/26` passed after dropping `RD` from the supported device set |
 | Device-family write probe | `probe-write-all` | pass with exclusions | `25/25` passed after excluding `S` and using `F100` instead of `F0` |
 
@@ -164,9 +175,14 @@ Additional validated target:
 | `mixed supported-command soak / 61 seconds` | pass, `28 cycles`, `fail=0` |
 | `extended mixed supported-command soak / 301 seconds` | pass, `140 cycles`, `fail=0` |
 
-## Current HOLD Items
+## Current Follow-up Items
 
-Target-specific holds:
+Target-dependent follow-up:
+
+- `RJ71C24-R2 + R120PCPU`: `1630` / `1631` currently return `0x7F22` on the focused
+  `--series iqr` checks, while read-only access still passes.
+
+Command-family holds:
 
 - none at the command-family level on the currently validated targets
 

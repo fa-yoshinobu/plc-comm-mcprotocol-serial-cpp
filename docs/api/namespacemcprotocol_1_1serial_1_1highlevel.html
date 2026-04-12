@@ -112,6 +112,8 @@ Functions</h2></td></tr>
 <tr class="memdesc:a4673d28aa459f5457b331f4acbb8a13f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns a practical default for Q/L-era <span class="tt">Format5 / Binary / C4</span>.  <br /></td></tr>
 <tr class="memitem:ab742d4fc876c94a8e6e983e2dd9e29e4" id="r_ab742d4fc876c94a8e6e983e2dd9e29e4"><td class="memItemLeft">constexpr <a class="el" href="structmcprotocol_1_1serial_1_1_protocol_config.html">ProtocolConfig</a>&#160;</td><td class="memItemRight"><a class="el" href="#ab742d4fc876c94a8e6e983e2dd9e29e4">make_c4_ascii_format4_protocol</a> (<a class="el" href="namespacemcprotocol_1_1serial.html#abc734f0164959f34fab347dd491480a2">PlcSeries</a> series=<a class="el" href="namespacemcprotocol_1_1serial.html#abc734f0164959f34fab347dd491480a2ae04d85de978e3dd06f3e0b1c3db007f9">PlcSeries::Q_L</a>) noexcept</td></tr>
 <tr class="memdesc:ab742d4fc876c94a8e6e983e2dd9e29e4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns a practical default for <span class="tt">Format4 / ASCII / C4</span>.  <br /></td></tr>
+<tr class="memitem:af3e62fea0ecb02d36c15123e75c69ee5" id="r_af3e62fea0ecb02d36c15123e75c69ee5"><td class="memItemLeft">constexpr <a class="el" href="structmcprotocol_1_1serial_1_1_protocol_config.html">ProtocolConfig</a>&#160;</td><td class="memItemRight"><a class="el" href="#af3e62fea0ecb02d36c15123e75c69ee5">make_c4_ascii_format2_protocol</a> (<a class="el" href="namespacemcprotocol_1_1serial.html#abc734f0164959f34fab347dd491480a2">PlcSeries</a> series=<a class="el" href="namespacemcprotocol_1_1serial.html#abc734f0164959f34fab347dd491480a2ae04d85de978e3dd06f3e0b1c3db007f9">PlcSeries::Q_L</a>) noexcept</td></tr>
+<tr class="memdesc:af3e62fea0ecb02d36c15123e75c69ee5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Returns a practical default for <span class="tt">Format2 / ASCII / C4</span>.  <br /></td></tr>
 <tr class="memitem:ac7e66ddb23b475494bd6e8161c91cd1e" id="r_ac7e66ddb23b475494bd6e8161c91cd1e"><td class="memItemLeft"><a class="el" href="structmcprotocol_1_1serial_1_1_status.html">Status</a>&#160;</td><td class="memItemRight"><a class="el" href="#ac7e66ddb23b475494bd6e8161c91cd1e">parse_device_address</a> (<a class="el" href="classstd_1_1string__view.html">std::string_view</a> text, <a class="el" href="structmcprotocol_1_1serial_1_1_device_address.html">DeviceAddress</a> &amp;out_device) noexcept</td></tr>
 <tr class="memdesc:ac7e66ddb23b475494bd6e8161c91cd1e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Parses a plain MC device string such as <span class="tt">D100</span>, <span class="tt">M100</span>, <span class="tt">X10</span>, or <span class="tt">B20</span>.  <br /></td></tr>
 <tr class="memitem:a61c90d51f0343af1c91f467928518f36" id="r_a61c90d51f0343af1c91f467928518f36"><td class="memItemLeft"><a class="el" href="structmcprotocol_1_1serial_1_1_status.html">Status</a>&#160;</td><td class="memItemRight"><a class="el" href="#a61c90d51f0343af1c91f467928518f36">make_batch_read_words_request</a> (<a class="el" href="classstd_1_1string__view.html">std::string_view</a> head_device, std::uint16_t points, <a class="el" href="structmcprotocol_1_1serial_1_1_batch_read_words_request.html">BatchReadWordsRequest</a> &amp;out_request) noexcept</td></tr>
@@ -172,7 +174,7 @@ Functions</h2></td></tr>
 
 <p>Builds a contiguous bit-read request from a string address such as <span class="tt">M100</span>. </p>
 
-<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00253">253</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00269">269</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
 
 </div>
 </div>
@@ -210,7 +212,7 @@ Functions</h2></td></tr>
 
 <p>Builds a contiguous word-read request from a string address such as <span class="tt">D100</span>. </p>
 
-<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00236">236</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00252">252</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
 
 </div>
 </div>
@@ -248,7 +250,7 @@ Functions</h2></td></tr>
 
 <p>Builds a contiguous bit-write request from a string address such as <span class="tt">M100</span>. </p>
 
-<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00287">287</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00303">303</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
 
 </div>
 </div>
@@ -286,7 +288,37 @@ Functions</h2></td></tr>
 
 <p>Builds a contiguous word-write request from a string address such as <span class="tt">D100</span>. </p>
 
-<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00270">270</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00286">286</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
+
+</div>
+</div>
+<a id="af3e62fea0ecb02d36c15123e75c69ee5" name="af3e62fea0ecb02d36c15123e75c69ee5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af3e62fea0ecb02d36c15123e75c69ee5">&#9670;&#160;</a></span>make_c4_ascii_format2_protocol()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structmcprotocol_1_1serial_1_1_protocol_config.html">ProtocolConfig</a> mcprotocol::serial::highlevel::make_c4_ascii_format2_protocol </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="namespacemcprotocol_1_1serial.html#abc734f0164959f34fab347dd491480a2">PlcSeries</a></td>          <td class="paramname"><span class="paramname"><em>series</em></span><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="namespacemcprotocol_1_1serial.html#abc734f0164959f34fab347dd491480a2ae04d85de978e3dd06f3e0b1c3db007f9">PlcSeries::Q_L</a></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel nodiscard">nodiscard</span><span class="mlabel constexpr">constexpr</span><span class="mlabel noexcept">noexcept</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Returns a practical default for <span class="tt">Format2 / ASCII / C4</span>. </p>
+<p><span class="tt">Format2</span> is the <span class="tt">Format1</span> style <span class="tt">ENQ/ACK/NAK/STX/ETX</span> link with an extra 1-byte block number inserted before the frame ID. The default block number is <span class="tt">0x00</span>; change <span class="tt"><a class="el" href="structmcprotocol_1_1serial_1_1_protocol_config.html#ab21cf2bd7bd24d19887e64d01f8b0c40">ProtocolConfig::ascii_block_number</a></span> if the host side needs a different value. </p>
+
+<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00175">175</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
 
 </div>
 </div>
@@ -383,7 +415,7 @@ Functions</h2></td></tr>
 <p>Builds a sparse monitor registration payload from string-address specs. </p>
 <p>The resulting payload is intended for <span class="tt">0801</span>. Readback still happens through the normal monitor read API. </p>
 
-<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00386">386</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00402">402</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
 
 </div>
 </div>
@@ -421,7 +453,7 @@ Functions</h2></td></tr>
 
 <p>Builds one sparse random-read item from a string address. </p>
 
-<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00304">304</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00320">320</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
 
 </div>
 </div>
@@ -460,7 +492,7 @@ Functions</h2></td></tr>
 <p>Builds a sparse random-read request from string-address specs. </p>
 <p>Use this when you want <span class="tt">0403</span> style sparse addressing without hand-filling <span class="tt"><a class="el" href="structmcprotocol_1_1serial_1_1_random_read_item.html">RandomReadItem</a></span> entries. </p>
 
-<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00360">360</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00376">376</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
 
 </div>
 </div>
@@ -498,7 +530,7 @@ Functions</h2></td></tr>
 
 <p>Builds one sparse random bit-write item from a string address. </p>
 
-<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00340">340</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00356">356</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
 
 </div>
 </div>
@@ -536,7 +568,7 @@ Functions</h2></td></tr>
 
 <p>Builds sparse random bit-write items from string-address specs. </p>
 
-<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00427">427</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00443">443</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
 
 </div>
 </div>
@@ -579,7 +611,7 @@ Functions</h2></td></tr>
 
 <p>Builds one sparse random word-write item from a string address. </p>
 
-<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00321">321</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00337">337</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
 
 </div>
 </div>
@@ -617,7 +649,7 @@ Functions</h2></td></tr>
 
 <p>Builds sparse random word-write items from string-address specs. </p>
 
-<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00403">403</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00419">419</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
 
 </div>
 </div>
@@ -651,7 +683,7 @@ Functions</h2></td></tr>
 <p>Parses a plain MC device string such as <span class="tt">D100</span>, <span class="tt">M100</span>, <span class="tt">X10</span>, or <span class="tt">B20</span>. </p>
 <p>This helper is intentionally limited to plain device syntax. It does not parse <span class="tt">Jn\\...</span> link- direct addresses or helper-qualified <span class="tt">U...\\G...</span> addresses. </p>
 
-<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00200">200</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="high__level_8hpp_source.html#l00216">216</a> of file <a class="el" href="high__level_8hpp_source.html">high_level.hpp</a>.</p>
 
 </div>
 </div>

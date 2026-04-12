@@ -278,9 +278,12 @@ class ByteWriter {
   return ascii_frame_id_length(frame_kind) + ascii_route_length(frame_kind);
 }
 
-[[nodiscard]] constexpr std::size_t ascii_error_code_width(FrameKind frame_kind) noexcept {
-  return ((MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && frame_kind == FrameKind::C1) ||
-          (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && frame_kind == FrameKind::E1))
+[[nodiscard]] constexpr std::size_t ascii_error_code_width(const ProtocolConfig& config) noexcept {
+  return ((MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && config.frame_kind == FrameKind::C1) ||
+          (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && config.frame_kind == FrameKind::E1) ||
+          (MCPROTOCOL_SERIAL_ENABLE_FRAME_C2 && config.frame_kind == FrameKind::C2 &&
+           (config.ascii_format == AsciiFormat::Format2 ||
+            config.ascii_format == AsciiFormat::Format4)))
              ? 2U
              : 4U;
 }
@@ -297,6 +300,22 @@ class ByteWriter {
     return "NN";
   }
   return (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && frame_kind == FrameKind::E1) ? "5B" : "QNAK";
+}
+
+[[nodiscard]] inline std::string_view ascii_alt_success_end_code(const ProtocolConfig& config) noexcept {
+  if (MCPROTOCOL_SERIAL_ENABLE_FRAME_C2 && config.frame_kind == FrameKind::C2 &&
+      config.ascii_format == AsciiFormat::Format3) {
+    return "GG";
+  }
+  return {};
+}
+
+[[nodiscard]] inline std::string_view ascii_alt_error_end_code(const ProtocolConfig& config) noexcept {
+  if (MCPROTOCOL_SERIAL_ENABLE_FRAME_C2 && config.frame_kind == FrameKind::C2 &&
+      config.ascii_format == AsciiFormat::Format3) {
+    return "NN";
+  }
+  return {};
 }
 
 [[nodiscard]] constexpr std::size_t binary_route_length(FrameKind frame_kind) noexcept {
@@ -427,8 +446,10 @@ class ByteWriter {
   return config.target_series == PlcSeries::IQ_R;
 }
 
-// Some iQ-R serial targets reject Jn\ native 0403/1402/0801 requests unless they use the
-// legacy extension-specification wire format.
+// Hardware compatibility exception:
+// some validated iQ-R serial targets reject Jn\ native 0403/1402/0801 requests unless the
+// request body falls back to the legacy extension-specification wire format. Keep this helper
+// narrow to link-direct native traffic so the default device encoding path stays rule-based.
 [[nodiscard]] ProtocolConfig link_direct_native_wire_config(const ProtocolConfig& config) noexcept {
   if (!is_binary_mode(config) || !is_iq_r_series(config)) {
     return config;
@@ -1485,12 +1506,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     const DeviceAddress& device) noexcept {
-  if (!is_binary_mode(config) || is_iq_r_series(config)) {
-    return append_device_reference(writer, config, device);
-  }
-  DeviceAddress adjusted = device;
-  adjusted.number ^= 1U;
-  return append_device_reference(writer, config, adjusted);
+  return append_device_reference(writer, config, device);
 }
 
 [[maybe_unused]] [[nodiscard]] bool append_dword_data_ascii(ByteWriter& writer, std::uint32_t value) noexcept {
@@ -1530,7 +1546,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     std::span<const BitValue> bits) noexcept {
   if (bits.size() == 1U) {
-    // Single-point binary bit writes use the addressed point in the high nibble.
+    // General binary bit-packing rule:
+    // a single-point 1401 bit write carries the addressed value in the high nibble.
     return writer.push(bits[0] == BitValue::On ? 0x10U : 0x00U);
   }
   return append_bit_units_binary(writer, bits);
@@ -1584,15 +1601,11 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     std::uint16_t value = 0;
     for (std::size_t index = 0; index < 16U; ++index) {
       if (bits[offset + index] == BitValue::On) {
+        // Word-packed bit blocks for the standard binary multi-block path are encoded MSB-first.
         value = static_cast<std::uint16_t>(value | (1U << (15U - index)));
       }
     }
-    std::uint16_t pair_reversed = 0;
-    for (std::size_t pair = 0; pair < 8U; ++pair) {
-      const std::uint16_t pair_bits = static_cast<std::uint16_t>((value >> (pair * 2U)) & 0x0003U);
-      pair_reversed = static_cast<std::uint16_t>(pair_reversed | (pair_bits << ((7U - pair) * 2U)));
-    }
-    if (!writer.append_le16(pair_reversed)) {
+    if (!writer.append_le16(value)) {
       return false;
     }
   }
@@ -1609,6 +1622,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     std::uint16_t value = 0;
     for (std::size_t index = 0; index < 16U; ++index) {
       if (bits[offset + index] == BitValue::On) {
+        // Direct/validated binary bit-block paths on current serial targets pack bit 0 into the
+        // least-significant bit of the word. Keep this helper separate from the MSB-first path so
+        // hardware exceptions stay localized.
         value = static_cast<std::uint16_t>(value | (1U << index));
       }
     }
@@ -2284,7 +2300,7 @@ Status FrameCodec::encode_error_response(
     }
 
     const std::size_t prefix_size = ascii_block_number_length(config) + ascii_header_length(config.frame_kind);
-    const std::size_t error_width = ascii_error_code_width(config.frame_kind);
+    const std::size_t error_width = ascii_error_code_width(config);
     ByteWriter writer(out_frame);
     if (is_ascii_enq_family(config)) {
       if (!writer.push(kAsciiNak) ||
@@ -2491,7 +2507,7 @@ DecodeResult FrameCodec::decode_response(
   if (is_ascii_mode(config)) {
     const std::size_t prefix_size = 1U + ascii_block_number_length(config) + ascii_header_length(config.frame_kind);
     const std::size_t terminator_size = uses_ascii_crlf(config) ? 2U : 0U;
-    const std::size_t error_width = ascii_error_code_width(config.frame_kind);
+    const std::size_t error_width = ascii_error_code_width(config);
     if (is_ascii_enq_family(config)) {
       if (bytes[0] == kAsciiAck) {
         if (bytes.size() < (prefix_size + terminator_size)) {
@@ -2599,9 +2615,50 @@ DecodeResult FrameCodec::decode_response(
 
     const std::string_view success_end_code = ascii_success_end_code(config.frame_kind);
     const std::string_view error_end_code = ascii_error_end_code(config.frame_kind);
-    const std::size_t end_code_width = success_end_code.size();
-    if (bytes.size() < (prefix_size + end_code_width)) {
+    const std::string_view alt_success_end_code = ascii_alt_success_end_code(config);
+    const std::string_view alt_error_end_code = ascii_alt_error_end_code(config);
+    const std::size_t minimum_end_code_width = [=]() noexcept {
+      std::size_t width = success_end_code.size();
+      if (!alt_success_end_code.empty() && alt_success_end_code.size() < width) {
+        width = alt_success_end_code.size();
+      }
+      if (!alt_error_end_code.empty() && alt_error_end_code.size() < width) {
+        width = alt_error_end_code.size();
+      }
+      return width;
+    }();
+    if (bytes.size() < (prefix_size + minimum_end_code_width)) {
       return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+    }
+
+    bool success_match = false;
+    bool error_match = false;
+    std::size_t end_code_width = 0U;
+    if (bytes.size() >= (prefix_size + success_end_code.size()) &&
+        std::memcmp(bytes.data() + prefix_size, success_end_code.data(), success_end_code.size()) == 0) {
+      success_match = true;
+      end_code_width = success_end_code.size();
+    } else if (!alt_success_end_code.empty() &&
+               bytes.size() >= (prefix_size + alt_success_end_code.size()) &&
+               std::memcmp(bytes.data() + prefix_size, alt_success_end_code.data(), alt_success_end_code.size()) == 0) {
+      success_match = true;
+      end_code_width = alt_success_end_code.size();
+    } else if (bytes.size() >= (prefix_size + error_end_code.size()) &&
+               std::memcmp(bytes.data() + prefix_size, error_end_code.data(), error_end_code.size()) == 0) {
+      error_match = true;
+      end_code_width = error_end_code.size();
+    } else if (!alt_error_end_code.empty() &&
+               bytes.size() >= (prefix_size + alt_error_end_code.size()) &&
+               std::memcmp(bytes.data() + prefix_size, alt_error_end_code.data(), alt_error_end_code.size()) == 0) {
+      error_match = true;
+      end_code_width = alt_error_end_code.size();
+    } else {
+      return DecodeResult {
+          .status = DecodeStatus::Error,
+          .frame = RawResponseFrame {},
+          .error = parse_error("ASCII Format3 response must contain a valid end code"),
+          .bytes_consumed = bytes.size(),
+      };
     }
 
     const std::size_t content_offset = prefix_size + end_code_width;
@@ -2611,9 +2668,8 @@ DecodeResult FrameCodec::decode_response(
     }
 
     const std::size_t etx_index = static_cast<std::size_t>(std::distance(bytes.begin(), etx_it));
-    const auto end_code = bytes.subspan(prefix_size, end_code_width);
 
-    if (std::memcmp(end_code.data(), success_end_code.data(), end_code_width) == 0) {
+    if (success_match) {
       const bool has_data = etx_index > content_offset;
       const std::size_t checksum_size = (config.sum_check_enabled && has_data) ? 2U : 0U;
       if (bytes.size() < (etx_index + 1U + checksum_size)) {
@@ -2647,17 +2703,12 @@ DecodeResult FrameCodec::decode_response(
       };
     }
 
-    if (std::memcmp(end_code.data(), error_end_code.data(), end_code_width) != 0) {
-      return DecodeResult {
-          .status = DecodeStatus::Error,
-          .frame = RawResponseFrame {},
-          .error = parse_error("ASCII Format3 response must contain a valid end code"),
-          .bytes_consumed = etx_index + 1U,
-      };
-    }
-
     std::uint32_t parsed_error = 0;
-    if (!parse_ascii_hex(bytes.subspan(content_offset, etx_index - content_offset), parsed_error) ||
+    const std::size_t format3_error_width =
+        (error_match && end_code_width == alt_error_end_code.size() && !alt_error_end_code.empty()) ? 2U
+                                                                                                      : ascii_error_code_width(config);
+    if ((etx_index - content_offset) != format3_error_width ||
+        !parse_ascii_hex(bytes.subspan(content_offset, format3_error_width), parsed_error) ||
         parsed_error > 0xFFFFU) {
       return DecodeResult {
           .status = DecodeStatus::Error,
@@ -4570,7 +4621,7 @@ Status encode_multi_block_write(
         append_device_reference(writer, config, block.head_device) &&
         append_word_count(writer, config, block.points) &&
         (is_ascii_mode(config) ? append_word_units_from_bits_ascii(writer, block.bits)
-                                             : append_word_units_from_bits_binary(writer, block.bits));
+                                             : append_word_units_from_bits_binary_direct(writer, block.bits));
     if (!ok) {
       return buffer_too_small("Multi-block write request buffer is too small");
     }

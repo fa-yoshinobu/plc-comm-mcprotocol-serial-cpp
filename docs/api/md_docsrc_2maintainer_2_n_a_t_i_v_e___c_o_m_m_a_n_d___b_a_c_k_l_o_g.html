@@ -117,7 +117,7 @@ Follow-up Rules</h1>
 <li>Keep the top-level <span class="tt">README.md</span> summary short. Push detailed failure evidence into validation docs.</li>
 <li>Preserve request-shape conformance tests before treating hardware rejection as an encoder bug.</li>
 <li>Record the exact serial settings, PLC model, and native PLC end code for every new result.</li>
-<li>Run shared real-UART probes strictly serially. Parallel access on <span class="tt">/dev/ttyUSB0</span> produced mixed RX fragments during <span class="tt">2026-04-11</span> revalidation.</li>
+<li>Run shared real-UART probes strictly serially. Parallel access on the same serial port can produce mixed RX fragments and invalidate the result.</li>
 <li>Match <span class="tt">--series</span> to the actual CPU family before interpreting PLC end codes.</li>
 <li>Keep FX5U notes aligned with its serial manual: <span class="tt">0801/0802</span> unsupported, <span class="tt">DX/DY/V/ZR</span> outside the validated subset.</li>
 <li>Do not turn unsupported access paths into backlog items. For long timer / long retentive timer contact+coil devices, keep <span class="tt">LTS/LTC/LSTS/LSTC</span> on the structured <span class="tt">LTN/LSTN</span> <span class="tt">0401</span> path.</li>

@@ -12,7 +12,7 @@ var searchData=
   ['decodestatus_9',['DecodeStatus',['../namespacemcprotocol_1_1serial.html#a10ca9df45a12085535dc3602ac9040cf',1,'mcprotocol::serial']]],
   ['default_20sample_20assumptions_10',['Default Sample Assumptions',['../md_docsrc_2user_2_m_c_u___q_u_i_c_k_s_t_a_r_t.html#autotoc_md54',1,'']]],
   ['delete_5fuser_5fframe_11',['delete_user_frame',['../classmcprotocol_1_1serial_1_1_posix_sync_client.html#a76205e11babb791a8a5c5cb61635efdb',1,'mcprotocol::serial::PosixSyncClient']]],
-  ['dependent_20follow_20up_12',['Target-dependent Follow-up',['../md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md40',1,'']]],
+  ['dependent_20follow_20up_12',['Target-dependent Follow-up',['../md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md39',1,'']]],
   ['deregister_5fcpu_5fmonitoring_13',['deregister_cpu_monitoring',['../classmcprotocol_1_1serial_1_1_posix_sync_client.html#afe56148997b44960beac428b90d2dbb9',1,'mcprotocol::serial::PosixSyncClient']]],
   ['developer_20notes_14',['Developer Notes',['../md_docsrc_2maintainer_2_d_e_v_e_l_o_p_e_r___n_o_t_e_s.html',1,'']]],
   ['developer_5fnotes_2emd_15',['DEVELOPER_NOTES.md',['../_d_e_v_e_l_o_p_e_r___n_o_t_e_s_8md.html',1,'']]],

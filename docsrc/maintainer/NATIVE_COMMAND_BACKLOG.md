@@ -33,8 +33,8 @@ Track current implementation gaps in [TODO.md](TODO.md).
 - Keep the top-level `README.md` summary short. Push detailed failure evidence into validation docs.
 - Preserve request-shape conformance tests before treating hardware rejection as an encoder bug.
 - Record the exact serial settings, PLC model, and native PLC end code for every new result.
-- Run shared real-UART probes strictly serially. Parallel access on `/dev/ttyUSB0` produced mixed RX
-  fragments during `2026-04-11` revalidation.
+- Run shared real-UART probes strictly serially. Parallel access on the same serial port can
+  produce mixed RX fragments and invalidate the result.
 - Match `--series` to the actual CPU family before interpreting PLC end codes.
 - Keep FX5U notes aligned with its serial manual: `0801/0802` unsupported, `DX/DY/V/ZR` outside the validated subset.
 - Do not turn unsupported access paths into backlog items. For long timer / long retentive timer

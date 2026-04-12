@@ -8,6 +8,7 @@ var namespacemcprotocol_1_1serial_1_1highlevel =
     [ "make_batch_read_words_request", "namespacemcprotocol_1_1serial_1_1highlevel.html#a61c90d51f0343af1c91f467928518f36", null ],
     [ "make_batch_write_bits_request", "namespacemcprotocol_1_1serial_1_1highlevel.html#a59d78fa996626bc3ae13f4a58d9b21be", null ],
     [ "make_batch_write_words_request", "namespacemcprotocol_1_1serial_1_1highlevel.html#a4e5d93243eb4ad54410cf33855575407", null ],
+    [ "make_c4_ascii_format2_protocol", "namespacemcprotocol_1_1serial_1_1highlevel.html#af3e62fea0ecb02d36c15123e75c69ee5", null ],
     [ "make_c4_ascii_format4_protocol", "namespacemcprotocol_1_1serial_1_1highlevel.html#ab742d4fc876c94a8e6e983e2dd9e29e4", null ],
     [ "make_c4_binary_protocol", "namespacemcprotocol_1_1serial_1_1highlevel.html#a4673d28aa459f5457b331f4acbb8a13f", null ],
     [ "make_monitor_registration", "namespacemcprotocol_1_1serial_1_1highlevel.html#a6cd3ca72758804e33defc1969e1b932a", null ],

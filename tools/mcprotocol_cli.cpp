@@ -497,6 +497,7 @@ void print_usage() {
       "  multi-block-write-link-direct-bits expects a 0/1 bit string whose length is a multiple of 16.\n"
       "  probe-multi-block defaults to mixed; pass word-only/bit-only or a single block mode to isolate 1406 verification.\n"
       "  probe-monitor read-only sends raw 0802 without client-side monitor registration state.\n"
+      "  random-read / monitor bit items print the requested point plus raw=0x.... for the native 16-point mask.\n"
       "  random-read / random-write-* / probe-random-* / probe-multi-block / probe-monitor expose native probe results directly.\n");
 }
 
@@ -1743,6 +1744,26 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
       return false;
   }
   return false;
+}
+
+// Native sparse bit reads (`0403`) and monitor reads (`0802`) on 2C/3C/4C return a
+// 16-point word window whose bit0 corresponds to the requested head device. Treat the
+// requested point as bit0 for CLI comparisons, but keep printing the raw mask so device-
+// local offsets remain visible when diagnosing the wire format.
+[[nodiscard]] constexpr BitValue requested_bit_from_sparse_native_mask(std::uint32_t raw_value) noexcept {
+  return (raw_value & 0x0001U) != 0U ? BitValue::On : BitValue::Off;
+}
+
+[[nodiscard]] constexpr std::uint16_t sparse_native_mask_word(std::uint32_t raw_value) noexcept {
+  return static_cast<std::uint16_t>(raw_value & 0xFFFFU);
+}
+
+void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_value) {
+  std::printf("%.*s=%u raw=0x%04X\n",
+              static_cast<int>(label.size()),
+              label.data(),
+              requested_bit_from_sparse_native_mask(raw_value) == BitValue::On ? 1U : 0U,
+              static_cast<unsigned>(sparse_native_mask_word(raw_value)));
 }
 
 [[nodiscard]] constexpr bool is_double_word_device(DeviceCode code) {
@@ -3298,14 +3319,15 @@ int main(int argc, char** argv) {
                                                std::span<const BitValue> expected,
                                                std::span<const std::uint32_t> actual) -> bool {
         for (std::size_t index = 0; index < expected.size(); ++index) {
-          const BitValue actual_bit = actual[index] == 0U ? BitValue::Off : BitValue::On;
+          const BitValue actual_bit = requested_bit_from_sparse_native_mask(actual[index]);
           if (actual_bit != expected[index]) {
-            std::printf("%.*s-mismatch[%zu] expected=%u read=%u\n",
+            std::printf("%.*s-mismatch[%zu] expected=%u read=%u raw=0x%04X\n",
                         static_cast<int>(label.size()),
                         label.data(),
                         index,
                         expected[index] == BitValue::On ? 1U : 0U,
-                        actual_bit == BitValue::On ? 1U : 0U);
+                        actual_bit == BitValue::On ? 1U : 0U,
+                        static_cast<unsigned>(sparse_native_mask_word(actual[index])));
             return false;
           }
         }
@@ -4687,20 +4709,34 @@ int main(int argc, char** argv) {
           expected_m105 == BitValue::On ? 1U : 0U,
       };
       for (std::size_t index = 0; index < expected_values.size(); ++index) {
-        if (monitor_values[index] != expected_values[index]) {
-          std::printf("probe-monitor: skip verify-mismatch index=%zu expected=%u read=%u\n",
-                      index,
-                      expected_values[index],
-                      monitor_values[index]);
+        const bool bit_item = is_bit_device(items[index].device.code);
+        const std::uint32_t actual_value =
+            bit_item ? (requested_bit_from_sparse_native_mask(monitor_values[index]) == BitValue::On ? 1U : 0U)
+                     : monitor_values[index];
+        if (actual_value != expected_values[index]) {
+          if (bit_item) {
+            std::printf("probe-monitor: skip verify-mismatch index=%zu expected=%u read=%u raw=0x%04X\n",
+                        index,
+                        static_cast<unsigned>(expected_values[index]),
+                        static_cast<unsigned>(actual_value),
+                        static_cast<unsigned>(sparse_native_mask_word(monitor_values[index])));
+          } else {
+            std::printf("probe-monitor: skip verify-mismatch index=%zu expected=%u read=%u\n",
+                        index,
+                        static_cast<unsigned>(expected_values[index]),
+                        static_cast<unsigned>(actual_value));
+          }
           return 1;
         }
       }
 
-      std::printf("probe-monitor=ok mode=native D100=%u D105=%u M100=%u M105=%u\n",
+      std::printf("probe-monitor=ok mode=native D100=%u D105=%u M100=%u(raw=0x%04X) M105=%u(raw=0x%04X)\n",
                   static_cast<unsigned>(monitor_values[0]),
                   static_cast<unsigned>(monitor_values[1]),
-                  static_cast<unsigned>(monitor_values[2]),
-                  static_cast<unsigned>(monitor_values[3]));
+                  requested_bit_from_sparse_native_mask(monitor_values[2]) == BitValue::On ? 1U : 0U,
+                  static_cast<unsigned>(sparse_native_mask_word(monitor_values[2])),
+                  requested_bit_from_sparse_native_mask(monitor_values[3]) == BitValue::On ? 1U : 0U,
+                  static_cast<unsigned>(sparse_native_mask_word(monitor_values[3])));
       return 0;
     }
 
@@ -5678,7 +5714,7 @@ int main(int argc, char** argv) {
       for (int index = 0; index < options.command_argc; ++index) {
         const auto value = values[static_cast<std::size_t>(index)];
         if (is_bit_device(items[static_cast<std::size_t>(index)].device.device.code)) {
-          std::printf("%s=%u\n", options.command_argv[index], value != 0U ? 1U : 0U);
+          print_sparse_native_bit_value(options.command_argv[index], value);
         } else {
           const unsigned word = static_cast<unsigned>(value & 0xFFFFU);
           std::printf("%s=0x%04X %u\n", options.command_argv[index], word, word);
@@ -6046,7 +6082,7 @@ int main(int argc, char** argv) {
       for (int index = 0; index < options.command_argc; ++index) {
         const auto value = values[static_cast<std::size_t>(index)];
         if (is_bit_device(items[static_cast<std::size_t>(index)].device.device.code)) {
-          std::printf("%s=%u\n", options.command_argv[index], value != 0U ? 1U : 0U);
+          print_sparse_native_bit_value(options.command_argv[index], value);
         } else {
           const unsigned word = static_cast<unsigned>(value & 0xFFFFU);
           std::printf("%s=0x%04X %u\n", options.command_argv[index], word, word);
@@ -6096,7 +6132,7 @@ int main(int argc, char** argv) {
       for (int index = 0; index < options.command_argc; ++index) {
         const auto value = values[static_cast<std::size_t>(index)];
         if (is_bit_device(items[static_cast<std::size_t>(index)].device.code)) {
-          std::printf("%s=%u\n", options.command_argv[index], value != 0U ? 1U : 0U);
+          print_sparse_native_bit_value(options.command_argv[index], value);
         } else {
           const unsigned word = static_cast<unsigned>(value & 0xFFFFU);
           std::printf("%s=0x%04X %u\n", options.command_argv[index], word, word);

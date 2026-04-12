@@ -114,7 +114,8 @@ Why do some native commands still fail on some targets?</h1>
 <li><span class="tt">RJ71C24-R2</span>, <span class="tt">LJ71C24</span>, and <span class="tt">QJ71C24N</span> pass native random / multi-block / monitor traffic under <span class="tt">--series ql</span></li>
 <li><span class="tt">FX5UC-32MT/D</span> passes native random / multi-block traffic under <span class="tt">--series ql</span></li>
 <li><span class="tt">FX5UC-32MT/D</span> monitor <span class="tt">0801/0802</span> is treated as unsupported on serial <span class="tt">3C/4C</span></li>
-<li><span class="tt">RJ71C24-R2 + R120PCPU</span> <span class="tt">remote-reset</span> is still parameter-dependent and currently returns <span class="tt">0x408B</span></li>
+<li><span class="tt">RJ71C24-R2 + R120PCPU</span> <span class="tt">remote-reset</span> passes once the target-side remote RESET parameter is enabled</li>
+<li><span class="tt">RJ71C24-R2 + R120PCPU</span> <span class="tt">lock</span> / <span class="tt">unlock</span> are still unresolved; focused <span class="tt">--series iqr</span> checks returned <span class="tt">0x7F22</span></li>
 <li>native qualified access is not a supported workflow</li>
 </ul>
 <p>For practical qualified-device access, use <span class="tt">read-qualified-words</span> / <span class="tt">write-qualified-words</span> where the helper path is validated. Treat native qualified commands as diagnostic probes only.</p>

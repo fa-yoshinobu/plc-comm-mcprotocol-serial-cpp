@@ -100,16 +100,16 @@ Native Command Holds</h1>
 <li>none at the command-family level on the currently validated targets.</li>
 </ul>
 <h1 class="doxsection"><a class="anchor" id="autotoc_md39"></a>
+Target-dependent Follow-up</h1>
+<ul>
+<li><span class="tt">RJ71C24-R2 + R120PCPU</span>: <span class="tt">1630</span> / <span class="tt">1631</span> remote password unlock/lock remain unresolved. Focused <span class="tt">--series iqr</span> checks returned <span class="tt">0x7F22</span> for both <span class="tt">unlock</span> and <span class="tt">lock</span>, while read-only access such as <span class="tt">cpu-model</span> and <span class="tt">read-words D0 1</span> remained available.</li>
+</ul>
+<h1 class="doxsection"><a class="anchor" id="autotoc_md40"></a>
 Implementation Gaps</h1>
 <ul>
 <li><span class="tt">1612</span>: serial-module mode switching is still not implemented.</li>
 <li><span class="tt">0630</span>: programmable-controller CPU monitoring register/start is still not implemented.</li>
 <li><span class="tt">2101</span>: on-demand data is still not implemented as a receive-side API.</li>
-</ul>
-<h1 class="doxsection"><a class="anchor" id="autotoc_md40"></a>
-Target-dependent Follow-up</h1>
-<ul>
-<li><span class="tt">RJ71C24-R2 + R120PCPU</span>: <span class="tt">1006 remote-reset</span> still returns <span class="tt">0x408B</span> in current validation. Manual conditions require <span class="tt">STOP</span> state and target-side remote RESET enable, so this remains a parameter-dependent hardware follow-up rather than a codec bug.</li>
 </ul>
 <h1 class="doxsection"><a class="anchor" id="autotoc_md41"></a>
 Notes</h1>

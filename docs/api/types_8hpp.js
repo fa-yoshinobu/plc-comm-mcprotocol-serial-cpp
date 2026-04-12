@@ -63,6 +63,7 @@ var types_8hpp =
     [ "mcprotocol::serial::CompletionHandler", "namespacemcprotocol_1_1serial.html#a4fb13b5bd03ced77d5e8947ab20757eb", null ],
     [ "mcprotocol::serial::AsciiFormat", "namespacemcprotocol_1_1serial.html#aa95ab71e8bca3e70b325b76c91b62917", [
       [ "mcprotocol::serial::AsciiFormat::Format1", "namespacemcprotocol_1_1serial.html#aa95ab71e8bca3e70b325b76c91b62917a285fa8fb8bfa38dee54ea197a54dd2df", null ],
+      [ "mcprotocol::serial::AsciiFormat::Format2", "namespacemcprotocol_1_1serial.html#aa95ab71e8bca3e70b325b76c91b62917ad10bbaf5d6ca235aaa79e4a2380252da", null ],
       [ "mcprotocol::serial::AsciiFormat::Format3", "namespacemcprotocol_1_1serial.html#aa95ab71e8bca3e70b325b76c91b62917acfc4ac8b8866ade25334a666755c9d1e", null ],
       [ "mcprotocol::serial::AsciiFormat::Format4", "namespacemcprotocol_1_1serial.html#aa95ab71e8bca3e70b325b76c91b62917a48ac272ef5c522f6a09e8452e3157946", null ]
     ] ],

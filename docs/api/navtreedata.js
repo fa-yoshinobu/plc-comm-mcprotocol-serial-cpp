@@ -69,8 +69,8 @@ var NAVTREE =
     ] ],
     [ "TODO", "md_docsrc_2maintainer_2_t_o_d_o.html", [
       [ "Native Command Holds", "md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md38", null ],
-      [ "Implementation Gaps", "md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md39", null ],
-      [ "Target-dependent Follow-up", "md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md40", null ],
+      [ "Target-dependent Follow-up", "md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md39", null ],
+      [ "Implementation Gaps", "md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md40", null ],
       [ "Notes", "md_docsrc_2maintainer_2_t_o_d_o.html#autotoc_md41", null ]
     ] ],
     [ "FAQ", "md_docsrc_2user_2_f_a_q.html", [
@@ -112,7 +112,7 @@ var NAVTREE =
       [ "Validation Flow", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md76", null ],
       [ "Current Matrix", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md77", null ],
       [ "Stress / Endurance Snapshot", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md78", null ],
-      [ "Current HOLD Items", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md79", null ],
+      [ "Current Follow-up Items", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md79", null ],
       [ "Current Interpretation", "md_docsrc_2validation_2reports_2_h_a_r_d_w_a_r_e___v_a_l_i_d_a_t_i_o_n.html#autotoc_md80", null ]
     ] ],
     [ "LJ71C24 RS-232C Report", "md_docsrc_2validation_2reports_2_l_j71_c24___r_s232_c.html", [
@@ -167,8 +167,8 @@ var NAVTREEINDEX =
 "annotated.html",
 "classstd_1_1span.html#a100132ab62eee5c8f227b8ba2144cab2",
 "namespacemcprotocol_1_1serial.html#a27597d44f3ac2679223eeb3ce15a3642a1c2903397d8833382673bab22aa8b937",
-"status_8hpp.html",
-"structmcprotocol_1_1serial_1_1_protocol_config.html#a7ab17ca719bfba52e44606ec88e1eb0c"
+"span__compat_8hpp.html",
+"structmcprotocol_1_1serial_1_1_protocol_config.html#a764e8824889a5e87d6eae2bb1be58c65"
 ];
 
 var SYNCONMSG = 'click to disable panel synchronization';

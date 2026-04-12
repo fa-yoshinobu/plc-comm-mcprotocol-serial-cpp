@@ -106,6 +106,7 @@ Public Attributes</h2></td></tr>
 <tr class="memdesc:a9235fe5eb270294905883545f057afc9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Selected payload encoding inside the frame.  <br /></td></tr>
 <tr class="memitem:a729ad854bd24c0e504156debabc297f8" id="r_a729ad854bd24c0e504156debabc297f8"><td class="memItemLeft"><a class="el" href="namespacemcprotocol_1_1serial.html#aa95ab71e8bca3e70b325b76c91b62917">AsciiFormat</a>&#160;</td><td class="memItemRight"><a class="el" href="#a729ad854bd24c0e504156debabc297f8">ascii_format</a> = <a class="el" href="namespacemcprotocol_1_1serial.html#aa95ab71e8bca3e70b325b76c91b62917acfc4ac8b8866ade25334a666755c9d1e">AsciiFormat::Format3</a></td></tr>
 <tr class="memdesc:a729ad854bd24c0e504156debabc297f8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Selected ASCII framing flavor when <span class="tt"><a class="el" href="#a9235fe5eb270294905883545f057afc9" title="Selected payload encoding inside the frame.">code_mode</a> == <a class="el" href="namespacemcprotocol_1_1serial.html#a9dab0fd4d2513a218dcaf08dc8f53cd4a76b8d0dcd02ccaf203c167ced6d7ef31" title="Text-encoded command data and response data.">CodeMode::Ascii</a></span>.  <br /></td></tr>
+<tr class="memitem:ab21cf2bd7bd24d19887e64d01f8b0c40" id="r_ab21cf2bd7bd24d19887e64d01f8b0c40"><td class="memItemLeft">std::uint8_t&#160;</td><td class="memItemRight"><a class="el" href="#ab21cf2bd7bd24d19887e64d01f8b0c40">ascii_block_number</a> = 0x00</td></tr>
 <tr class="memitem:a7ab17ca719bfba52e44606ec88e1eb0c" id="r_a7ab17ca719bfba52e44606ec88e1eb0c"><td class="memItemLeft"><a class="el" href="namespacemcprotocol_1_1serial.html#abc734f0164959f34fab347dd491480a2">PlcSeries</a>&#160;</td><td class="memItemRight"><a class="el" href="#a7ab17ca719bfba52e44606ec88e1eb0c">target_series</a> = <a class="el" href="namespacemcprotocol_1_1serial.html#abc734f0164959f34fab347dd491480a2ae04d85de978e3dd06f3e0b1c3db007f9">PlcSeries::Q_L</a></td></tr>
 <tr class="memdesc:a7ab17ca719bfba52e44606ec88e1eb0c"><td class="mdescLeft">&#160;</td><td class="mdescRight">PLC family used for device and subcommand differences.  <br /></td></tr>
 <tr class="memitem:a4648722f0b91ce3d558f89b962072605" id="r_a4648722f0b91ce3d558f89b962072605"><td class="memItemLeft">bool&#160;</td><td class="memItemRight"><a class="el" href="#a4648722f0b91ce3d558f89b962072605">sum_check_enabled</a> = true</td></tr>
@@ -124,8 +125,26 @@ Public Attributes</h2></td></tr>
 <li><span class="tt"><a class="el" href="classmcprotocol_1_1serial_1_1_melsec_serial_client.html" title="Asynchronous MC protocol client for UART / serial integrations.">MelsecSerialClient</a></span> and <span class="tt"><a class="el" href="classmcprotocol_1_1serial_1_1_posix_sync_client.html" title="Host-side synchronous convenience wrapper built on PosixSerialPort and MelsecSerialClient.">PosixSyncClient</a></span> for runtime request execution </li>
 </ul>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00321">321</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00323">323</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Member Data Documentation</h2>
+<a id="ab21cf2bd7bd24d19887e64d01f8b0c40" name="ab21cf2bd7bd24d19887e64d01f8b0c40"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab21cf2bd7bd24d19887e64d01f8b0c40">&#9670;&#160;</a></span>ascii_block_number</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">std::uint8_t mcprotocol::serial::ProtocolConfig::ascii_block_number = 0x00</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>Block number used only by <span class="tt">ASCII Format2</span> on <span class="tt">2C/3C/4C</span>.</p>
+<p>The external device chooses this value in the range <span class="tt">0x00..0xFF</span>. It is ignored by <span class="tt">Format1</span>, <span class="tt">Format3</span>, <span class="tt">Format4</span>, binary <span class="tt">Format5</span>, <span class="tt">1C</span>, and <span class="tt">1E</span>. </p>
+
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00334">334</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+
+</div>
+</div>
 <a id="a729ad854bd24c0e504156debabc297f8" name="a729ad854bd24c0e504156debabc297f8"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a729ad854bd24c0e504156debabc297f8">&#9670;&#160;</a></span>ascii_format</h2>
 
@@ -140,7 +159,7 @@ Public Attributes</h2></td></tr>
 
 <p>Selected ASCII framing flavor when <span class="tt"><a class="el" href="#a9235fe5eb270294905883545f057afc9" title="Selected payload encoding inside the frame.">code_mode</a> == <a class="el" href="namespacemcprotocol_1_1serial.html#a9dab0fd4d2513a218dcaf08dc8f53cd4a76b8d0dcd02ccaf203c167ced6d7ef31" title="Text-encoded command data and response data.">CodeMode::Ascii</a></span>. </p>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00327">327</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00329">329</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -158,7 +177,7 @@ Public Attributes</h2></td></tr>
 
 <p>Selected payload encoding inside the frame. </p>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00325">325</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00327">327</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -176,7 +195,7 @@ Public Attributes</h2></td></tr>
 
 <p>Selected serial frame family. </p>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00323">323</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00325">325</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -194,7 +213,7 @@ Public Attributes</h2></td></tr>
 
 <p>Route header fields used for every encoded request. </p>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00333">333</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00340">340</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -212,7 +231,7 @@ Public Attributes</h2></td></tr>
 
 <p>Enables or disables the ASCII/binary sum-check where that frame family supports it. </p>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00331">331</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00338">338</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -230,7 +249,7 @@ Public Attributes</h2></td></tr>
 
 <p>PLC family used for device and subcommand differences. </p>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00329">329</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00336">336</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>
@@ -248,7 +267,7 @@ Public Attributes</h2></td></tr>
 
 <p>Request timeout policy used by the async client and stream decoder. </p>
 
-<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00335">335</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
+<p class="definition">Definition at line <a class="el" href="types_8hpp_source.html#l00342">342</a> of file <a class="el" href="types_8hpp_source.html">types.hpp</a>.</p>
 
 </div>
 </div>

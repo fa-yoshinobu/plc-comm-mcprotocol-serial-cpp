@@ -24,7 +24,8 @@ Because support is target-dependent.
 - `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` pass native random / multi-block / monitor traffic under `--series ql`
 - `FX5UC-32MT/D` passes native random / multi-block traffic under `--series ql`
 - `FX5UC-32MT/D` monitor `0801/0802` is treated as unsupported on serial `3C/4C`
-- `RJ71C24-R2 + R120PCPU` `remote-reset` is still parameter-dependent and currently returns `0x408B`
+- `RJ71C24-R2 + R120PCPU` `remote-reset` passes once the target-side remote RESET parameter is enabled
+- `RJ71C24-R2 + R120PCPU` `lock` / `unlock` are still unresolved; focused `--series iqr` checks returned `0x7F22`
 - native qualified access is not a supported workflow
 
 For practical qualified-device access, use `read-qualified-words` / `write-qualified-words` where
