@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.1 - 2026-04-12
+
+- Added `SM`, `SD`, `RD`, `LZ`, `LTN`, `LSTN`, `LCN`, `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, and
+  `LCC` device support and validated the practical `iQ-R` spot-device paths on `RJ71C24-R2`.
+- Added `Jn\\...` link-direct support for batch and multi-block command surfaces, plus CLI
+  front-ends and hardware validation for the validated `J1` path.
+- Fixed binary single-point bit read/write behavior and aligned current request-shape tests with
+  manual-backed bit-packing rules and validated hardware results.
+- Moved generated API docs to GitHub Pages workflow deployment, pinned Actions workflow versions,
+  and kept release/feature-profile behavior aligned with the current build layout.
+- Added maintainer guardrails for manual-derived protocol rules and difference-first triage.
+
 ## 0.2.0 - 2026-04-11
 
 - Added simpler host and high-level library entrypoints with `high_level.hpp`,
