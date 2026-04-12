@@ -822,6 +822,29 @@ class ByteWriter {
   return true;
 }
 
+[[nodiscard]] bool append_batch_write_bits_binary(
+    ByteWriter& writer,
+    std::span<const BitValue> bits) noexcept {
+  if (bits.size() == 1U) {
+    // Single-point binary bit writes use the pair-mate address and the high nibble only.
+    return writer.push(bits[0] == BitValue::On ? 0x10U : 0x00U);
+  }
+  return append_bit_units_binary(writer, bits);
+}
+
+[[nodiscard]] DeviceAddress effective_batch_write_bits_head_device(
+    const ProtocolConfig& config,
+    const DeviceAddress& head_device,
+    std::span<const BitValue> bits) noexcept {
+  if (config.code_mode != CodeMode::Binary || bits.size() != 1U) {
+    return head_device;
+  }
+
+  DeviceAddress adjusted = head_device;
+  adjusted.number ^= 1U;
+  return adjusted;
+}
+
 [[maybe_unused]] [[nodiscard]] bool append_word_units_from_bits_ascii(
     ByteWriter& writer,
     std::span<const BitValue> bits) noexcept {
@@ -1873,9 +1896,13 @@ Status encode_link_direct_batch_read_bits(
   if (!device_status.ok()) {
     return device_status;
   }
+  LinkDirectDevice effective_device = device;
+  if (config.code_mode == CodeMode::Binary && points == 1U) {
+    effective_device.device.number ^= 1U;
+  }
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x0401U, extended_bit_subcommand(config)) ||
-      !append_link_direct_device_reference_binary(writer, config, device) ||
+      !append_link_direct_device_reference_binary(writer, config, effective_device) ||
       !append_word_count(writer, config, points)) {
     return buffer_too_small("Link direct batch read bits request buffer is too small");
   }
@@ -1910,6 +1937,15 @@ Status parse_batch_read_bits_response(
   const std::size_t expected_size = (request.points + 1U) / 2U;
   if (response_data.size() != expected_size) {
     return parse_error("Batch read bits binary response length mismatch");
+  }
+  if (request.points == 1U) {
+    // Single-point binary bit reads return the addressed value in the high nibble.
+    const std::uint8_t nibble = static_cast<std::uint8_t>((response_data[0] >> 4U) & 0x0FU);
+    if (nibble > 1U) {
+      return parse_error("Batch read bits binary payload contains an invalid bit nibble");
+    }
+    out_bits[0] = nibble == 0U ? BitValue::Off : BitValue::On;
+    return ok_status();
   }
   for (std::size_t index = 0; index < request.points; ++index) {
     const std::uint8_t packed = response_data[index / 2U];
@@ -2013,15 +2049,17 @@ Status encode_batch_write_bits(
     return invalid_argument("Batch write bits count exceeds supported range for the current buffer/configuration");
   }
   ByteWriter writer(out_request_data);
+  const DeviceAddress effective_head =
+      effective_batch_write_bits_head_device(config, request.head_device, request.bits);
   if (!append_command_header(writer, config, 0x1401U, bit_subcommand(config)) ||
-      !append_device_reference(writer, config, request.head_device) ||
+      !append_device_reference(writer, config, effective_head) ||
       !append_word_count(writer, config, static_cast<std::uint16_t>(request.bits.size()))) {
     return buffer_too_small("Batch write bits request buffer is too small");
   }
 
   const bool ok = (config.code_mode == CodeMode::Ascii)
                       ? append_bit_units_ascii(writer, request.bits)
-                      : append_bit_units_binary(writer, request.bits);
+                      : append_batch_write_bits_binary(writer, request.bits);
   if (!ok) {
     return buffer_too_small("Batch write bits request buffer is too small");
   }
@@ -2044,15 +2082,21 @@ Status encode_link_direct_batch_write_bits(
   if (!device_status.ok()) {
     return device_status;
   }
+  const DeviceAddress effective_head =
+      effective_batch_write_bits_head_device(config, device.device, bits);
+  const LinkDirectDevice effective_device {
+      .network_number = device.network_number,
+      .device = effective_head,
+  };
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x1401U, extended_bit_subcommand(config)) ||
-      !append_link_direct_device_reference_binary(writer, config, device) ||
+      !append_link_direct_device_reference_binary(writer, config, effective_device) ||
       !append_word_count(writer, config, static_cast<std::uint16_t>(bits.size()))) {
     return buffer_too_small("Link direct batch write bits request buffer is too small");
   }
   const bool appended = config.code_mode == CodeMode::Ascii
                             ? append_bit_units_ascii(writer, bits)
-                            : append_bit_units_binary(writer, bits);
+                            : append_batch_write_bits_binary(writer, bits);
   if (!appended) {
     return buffer_too_small("Link direct batch write bits request buffer is too small");
   }
