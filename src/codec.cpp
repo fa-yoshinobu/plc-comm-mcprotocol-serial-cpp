@@ -243,6 +243,10 @@ class ByteWriter {
   return is_iq_r_series(config) ? 0x0083U : 0x0081U;
 }
 
+[[nodiscard]] constexpr std::uint16_t extended_monitor_subcommand() noexcept {
+  return 0x00C0U;
+}
+
 [[nodiscard]] constexpr std::size_t ascii_device_modification_width(
     const ProtocolConfig& config) noexcept {
   return is_iq_r_series(config) ? 4U : 3U;
@@ -442,6 +446,36 @@ class ByteWriter {
     return invalid_argument("Link direct bit access requires X, Y, B, or SB");
   }
   return ok_status();
+}
+
+[[nodiscard]] Status validate_link_direct_random_read_item(
+    const ProtocolConfig& config,
+    const LinkDirectRandomReadItem& item) noexcept {
+  if (item.double_word) {
+    return invalid_argument("Link direct random read does not support double-word items");
+  }
+  if (is_link_direct_word_device(item.device.device.code)) {
+    return validate_link_direct_word_device(config, item.device);
+  }
+  if (is_link_direct_bit_device(item.device.device.code)) {
+    return validate_link_direct_bit_device(config, item.device);
+  }
+  return invalid_argument("Link direct random read requires X, Y, B, W, SB, or SW");
+}
+
+[[nodiscard]] Status validate_link_direct_random_write_word_item(
+    const ProtocolConfig& config,
+    const LinkDirectRandomWriteWordItem& item) noexcept {
+  if (item.double_word) {
+    return invalid_argument("Link direct random word write does not support double-word items");
+  }
+  return validate_link_direct_word_device(config, item.device);
+}
+
+[[nodiscard]] Status validate_link_direct_random_write_bit_item(
+    const ProtocolConfig& config,
+    const LinkDirectRandomWriteBitItem& item) noexcept {
+  return validate_link_direct_bit_device(config, item.device);
 }
 
 [[nodiscard]] constexpr std::uint8_t qualified_binary_direct_memory(
@@ -2110,6 +2144,44 @@ Status encode_link_direct_batch_write_bits(
 }
 
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
+Status encode_link_direct_random_read(
+    const ProtocolConfig& config,
+    std::span<const LinkDirectRandomReadItem> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  if (items.empty()) {
+    return invalid_argument("Link direct random read requires at least one item");
+  }
+
+  for (const LinkDirectRandomReadItem& item : items) {
+    const Status item_status = validate_link_direct_random_read_item(config, item);
+    if (!item_status.ok()) {
+      return item_status;
+    }
+  }
+
+  const std::uint16_t limit = is_iq_r_series(config) ? 96U : 192U;
+  if (items.size() > limit) {
+    return invalid_argument("Link direct random read access-point count exceeds supported range");
+  }
+
+  ByteWriter writer(out_request_data);
+  if (!append_command_header(writer, config, 0x0403U, extended_word_subcommand(config)) ||
+      !append_random_word_dword_count(writer, config, static_cast<std::uint16_t>(items.size())) ||
+      !append_random_word_dword_count(writer, config, 0U)) {
+    return buffer_too_small("Link direct random read request buffer is too small");
+  }
+
+  for (const LinkDirectRandomReadItem& item : items) {
+    if (!append_link_direct_device_reference_binary(writer, config, item.device)) {
+      return buffer_too_small("Link direct random read request buffer is too small");
+    }
+  }
+
+  out_size = writer.size();
+  return ok_status();
+}
+
 Status encode_random_read(
     const ProtocolConfig& config,
     const RandomReadRequest& request,
@@ -2159,6 +2231,18 @@ Status encode_random_read(
   return ok_status();
 }
 #else
+Status encode_link_direct_random_read(
+    const ProtocolConfig& config,
+    std::span<const LinkDirectRandomReadItem> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)items;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Random commands are disabled at build time");
+}
+
 Status encode_random_read(
     const ProtocolConfig& config,
     const RandomReadRequest& request,
@@ -2244,6 +2328,47 @@ Status parse_random_read_response(
 #endif
 
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+Status encode_link_direct_random_write_words(
+    const ProtocolConfig& config,
+    std::span<const LinkDirectRandomWriteWordItem> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  if (items.empty()) {
+    return invalid_argument("Link direct random write words requires at least one item");
+  }
+
+  for (const LinkDirectRandomWriteWordItem& item : items) {
+    const Status item_status = validate_link_direct_random_write_word_item(config, item);
+    if (!item_status.ok()) {
+      return item_status;
+    }
+  }
+
+  const std::uint16_t weighted_limit = is_iq_r_series(config) ? 960U : 1920U;
+  const std::uint16_t weighted_size = static_cast<std::uint16_t>(items.size() * 12U);
+  if (weighted_size == 0U || weighted_size > weighted_limit) {
+    return invalid_argument("Link direct random write words exceeds the supported request size");
+  }
+
+  ByteWriter writer(out_request_data);
+  if (!append_command_header(writer, config, 0x1402U, extended_word_subcommand(config)) ||
+      !append_random_word_dword_count(writer, config, static_cast<std::uint16_t>(items.size())) ||
+      !append_random_word_dword_count(writer, config, 0U)) {
+    return buffer_too_small("Link direct random write words request buffer is too small");
+  }
+
+  for (const LinkDirectRandomWriteWordItem& item : items) {
+    if (!append_link_direct_device_reference_binary(writer, config, item.device) ||
+        (config.code_mode == CodeMode::Ascii ? !append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))
+                                             : !writer.append_le16(static_cast<std::uint16_t>(item.value & 0xFFFFU)))) {
+      return buffer_too_small("Link direct random write words request buffer is too small");
+    }
+  }
+
+  out_size = writer.size();
+  return ok_status();
+}
+
 Status encode_random_write_words(
     const ProtocolConfig& config,
     std::span<const RandomWriteWordItem> items,
@@ -2304,6 +2429,18 @@ Status encode_random_write_words(
   return ok_status();
 }
 #else
+Status encode_link_direct_random_write_words(
+    const ProtocolConfig& config,
+    std::span<const LinkDirectRandomWriteWordItem> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)items;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Random commands are disabled at build time");
+}
+
 Status encode_random_write_words(
     const ProtocolConfig& config,
     std::span<const RandomWriteWordItem> items,
@@ -2359,6 +2496,48 @@ Status encode_random_write_bits(
   out_size = writer.size();
   return ok_status();
 }
+
+Status encode_link_direct_random_write_bits(
+    const ProtocolConfig& config,
+    std::span<const LinkDirectRandomWriteBitItem> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  if (items.empty()) {
+    return invalid_argument("Link direct random write bits requires at least one item");
+  }
+  const std::uint16_t limit = is_iq_r_series(config) ? 94U : 188U;
+  if (items.size() > limit) {
+    return invalid_argument("Link direct random write bits count exceeds supported range");
+  }
+  for (const LinkDirectRandomWriteBitItem& item : items) {
+    const Status bit_status = validate_link_direct_random_write_bit_item(config, item);
+    if (!bit_status.ok()) {
+      return bit_status;
+    }
+  }
+
+  ByteWriter writer(out_request_data);
+  if (!append_command_header(writer, config, 0x1402U, extended_bit_subcommand(config)) ||
+      !append_random_write_bit_count(writer, config, static_cast<std::uint16_t>(items.size()))) {
+    return buffer_too_small("Link direct random write bits request buffer is too small");
+  }
+  for (const LinkDirectRandomWriteBitItem& item : items) {
+    if (!append_link_direct_device_reference_binary(writer, config, item.device)) {
+      return buffer_too_small("Link direct random write bits request buffer is too small");
+    }
+    const std::uint16_t bit_value = item.value == BitValue::On ? 0x0001U : 0x0000U;
+    const bool ok = config.code_mode == CodeMode::Ascii
+                        ? (is_iq_r_series(config) ? append_word_data_ascii(writer, bit_value)
+                                                  : append_ascii_hex(writer, bit_value, 2U))
+                        : (is_iq_r_series(config) ? writer.append_le16(bit_value)
+                                                  : writer.push(static_cast<std::uint8_t>(bit_value)));
+    if (!ok) {
+      return buffer_too_small("Link direct random write bits request buffer is too small");
+    }
+  }
+  out_size = writer.size();
+  return ok_status();
+}
 #else
 Status encode_random_write_bits(
     const ProtocolConfig& config,
@@ -2371,9 +2550,77 @@ Status encode_random_write_bits(
   (void)out_size;
   return unsupported("Random commands are disabled at build time");
 }
+
+Status encode_link_direct_random_write_bits(
+    const ProtocolConfig& config,
+    std::span<const LinkDirectRandomWriteBitItem> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)items;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Random commands are disabled at build time");
+}
 #endif
 
 #if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
+Status encode_link_direct_multi_block_read(
+    const ProtocolConfig& config,
+    const LinkDirectMultiBlockReadRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  if (request.blocks.empty()) {
+    return invalid_argument("Link direct multi-block read requires at least one block");
+  }
+
+  std::uint16_t word_blocks = 0;
+  std::uint16_t bit_blocks = 0;
+  for (const LinkDirectMultiBlockReadBlock& block : request.blocks) {
+    if (block.points == 0U || block.points > 960U) {
+      return invalid_argument("Each link direct multi-block read block must be in range 1..960 points");
+    }
+    const Status block_status =
+        block.bit_block ? validate_link_direct_bit_device(config, block.head_device)
+                        : validate_link_direct_word_device(config, block.head_device);
+    if (!block_status.ok()) {
+      return block_status;
+    }
+    block.bit_block ? ++bit_blocks : ++word_blocks;
+  }
+  const std::uint16_t limit = is_iq_r_series(config) ? 60U : 120U;
+  if (static_cast<std::uint16_t>(word_blocks + bit_blocks) > limit) {
+    return invalid_argument("Link direct multi-block read block count exceeds supported range");
+  }
+
+  ByteWriter writer(out_request_data);
+  if (!append_command_header(writer, config, 0x0406U, extended_word_subcommand(config)) ||
+      !append_multi_block_block_count(writer, config, word_blocks) ||
+      !append_multi_block_block_count(writer, config, bit_blocks)) {
+    return buffer_too_small("Link direct multi-block read request buffer is too small");
+  }
+  for (const LinkDirectMultiBlockReadBlock& block : request.blocks) {
+    if (block.bit_block) {
+      continue;
+    }
+    if (!append_link_direct_device_reference_binary(writer, config, block.head_device) ||
+        !append_word_count(writer, config, block.points)) {
+      return buffer_too_small("Link direct multi-block read request buffer is too small");
+    }
+  }
+  for (const LinkDirectMultiBlockReadBlock& block : request.blocks) {
+    if (!block.bit_block) {
+      continue;
+    }
+    if (!append_link_direct_device_reference_binary(writer, config, block.head_device) ||
+        !append_word_count(writer, config, block.points)) {
+      return buffer_too_small("Link direct multi-block read request buffer is too small");
+    }
+  }
+  out_size = writer.size();
+  return ok_status();
+}
+
 Status encode_multi_block_read(
     const ProtocolConfig& config,
     const MultiBlockReadRequest& request,
@@ -2589,7 +2836,93 @@ Status encode_multi_block_write(
   out_size = writer.size();
   return ok_status();
 }
+
+Status encode_link_direct_multi_block_write(
+    const ProtocolConfig& config,
+    const LinkDirectMultiBlockWriteRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  if (request.blocks.empty()) {
+    return invalid_argument("Link direct multi-block write requires at least one block");
+  }
+
+  std::uint16_t word_blocks = 0;
+  std::uint16_t bit_blocks = 0;
+  std::uint32_t weighted_points = 0;
+  for (const LinkDirectMultiBlockWriteBlock& block : request.blocks) {
+    if (block.points == 0U || block.points > 960U) {
+      return invalid_argument("Each link direct multi-block write block must be in range 1..960 points");
+    }
+    const Status block_status =
+        block.bit_block ? validate_link_direct_bit_device(config, block.head_device)
+                        : validate_link_direct_word_device(config, block.head_device);
+    if (!block_status.ok()) {
+      return block_status;
+    }
+    if (block.bit_block) {
+      if (block.bits.size() != static_cast<std::size_t>(block.points) * 16U) {
+        return invalid_argument("Link direct bit block write data must contain points * 16 entries");
+      }
+      ++bit_blocks;
+    } else {
+      if (block.words.size() != block.points) {
+        return invalid_argument("Link direct word block write data must contain one word per point");
+      }
+      ++word_blocks;
+    }
+    weighted_points += 4U + block.points;
+  }
+  const std::uint16_t block_limit = is_iq_r_series(config) ? 60U : 120U;
+  if (static_cast<std::uint16_t>(word_blocks + bit_blocks) > block_limit || weighted_points > 960U) {
+    return invalid_argument("Link direct multi-block write request exceeds supported range");
+  }
+
+  ByteWriter writer(out_request_data);
+  if (!append_command_header(writer, config, 0x1406U, extended_word_subcommand(config)) ||
+      !append_multi_block_block_count(writer, config, word_blocks) ||
+      !append_multi_block_block_count(writer, config, bit_blocks)) {
+    return buffer_too_small("Link direct multi-block write request buffer is too small");
+  }
+
+  for (const LinkDirectMultiBlockWriteBlock& block : request.blocks) {
+    if (block.bit_block) {
+      continue;
+    }
+    if (!append_link_direct_device_reference_binary(writer, config, block.head_device) ||
+        !append_word_count(writer, config, block.points) ||
+        !append_word_data(writer, config, block.words)) {
+      return buffer_too_small("Link direct multi-block write request buffer is too small");
+    }
+  }
+  for (const LinkDirectMultiBlockWriteBlock& block : request.blocks) {
+    if (!block.bit_block) {
+      continue;
+    }
+    const bool ok =
+        append_link_direct_device_reference_binary(writer, config, block.head_device) &&
+        append_word_count(writer, config, block.points) &&
+        (config.code_mode == CodeMode::Ascii ? append_word_units_from_bits_ascii(writer, block.bits)
+                                             : append_word_units_from_bits_binary(writer, block.bits));
+    if (!ok) {
+      return buffer_too_small("Link direct multi-block write request buffer is too small");
+    }
+  }
+  out_size = writer.size();
+  return ok_status();
+}
 #else
+Status encode_link_direct_multi_block_read(
+    const ProtocolConfig& config,
+    const LinkDirectMultiBlockReadRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)request;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Multi-block commands are disabled at build time");
+}
+
 Status encode_multi_block_read(
     const ProtocolConfig& config,
     const MultiBlockReadRequest& request,
@@ -2629,9 +2962,50 @@ Status encode_multi_block_write(
   (void)out_size;
   return unsupported("Multi-block commands are disabled at build time");
 }
+
+Status encode_link_direct_multi_block_write(
+    const ProtocolConfig& config,
+    const LinkDirectMultiBlockWriteRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)request;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Multi-block commands are disabled at build time");
+}
 #endif
 
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
+Status encode_link_direct_register_monitor(
+    const ProtocolConfig& config,
+    const LinkDirectMonitorRegistration& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  if (request.items.empty()) {
+    return invalid_argument("Link direct monitor registration requires at least one item");
+  }
+  std::array<std::uint8_t, kMaxRequestDataBytes> random_request_data {};
+  std::size_t inner_size = 0;
+  Status status = encode_link_direct_random_read(config, request.items, random_request_data, inner_size);
+  if (!status.ok()) {
+    return status;
+  }
+
+  ByteWriter patched(out_request_data);
+  patched.clear();
+  if (!append_command_header(patched, config, 0x0801U, extended_monitor_subcommand())) {
+    return buffer_too_small("Link direct monitor registration request buffer is too small");
+  }
+  if (!patched.append(std::span<const std::uint8_t>(
+          random_request_data.data() + (config.code_mode == CodeMode::Ascii ? 8U : 4U),
+          inner_size - (config.code_mode == CodeMode::Ascii ? 8U : 4U)))) {
+    return buffer_too_small("Link direct monitor registration request buffer is too small");
+  }
+  out_size = patched.size();
+  return ok_status();
+}
+
 Status encode_register_monitor(
     const ProtocolConfig& config,
     const MonitorRegistration& request,
@@ -2682,6 +3056,18 @@ Status parse_read_monitor_response(
   return parse_random_read_response(config, items, response_data, out_values);
 }
 #else
+Status encode_link_direct_register_monitor(
+    const ProtocolConfig& config,
+    const LinkDirectMonitorRegistration& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  (void)config;
+  (void)request;
+  (void)out_request_data;
+  (void)out_size;
+  return unsupported("Monitor commands are disabled at build time");
+}
+
 Status encode_register_monitor(
     const ProtocolConfig& config,
     const MonitorRegistration& request,

@@ -60,7 +60,7 @@ Validated target:
 | Multi-block read | native `0406` | native pass | `2026-04-11` recheck on the corrected binary encoder passed with `0406 0002` |
 | Multi-block write | native `1406` | native pass | `2026-04-11` recheck on the corrected binary encoder passed with `1406 0002` and restore |
 | Monitor register/read | native `0801/0802` | native pass | `2026-04-11` focused recheck passed under `--series ql`; `--series iqr` still produced `0801=0x7F23` and raw `0802=0x7155` |
-| iQ-R-only spot devices and `Jn\\...` surface | `SM`, `SD`, `RD`, `LZ`, `J1\\...`, `LTN/LSTN/LCN` | target-dependent | current per-device read/write matrix lives in [RJ71C24_R2_RS232C.md](RJ71C24_R2_RS232C.md); use `--series iqr` only for these spot-device checks |
+| iQ-R-only spot devices and `Jn\\...` surface | `SM`, `SD`, `RD`, `LZ`, `J1\\...`, `LTN/LSTN/LCN` | target-dependent | current per-device read/write matrix lives in [RJ71C24_R2_RS232C.md](RJ71C24_R2_RS232C.md); use `--series iqr` only for these spot-device checks. `Jn\\...` batch read/write are hardware-validated; random / multi-block / monitor are implemented but not yet hardware-validated |
 | Device-family read probe | `probe-all` | pass | `26/26` passed after dropping `RD` from the supported device set |
 | Device-family write probe | `probe-write-all` | pass with exclusions | `25/25` passed after excluding `S` and using `F100` instead of `F0` |
 

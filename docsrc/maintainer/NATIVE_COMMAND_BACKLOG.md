@@ -36,9 +36,9 @@ Target-specific remaining items:
 
 ### Implementation Gaps
 
-Device/register surfaces still missing from this serial C++ library:
+Current repository-level implementation gaps:
 
-- `Jn\\...` random / multi-block / monitor surfaces
+- none
 
 ## Follow-up Rules
 

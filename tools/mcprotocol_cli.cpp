@@ -33,6 +33,14 @@ using mcprotocol::serial::FrameKind;
 using mcprotocol::serial::HostBufferReadRequest;
 using mcprotocol::serial::HostBufferWriteRequest;
 using mcprotocol::serial::LinkDirectDevice;
+using mcprotocol::serial::LinkDirectMonitorRegistration;
+using mcprotocol::serial::LinkDirectMultiBlockReadBlock;
+using mcprotocol::serial::LinkDirectMultiBlockReadRequest;
+using mcprotocol::serial::LinkDirectMultiBlockWriteBlock;
+using mcprotocol::serial::LinkDirectMultiBlockWriteRequest;
+using mcprotocol::serial::LinkDirectRandomReadItem;
+using mcprotocol::serial::LinkDirectRandomWriteBitItem;
+using mcprotocol::serial::LinkDirectRandomWriteWordItem;
 using mcprotocol::serial::MelsecSerialClient;
 using mcprotocol::serial::ModuleBufferReadRequest;
 using mcprotocol::serial::ModuleBufferWriteRequest;
@@ -72,6 +80,14 @@ enum class CommandKind : std::uint8_t {
   ReadLinkDirectBits,
   WriteLinkDirectWords,
   WriteLinkDirectBits,
+  RandomReadLinkDirect,
+  RandomWriteLinkDirectWords,
+  RandomWriteLinkDirectBits,
+  MultiBlockReadLinkDirectWords,
+  MultiBlockReadLinkDirectBits,
+  MultiBlockWriteLinkDirectWords,
+  MultiBlockWriteLinkDirectBits,
+  MonitorLinkDirect,
   ReadHostBuffer,
   ReadModuleBuffer,
   ReadQualifiedWords,
@@ -311,6 +327,14 @@ void print_usage() {
       "  mcprotocol_cli [options] read-link-direct-bits J1\\\\X10 POINTS\n"
       "  mcprotocol_cli [options] write-link-direct-words J1\\\\W100 VALUE [VALUE ...]\n"
       "  mcprotocol_cli [options] write-link-direct-bits J1\\\\B0 0|1 [0|1 ...]\n"
+      "  mcprotocol_cli [options] random-read-link-direct J1\\\\W100 [J1\\\\B10 ...]\n"
+      "  mcprotocol_cli [options] random-write-link-direct-words J1\\\\W100=VALUE [J1\\\\SW0=VALUE ...]\n"
+      "  mcprotocol_cli [options] random-write-link-direct-bits J1\\\\B10=0|1 [J1\\\\SB10=0|1 ...]\n"
+      "  mcprotocol_cli [options] multi-block-read-link-direct-words J1\\\\W100:POINTS [J1\\\\SW0:POINTS ...]\n"
+      "  mcprotocol_cli [options] multi-block-read-link-direct-bits J1\\\\B10:POINTS [J1\\\\X10:POINTS ...]\n"
+      "  mcprotocol_cli [options] multi-block-write-link-direct-words J1\\\\W100=V0,V1 [J1\\\\SW0=V0 ...]\n"
+      "  mcprotocol_cli [options] multi-block-write-link-direct-bits J1\\\\B10=0101... [J1\\\\SB10=0011...]\n"
+      "  mcprotocol_cli [options] monitor-link-direct J1\\\\W100 [J1\\\\B10 ...]\n"
       "  mcprotocol_cli [options] read-host-buffer START WORDS\n"
       "  mcprotocol_cli [options] read-module-buffer START BYTES MODULE\n"
       "  mcprotocol_cli [options] read-qualified-words U3E0\\\\G0 POINTS\n"
@@ -358,7 +382,9 @@ void print_usage() {
       "  Use recover-c24 after timeout or mixed-response states on C24 ASCII links; no reply is expected.\n"
       "  read-qualified-words / write-qualified-words use the practical 0601/1601 helper path.\n"
       "  read-native-qualified-words / write-native-qualified-words are unsupported diagnostic probes, not a supported workflow.\n"
-      "  read/write-link-direct-* uses binary-only device extension specification for Jn\\\\X/Y/B/W/SB/SW.\n"
+      "  link-direct commands use binary-only device extension specification for Jn\\\\X/Y/B/W/SB/SW.\n"
+      "  multi-block-read-link-direct-bits uses POINTS in 16-bit units.\n"
+      "  multi-block-write-link-direct-bits expects a 0/1 bit string whose length is a multiple of 16.\n"
       "  probe-multi-block defaults to mixed; pass word-only/bit-only or a single block mode to isolate 1406 verification.\n"
       "  probe-monitor read-only sends raw 0802 without client-side monitor registration state.\n"
       "  random-read / random-write-* / probe-random-* / probe-multi-block / probe-monitor expose native probe results directly.\n");
@@ -529,6 +555,201 @@ void print_usage() {
   return false;
 }
 
+[[nodiscard]] bool split_once(
+    std::string_view text,
+    char delimiter,
+    std::string_view& left,
+    std::string_view& right) {
+  const std::size_t position = text.find(delimiter);
+  if (position == std::string_view::npos || position == 0U || position == (text.size() - 1U)) {
+    return false;
+  }
+  left = text.substr(0U, position);
+  right = text.substr(position + 1U);
+  return true;
+}
+
+[[nodiscard]] bool parse_link_direct_random_read_item(
+    std::string_view text,
+    LinkDirectRandomReadItem& out_item) {
+  LinkDirectDevice device {};
+  const Status status = parse_link_direct_device(text, device);
+  if (!status.ok()) {
+    return false;
+  }
+  out_item = LinkDirectRandomReadItem {
+      .device = device,
+      .double_word = false,
+  };
+  return true;
+}
+
+[[nodiscard]] bool parse_link_direct_random_write_word_item(
+    std::string_view text,
+    LinkDirectRandomWriteWordItem& out_item) {
+  std::string_view device_text;
+  std::string_view value_text;
+  if (!split_once(text, '=', device_text, value_text)) {
+    return false;
+  }
+
+  LinkDirectDevice device {};
+  const Status status = parse_link_direct_device(device_text, device);
+  if (!status.ok()) {
+    return false;
+  }
+
+  std::uint32_t value = 0;
+  if (!parse_u32_auto(value_text, value) || value > 0xFFFFU) {
+    return false;
+  }
+
+  out_item = LinkDirectRandomWriteWordItem {
+      .device = device,
+      .value = value,
+      .double_word = false,
+  };
+  return true;
+}
+
+[[nodiscard]] bool parse_link_direct_random_write_bit_item(
+    std::string_view text,
+    LinkDirectRandomWriteBitItem& out_item) {
+  std::string_view device_text;
+  std::string_view value_text;
+  if (!split_once(text, '=', device_text, value_text)) {
+    return false;
+  }
+
+  LinkDirectDevice device {};
+  const Status status = parse_link_direct_device(device_text, device);
+  if (!status.ok()) {
+    return false;
+  }
+
+  BitValue value {};
+  if (value_text == "0") {
+    value = BitValue::Off;
+  } else if (value_text == "1") {
+    value = BitValue::On;
+  } else {
+    return false;
+  }
+
+  out_item = LinkDirectRandomWriteBitItem {
+      .device = device,
+      .value = value,
+  };
+  return true;
+}
+
+[[nodiscard]] bool parse_link_direct_multi_block_read_spec(
+    std::string_view text,
+    bool bit_block,
+    LinkDirectMultiBlockReadBlock& out_block) {
+  std::string_view device_text;
+  std::string_view points_text;
+  if (!split_once(text, ':', device_text, points_text)) {
+    return false;
+  }
+
+  LinkDirectDevice device {};
+  const Status status = parse_link_direct_device(device_text, device);
+  if (!status.ok()) {
+    return false;
+  }
+
+  std::uint32_t points = 0;
+  if (!parse_u32(points_text, points) || points == 0U || points > 960U) {
+    return false;
+  }
+
+  out_block = LinkDirectMultiBlockReadBlock {
+      .head_device = device,
+      .points = static_cast<std::uint16_t>(points),
+      .bit_block = bit_block,
+  };
+  return true;
+}
+
+[[nodiscard]] bool parse_csv_u16_values(
+    std::string_view text,
+    std::span<std::uint16_t> storage,
+    std::size_t& out_count) {
+  out_count = 0U;
+  while (!text.empty()) {
+    const std::size_t comma = text.find(',');
+    const std::string_view token = comma == std::string_view::npos ? text : text.substr(0U, comma);
+    if (token.empty() || out_count >= storage.size()) {
+      return false;
+    }
+    std::uint32_t value = 0;
+    if (!parse_u32_auto(token, value) || value > 0xFFFFU) {
+      return false;
+    }
+    storage[out_count++] = static_cast<std::uint16_t>(value);
+    if (comma == std::string_view::npos) {
+      break;
+    }
+    text.remove_prefix(comma + 1U);
+  }
+  return out_count > 0U;
+}
+
+[[nodiscard]] bool parse_link_direct_multi_block_write_word_spec(
+    std::string_view text,
+    std::span<std::uint16_t> storage,
+    std::size_t& out_count,
+    LinkDirectDevice& out_device) {
+  std::string_view device_text;
+  std::string_view values_text;
+  if (!split_once(text, '=', device_text, values_text)) {
+    return false;
+  }
+  const Status status = parse_link_direct_device(device_text, out_device);
+  if (!status.ok()) {
+    return false;
+  }
+  return parse_csv_u16_values(values_text, storage, out_count);
+}
+
+[[nodiscard]] bool parse_link_direct_bit_string(
+    std::string_view text,
+    std::span<BitValue> storage,
+    std::size_t& out_count) {
+  if (text.empty() || (text.size() % 16U) != 0U || text.size() > storage.size()) {
+    return false;
+  }
+  for (std::size_t index = 0; index < text.size(); ++index) {
+    if (text[index] == '0') {
+      storage[index] = BitValue::Off;
+    } else if (text[index] == '1') {
+      storage[index] = BitValue::On;
+    } else {
+      return false;
+    }
+  }
+  out_count = text.size();
+  return true;
+}
+
+[[nodiscard]] bool parse_link_direct_multi_block_write_bit_spec(
+    std::string_view text,
+    std::span<BitValue> storage,
+    std::size_t& out_count,
+    LinkDirectDevice& out_device) {
+  std::string_view device_text;
+  std::string_view bits_text;
+  if (!split_once(text, '=', device_text, bits_text)) {
+    return false;
+  }
+  const Status status = parse_link_direct_device(device_text, out_device);
+  if (!status.ok()) {
+    return false;
+  }
+  return parse_link_direct_bit_string(bits_text, storage, out_count);
+}
+
 [[nodiscard]] bool parse_args(int argc, char** argv, CliOptions& options) {
   options.serial.device_path = "/dev/ttyUSB0";
   options.protocol.frame_kind = FrameKind::C4;
@@ -640,6 +861,22 @@ void print_usage() {
         options.command = CommandKind::WriteLinkDirectWords;
       } else if (arg == "write-link-direct-bits") {
         options.command = CommandKind::WriteLinkDirectBits;
+      } else if (arg == "random-read-link-direct") {
+        options.command = CommandKind::RandomReadLinkDirect;
+      } else if (arg == "random-write-link-direct-words") {
+        options.command = CommandKind::RandomWriteLinkDirectWords;
+      } else if (arg == "random-write-link-direct-bits") {
+        options.command = CommandKind::RandomWriteLinkDirectBits;
+      } else if (arg == "multi-block-read-link-direct-words") {
+        options.command = CommandKind::MultiBlockReadLinkDirectWords;
+      } else if (arg == "multi-block-read-link-direct-bits") {
+        options.command = CommandKind::MultiBlockReadLinkDirectBits;
+      } else if (arg == "multi-block-write-link-direct-words") {
+        options.command = CommandKind::MultiBlockWriteLinkDirectWords;
+      } else if (arg == "multi-block-write-link-direct-bits") {
+        options.command = CommandKind::MultiBlockWriteLinkDirectBits;
+      } else if (arg == "monitor-link-direct") {
+        options.command = CommandKind::MonitorLinkDirect;
       } else if (arg == "read-host-buffer") {
         options.command = CommandKind::ReadHostBuffer;
       } else if (arg == "read-module-buffer") {
@@ -742,6 +979,14 @@ void print_usage() {
     case CommandKind::WriteQualifiedWords:
     case CommandKind::WriteNativeQualifiedWords:
       return options.command_argc >= 2;
+    case CommandKind::RandomReadLinkDirect:
+    case CommandKind::RandomWriteLinkDirectWords:
+    case CommandKind::RandomWriteLinkDirectBits:
+    case CommandKind::MultiBlockReadLinkDirectWords:
+    case CommandKind::MultiBlockReadLinkDirectBits:
+    case CommandKind::MultiBlockWriteLinkDirectWords:
+    case CommandKind::MultiBlockWriteLinkDirectBits:
+    case CommandKind::MonitorLinkDirect:
     case CommandKind::RandomRead:
     case CommandKind::RandomWriteWords:
     case CommandKind::RandomWriteBits:
@@ -1480,6 +1725,27 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
   return drive_request(client, port, command_state);
 }
 
+[[nodiscard]] Status run_link_direct_random_read(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    std::span<const LinkDirectRandomReadItem> items,
+    std::span<std::uint32_t> out_values) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_link_direct_random_read(
+      now_ms(),
+      items,
+      out_values,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
 [[nodiscard]] Status run_random_write_words(
     MelsecSerialClient& client,
     PosixSerialPort& port,
@@ -1489,6 +1755,25 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
   command_state.status = Status {};
 
   const Status start_status = client.async_random_write_words(
+      now_ms(),
+      items,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_link_direct_random_write_words(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    std::span<const LinkDirectRandomWriteWordItem> items) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_link_direct_random_write_words(
       now_ms(),
       items,
       request_complete,
@@ -1520,6 +1805,25 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
   return drive_request(client, port, command_state);
 }
 
+[[nodiscard]] Status run_link_direct_random_write_bits(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    std::span<const LinkDirectRandomWriteBitItem> items) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_link_direct_random_write_bits(
+      now_ms(),
+      items,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
 [[nodiscard]] Status run_random_write_bits(
     MelsecSerialClient& client,
     PosixSerialPort& port,
@@ -1531,6 +1835,31 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
   const Status start_status = client.async_random_write_bits(
       now_ms(),
       items,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_link_direct_multi_block_read(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const LinkDirectMultiBlockReadRequest& request,
+    std::span<std::uint16_t> out_words,
+    std::span<BitValue> out_bits,
+    std::span<MultiBlockReadBlockResult> out_results) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_link_direct_multi_block_read(
+      now_ms(),
+      request,
+      out_words,
+      out_bits,
+      out_results,
       request_complete,
       &command_state);
   if (!start_status.ok()) {
@@ -1564,6 +1893,25 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
   return drive_request(client, port, command_state);
 }
 
+[[nodiscard]] Status run_link_direct_multi_block_write(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const LinkDirectMultiBlockWriteRequest& request) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_link_direct_multi_block_write(
+      now_ms(),
+      request,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
 [[nodiscard]] Status run_multi_block_write(
     MelsecSerialClient& client,
     PosixSerialPort& port,
@@ -1575,6 +1923,25 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
   const Status start_status = client.async_multi_block_write(
       now_ms(),
       request,
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_link_direct_register_monitor(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    std::span<const LinkDirectRandomReadItem> items) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_link_direct_register_monitor(
+      now_ms(),
+      LinkDirectMonitorRegistration {.items = items},
       request_complete,
       &command_state);
   if (!start_status.ok()) {
@@ -4239,6 +4606,373 @@ int main(int argc, char** argv) {
         return 1;
       }
       std::printf("write-link-direct-bits=ok bits=%d\n", bit_count);
+      return 0;
+    }
+
+    case CommandKind::RandomReadLinkDirect: {
+      if (options.command_argc > static_cast<int>(mcprotocol::serial::kMaxRandomAccessItems)) {
+        std::fprintf(stderr,
+                     "Too many random-read-link-direct items; max is %zu\n",
+                     mcprotocol::serial::kMaxRandomAccessItems);
+        return 2;
+      }
+
+      std::array<LinkDirectRandomReadItem, mcprotocol::serial::kMaxRandomAccessItems> items {};
+      for (int index = 0; index < options.command_argc; ++index) {
+        if (!parse_link_direct_random_read_item(options.command_argv[index], items[static_cast<std::size_t>(index)])) {
+          std::fprintf(stderr, "Invalid random-read-link-direct item: %s\n", options.command_argv[index]);
+          return 2;
+        }
+      }
+
+      std::array<std::uint32_t, mcprotocol::serial::kMaxRandomAccessItems> values {};
+      status = run_link_direct_random_read(
+          client,
+          port,
+          command_state,
+          std::span<const LinkDirectRandomReadItem>(items.data(), static_cast<std::size_t>(options.command_argc)),
+          std::span<std::uint32_t>(values.data(), static_cast<std::size_t>(options.command_argc)));
+      if (!status.ok()) {
+        print_status_error("random-read-link-direct request failed", status);
+        return 1;
+      }
+      for (int index = 0; index < options.command_argc; ++index) {
+        const auto value = values[static_cast<std::size_t>(index)];
+        if (is_bit_device(items[static_cast<std::size_t>(index)].device.device.code)) {
+          std::printf("%s=%u\n", options.command_argv[index], value != 0U ? 1U : 0U);
+        } else {
+          const unsigned word = static_cast<unsigned>(value & 0xFFFFU);
+          std::printf("%s=0x%04X %u\n", options.command_argv[index], word, word);
+        }
+      }
+      return 0;
+    }
+
+    case CommandKind::RandomWriteLinkDirectWords: {
+      if (options.command_argc > static_cast<int>(mcprotocol::serial::kMaxRandomAccessItems)) {
+        std::fprintf(stderr,
+                     "Too many random-write-link-direct-words items; max is %zu\n",
+                     mcprotocol::serial::kMaxRandomAccessItems);
+        return 2;
+      }
+
+      std::array<LinkDirectRandomWriteWordItem, mcprotocol::serial::kMaxRandomAccessItems> items {};
+      for (int index = 0; index < options.command_argc; ++index) {
+        if (!parse_link_direct_random_write_word_item(
+                options.command_argv[index],
+                items[static_cast<std::size_t>(index)])) {
+          std::fprintf(stderr, "Invalid random-write-link-direct-words item: %s\n", options.command_argv[index]);
+          return 2;
+        }
+      }
+
+      status = run_link_direct_random_write_words(
+          client,
+          port,
+          command_state,
+          std::span<const LinkDirectRandomWriteWordItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
+      if (!status.ok()) {
+        print_status_error("random-write-link-direct-words request failed", status);
+        return 1;
+      }
+      std::printf("random-write-link-direct-words=ok items=%d\n", options.command_argc);
+      return 0;
+    }
+
+    case CommandKind::RandomWriteLinkDirectBits: {
+      constexpr std::size_t kMaxRandomWriteBitItems = 94;
+      if (options.command_argc > static_cast<int>(kMaxRandomWriteBitItems)) {
+        std::fprintf(stderr,
+                     "Too many random-write-link-direct-bits items; max is %zu\n",
+                     kMaxRandomWriteBitItems);
+        return 2;
+      }
+
+      std::array<LinkDirectRandomWriteBitItem, kMaxRandomWriteBitItems> items {};
+      for (int index = 0; index < options.command_argc; ++index) {
+        if (!parse_link_direct_random_write_bit_item(
+                options.command_argv[index],
+                items[static_cast<std::size_t>(index)])) {
+          std::fprintf(stderr, "Invalid random-write-link-direct-bits item: %s\n", options.command_argv[index]);
+          return 2;
+        }
+      }
+
+      status = run_link_direct_random_write_bits(
+          client,
+          port,
+          command_state,
+          std::span<const LinkDirectRandomWriteBitItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
+      if (!status.ok()) {
+        print_status_error("random-write-link-direct-bits request failed", status);
+        return 1;
+      }
+      std::printf("random-write-link-direct-bits=ok items=%d\n", options.command_argc);
+      return 0;
+    }
+
+    case CommandKind::MultiBlockReadLinkDirectWords: {
+      if (options.command_argc > static_cast<int>(mcprotocol::serial::kMaxMultiBlockCount)) {
+        std::fprintf(stderr,
+                     "Too many multi-block-read-link-direct-words blocks; max is %zu\n",
+                     mcprotocol::serial::kMaxMultiBlockCount);
+        return 2;
+      }
+
+      std::array<LinkDirectMultiBlockReadBlock, mcprotocol::serial::kMaxMultiBlockCount> blocks {};
+      for (int index = 0; index < options.command_argc; ++index) {
+        if (!parse_link_direct_multi_block_read_spec(
+                options.command_argv[index],
+                false,
+                blocks[static_cast<std::size_t>(index)])) {
+          std::fprintf(stderr, "Invalid multi-block-read-link-direct-words block: %s\n", options.command_argv[index]);
+          return 2;
+        }
+      }
+
+      std::size_t total_words = 0U;
+      for (int index = 0; index < options.command_argc; ++index) {
+        total_words += blocks[static_cast<std::size_t>(index)].points;
+      }
+      if (total_words > 960U) {
+        std::fprintf(stderr, "multi-block-read-link-direct-words total points exceed 960\n");
+        return 2;
+      }
+
+      std::array<std::uint16_t, 960> words {};
+      std::array<BitValue, 1> bits {};
+      std::array<MultiBlockReadBlockResult, mcprotocol::serial::kMaxMultiBlockCount> results {};
+      status = run_link_direct_multi_block_read(
+          client,
+          port,
+          command_state,
+          LinkDirectMultiBlockReadRequest {
+              .blocks = std::span<const LinkDirectMultiBlockReadBlock>(
+                  blocks.data(),
+                  static_cast<std::size_t>(options.command_argc)),
+          },
+          std::span<std::uint16_t>(words.data(), total_words),
+          std::span<BitValue>(bits.data(), bits.size()),
+          std::span<MultiBlockReadBlockResult>(results.data(), static_cast<std::size_t>(options.command_argc)));
+      if (!status.ok()) {
+        print_status_error("multi-block-read-link-direct-words request failed", status);
+        return 1;
+      }
+
+      for (int block_index = 0; block_index < options.command_argc; ++block_index) {
+        const auto& result = results[static_cast<std::size_t>(block_index)];
+        for (std::uint16_t point = 0; point < result.data_count; ++point) {
+          const auto value = words[static_cast<std::size_t>(result.data_offset + point)];
+          std::printf("%s[%u]=0x%04X %u\n",
+                      options.command_argv[block_index],
+                      static_cast<unsigned>(point),
+                      value,
+                      value);
+        }
+      }
+      return 0;
+    }
+
+    case CommandKind::MultiBlockReadLinkDirectBits: {
+      if (options.command_argc > static_cast<int>(mcprotocol::serial::kMaxMultiBlockCount)) {
+        std::fprintf(stderr,
+                     "Too many multi-block-read-link-direct-bits blocks; max is %zu\n",
+                     mcprotocol::serial::kMaxMultiBlockCount);
+        return 2;
+      }
+
+      std::array<LinkDirectMultiBlockReadBlock, mcprotocol::serial::kMaxMultiBlockCount> blocks {};
+      for (int index = 0; index < options.command_argc; ++index) {
+        if (!parse_link_direct_multi_block_read_spec(
+                options.command_argv[index],
+                true,
+                blocks[static_cast<std::size_t>(index)])) {
+          std::fprintf(stderr, "Invalid multi-block-read-link-direct-bits block: %s\n", options.command_argv[index]);
+          return 2;
+        }
+      }
+
+      std::size_t total_bit_values = 0U;
+      for (int index = 0; index < options.command_argc; ++index) {
+        total_bit_values += static_cast<std::size_t>(blocks[static_cast<std::size_t>(index)].points) * 16U;
+      }
+      if (total_bit_values > (960U * 16U)) {
+        std::fprintf(stderr, "multi-block-read-link-direct-bits total points exceed 960 words\n");
+        return 2;
+      }
+
+      std::array<std::uint16_t, 1> words {};
+      std::array<BitValue, 960U * 16U> bits {};
+      std::array<MultiBlockReadBlockResult, mcprotocol::serial::kMaxMultiBlockCount> results {};
+      status = run_link_direct_multi_block_read(
+          client,
+          port,
+          command_state,
+          LinkDirectMultiBlockReadRequest {
+              .blocks = std::span<const LinkDirectMultiBlockReadBlock>(
+                  blocks.data(),
+                  static_cast<std::size_t>(options.command_argc)),
+          },
+          std::span<std::uint16_t>(words.data(), words.size()),
+          std::span<BitValue>(bits.data(), total_bit_values),
+          std::span<MultiBlockReadBlockResult>(results.data(), static_cast<std::size_t>(options.command_argc)));
+      if (!status.ok()) {
+        print_status_error("multi-block-read-link-direct-bits request failed", status);
+        return 1;
+      }
+
+      for (int block_index = 0; block_index < options.command_argc; ++block_index) {
+        const auto& result = results[static_cast<std::size_t>(block_index)];
+        for (std::uint16_t bit_index = 0; bit_index < result.data_count; ++bit_index) {
+          std::printf("%s[%u]=%u\n",
+                      options.command_argv[block_index],
+                      static_cast<unsigned>(bit_index),
+                      bits[static_cast<std::size_t>(result.data_offset + bit_index)] == BitValue::On ? 1U : 0U);
+        }
+      }
+      return 0;
+    }
+
+    case CommandKind::MultiBlockWriteLinkDirectWords: {
+      if (options.command_argc > static_cast<int>(mcprotocol::serial::kMaxMultiBlockCount)) {
+        std::fprintf(stderr,
+                     "Too many multi-block-write-link-direct-words blocks; max is %zu\n",
+                     mcprotocol::serial::kMaxMultiBlockCount);
+        return 2;
+      }
+
+      std::array<LinkDirectMultiBlockWriteBlock, mcprotocol::serial::kMaxMultiBlockCount> blocks {};
+      std::array<std::uint16_t, 960> word_pool {};
+      std::size_t word_offset = 0U;
+      for (int index = 0; index < options.command_argc; ++index) {
+        LinkDirectDevice device {};
+        std::size_t count = 0U;
+        if (!parse_link_direct_multi_block_write_word_spec(
+                options.command_argv[index],
+                std::span<std::uint16_t>(word_pool.data() + word_offset, word_pool.size() - word_offset),
+                count,
+                device)) {
+          std::fprintf(stderr, "Invalid multi-block-write-link-direct-words block: %s\n", options.command_argv[index]);
+          return 2;
+        }
+        blocks[static_cast<std::size_t>(index)] = LinkDirectMultiBlockWriteBlock {
+            .head_device = device,
+            .points = static_cast<std::uint16_t>(count),
+            .bit_block = false,
+            .words = std::span<const std::uint16_t>(word_pool.data() + word_offset, count),
+        };
+        word_offset += count;
+      }
+
+      status = run_link_direct_multi_block_write(
+          client,
+          port,
+          command_state,
+          LinkDirectMultiBlockWriteRequest {
+              .blocks = std::span<const LinkDirectMultiBlockWriteBlock>(
+                  blocks.data(),
+                  static_cast<std::size_t>(options.command_argc)),
+          });
+      if (!status.ok()) {
+        print_status_error("multi-block-write-link-direct-words request failed", status);
+        return 1;
+      }
+      std::printf("multi-block-write-link-direct-words=ok blocks=%d words=%zu\n", options.command_argc, word_offset);
+      return 0;
+    }
+
+    case CommandKind::MultiBlockWriteLinkDirectBits: {
+      if (options.command_argc > static_cast<int>(mcprotocol::serial::kMaxMultiBlockCount)) {
+        std::fprintf(stderr,
+                     "Too many multi-block-write-link-direct-bits blocks; max is %zu\n",
+                     mcprotocol::serial::kMaxMultiBlockCount);
+        return 2;
+      }
+
+      std::array<LinkDirectMultiBlockWriteBlock, mcprotocol::serial::kMaxMultiBlockCount> blocks {};
+      std::array<BitValue, 960U * 16U> bit_pool {};
+      std::size_t bit_offset = 0U;
+      for (int index = 0; index < options.command_argc; ++index) {
+        LinkDirectDevice device {};
+        std::size_t count = 0U;
+        if (!parse_link_direct_multi_block_write_bit_spec(
+                options.command_argv[index],
+                std::span<BitValue>(bit_pool.data() + bit_offset, bit_pool.size() - bit_offset),
+                count,
+                device)) {
+          std::fprintf(stderr, "Invalid multi-block-write-link-direct-bits block: %s\n", options.command_argv[index]);
+          return 2;
+        }
+        blocks[static_cast<std::size_t>(index)] = LinkDirectMultiBlockWriteBlock {
+            .head_device = device,
+            .points = static_cast<std::uint16_t>(count / 16U),
+            .bit_block = true,
+            .bits = std::span<const BitValue>(bit_pool.data() + bit_offset, count),
+        };
+        bit_offset += count;
+      }
+
+      status = run_link_direct_multi_block_write(
+          client,
+          port,
+          command_state,
+          LinkDirectMultiBlockWriteRequest {
+              .blocks = std::span<const LinkDirectMultiBlockWriteBlock>(
+                  blocks.data(),
+                  static_cast<std::size_t>(options.command_argc)),
+          });
+      if (!status.ok()) {
+        print_status_error("multi-block-write-link-direct-bits request failed", status);
+        return 1;
+      }
+      std::printf("multi-block-write-link-direct-bits=ok blocks=%d bits=%zu\n", options.command_argc, bit_offset);
+      return 0;
+    }
+
+    case CommandKind::MonitorLinkDirect: {
+      if (options.command_argc > static_cast<int>(mcprotocol::serial::kMaxMonitorItems)) {
+        std::fprintf(stderr, "Too many monitor-link-direct items; max is %zu\n", mcprotocol::serial::kMaxMonitorItems);
+        return 2;
+      }
+
+      std::array<LinkDirectRandomReadItem, mcprotocol::serial::kMaxMonitorItems> items {};
+      for (int index = 0; index < options.command_argc; ++index) {
+        if (!parse_link_direct_random_read_item(options.command_argv[index], items[static_cast<std::size_t>(index)])) {
+          std::fprintf(stderr, "Invalid monitor-link-direct item: %s\n", options.command_argv[index]);
+          return 2;
+        }
+      }
+
+      status = run_link_direct_register_monitor(
+          client,
+          port,
+          command_state,
+          std::span<const LinkDirectRandomReadItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
+      if (!status.ok()) {
+        print_status_error("monitor-link-direct register failed", status);
+        return 1;
+      }
+
+      std::array<std::uint32_t, mcprotocol::serial::kMaxMonitorItems> values {};
+      status = run_read_monitor(
+          client,
+          port,
+          command_state,
+          std::span<std::uint32_t>(values.data(), static_cast<std::size_t>(options.command_argc)));
+      if (!status.ok()) {
+        print_status_error("monitor-link-direct read failed", status);
+        return 1;
+      }
+
+      for (int index = 0; index < options.command_argc; ++index) {
+        const auto value = values[static_cast<std::size_t>(index)];
+        if (is_bit_device(items[static_cast<std::size_t>(index)].device.device.code)) {
+          std::printf("%s=%u\n", options.command_argv[index], value != 0U ? 1U : 0U);
+        } else {
+          const unsigned word = static_cast<unsigned>(value & 0xFFFFU);
+          std::printf("%s=0x%04X %u\n", options.command_argv[index], word, word);
+        }
+      }
       return 0;
     }
 

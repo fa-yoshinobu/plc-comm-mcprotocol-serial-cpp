@@ -158,6 +158,12 @@ namespace CommandCodec {
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
+[[nodiscard]] Status encode_link_direct_random_read(
+    const ProtocolConfig& config,
+    std::span<const LinkDirectRandomReadItem> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
 [[nodiscard]] Status encode_random_read(
     const ProtocolConfig& config,
     const RandomReadRequest& request,
@@ -176,9 +182,27 @@ namespace CommandCodec {
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
+[[nodiscard]] Status encode_link_direct_random_write_words(
+    const ProtocolConfig& config,
+    std::span<const LinkDirectRandomWriteWordItem> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
 [[nodiscard]] Status encode_random_write_bits(
     const ProtocolConfig& config,
     std::span<const RandomWriteBitItem> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_link_direct_random_write_bits(
+    const ProtocolConfig& config,
+    std::span<const LinkDirectRandomWriteBitItem> items,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_link_direct_multi_block_read(
+    const ProtocolConfig& config,
+    const LinkDirectMultiBlockReadRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
@@ -202,9 +226,21 @@ namespace CommandCodec {
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
+[[nodiscard]] Status encode_link_direct_multi_block_write(
+    const ProtocolConfig& config,
+    const LinkDirectMultiBlockWriteRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
 [[nodiscard]] Status encode_register_monitor(
     const ProtocolConfig& config,
     const MonitorRegistration& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
+[[nodiscard]] Status encode_link_direct_register_monitor(
+    const ProtocolConfig& config,
+    const LinkDirectMonitorRegistration& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 

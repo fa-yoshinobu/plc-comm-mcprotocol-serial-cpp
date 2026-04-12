@@ -721,6 +721,43 @@ Status MelsecSerialClient::async_random_read(
 #endif
 }
 
+Status MelsecSerialClient::async_link_direct_random_read(
+    std::uint32_t now_ms,
+    std::span<const LinkDirectRandomReadItem> items,
+    std::span<std::uint32_t> out_values,
+    CompletionHandler callback,
+    void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+  if (items.size() > pending_random_items_.size()) {
+    return make_status(StatusCode::InvalidArgument, "Link direct random read item count exceeds the client limit");
+  }
+  pending_random_item_count_ = items.size();
+  for (std::size_t index = 0; index < items.size(); ++index) {
+    pending_random_items_[index] = RandomReadItem {
+        .device = items[index].device.device,
+        .double_word = items[index].double_word,
+    };
+  }
+  out_values_ = out_values;
+
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_random_read(config_, items, request_data_, request_size);
+  if (!status.ok()) {
+    clear_pending_outputs();
+    clear_pending_copies();
+    return status;
+  }
+  return start_request(now_ms, OperationKind::RandomRead, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)items;
+  (void)out_values;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Random commands are disabled at build time");
+#endif
+}
+
 Status MelsecSerialClient::async_random_write_words(
     std::uint32_t now_ms,
     std::span<const RandomWriteWordItem> items,
@@ -742,6 +779,27 @@ Status MelsecSerialClient::async_random_write_words(
 #endif
 }
 
+Status MelsecSerialClient::async_link_direct_random_write_words(
+    std::uint32_t now_ms,
+    std::span<const LinkDirectRandomWriteWordItem> items,
+    CompletionHandler callback,
+    void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_random_write_words(config_, items, request_data_, request_size);
+  if (!status.ok()) {
+    return status;
+  }
+  return start_request(now_ms, OperationKind::RandomWriteWords, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)items;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Random commands are disabled at build time");
+#endif
+}
+
 Status MelsecSerialClient::async_random_write_bits(
     std::uint32_t now_ms,
     std::span<const RandomWriteBitItem> items,
@@ -750,6 +808,27 @@ Status MelsecSerialClient::async_random_write_bits(
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_random_write_bits(config_, items, request_data_, request_size);
+  if (!status.ok()) {
+    return status;
+  }
+  return start_request(now_ms, OperationKind::RandomWriteBits, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)items;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Random commands are disabled at build time");
+#endif
+}
+
+Status MelsecSerialClient::async_link_direct_random_write_bits(
+    std::uint32_t now_ms,
+    std::span<const LinkDirectRandomWriteBitItem> items,
+    CompletionHandler callback,
+    void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_random_write_bits(config_, items, request_data_, request_size);
   if (!status.ok()) {
     return status;
   }
@@ -801,6 +880,54 @@ Status MelsecSerialClient::async_multi_block_read(
 #endif
 }
 
+Status MelsecSerialClient::async_link_direct_multi_block_read(
+    std::uint32_t now_ms,
+    const LinkDirectMultiBlockReadRequest& request,
+    std::span<std::uint16_t> out_words,
+    std::span<BitValue> out_bits,
+    std::span<MultiBlockReadBlockResult> out_results,
+    CompletionHandler callback,
+    void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
+  if (request.blocks.size() > pending_multi_blocks_.size()) {
+    return make_status(StatusCode::InvalidArgument, "Link direct multi-block read block count exceeds the client limit");
+  }
+  pending_multi_block_count_ = request.blocks.size();
+  for (std::size_t index = 0; index < request.blocks.size(); ++index) {
+    pending_multi_blocks_[index] = MultiBlockReadBlock {
+        .head_device = request.blocks[index].head_device.device,
+        .points = request.blocks[index].points,
+        .bit_block = request.blocks[index].bit_block,
+    };
+  }
+  out_words_ = out_words;
+  out_bits_ = out_bits;
+  out_block_results_ = out_results;
+
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_multi_block_read(
+      config_,
+      request,
+      request_data_,
+      request_size);
+  if (!status.ok()) {
+    clear_pending_outputs();
+    clear_pending_copies();
+    return status;
+  }
+  return start_request(now_ms, OperationKind::MultiBlockRead, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)request;
+  (void)out_words;
+  (void)out_bits;
+  (void)out_results;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Multi-block commands are disabled at build time");
+#endif
+}
+
 Status MelsecSerialClient::async_multi_block_write(
     std::uint32_t now_ms,
     const MultiBlockWriteRequest& request,
@@ -809,6 +936,31 @@ Status MelsecSerialClient::async_multi_block_write(
 #if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_multi_block_write(config_, request, request_data_, request_size);
+  if (!status.ok()) {
+    return status;
+  }
+  return start_request(now_ms, OperationKind::MultiBlockWrite, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)request;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Multi-block commands are disabled at build time");
+#endif
+}
+
+Status MelsecSerialClient::async_link_direct_multi_block_write(
+    std::uint32_t now_ms,
+    const LinkDirectMultiBlockWriteRequest& request,
+    CompletionHandler callback,
+    void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_multi_block_write(
+      config_,
+      request,
+      request_data_,
+      request_size);
   if (!status.ok()) {
     return status;
   }
@@ -836,6 +988,39 @@ Status MelsecSerialClient::async_register_monitor(
 
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_register_monitor(config_, request, request_data_, request_size);
+  if (!status.ok()) {
+    clear_pending_copies();
+    return status;
+  }
+  return start_request(now_ms, OperationKind::RegisterMonitor, request_size, callback, user);
+#else
+  (void)now_ms;
+  (void)request;
+  (void)callback;
+  (void)user;
+  return feature_disabled("Monitor commands are disabled at build time");
+#endif
+}
+
+Status MelsecSerialClient::async_link_direct_register_monitor(
+    std::uint32_t now_ms,
+    const LinkDirectMonitorRegistration& request,
+    CompletionHandler callback,
+    void* user) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
+  if (request.items.size() > pending_random_items_.size()) {
+    return make_status(StatusCode::InvalidArgument, "Link direct monitor item count exceeds the client limit");
+  }
+  pending_random_item_count_ = request.items.size();
+  for (std::size_t index = 0; index < request.items.size(); ++index) {
+    pending_random_items_[index] = RandomReadItem {
+        .device = request.items[index].device.device,
+        .double_word = request.items[index].double_word,
+    };
+  }
+
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_register_monitor(config_, request, request_data_, request_size);
   if (!status.ok()) {
     clear_pending_copies();
     return status;

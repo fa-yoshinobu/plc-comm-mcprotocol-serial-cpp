@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "mcprotocol/serial/span_compat.hpp"
 #include "mcprotocol/serial/status.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
 #include "mcprotocol/serial/types.hpp"
@@ -13,6 +14,56 @@ namespace mcprotocol::serial {
 struct LinkDirectDevice {
   std::uint16_t network_number = 0;
   DeviceAddress device {};
+};
+
+/// \brief One sparse `Jn\\...` item used by native random-read and monitor registration.
+struct LinkDirectRandomReadItem {
+  LinkDirectDevice device {};
+  bool double_word = false;
+};
+
+/// \brief One sparse `Jn\\...` word item used by native random word-write.
+struct LinkDirectRandomWriteWordItem {
+  LinkDirectDevice device {};
+  std::uint32_t value = 0;
+  bool double_word = false;
+};
+
+/// \brief One sparse `Jn\\...` bit item used by native random bit-write.
+struct LinkDirectRandomWriteBitItem {
+  LinkDirectDevice device {};
+  BitValue value = BitValue::Off;
+};
+
+/// \brief One `Jn\\...` block used by native multi-block read.
+struct LinkDirectMultiBlockReadBlock {
+  LinkDirectDevice head_device {};
+  std::uint16_t points = 0;
+  bool bit_block = false;
+};
+
+/// \brief `Jn\\...` native multi-block read request.
+struct LinkDirectMultiBlockReadRequest {
+  std::span<const LinkDirectMultiBlockReadBlock> blocks {};
+};
+
+/// \brief One `Jn\\...` block used by native multi-block write.
+struct LinkDirectMultiBlockWriteBlock {
+  LinkDirectDevice head_device {};
+  std::uint16_t points = 0;
+  bool bit_block = false;
+  std::span<const std::uint16_t> words {};
+  std::span<const BitValue> bits {};
+};
+
+/// \brief `Jn\\...` native multi-block write request.
+struct LinkDirectMultiBlockWriteRequest {
+  std::span<const LinkDirectMultiBlockWriteBlock> blocks {};
+};
+
+/// \brief `Jn\\...` monitor registration payload (`0801` + `00C0`).
+struct LinkDirectMonitorRegistration {
+  std::span<const LinkDirectRandomReadItem> items {};
 };
 
 namespace link_direct_detail {

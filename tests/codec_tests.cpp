@@ -27,6 +27,14 @@ using mcprotocol::serial::DecodeStatus;
 using mcprotocol::serial::FrameCodec;
 using mcprotocol::serial::FrameKind;
 using mcprotocol::serial::LinkDirectDevice;
+using mcprotocol::serial::LinkDirectMonitorRegistration;
+using mcprotocol::serial::LinkDirectMultiBlockReadBlock;
+using mcprotocol::serial::LinkDirectMultiBlockReadRequest;
+using mcprotocol::serial::LinkDirectMultiBlockWriteBlock;
+using mcprotocol::serial::LinkDirectMultiBlockWriteRequest;
+using mcprotocol::serial::LinkDirectRandomReadItem;
+using mcprotocol::serial::LinkDirectRandomWriteBitItem;
+using mcprotocol::serial::LinkDirectRandomWriteWordItem;
 using mcprotocol::serial::MelsecSerialClient;
 using mcprotocol::serial::ModuleBufferReadRequest;
 using mcprotocol::serial::ModuleBufferWriteRequest;
@@ -854,6 +862,192 @@ void test_encode_link_direct_batch_write_bits_binary_iqr_shape() {
       0xF9,
       0x04, 0x00,
       0x10, 0x10,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_link_direct_random_read_binary_iqr_shape() {
+  const auto config = make_binary_c4_iqr_config();
+  const std::array<LinkDirectRandomReadItem, 2> items {{
+      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U}}},
+      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::SW, .number = 0x0000U}}},
+  }};
+
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_random_read(
+      config,
+      std::span<const LinkDirectRandomReadItem>(items.data(), items.size()),
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 34> expected {
+      0x03, 0x04, 0x82, 0x00,
+      0x02, 0x00,
+      0x00, 0x00,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xB4, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB5, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_link_direct_random_write_words_binary_iqr_shape() {
+  const auto config = make_binary_c4_iqr_config();
+  const std::array<LinkDirectRandomWriteWordItem, 2> items {{
+      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U}},
+       .value = 0x1234U},
+      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::SW, .number = 0x0000U}},
+       .value = 0xABCDU},
+  }};
+
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_random_write_words(
+      config,
+      std::span<const LinkDirectRandomWriteWordItem>(items.data(), items.size()),
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 38> expected {
+      0x02, 0x14, 0x82, 0x00,
+      0x02, 0x00,
+      0x00, 0x00,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xB4, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9, 0x34, 0x12,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB5, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9, 0xCD, 0xAB,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_link_direct_random_write_bits_binary_iqr_shape() {
+  const auto config = make_binary_c4_iqr_config();
+  const std::array<LinkDirectRandomWriteBitItem, 2> items {{
+      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0x0010U}},
+       .value = BitValue::On},
+      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::SB, .number = 0x0010U}},
+       .value = BitValue::Off},
+  }};
+
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_random_write_bits(
+      config,
+      std::span<const LinkDirectRandomWriteBitItem>(items.data(), items.size()),
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 36> expected {
+      0x02, 0x14, 0x83, 0x00,
+      0x02, 0x00,
+      0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0xA0, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9, 0x01, 0x00,
+      0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0xA1, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9, 0x00, 0x00,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_link_direct_multi_block_read_binary_iqr_shape() {
+  const auto config = make_binary_c4_iqr_config();
+  const std::array<LinkDirectMultiBlockReadBlock, 2> blocks {{
+      {.head_device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U}},
+       .points = 2U,
+       .bit_block = false},
+      {.head_device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0x0010U}},
+       .points = 1U,
+       .bit_block = true},
+  }};
+
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_multi_block_read(
+      config,
+      LinkDirectMultiBlockReadRequest {
+          .blocks = std::span<const LinkDirectMultiBlockReadBlock>(blocks.data(), blocks.size()),
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 36> expected {
+      0x06, 0x04, 0x82, 0x00,
+      0x01, 0x01,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xB4, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9, 0x02, 0x00,
+      0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0xA0, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9, 0x01, 0x00,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_link_direct_multi_block_write_binary_iqr_shape() {
+  const auto config = make_binary_c4_iqr_config();
+  const std::array<std::uint16_t, 2> word_values {0x1234U, 0xABCDU};
+  const std::array<BitValue, 16> bit_values {{
+      BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
+      BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
+      BitValue::Off, BitValue::On, BitValue::Off, BitValue::On,
+      BitValue::Off, BitValue::On, BitValue::Off, BitValue::On,
+  }};
+  const std::array<LinkDirectMultiBlockWriteBlock, 2> blocks {{
+      {.head_device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U}},
+       .points = 2U,
+       .bit_block = false,
+       .words = std::span<const std::uint16_t>(word_values.data(), word_values.size())},
+      {.head_device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0x0010U}},
+       .points = 1U,
+       .bit_block = true,
+       .bits = std::span<const BitValue>(bit_values.data(), bit_values.size())},
+  }};
+
+  std::array<std::uint8_t, 96> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_multi_block_write(
+      config,
+      LinkDirectMultiBlockWriteRequest {
+          .blocks = std::span<const LinkDirectMultiBlockWriteBlock>(blocks.data(), blocks.size()),
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 42> expected {
+      0x06, 0x14, 0x82, 0x00,
+      0x01, 0x01,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xB4, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9, 0x02, 0x00, 0x34, 0x12, 0xCD, 0xAB,
+      0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0xA0, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9, 0x01, 0x00, 0xAA, 0x55,
+  };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_link_direct_register_monitor_binary_iqr_shape() {
+  const auto config = make_binary_c4_iqr_config();
+  const std::array<LinkDirectRandomReadItem, 2> items {{
+      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U}}},
+      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::SW, .number = 0x0000U}}},
+  }};
+
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_link_direct_register_monitor(
+      config,
+      LinkDirectMonitorRegistration {
+          .items = std::span<const LinkDirectRandomReadItem>(items.data(), items.size()),
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 34> expected {
+      0x01, 0x08, 0xC0, 0x00,
+      0x02, 0x00,
+      0x00, 0x00,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0xB4, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xB5, 0x00, 0x00, 0x00, 0x01, 0x00, 0xF9,
   };
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
@@ -1708,6 +1902,105 @@ void test_client_write_rejects_unexpected_success_data() {
   assert(!client.busy());
 }
 
+void test_client_link_direct_random_read_roundtrip() {
+  const auto config = make_binary_c4_iqr_config();
+  MelsecSerialClient client;
+  Status status = client.configure(config);
+  assert(status.ok());
+
+  const std::array<LinkDirectRandomReadItem, 2> items {{
+      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U}}},
+      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0x0010U}}},
+  }};
+  std::array<std::uint32_t, 2> values {};
+  CallbackCapture capture;
+
+  status = client.async_link_direct_random_read(
+      0,
+      std::span<const LinkDirectRandomReadItem>(items.data(), items.size()),
+      values,
+      completion_callback,
+      &capture);
+  assert(status.ok());
+  status = client.notify_tx_complete(1);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 4> response_data {0x34, 0x12, 0x01, 0x00};
+  std::array<std::uint8_t, 64> response_frame {};
+  std::size_t response_frame_size = 0;
+  status = FrameCodec::encode_success_response(config, response_data, response_frame, response_frame_size);
+  assert(status.ok());
+
+  client.on_rx_bytes(
+      2,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(response_frame.data()),
+          response_frame_size));
+  assert(capture.called);
+  assert(capture.status.ok());
+  assert(values[0] == 0x1234U);
+  assert(values[1] == 0x0001U);
+  assert(!client.busy());
+}
+
+void test_client_link_direct_register_monitor_roundtrip() {
+  const auto config = make_binary_c4_iqr_config();
+  MelsecSerialClient client;
+  Status status = client.configure(config);
+  assert(status.ok());
+
+  const std::array<LinkDirectRandomReadItem, 2> items {{
+      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U}}},
+      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0x0010U}}},
+  }};
+  CallbackCapture register_capture;
+  status = client.async_link_direct_register_monitor(
+      0,
+      LinkDirectMonitorRegistration {
+          .items = std::span<const LinkDirectRandomReadItem>(items.data(), items.size()),
+      },
+      completion_callback,
+      &register_capture);
+  assert(status.ok());
+  status = client.notify_tx_complete(1);
+  assert(status.ok());
+
+  std::array<std::uint8_t, 32> register_frame {};
+  std::size_t register_frame_size = 0;
+  status = FrameCodec::encode_success_response(config, {}, register_frame, register_frame_size);
+  assert(status.ok());
+  client.on_rx_bytes(
+      2,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(register_frame.data()),
+          register_frame_size));
+  assert(register_capture.called);
+  assert(register_capture.status.ok());
+
+  std::array<std::uint32_t, 2> values {};
+  CallbackCapture read_capture;
+  status = client.async_read_monitor(10, values, completion_callback, &read_capture);
+  assert(status.ok());
+  status = client.notify_tx_complete(11);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 4> response_data {0x78, 0x56, 0x01, 0x00};
+  std::array<std::uint8_t, 64> response_frame {};
+  std::size_t response_frame_size = 0;
+  status = FrameCodec::encode_success_response(config, response_data, response_frame, response_frame_size);
+  assert(status.ok());
+  client.on_rx_bytes(
+      12,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(response_frame.data()),
+          response_frame_size));
+  assert(read_capture.called);
+  assert(read_capture.status.ok());
+  assert(values[0] == 0x5678U);
+  assert(values[1] == 0x0001U);
+  assert(!client.busy());
+}
+
 }  // namespace
 
 int main() {
@@ -1734,6 +2027,12 @@ int main() {
   test_encode_link_direct_batch_read_bits_binary_single_uses_addressed_point();
   test_encode_link_direct_batch_write_words_binary_iqr_shape();
   test_encode_link_direct_batch_write_bits_binary_iqr_shape();
+  test_encode_link_direct_random_read_binary_iqr_shape();
+  test_encode_link_direct_random_write_words_binary_iqr_shape();
+  test_encode_link_direct_random_write_bits_binary_iqr_shape();
+  test_encode_link_direct_multi_block_read_binary_iqr_shape();
+  test_encode_link_direct_multi_block_write_binary_iqr_shape();
+  test_encode_link_direct_register_monitor_binary_iqr_shape();
   test_encode_batch_write_bits_binary_single_even_uses_addressed_point_and_high_nibble();
   test_encode_batch_write_bits_binary_single_odd_uses_addressed_point_and_high_nibble();
   test_encode_link_direct_batch_write_bits_binary_single_even_uses_addressed_point_and_high_nibble();
@@ -1760,6 +2059,8 @@ int main() {
   test_make_qualified_buffer_write_words_request_encodes_little_endian_bytes();
   test_decode_qualified_buffer_word_values_decodes_little_endian_bytes();
   test_client_binary_cpu_model_roundtrip();
+  test_client_link_direct_random_read_roundtrip();
+  test_client_link_direct_register_monitor_roundtrip();
   test_client_timeout();
   test_client_ascii_format4_resynchronizes_on_stale_ack();
   test_client_write_rejects_unexpected_success_data();

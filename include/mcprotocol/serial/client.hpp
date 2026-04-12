@@ -135,6 +135,14 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
 
+  /// \brief Starts native `Jn\\...` random read (`0403` + device extension specification).
+  [[nodiscard]] Status async_link_direct_random_read(
+      std::uint32_t now_ms,
+      std::span<const LinkDirectRandomReadItem> items,
+      std::span<std::uint32_t> out_values,
+      CompletionHandler callback,
+      void* user) noexcept;
+
   /// \brief Starts native random word/dword write (`1402` word path).
   [[nodiscard]] Status async_random_write_words(
       std::uint32_t now_ms,
@@ -142,10 +150,24 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
 
+  /// \brief Starts native `Jn\\...` random word write (`1402` + device extension specification).
+  [[nodiscard]] Status async_link_direct_random_write_words(
+      std::uint32_t now_ms,
+      std::span<const LinkDirectRandomWriteWordItem> items,
+      CompletionHandler callback,
+      void* user) noexcept;
+
   /// \brief Starts native random bit write (`1402` bit path).
   [[nodiscard]] Status async_random_write_bits(
       std::uint32_t now_ms,
       std::span<const RandomWriteBitItem> items,
+      CompletionHandler callback,
+      void* user) noexcept;
+
+  /// \brief Starts native `Jn\\...` random bit write (`1402` + device extension specification).
+  [[nodiscard]] Status async_link_direct_random_write_bits(
+      std::uint32_t now_ms,
+      std::span<const LinkDirectRandomWriteBitItem> items,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -159,6 +181,20 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
 
+  /// \brief Starts native `Jn\\...` multi-block read (`0406` + device extension specification).
+  ///
+  /// The returned `out_results` preserve block order, point counts, and offsets. Their
+  /// `head_device` field contains the inner device code/address, while the network number stays in
+  /// the original request blocks.
+  [[nodiscard]] Status async_link_direct_multi_block_read(
+      std::uint32_t now_ms,
+      const LinkDirectMultiBlockReadRequest& request,
+      std::span<std::uint16_t> out_words,
+      std::span<BitValue> out_bits,
+      std::span<MultiBlockReadBlockResult> out_results,
+      CompletionHandler callback,
+      void* user) noexcept;
+
   /// \brief Starts native multi-block write (`1406`).
   [[nodiscard]] Status async_multi_block_write(
       std::uint32_t now_ms,
@@ -166,10 +202,24 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
 
+  /// \brief Starts native `Jn\\...` multi-block write (`1406` + device extension specification).
+  [[nodiscard]] Status async_link_direct_multi_block_write(
+      std::uint32_t now_ms,
+      const LinkDirectMultiBlockWriteRequest& request,
+      CompletionHandler callback,
+      void* user) noexcept;
+
   /// \brief Starts monitor registration (`0801`).
   [[nodiscard]] Status async_register_monitor(
       std::uint32_t now_ms,
       const MonitorRegistration& request,
+      CompletionHandler callback,
+      void* user) noexcept;
+
+  /// \brief Starts native `Jn\\...` monitor registration (`0801` + `00C0`).
+  [[nodiscard]] Status async_link_direct_register_monitor(
+      std::uint32_t now_ms,
+      const LinkDirectMonitorRegistration& request,
       CompletionHandler callback,
       void* user) noexcept;
 
