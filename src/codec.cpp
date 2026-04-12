@@ -29,7 +29,7 @@ struct DeviceSpec {
   bool bit_device;
 };
 
-constexpr std::array<DeviceSpec, 32> kDeviceSpecs {{
+constexpr std::array<DeviceSpec, 35> kDeviceSpecs {{
     {DeviceCode::X, "X", "X", 0x9C, 0x009C, true, true},
     {DeviceCode::Y, "Y", "Y", 0x9D, 0x009D, true, true},
     {DeviceCode::M, "M", "M", 0x90, 0x0090, false, true},
@@ -55,6 +55,9 @@ constexpr std::array<DeviceSpec, 32> kDeviceSpecs {{
     {DeviceCode::S, "S", "S", 0x98, 0x0098, false, true},
     {DeviceCode::DX, "DX", "DX", 0xA2, 0x00A2, true, true},
     {DeviceCode::DY, "DY", "DY", 0xA3, 0x00A3, true, true},
+    {DeviceCode::LTN, "LTN", "LTN", 0x52, 0x0052, false, false},
+    {DeviceCode::LSTN, "LSTN", "LSTN", 0x5A, 0x005A, false, false},
+    {DeviceCode::LCN, "LCN", "LCN", 0x56, 0x0056, false, false},
     {DeviceCode::LZ, "LZ", "LZ", 0x62, 0x0062, false, false},
     {DeviceCode::Z, "Z", "Z", 0xCC, 0x00CC, false, false},
     {DeviceCode::R, "R", "R", 0xAF, 0x00AF, false, false},
@@ -870,8 +873,11 @@ class ByteWriter {
   return ok_status();
 }
 
-[[nodiscard]] constexpr bool is_double_word_device_code(DeviceCode code) noexcept {
+[[nodiscard]] constexpr bool requires_random_dword_access(DeviceCode code) noexcept {
   switch (code) {
+    case DeviceCode::LTN:
+    case DeviceCode::LSTN:
+    case DeviceCode::LCN:
     case DeviceCode::LZ:
       return true;
     default:
@@ -891,7 +897,7 @@ class ByteWriter {
 [[nodiscard]] Status validate_word_device(const ProtocolConfig& config, const DeviceAddress& device, const char* message)
     noexcept {
   const DeviceSpec* spec = find_device_spec(device.code);
-  if (spec == nullptr || is_double_word_device_code(device.code)) {
+  if (spec == nullptr || device.code == DeviceCode::LZ) {
     return invalid_argument(message);
   }
   if (is_iq_r_only_device_code(device.code) && !is_iq_r_series(config)) {
@@ -909,8 +915,8 @@ class ByteWriter {
   if (spec == nullptr) {
     return invalid_argument(item.double_word ? dword_message : word_message);
   }
-  if (is_double_word_device_code(item.device.code) != item.double_word &&
-      is_double_word_device_code(item.device.code)) {
+  if (requires_random_dword_access(item.device.code) != item.double_word &&
+      requires_random_dword_access(item.device.code)) {
     return invalid_argument(item.double_word ? dword_message : word_message);
   }
   if (is_iq_r_only_device_code(item.device.code) && !is_iq_r_series(config)) {
@@ -928,8 +934,8 @@ class ByteWriter {
   if (spec == nullptr) {
     return invalid_argument(item.double_word ? dword_message : word_message);
   }
-  if (is_double_word_device_code(item.device.code) != item.double_word &&
-      is_double_word_device_code(item.device.code)) {
+  if (requires_random_dword_access(item.device.code) != item.double_word &&
+      requires_random_dword_access(item.device.code)) {
     return invalid_argument(item.double_word ? dword_message : word_message);
   }
   if (is_iq_r_only_device_code(item.device.code) && !is_iq_r_series(config)) {

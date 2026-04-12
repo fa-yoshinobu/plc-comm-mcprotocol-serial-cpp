@@ -293,6 +293,21 @@ void test_high_level_parse_device_address() {
   assert(address.code == mcprotocol::serial::DeviceCode::RD);
   assert(address.number == 20U);
 
+  status = parse_device_address("LTN0", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::LTN);
+  assert(address.number == 0U);
+
+  status = parse_device_address("LSTN1", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::LSTN);
+  assert(address.number == 1U);
+
+  status = parse_device_address("LCN2", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::LCN);
+  assert(address.number == 2U);
+
   status = parse_device_address("", address);
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
@@ -346,6 +361,24 @@ void test_high_level_make_random_dword_item_defaults() {
   assert(status.ok());
   assert(write_item.device.code == mcprotocol::serial::DeviceCode::LZ);
   assert(write_item.device.number == 0U);
+  assert(write_item.double_word);
+
+  status = make_random_read_item("LTN1", read_item);
+  assert(status.ok());
+  assert(read_item.device.code == mcprotocol::serial::DeviceCode::LTN);
+  assert(read_item.device.number == 1U);
+  assert(read_item.double_word);
+
+  status = make_random_read_item("LSTN2", read_item);
+  assert(status.ok());
+  assert(read_item.device.code == mcprotocol::serial::DeviceCode::LSTN);
+  assert(read_item.device.number == 2U);
+  assert(read_item.double_word);
+
+  status = make_random_write_word_item("LCN3", 0x12345678U, write_item);
+  assert(status.ok());
+  assert(write_item.device.code == mcprotocol::serial::DeviceCode::LCN);
+  assert(write_item.device.number == 3U);
   assert(write_item.double_word);
 }
 
@@ -412,6 +445,21 @@ void test_encode_sm_sd_and_lz_device_codes() {
     status = CommandCodec::encode_random_read(config, request, request_data, request_data_size);
     assert(!status.ok());
     assert(status.code == StatusCode::InvalidArgument);
+  }
+
+  {
+    const std::array<RandomReadItem, 1> items {{
+        {.device = {.code = mcprotocol::serial::DeviceCode::LTN, .number = 0}, .double_word = true},
+    }};
+    const RandomReadRequest request {.items = items};
+    std::array<std::uint8_t, 32> request_data {};
+    std::size_t request_data_size = 0;
+    Status status = CommandCodec::encode_random_read(make_binary_c4_iqr_config(), request, request_data, request_data_size);
+    assert(status.ok());
+    const std::array<std::uint8_t, 14> expected {
+        0x03, 0x04, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x52, 0x00};
+    assert(request_data_size == expected.size());
+    assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
   }
 }
 

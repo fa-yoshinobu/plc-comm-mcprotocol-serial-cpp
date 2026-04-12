@@ -127,7 +127,7 @@ struct ProbeTarget {
   DeviceAddress device;
 };
 
-constexpr std::array<DeviceParseSpec, 30> kDeviceParseSpecs {{
+constexpr std::array<DeviceParseSpec, 33> kDeviceParseSpecs {{
     {"STS", DeviceCode::STS, 10},
     {"STC", DeviceCode::STC, 10},
     {"STN", DeviceCode::STN, 10},
@@ -143,6 +143,9 @@ constexpr std::array<DeviceParseSpec, 30> kDeviceParseSpecs {{
     {"SD", DeviceCode::SD, 10},
     {"DX", DeviceCode::DX, 16},
     {"DY", DeviceCode::DY, 16},
+    {"LTN", DeviceCode::LTN, 10},
+    {"LSTN", DeviceCode::LSTN, 10},
+    {"LCN", DeviceCode::LCN, 10},
     {"LZ", DeviceCode::LZ, 10},
     {"RD", DeviceCode::RD, 10},
     {"ZR", DeviceCode::ZR, 16},
@@ -1092,6 +1095,9 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
     case DeviceCode::TN:
     case DeviceCode::STN:
     case DeviceCode::CN:
+    case DeviceCode::LTN:
+    case DeviceCode::LSTN:
+    case DeviceCode::LCN:
     case DeviceCode::SW:
     case DeviceCode::LZ:
     case DeviceCode::Z:
@@ -1105,6 +1111,9 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
 
 [[nodiscard]] constexpr bool is_double_word_device(DeviceCode code) {
   switch (code) {
+    case DeviceCode::LTN:
+    case DeviceCode::LSTN:
+    case DeviceCode::LCN:
     case DeviceCode::LZ:
       return true;
     default:

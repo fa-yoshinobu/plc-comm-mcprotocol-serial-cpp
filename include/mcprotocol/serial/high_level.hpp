@@ -31,7 +31,7 @@ struct DeviceParseSpec {
   int base;
 };
 
-constexpr std::array<DeviceParseSpec, 30> kDeviceParseSpecs {{
+constexpr std::array<DeviceParseSpec, 33> kDeviceParseSpecs {{
     {"STS", 3U, DeviceCode::STS, 10},
     {"STC", 3U, DeviceCode::STC, 10},
     {"STN", 3U, DeviceCode::STN, 10},
@@ -47,6 +47,9 @@ constexpr std::array<DeviceParseSpec, 30> kDeviceParseSpecs {{
     {"SD", 2U, DeviceCode::SD, 10},
     {"DX", 2U, DeviceCode::DX, 16},
     {"DY", 2U, DeviceCode::DY, 16},
+    {"LTN", 3U, DeviceCode::LTN, 10},
+    {"LSTN", 4U, DeviceCode::LSTN, 10},
+    {"LCN", 3U, DeviceCode::LCN, 10},
     {"LZ", 2U, DeviceCode::LZ, 10},
     {"RD", 2U, DeviceCode::RD, 10},
     {"ZR", 2U, DeviceCode::ZR, 16},
@@ -102,6 +105,9 @@ constexpr std::array<DeviceParseSpec, 30> kDeviceParseSpecs {{
 
 [[nodiscard]] constexpr bool is_double_word_device(DeviceCode code) noexcept {
   switch (code) {
+    case DeviceCode::LTN:
+    case DeviceCode::LSTN:
+    case DeviceCode::LCN:
     case DeviceCode::LZ:
       return true;
     default:

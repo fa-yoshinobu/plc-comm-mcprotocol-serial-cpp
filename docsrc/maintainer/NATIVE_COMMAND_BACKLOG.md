@@ -37,27 +37,32 @@ Target-specific remaining items:
 - `RJ71C24-R2 + R08CPU / Format5 Binary / --series iqr` still rejects native `LZ` double-word
   random-read probes with `0x7F23`; local support now treats `LZ` as an iQ-R-only double-word
   device and rejects Q/L-mode requests before transmit
+- `RJ71C24-R2 + iQ-R CPU / Format5 Binary / --series iqr` currently rejects native `0403`
+  random-read probes for `LTN`, `LSTN`, and `LCN` with `0x7F23`, even though spot batch reads now
+  work (`read-words LTN0 4`, `read-words LSTN0 4`, `read-words LCN0 2`)
 - `FX5UC-32MT/D` still holds on host/module buffer access
 
 ### Implementation Gaps
 
 Device/register surfaces still missing from this serial C++ library:
 
-- `LTN` long timer current value
-- `LSTN` long retentive timer current value
-- `LCN` long counter current value
+- none from the currently reviewed public surface
 
 Manual re-read notes:
 
 - `RD` is now implemented as a direct word device (`RD**`, binary `002CH`).
 - `2026-04-12` spot rechecks on `RJ71C24-R2 + R120PCPU / Format5 Binary / --series iqr` showed
   `read-bits SM0 4`, `read-words SD0 2`, and `read-words RD0 2` all passing.
-- `LTN`, `LSTN`, and `LCN` are actual current-value devices, not just helper aliases.
+- `LTN`, `LSTN`, and `LCN` are now implemented as actual current-value devices, not helper aliases.
 - `LTN` / `LSTN` / `LCN` are not ordinary one-word devices; the manual calls out special access
   rules for long timer / long retentive timer / long counter current values.
-- For `LTN` / `LSTN` / `LCN`, implementation may require special point accounting and result
-  interpretation on top of normal `0401` / `0403` / `1401` / `1402`, not just a bare `DeviceCode`
-  addition.
+- `2026-04-12` spot rechecks on `RJ71C24-R2 + R120PCPU / Format5 Binary / --series iqr` showed:
+  - `read-words LTN0 4` passed
+  - `read-words LSTN0 4` passed
+  - `read-words LCN0 2` passed
+  - `random-read LTN0`, `LSTN0`, and `LCN0` all returned `0x7F23`
+- `LTN` / `LSTN` batch reads are special: one device consumes four words in the response, with the
+  current value in the first word and contact/coil bits in the second word.
 
 Resolved enough to remove from the active hold list:
 
