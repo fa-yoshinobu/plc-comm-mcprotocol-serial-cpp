@@ -13,6 +13,7 @@ Audience: maintainers of this repository.
 - Keep `docsrc/user/` and the top-level `README.md` focused on current user workflows.
 - Keep unresolved hardware evidence, command coverage detail, and backlog policy in
   `docsrc/validation/reports/` or `docsrc/maintainer/`.
+- Keep manual-derived operational rules in [MANUAL_DERIVED_RULES.md](MANUAL_DERIVED_RULES.md).
 - Label sample defaults as sample defaults. Do not describe example-code defaults as the current
   validated target settings.
 - When the practical settings or follow-up state changes, re-check `README.md`, `docs/index.md`,
@@ -73,6 +74,17 @@ When adding new hardware results:
 2. Add or extend the consolidated report for that hardware target in `docsrc/validation/reports/`.
 3. Keep the top-level `README.md` summary short and point to the detailed report.
 4. Record the native result and PLC end code without masking it with a different command path.
+
+## Difference-First Triage
+
+When a test, build, or probe regresses:
+
+1. Check what changed first.
+2. Localize the failing file, request shape, or target-specific area.
+3. Reconcile the manual, current implementation, and existing tests.
+4. Only then decide whether to change code, tests, or documentation.
+
+Do not patch first and justify later.
 
 ## Open Items
 

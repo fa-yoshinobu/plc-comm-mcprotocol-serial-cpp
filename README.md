@@ -97,6 +97,8 @@ the authority for the current validated settings.
   `FX5UC-32MT/D`.
 - There are no active command-family holds on the currently validated targets.
 - Qualified helper access over `0601/1601` is the supported public `U...` path.
+- On the validated `RJ71C24-R2 + R120PCPU` iQ-R spot-device path, `Jn\\...` batch and multi-block
+  surfaces are validated.
 
 For the exact PASS / status matrix and the verified serial settings for each target, see
 [HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md).
@@ -111,6 +113,7 @@ For the exact PASS / status matrix and the verified serial settings for each tar
 - Some command families are target-dependent and require the right `--series` selection.
 - Native qualified access is not a supported public workflow. Keep `U...` access on the helper
   path only.
+- `Jn\\...` random and monitor remain outside the currently validated public surface.
 - `FX5UC-32MT/D` treats `0613/1613/0601/1601` and `0801/0802` as unsupported / not applicable on
   serial `3C/4C`.
 - Large contiguous `write-words` and `write-bits` are still split automatically to fit fixed

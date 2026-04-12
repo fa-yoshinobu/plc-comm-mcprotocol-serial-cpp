@@ -2197,6 +2197,20 @@ void test_encode_sm_sd_and_lz_device_codes() {
   }
 
   {
+    const BatchReadWordsRequest request {
+        .head_device = {.code = mcprotocol::serial::DeviceCode::ZR, .number = 10},
+        .points = 1,
+    };
+    std::array<std::uint8_t, 32> request_data {};
+    std::size_t request_data_size = 0;
+    Status status = CommandCodec::encode_batch_read_words(config, request, request_data, request_data_size);
+    assert(status.ok());
+    const std::array<std::uint8_t, 10> expected {0x01, 0x04, 0x00, 0x00, 0x0A, 0x00, 0x00, 0xB0, 0x01, 0x00};
+    assert(request_data_size == expected.size());
+    assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+  }
+
+  {
     const std::array<RandomReadItem, 1> items {{
         {.device = {.code = mcprotocol::serial::DeviceCode::LZ, .number = 10}, .double_word = true},
     }};
@@ -2227,6 +2241,21 @@ void test_encode_sm_sd_and_lz_device_codes() {
     assert(status.ok());
     const std::array<std::uint8_t, 12> expected {
         0x03, 0x04, 0x02, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x52, 0x00};
+    assert(request_data_size == expected.size());
+    assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+  }
+
+  {
+    const std::array<RandomReadItem, 1> items {{
+        {.device = {.code = mcprotocol::serial::DeviceCode::LCN, .number = 3}, .double_word = true},
+    }};
+    const RandomReadRequest request {.items = items};
+    std::array<std::uint8_t, 32> request_data {};
+    std::size_t request_data_size = 0;
+    Status status = CommandCodec::encode_random_read(make_binary_c4_iqr_config(), request, request_data, request_data_size);
+    assert(status.ok());
+    const std::array<std::uint8_t, 12> expected {
+        0x03, 0x04, 0x02, 0x00, 0x00, 0x01, 0x03, 0x00, 0x00, 0x00, 0x56, 0x00};
     assert(request_data_size == expected.size());
     assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
   }
@@ -3444,6 +3473,32 @@ void test_encode_register_monitor_binary_iqr_layout() {
              monitor_request.data() + expected_prefix.size(),
              random_read_request.data() + expected_prefix.size(),
              random_read_size - expected_prefix.size()) == 0);
+}
+
+void test_encode_register_monitor_binary_iqr_allows_lz_shape() {
+  const auto config = make_binary_c4_iqr_config();
+  const std::array<mcprotocol::serial::RandomReadItem, 1> items {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::LZ, .number = 1}, .double_word = true},
+  }};
+
+  std::array<std::uint8_t, 64> monitor_request {};
+  std::size_t monitor_size = 0;
+  Status status = CommandCodec::encode_register_monitor(
+      config,
+      mcprotocol::serial::MonitorRegistration {
+          .items = std::span<const mcprotocol::serial::RandomReadItem>(items.data(), items.size()),
+      },
+      monitor_request,
+      monitor_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 12> expected {
+      0x01, 0x08, 0x02, 0x00,
+      0x00, 0x01,
+      0x01, 0x00, 0x00, 0x00, 0x62, 0x00,
+  };
+  assert(monitor_size == expected.size());
+  assert(std::memcmp(monitor_request.data(), expected.data(), expected.size()) == 0);
 }
 
 void test_encode_read_monitor_ascii_matches_manual() {
@@ -4786,6 +4841,7 @@ int main() {
   test_encode_multi_block_write_binary_bit_blocks_use_lsb_first_word_packing();
   test_encode_register_monitor_ascii_reuses_random_read_layout();
   test_encode_register_monitor_binary_iqr_layout();
+  test_encode_register_monitor_binary_iqr_allows_lz_shape();
   test_encode_read_monitor_ascii_matches_manual();
   test_sparse_native_bit_helpers_match_batch_random_and_monitor_values();
   test_parse_multi_block_read_response_ascii_mixed_blocks();
