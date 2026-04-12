@@ -9,6 +9,8 @@ If you want the smallest library usage example first, start from:
 
 Current pages:
 
+- [LIBRARY_ENTRYPOINTS.md](LIBRARY_ENTRYPOINTS.md)
+- [PLATFORMIO.md](PLATFORMIO.md)
 - [WIRING_GUIDE.md](WIRING_GUIDE.md)
 - [MCU_QUICKSTART.md](MCU_QUICKSTART.md)
 - [FAQ.md](FAQ.md)
