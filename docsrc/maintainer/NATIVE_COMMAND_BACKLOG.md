@@ -46,7 +46,7 @@ Target-specific remaining items:
 
 Device/register surfaces still missing from this serial C++ library:
 
-- none from the currently reviewed public surface
+- `Jn\\X`, `Jn\\Y`, `Jn\\B`, `Jn\\W`, `Jn\\SB`, `Jn\\SW` address surfaces
 
 Manual re-read notes:
 
@@ -54,6 +54,10 @@ Manual re-read notes:
 - `2026-04-12` spot rechecks on `RJ71C24-R2 + R120PCPU / Format5 Binary / --series iqr` showed
   `read-bits SM0 4`, `read-words SD0 2`, and `read-words RD0 2` all passing.
 - `LTN`, `LSTN`, and `LCN` are now implemented as actual current-value devices, not helper aliases.
+- `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, and `LCC` are implemented in `DeviceCode`, parser, and CLI
+  surface.
+- `Jn\\...` prefixed access is not a plain `DeviceCode` gap; it is an address-surface / routing
+  syntax gap and needs its own parser / request-construction design.
 - `LTN` / `LSTN` / `LCN` are not ordinary one-word devices; the manual calls out special access
   rules for long timer / long retentive timer / long counter current values.
 - `2026-04-12` spot rechecks on `RJ71C24-R2 + R120PCPU / Format5 Binary / --series iqr` showed:
@@ -63,6 +67,10 @@ Manual re-read notes:
   - `random-read LTN0`, `LSTN0`, and `LCN0` all returned `0x7F23`
 - `LTN` / `LSTN` batch reads are special: one device consumes four words in the response, with the
   current value in the first word and contact/coil bits in the second word.
+- Do not track unsupported access paths as backlog items. Long timer / long retentive timer
+  contact and coil access is block/structured-access oriented and should be validated through the
+  corresponding current-value read path (`LTN` / `LSTN`) plus response decomposition, not through
+  direct single-bit probe failures.
 
 Resolved enough to remove from the active hold list:
 
