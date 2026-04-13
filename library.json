@@ -1,6 +1,6 @@
 {
   "name": "mcprotocol-serial-cpp",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "MC protocol serial C++ library for MCU-oriented environments with fixed caller-owned buffers and async request flow.",
   "keywords": [
     "mcprotocol",
@@ -48,13 +48,19 @@
   },
   "export": {
     "exclude": [
+      ".gitignore",
       ".github",
       ".pio",
       ".platformio",
       ".tools",
       "build",
+      "CMakeLists.txt",
       "docsrc",
       "docs",
+      "Doxyfile",
+      "Doxyfile.in",
+      "examples/linux_cli",
+      "platformio.ini",
       "scripts",
       "tests",
       "tools",

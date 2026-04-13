@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.3 - 2026-04-13
+
+- trimmed the PlatformIO package export so build-system files and host-only shell examples are not shipped in the registry tarball
+
 ## 0.2.2 - 2026-04-12
 
 - Split the top-level `README.md` into a shorter overview plus focused user and maintainer docs for

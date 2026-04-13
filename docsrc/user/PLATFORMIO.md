@@ -1,6 +1,6 @@
 # PlatformIO
 
-Version `0.2.2` includes PlatformIO packaging metadata and simpler host-side entrypoints.
+Version `0.2.3` trims the registry tarball to the library-facing files while keeping the PlatformIO packaging metadata and simpler host-side entrypoints.
 
 ## Main Files
 
