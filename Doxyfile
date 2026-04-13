@@ -13,7 +13,7 @@ FILE_PATTERNS          = *.md *.hpp *.h *.cpp
 RECURSIVE              = YES
 EXCLUDE_PATTERNS       = */build/*
 
-USE_MDFILE_AS_MAINPAGE = README.md
+USE_MDFILE_AS_MAINPAGE = ./README.md
 MARKDOWN_SUPPORT       = YES
 TOC_INCLUDE_HEADINGS   = 2
 
