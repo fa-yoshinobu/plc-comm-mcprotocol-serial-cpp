@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4 - 2026-04-14
+
+- added a direct README link to the PlatformIO registry page so install guidance points at the published package metadata
+
 ## 0.2.3 - 2026-04-13
 
 - trimmed the PlatformIO package export so build-system files and host-only shell examples are not shipped in the registry tarball
