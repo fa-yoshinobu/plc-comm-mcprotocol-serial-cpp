@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.5 - 2026-04-28
+
+- Tightened string-device parsers so oversized decimal or hexadecimal values fail instead of
+  overflowing in plain, link-direct, and qualified-buffer address helpers.
+- Added regression coverage for all-letter hexadecimal device numbers and invalid known-code
+  number fallbacks.
+
 ## 0.2.4 - 2026-04-14
 
 - added a direct README link to the PlatformIO registry page so install guidance points at the published package metadata

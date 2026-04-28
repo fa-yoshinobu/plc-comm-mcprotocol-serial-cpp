@@ -1895,10 +1895,20 @@ void test_high_level_parse_device_address() {
   assert(address.code == mcprotocol::serial::DeviceCode::X);
   assert(address.number == 0x1AU);
 
+  status = parse_device_address("XFF", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::X);
+  assert(address.number == 0xFFU);
+
   status = parse_device_address("SM100", address);
   assert(status.ok());
   assert(address.code == mcprotocol::serial::DeviceCode::SM);
   assert(address.number == 100U);
+
+  status = parse_device_address("SWFF", address);
+  assert(status.ok());
+  assert(address.code == mcprotocol::serial::DeviceCode::SW);
+  assert(address.number == 0xFFU);
 
   status = parse_device_address("SD200", address);
   assert(status.ok());
@@ -1968,6 +1978,19 @@ void test_high_level_parse_device_address() {
   status = parse_device_address("", address);
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
+
+  status = parse_device_address("DFFFF", address);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(std::strcmp(status.message, "Device address number is invalid") == 0);
+
+  status = parse_device_address("D4294967296", address);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  status = parse_device_address("SW100000000", address);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
 }
 
 void test_parse_link_direct_device_surface() {
@@ -1986,6 +2009,20 @@ void test_parse_link_direct_device_surface() {
 
   status = parse_link_direct_device("J1\\D100", device);
   assert(!status.ok());
+
+  status = parse_link_direct_device("J100000000\\W10", device);
+  assert(!status.ok());
+}
+
+void test_parse_qualified_buffer_word_device_rejects_overflow() {
+  QualifiedBufferWordDevice device {};
+  Status status = parse_qualified_buffer_word_device("U100000000\\G0", device);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  status = parse_qualified_buffer_word_device("U3E0\\G4294967296", device);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
 }
 
 void test_high_level_make_contiguous_requests() {
@@ -4835,6 +4872,7 @@ int main() {
   test_decode_ascii_format4_ack_response();
   test_high_level_parse_device_address();
   test_parse_link_direct_device_surface();
+  test_parse_qualified_buffer_word_device_rejects_overflow();
   test_high_level_make_contiguous_requests();
   test_high_level_protocol_presets();
   test_high_level_make_random_bit_item();
