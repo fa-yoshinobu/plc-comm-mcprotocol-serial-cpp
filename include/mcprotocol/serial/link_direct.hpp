@@ -101,7 +101,12 @@ namespace link_direct_detail {
       return false;
     }
 
-    value = static_cast<std::uint32_t>(value * static_cast<std::uint32_t>(base) + digit);
+    const std::uint32_t radix = static_cast<std::uint32_t>(base);
+    constexpr std::uint32_t max_u32 = static_cast<std::uint32_t>(0xFFFFFFFFULL);
+    if (value > ((max_u32 - digit) / radix)) {
+      return false;
+    }
+    value = static_cast<std::uint32_t>(value * radix + digit);
   }
 
   out_value = value;

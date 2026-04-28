@@ -1,6 +1,6 @@
 {
   "name": "mcprotocol-serial-cpp",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "MC protocol serial C++ library for MCU-oriented environments with fixed caller-owned buffers and async request flow.",
   "keywords": [
     "mcprotocol",
