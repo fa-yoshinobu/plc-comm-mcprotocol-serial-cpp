@@ -9,8 +9,8 @@ Scope:
 - Current ASCII wire scope for `2C/3C/4C`: `Format1`, `Format2`, `Format3`, and `Format4`
 - Public library scope: device memory access, buffer memory access, CPU-model, remote control,
   remote password control, loopback, and helper-qualified access over `0601/1601`
-- Out of scope by design unless stated otherwise: label access, file control,
-  serial-module dedicated commands beyond user-frame handling, and the later drive/file memory chapters
+- Not needed by design unless stated otherwise: label access, file control, `0630` / `0631` CPU
+  monitoring, `2101` on-demand receive, and the later drive/file memory chapters
 
 ## Summary
 
@@ -19,10 +19,11 @@ Scope:
 - Buffer-memory chapter `10` is covered as command families: `0613`, `1613`, `0601`, `1601`
 - Implemented chapter `11` families now include `0101`, `1001`, `1002`, `1003`, `1005`, `1006`,
   `1617`, `1630`, `1631`, and `0619`
-- Implemented chapter `13` user-frame families now include `0610`, `1610`, `1615`, `1618`, and `0631`
+- Implemented chapter `13` user-frame/control families now include `0610`, `1610`, `1612`, `1615`, and `1618`
 - `1E` now has initial chapter `18` coverage for device-memory read/write, random write, monitor,
   extended-file-register access, and special-function-module buffer read/write
-- The library does not implement the full MC protocol serial command list
+- The library intentionally implements the practical serial MC protocol subset needed for this
+  package, not the full manual command list
 
 ## Compile-time Trim Scope
 
@@ -60,7 +61,7 @@ For target-specific PASS/HOLD results, use
 | Chapter 8 device memory | `1406` multi-block write | implemented | `async_multi_block_write`, `async_link_direct_multi_block_write`, CLI | Long-device head restrictions follow the manual |
 | Chapter 8 device memory | `0801` monitor register | implemented | `async_register_monitor`, `async_link_direct_register_monitor`, `PosixSyncClient::register_monitor`, CLI | Some targets such as `FX5UC-32MT/D` still reject monitor on serial `3C/4C` |
 | Chapter 8 device memory | `0802` monitor read | implemented | `async_read_monitor`, `PosixSyncClient::read_monitor`, CLI | Requires prior successful `0801` registration |
-| Chapter 9 label access | `041A`, `141A`, `041C`, `141B` | not implemented | none | No label codec/client/public API exists |
+| Chapter 9 label access | `041A`, `141A`, `041C`, `141B` | not needed | none | Label access is not needed for this library and is not an implementation TODO |
 | Chapter 10 buffer memory | `0613`, `1613` host-buffer read/write | implemented | `async_read_host_buffer`, `async_write_host_buffer`, CLI | Target-dependent support remains; see validation matrix |
 | Chapter 10 buffer memory | `0601`, `1601` module-buffer read/write | implemented | `async_read_module_buffer`, `async_write_module_buffer`, CLI | Public qualified-word helpers intentionally reuse this path |
 | Chapter 11 control/diagnostic | `0101` read CPU model | implemented | `async_read_cpu_model`, `PosixSyncClient::read_cpu_model`, CLI | Implemented and validated |
@@ -72,11 +73,12 @@ For target-specific PASS/HOLD results, use
 | Chapter 11 password/error control | `1630`, `1631` remote password unlock/lock | implemented | `async_unlock_remote_password`, `async_lock_remote_password`, sync wrappers, CLI | Enforces documented password-length rules: Q/L fixed `4`, iQ-R `6..32`; focused `RJ71C24-R2 + R120PCPU` `--series iqr` checks return `0x7FE7` for a `6`-character `unlock` attempt and `0x7F22` for `lock` plus longer `unlock` attempts (`10` and `32` characters), so this remains target-dependent |
 | Chapter 11 remote operation | `1006` remote RESET | implemented | `async_remote_reset`, `PosixSyncClient::remote_reset`, CLI | Manual notes some targets may reset before returning a response; this library treats a pure no-response timeout as success for this command. Hardware-validated on `RJ71C24-R2 + R120PCPU` after enabling the target-side remote RESET parameter |
 | Chapter 11 control/diagnostic | `0619` loopback | implemented | `async_loopback`, CLI | Implemented and validated |
-| Chapter 12 file control | `1810`..`182A` | not implemented | none | No file-control codec/client/public API exists |
+| Chapter 12 file control | `1810`..`182A` | not needed | none | File-control access is not needed for this library and is not an implementation TODO |
 | Chapter 13 serial-module user frame | `0610`, `1610` | implemented | `async_read_user_frame`, `async_write_user_frame`, `async_delete_user_frame`, sync wrappers, CLI | This is C24 user-frame registration/read/delete, not chapter `8` device-memory monitor |
-| Chapter 13 serial-module control extras | `1618`, `1615`, `0631` | implemented | `async_control_global_signal`, `async_initialize_c24_transmission_sequence`, `async_deregister_cpu_monitoring`, sync wrappers, CLI | `1615` is binary `4C` format-5 only; `1618` and `0631` are `2C/3C/4C` only |
-| Chapter 13 serial-module advanced extras | `1612`, `0630`, `2101` | not implemented | none | `1612` changes link settings, `0630` is the large CPU-monitor registration family, and `2101` is receive-side on-demand data rather than a normal outbound request |
-| Chapter 15 drive/file memory | `0201`..`0206`, `0808`, `1202`..`1207` | not implemented | none | No drive/file memory codec/client/public API exists |
+| Chapter 13 serial-module control extras | `1618`, `1615`, `1612` | implemented | `async_control_global_signal`, `async_initialize_c24_transmission_sequence`, `async_switch_serial_module_mode`, sync wrappers, CLI except `1612` | `1615` is binary `4C` format-5 only; `1618` and `1612` are `2C/3C/4C` only |
+| Chapter 13 serial-module CPU monitoring | `0630`, `0631` | not needed | none | CPU-monitoring registration/start and deregistration are not needed for this library and are not implementation TODOs |
+| Chapter 13 serial-module on-demand | `2101` | not needed | none | `2101` is receive-side on-demand data from CPU/C24 to the external device and is not needed for this library |
+| Chapter 15 drive/file memory | `0201`..`0206`, `0808`, `1202`..`1207` | not needed | none | Drive/file memory access is not needed for this library and is not an implementation TODO |
 
 ## Important Scope Notes
 
@@ -110,5 +112,6 @@ For target-specific PASS/HOLD results, use
 - If the question is "are chapter `8` device-memory command families all present?", the answer is
   yes for the intended `2C/3C/4C` library scope.
 - If the question is "does this repository implement every MC protocol serial `2C/3C/4C` command?", the
-  answer is no. The main missing families are label access, file control, registered-data
-  commands, network/module extras, and drive/file memory commands.
+  answer is no by design. Label access, file control, `0630` / `0631` CPU monitoring, `2101`,
+  and drive/file memory are explicitly not needed for this library and should not be tracked as
+  TODOs.

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.6 - 2026-05-02
+
+- Made host `mcprotocol_cli` protocol selection explicit: live commands now
+  require `--frame` and `--series` instead of falling back to `c4-binary` + `ql`.
+- Updated host shell examples to require `MCPROTOCOL_FRAME` and
+  `MCPROTOCOL_SERIES` unless a target-specific wrapper supplies them.
+- Removed `0631` CPU-monitoring deregistration from the public API, codec, CLI,
+  and tests, and documented `0630` / `0631` CPU monitoring as explicitly not
+  needed for this library.
+- Documented label access, file control, `2101`, and drive/file memory as
+  explicitly not needed for this library instead of active implementation TODOs.
+
+## 0.2.5 - 2026-05-02
+
+- Added C24 mode switching (`1612`) request support in `CommandCodec`, `MelsecSerialClient`, and
+  `PosixSyncClient`.
+- Added manual-shaped binary and ASCII request tests for C24 mode switching and updated docs/TODO
+  status for the implemented surface.
+
 ## 0.2.4 - 2026-04-14
 
 - added a direct README link to the PlatformIO registry page so install guidance points at the published package metadata

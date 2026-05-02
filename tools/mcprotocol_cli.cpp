@@ -103,7 +103,6 @@ enum class CommandKind : std::uint8_t {
   RemoteReset,
   GlobalSignal,
   InitializeTransmissionSequence,
-  DeregisterCpuMonitoring,
   RecoverC24,
   Loopback,
   ReadUserFrame,
@@ -173,6 +172,8 @@ struct CommandState {
 struct CliOptions {
   PosixSerialConfig serial {};
   ProtocolConfig protocol {};
+  bool frame_specified = false;
+  bool series_specified = false;
   bool rts_toggle = false;
   bool dump_frames = false;
   CommandKind command = CommandKind::None;
@@ -409,7 +410,6 @@ void print_usage() {
       "  mcprotocol_cli [options] remote-reset\n"
       "  mcprotocol_cli [options] global-signal on|off current|x1a|x1b [STATION]\n"
       "  mcprotocol_cli [options] init-sequence\n"
-      "  mcprotocol_cli [options] deregister-cpu-monitor\n"
       "  mcprotocol_cli [options] recover-c24 [eot|cl]\n"
       "\n"
       "  User Frame and File Register:\n"
@@ -476,8 +476,8 @@ void print_usage() {
       "  --rts-cts on|off           Hardware flow control (default: off)\n"
       "  --rts-toggle on|off        Toggle RTS during TX for RS-485 DE control\n"
       "  --dump-frames on|off       Print raw TX/RX frame bytes to stderr (default: off)\n"
-      "  --frame MODE               c4-binary | c4-ascii-f1 | c4-ascii-f2 | c4-ascii-f3 | c4-ascii-f4 | c3-ascii-f1 | c3-ascii-f2 | c3-ascii-f3 | c3-ascii-f4 | c2-ascii-f1 | c2-ascii-f2 | c2-ascii-f3 | c2-ascii-f4 | c1-ascii-f1 | c1-ascii-f3 | c1-ascii-f4 | e1-binary | e1-ascii\n"
-      "  --series ql|iqr|qna|a      Target PLC family for device encoding (default: ql)\n"
+      "  --frame MODE               Required. c4-binary | c4-ascii-f1 | c4-ascii-f2 | c4-ascii-f3 | c4-ascii-f4 | c3-ascii-f1 | c3-ascii-f2 | c3-ascii-f3 | c3-ascii-f4 | c2-ascii-f1 | c2-ascii-f2 | c2-ascii-f3 | c2-ascii-f4 | c1-ascii-f1 | c1-ascii-f3 | c1-ascii-f4 | e1-binary | e1-ascii\n"
+      "  --series ql|iqr|qna|a      Required. Target PLC family for device encoding\n"
       "  --block-no N               ASCII Format2 block number 0..255 (default: 0)\n"
       "  --station N                Station number; non-zero implies multidrop\n"
       "  --self-station N           Self-station number for m:n connections\n"
@@ -493,7 +493,6 @@ void print_usage() {
       "  remote-reset may complete without a response; this CLI treats a pure response-timeout after TX as success.\n"
       "  global-signal maps to C24 command 1618 on 2C/3C/4C; STATION defaults to 0.\n"
       "  init-sequence maps to 1615 and is binary 4C format-5 only; some targets complete without replying.\n"
-      "  deregister-cpu-monitor maps to 0631 on 2C/3C/4C and stops chapter-13 CPU monitoring.\n"
       "  recover-c24 sends ASCII EOT CRLF by default; pass cl to send CL CRLF.\n"
       "  Use recover-c24 after timeout or mixed-response states on C24 ASCII links; no reply is expected.\n"
       "  read-qualified-words / write-qualified-words use the practical 0601/1601 helper path.\n"
@@ -1104,10 +1103,12 @@ void print_usage() {
       if (!parse_frame_mode(argv[++index], options.protocol)) {
         return false;
       }
+      options.frame_specified = true;
     } else if (arg == "--series" && (index + 1) < argc) {
       if (!parse_series(argv[++index], options.protocol)) {
         return false;
       }
+      options.series_specified = true;
     } else if (arg == "--block-no" && (index + 1) < argc) {
       std::uint32_t value = 0;
       if (!parse_u32_auto(argv[++index], value) || value > 0xFFU) {
@@ -1167,8 +1168,6 @@ void print_usage() {
         options.command = CommandKind::GlobalSignal;
       } else if (arg == "init-sequence" || arg == "initialize-sequence") {
         options.command = CommandKind::InitializeTransmissionSequence;
-      } else if (arg == "deregister-cpu-monitor" || arg == "cpu-monitor-deregister") {
-        options.command = CommandKind::DeregisterCpuMonitoring;
       } else if (arg == "recover-c24") {
         options.command = CommandKind::RecoverC24;
       } else if (arg == "loopback") {
@@ -1284,6 +1283,11 @@ void print_usage() {
     return false;
   }
 
+  if (options.command != CommandKind::RecoverC24 &&
+      (!options.frame_specified || !options.series_specified)) {
+    return false;
+  }
+
   switch (options.command) {
     case CommandKind::CpuModel:
     case CommandKind::RemoteStop:
@@ -1291,7 +1295,6 @@ void print_usage() {
     case CommandKind::ClearError:
     case CommandKind::RemoteReset:
     case CommandKind::InitializeTransmissionSequence:
-    case CommandKind::DeregisterCpuMonitoring:
     case CommandKind::ProbeAll:
     case CommandKind::ProbeWriteAll:
     case CommandKind::ProbeRandomRead:
@@ -2919,24 +2922,6 @@ int main(int argc, char** argv) {
               status.message,
               "Transmission-sequence initialization completed without a response") == 0;
       std::printf("init-sequence=ok response=%s\n", no_response ? "none" : "ack");
-      return 0;
-    }
-
-    case CommandKind::DeregisterCpuMonitoring: {
-      status = client.async_deregister_cpu_monitoring(
-          now_ms(),
-          request_complete,
-          &command_state);
-      if (!status.ok()) {
-        print_status_error("Failed to start deregister-cpu-monitor request", status);
-        return 1;
-      }
-      status = drive_request(client, port, command_state);
-      if (!status.ok()) {
-        print_status_error("deregister-cpu-monitor request failed", status);
-        return 1;
-      }
-      std::printf("deregister-cpu-monitor=ok\n");
       return 0;
     }
 

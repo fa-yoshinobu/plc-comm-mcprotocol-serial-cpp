@@ -708,8 +708,8 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
     case OperationKind::WriteUserFrame:
     case OperationKind::DeleteUserFrame:
     case OperationKind::ControlGlobalSignal:
+    case OperationKind::SwitchSerialModuleMode:
     case OperationKind::InitializeTransmissionSequence:
-    case OperationKind::DeregisterCpuMonitoring:
       if (!response_data.empty()) {
         return make_status(StatusCode::Parse, "Write response must not contain response data");
       }
@@ -1982,6 +1982,20 @@ Status MelsecSerialClient::async_control_global_signal(
   return start_request(now_ms, OperationKind::ControlGlobalSignal, request_size, callback, user);
 }
 
+Status MelsecSerialClient::async_switch_serial_module_mode(
+    std::uint32_t now_ms,
+    const SerialModuleModeSwitchRequest& request,
+    CompletionHandler callback,
+    void* user) noexcept {
+  std::size_t request_size = 0;
+  const Status status =
+      CommandCodec::encode_switch_serial_module_mode(config_, request, request_data_, request_size);
+  if (!status.ok()) {
+    return status;
+  }
+  return start_request(now_ms, OperationKind::SwitchSerialModuleMode, request_size, callback, user);
+}
+
 Status MelsecSerialClient::async_initialize_c24_transmission_sequence(
     std::uint32_t now_ms,
     CompletionHandler callback,
@@ -1998,19 +2012,6 @@ Status MelsecSerialClient::async_initialize_c24_transmission_sequence(
       request_size,
       callback,
       user);
-}
-
-Status MelsecSerialClient::async_deregister_cpu_monitoring(
-    std::uint32_t now_ms,
-    CompletionHandler callback,
-    void* user) noexcept {
-  std::size_t request_size = 0;
-  const Status status =
-      CommandCodec::encode_deregister_cpu_monitoring(config_, request_data_, request_size);
-  if (!status.ok()) {
-    return status;
-  }
-  return start_request(now_ms, OperationKind::DeregisterCpuMonitoring, request_size, callback, user);
 }
 
 Status MelsecSerialClient::async_loopback(

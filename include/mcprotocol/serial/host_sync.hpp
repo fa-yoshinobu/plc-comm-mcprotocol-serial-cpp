@@ -100,11 +100,12 @@ class PosixSyncClient {
   [[nodiscard]] Status control_global_signal(
       const GlobalSignalControlRequest& request) noexcept;
 
+  /// \brief Switches C24 operation mode / transmission settings synchronously (`1612`).
+  [[nodiscard]] Status switch_serial_module_mode(
+      const SerialModuleModeSwitchRequest& request) noexcept;
+
   /// \brief Initializes C24 format-5 transmission sequence synchronously (`1615`).
   [[nodiscard]] Status initialize_c24_transmission_sequence() noexcept;
-
-  /// \brief Deregisters programmable-controller CPU monitoring synchronously (`0631`).
-  [[nodiscard]] Status deregister_cpu_monitoring() noexcept;
 
   /// \brief Reads contiguous words synchronously from a string address such as `D100`.
   [[nodiscard]] Status read_words(

@@ -417,14 +417,15 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
 
-  /// \brief Starts C24 transmission-sequence initialization (`1615`).
-  [[nodiscard]] Status async_initialize_c24_transmission_sequence(
+  /// \brief Starts C24 mode switching (`1612`).
+  [[nodiscard]] Status async_switch_serial_module_mode(
       std::uint32_t now_ms,
+      const SerialModuleModeSwitchRequest& request,
       CompletionHandler callback,
       void* user) noexcept;
 
-  /// \brief Starts programmable-controller CPU monitoring deregistration (`0631`).
-  [[nodiscard]] Status async_deregister_cpu_monitoring(
+  /// \brief Starts C24 transmission-sequence initialization (`1615`).
+  [[nodiscard]] Status async_initialize_c24_transmission_sequence(
       std::uint32_t now_ms,
       CompletionHandler callback,
       void* user) noexcept;
@@ -489,8 +490,8 @@ class MelsecSerialClient {
     WriteUserFrame,
     DeleteUserFrame,
     ControlGlobalSignal,
+    SwitchSerialModuleMode,
     InitializeTransmissionSequence,
-    DeregisterCpuMonitoring,
 #if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
     Loopback
 #endif

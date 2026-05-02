@@ -53,6 +53,7 @@ It wraps `PosixSerialPort` and `MelsecSerialClient` into a single helper for:
 - `lock_remote_password`
 - `clear_error_information`
 - `remote_reset`
+- `switch_serial_module_mode`
 - contiguous `read_words`
 - contiguous `read_bits`
 - contiguous `write_words`

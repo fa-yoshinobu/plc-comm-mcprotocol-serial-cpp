@@ -64,6 +64,10 @@ Before building against real hardware, confirm the exact serial settings for you
 The example projects keep intentionally simple defaults. Those defaults are example defaults, not
 the authority for the current validated settings.
 
+The host-side `mcprotocol_cli` is stricter: pass `--frame` and `--series`
+explicitly for live commands so the tool never infers a PLC family or frame
+format from omitted options.
+
 ## Documentation Map
 
 ### For Users
@@ -112,9 +116,9 @@ For the exact PASS / status matrix and the verified serial settings for each tar
 
 ## Current Limits
 
-- This repository does not implement the full MC protocol serial command list. Use
+- This repository intentionally implements the practical serial MC protocol subset needed here. Use
   [MANUAL_COMMAND_COVERAGE.md](docsrc/maintainer/MANUAL_COMMAND_COVERAGE.md) for the exact
-  implemented vs. missing command families.
+  implemented and intentionally omitted command families.
 - `1C` and `1E` remain subset implementations. They are useful, but they do not expose the full
   `3C` / `4C` surface.
 - Some command families are target-dependent and require the right `--series` selection.
@@ -126,8 +130,9 @@ For the exact PASS / status matrix and the verified serial settings for each tar
 - Large contiguous `write-words` and `write-bits` are still split automatically to fit fixed
   request buffers.
 - The current active follow-up is target-dependent validation for `1005` remote latch clear and
-  `1630` / `1631` remote password unlock/lock on `RJ71C24-R2 + R120PCPU`. Parked implementation
-  gaps such as `1612`, `0630`, and `2101` remain documented in [TODO.md](docsrc/maintainer/TODO.md).
+  `1630` / `1631` remote password unlock/lock on `RJ71C24-R2 + R120PCPU`.
+- Label access, file control, `0630` / `0631` CPU monitoring, `2101` on-demand receive, and
+  drive/file memory access are explicitly not needed for this library and are not TODOs.
 
 For target-specific limits and current follow-up items, use
 [HARDWARE_VALIDATION.md](docsrc/validation/reports/HARDWARE_VALIDATION.md) and

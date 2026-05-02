@@ -275,9 +275,11 @@ Status PosixSyncClient::control_global_signal(
   return run_until_complete();
 }
 
-Status PosixSyncClient::initialize_c24_transmission_sequence() noexcept {
-  const Status status = client_.async_initialize_c24_transmission_sequence(
+Status PosixSyncClient::switch_serial_module_mode(
+    const SerialModuleModeSwitchRequest& request) noexcept {
+  const Status status = client_.async_switch_serial_module_mode(
       now_ms(),
+      request,
       &PosixSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
@@ -286,8 +288,8 @@ Status PosixSyncClient::initialize_c24_transmission_sequence() noexcept {
   return run_until_complete();
 }
 
-Status PosixSyncClient::deregister_cpu_monitoring() noexcept {
-  const Status status = client_.async_deregister_cpu_monitoring(
+Status PosixSyncClient::initialize_c24_transmission_sequence() noexcept {
+  const Status status = client_.async_initialize_c24_transmission_sequence(
       now_ms(),
       &PosixSyncClient::on_request_complete,
       &completion_);

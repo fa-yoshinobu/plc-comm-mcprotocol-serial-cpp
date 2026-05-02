@@ -63,6 +63,10 @@ using mcprotocol::serial::RandomWriteBitItem;
 using mcprotocol::serial::RandomWriteWordItem;
 using mcprotocol::serial::RouteConfig;
 using mcprotocol::serial::RouteKind;
+using mcprotocol::serial::SerialModuleChannel;
+using mcprotocol::serial::SerialModuleCommunicationSpeed;
+using mcprotocol::serial::SerialModuleModeNo;
+using mcprotocol::serial::SerialModuleModeSwitchRequest;
 using mcprotocol::serial::sparse_native_mask_word;
 using mcprotocol::serial::sparse_native_requested_bit_value;
 using mcprotocol::serial::Status;
@@ -507,17 +511,83 @@ void test_encode_control_global_signal_binary_request() {
   assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
 }
 
-void test_encode_deregister_cpu_monitoring_binary_request() {
+void test_encode_switch_serial_module_mode_binary_request_matches_manual() {
   const auto config = make_binary_c4_config();
   std::array<std::uint8_t, 16> request_data {};
   std::size_t request_size = 0;
-  const Status status =
-      CommandCodec::encode_deregister_cpu_monitoring(config, request_data, request_size);
+  const Status status = CommandCodec::encode_switch_serial_module_mode(
+      config,
+      SerialModuleModeSwitchRequest {
+          .channel = SerialModuleChannel::Ch1,
+          .switch_mode_no = true,
+          .switch_transmission_setting = true,
+          .switch_communication_speed = true,
+          .mode_no = SerialModuleModeNo::McProtocolFormat1,
+          .transmission_setting = 0xB0U,
+          .communication_speed = SerialModuleCommunicationSpeed::Bps9600,
+      },
+      request_data,
+      request_size);
   assert(status.ok());
 
-  const std::array<std::uint8_t, 4> expected {0x31, 0x06, 0x00, 0x00};
+  const std::array<std::uint8_t, 9> expected {
+      0x12,
+      0x16,
+      0x00,
+      0x00,
+      0x01,
+      0x07,
+      0x01,
+      0xB0,
+      0x05,
+  };
   assert(request_size == expected.size());
   assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+}
+
+void test_encode_switch_serial_module_mode_ascii_request_matches_manual() {
+  const auto config = make_ascii_c3_format3_config();
+  std::array<std::uint8_t, 32> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_switch_serial_module_mode(
+      config,
+      SerialModuleModeSwitchRequest {
+          .channel = SerialModuleChannel::Ch1,
+          .switch_mode_no = true,
+          .switch_transmission_setting = true,
+          .switch_communication_speed = true,
+          .mode_no = SerialModuleModeNo::McProtocolFormat1,
+          .transmission_setting = 0xB0U,
+          .communication_speed = SerialModuleCommunicationSpeed::Bps9600,
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected = "1612000001070100B00005";
+  assert(request_size == expected.size());
+  assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+}
+
+void test_encode_switch_serial_module_mode_rejects_invalid_request() {
+  const auto config = make_binary_c4_config();
+  std::array<std::uint8_t, 16> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_switch_serial_module_mode(
+      config,
+      SerialModuleModeSwitchRequest {
+          .channel = SerialModuleChannel::Ch1,
+          .switch_mode_no = false,
+          .switch_transmission_setting = false,
+          .switch_communication_speed = false,
+          .mode_no = SerialModuleModeNo::McProtocolFormat1,
+          .transmission_setting = 0xB0U,
+          .communication_speed = SerialModuleCommunicationSpeed::Bps300,
+      },
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
 }
 
 void test_decode_ascii_loopback_response() {
@@ -4084,6 +4154,35 @@ void test_client_remote_control_and_password_roundtrips() {
     status = client.configure(config);
     assert(status.ok());
     CallbackCapture capture;
+    status = client.async_switch_serial_module_mode(
+        0,
+        SerialModuleModeSwitchRequest {
+            .channel = SerialModuleChannel::Ch1,
+            .switch_mode_no = false,
+            .switch_transmission_setting = false,
+            .switch_communication_speed = false,
+            .mode_no = SerialModuleModeNo::McProtocolFormat1,
+            .transmission_setting = 0,
+            .communication_speed = SerialModuleCommunicationSpeed::Bps300,
+        },
+        completion_callback,
+        &capture);
+    assert(status.ok());
+    status = client.notify_tx_complete(1);
+    assert(status.ok());
+    client.on_rx_bytes(
+        2,
+        std::span<const std::byte>(
+            reinterpret_cast<const std::byte*>(response_frame.data()),
+            response_frame_size));
+    assert(capture.called);
+    assert(capture.status.ok());
+  }
+  {
+    MelsecSerialClient client;
+    status = client.configure(config);
+    assert(status.ok());
+    CallbackCapture capture;
     status = client.async_remote_stop(0, completion_callback, &capture);
     assert(status.ok());
     status = client.notify_tx_complete(1);
@@ -4238,23 +4337,6 @@ void test_client_c24_small_command_roundtrips() {
     assert(status.ok());
     CallbackCapture capture;
     status = client.async_initialize_c24_transmission_sequence(0, completion_callback, &capture);
-    assert(status.ok());
-    status = client.notify_tx_complete(1);
-    assert(status.ok());
-    client.on_rx_bytes(
-        2,
-        std::span<const std::byte>(
-            reinterpret_cast<const std::byte*>(response_frame.data()),
-            response_frame_size));
-    assert(capture.called);
-    assert(capture.status.ok());
-  }
-  {
-    MelsecSerialClient client;
-    status = client.configure(config);
-    assert(status.ok());
-    CallbackCapture capture;
-    status = client.async_deregister_cpu_monitoring(0, completion_callback, &capture);
     assert(status.ok());
     status = client.notify_tx_complete(1);
     assert(status.ok());
@@ -4780,7 +4862,9 @@ int main() {
   test_encode_initialize_transmission_sequence_binary_request();
   test_encode_initialize_transmission_sequence_rejects_ascii();
   test_encode_control_global_signal_binary_request();
-  test_encode_deregister_cpu_monitoring_binary_request();
+  test_encode_switch_serial_module_mode_binary_request_matches_manual();
+  test_encode_switch_serial_module_mode_ascii_request_matches_manual();
+  test_encode_switch_serial_module_mode_rejects_invalid_request();
   test_decode_ascii_loopback_response();
   test_encode_ascii_read_user_frame_request_shape();
   test_parse_ascii_read_user_frame_response();

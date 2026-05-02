@@ -412,15 +412,17 @@ namespace CommandCodec {
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
+[[nodiscard]] Status encode_switch_serial_module_mode(
+    const ProtocolConfig& config,
+    const SerialModuleModeSwitchRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept;
+
 [[nodiscard]] Status encode_initialize_transmission_sequence(
     const ProtocolConfig& config,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
-[[nodiscard]] Status encode_deregister_cpu_monitoring(
-    const ProtocolConfig& config,
-    std::span<std::uint8_t> out_request_data,
-    std::size_t& out_size) noexcept;
 /// @}
 
 /// \name Buffer-Memory Helpers

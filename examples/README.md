@@ -20,6 +20,11 @@ For exact target settings, do not rely on the sample defaults alone. Use
 [../docsrc/validation/reports/HARDWARE_VALIDATION.md](../docsrc/validation/reports/HARDWARE_VALIDATION.md)
 as the authority.
 
+Host CLI examples require explicit frame and PLC-family selection. Set
+`MCPROTOCOL_FRAME` and `MCPROTOCOL_SERIES`, or pass `--frame` and `--series`
+directly when using `mcprotocol_cli`. The shell wrappers also require those
+environment variables before they touch a PLC.
+
 ## 1. Simple Host Example
 
 - `host_sync_quickstart.cpp`

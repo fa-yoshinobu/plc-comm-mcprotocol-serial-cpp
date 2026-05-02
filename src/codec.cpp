@@ -822,6 +822,71 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
+[[nodiscard]] Status validate_serial_module_mode_switch_request(
+    const SerialModuleModeSwitchRequest& request) noexcept {
+  switch (request.channel) {
+    case SerialModuleChannel::Ch1:
+    case SerialModuleChannel::Ch2:
+      break;
+    default:
+      return invalid_argument("Serial-module mode switch channel must be ch1 or ch2");
+  }
+
+  switch (request.mode_no) {
+    case SerialModuleModeNo::McProtocolFormat1:
+    case SerialModuleModeNo::McProtocolFormat2:
+    case SerialModuleModeNo::McProtocolFormat3:
+    case SerialModuleModeNo::McProtocolFormat4:
+    case SerialModuleModeNo::McProtocolFormat5:
+    case SerialModuleModeNo::Nonprocedural:
+    case SerialModuleModeNo::Bidirectional:
+    case SerialModuleModeNo::Predefined:
+    case SerialModuleModeNo::ModbusRtu:
+    case SerialModuleModeNo::ModbusAscii:
+    case SerialModuleModeNo::MelsoftConnection:
+      break;
+    default:
+      return invalid_argument("Serial-module mode number must be 0x01..0x0B or 0xFF");
+  }
+
+  switch (request.communication_speed) {
+    case SerialModuleCommunicationSpeed::Bps50:
+    case SerialModuleCommunicationSpeed::Bps300:
+    case SerialModuleCommunicationSpeed::Bps600:
+    case SerialModuleCommunicationSpeed::Bps1200:
+    case SerialModuleCommunicationSpeed::Bps2400:
+    case SerialModuleCommunicationSpeed::Bps4800:
+    case SerialModuleCommunicationSpeed::Bps9600:
+    case SerialModuleCommunicationSpeed::Bps14400:
+    case SerialModuleCommunicationSpeed::Bps19200:
+    case SerialModuleCommunicationSpeed::Bps28800:
+    case SerialModuleCommunicationSpeed::Bps38400:
+    case SerialModuleCommunicationSpeed::Bps57600:
+    case SerialModuleCommunicationSpeed::Bps115200:
+    case SerialModuleCommunicationSpeed::Bps230400:
+      break;
+    default:
+      return invalid_argument("Serial-module communication speed selector is invalid");
+  }
+
+  if (!request.switch_transmission_setting && request.transmission_setting != 0U) {
+    return invalid_argument("Serial-module transmission setting must be 0 when it is not switched by command");
+  }
+  if (!request.switch_communication_speed &&
+      request.communication_speed != SerialModuleCommunicationSpeed::Bps300) {
+    return invalid_argument("Serial-module communication speed must be 0 when it is not switched by command");
+  }
+  return ok_status();
+}
+
+[[nodiscard]] constexpr std::uint8_t mode_switch_instruction(
+    const SerialModuleModeSwitchRequest& request) noexcept {
+  return static_cast<std::uint8_t>(
+      (request.switch_mode_no ? 0x01U : 0x00U) |
+      (request.switch_transmission_setting ? 0x02U : 0x00U) |
+      (request.switch_communication_speed ? 0x04U : 0x00U));
+}
+
 [[nodiscard]] bool append_e1_subheader(
     ByteWriter& writer,
     const ProtocolConfig& config,
@@ -5358,6 +5423,44 @@ Status encode_control_global_signal(
   return ok_status();
 }
 
+Status encode_switch_serial_module_mode(
+    const ProtocolConfig& config,
+    const SerialModuleModeSwitchRequest& request,
+    std::span<std::uint8_t> out_request_data,
+    std::size_t& out_size) noexcept {
+  const Status config_status = validate_serial_module_dedicated_command_config(
+      config,
+      "C24 mode switching is implemented only for 2C/3C/4C serial frames");
+  if (!config_status.ok()) {
+    return config_status;
+  }
+  const Status request_status = validate_serial_module_mode_switch_request(request);
+  if (!request_status.ok()) {
+    return request_status;
+  }
+
+  const auto channel = static_cast<std::uint8_t>(request.channel);
+  const auto mode_no = static_cast<std::uint8_t>(request.mode_no);
+  const auto communication_speed = static_cast<std::uint8_t>(request.communication_speed);
+
+  ByteWriter writer(out_request_data);
+  const bool fixed_part_ok =
+      append_command_header(writer, config, 0x1612U, 0x0000U) &&
+      append_byte_or_ascii_hex(writer, config, channel) &&
+      append_byte_or_ascii_hex(writer, config, mode_switch_instruction(request)) &&
+      append_byte_or_ascii_hex(writer, config, mode_no);
+  const bool variable_part_ok = is_ascii_mode(config)
+                                    ? append_ascii_hex(writer, request.transmission_setting, 4U) &&
+                                          append_ascii_hex(writer, communication_speed, 4U)
+                                    : writer.push(request.transmission_setting) &&
+                                          writer.push(communication_speed);
+  if (!fixed_part_ok || !variable_part_ok) {
+    return buffer_too_small("C24 mode-switch request buffer is too small");
+  }
+  out_size = writer.size();
+  return ok_status();
+}
+
 Status encode_initialize_transmission_sequence(
     const ProtocolConfig& config,
     std::span<std::uint8_t> out_request_data,
@@ -5372,25 +5475,6 @@ Status encode_initialize_transmission_sequence(
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x1615U, 0x0000U)) {
     return buffer_too_small("Transmission-sequence initialization request buffer is too small");
-  }
-  out_size = writer.size();
-  return ok_status();
-}
-
-Status encode_deregister_cpu_monitoring(
-    const ProtocolConfig& config,
-    std::span<std::uint8_t> out_request_data,
-    std::size_t& out_size) noexcept {
-  const Status config_status = validate_serial_module_dedicated_command_config(
-      config,
-      "CPU-monitoring deregistration is implemented only for 2C/3C/4C serial frames");
-  if (!config_status.ok()) {
-    return config_status;
-  }
-
-  ByteWriter writer(out_request_data);
-  if (!append_command_header(writer, config, 0x0631U, 0x0000U)) {
-    return buffer_too_small("CPU-monitoring deregistration request buffer is too small");
   }
   out_size = writer.size();
   return ok_status();

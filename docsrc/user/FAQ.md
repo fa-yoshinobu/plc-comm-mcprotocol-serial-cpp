@@ -21,6 +21,9 @@ The example projects keep simple starting values so the code stays easy to read.
 [../validation/reports/HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md) as
 the authority for the current validated settings of your actual target.
 
+The host CLI does not use those sample defaults for protocol selection. Live CLI commands require
+explicit `--frame` and `--series` values.
+
 ## Which MCU targets are prepared today?
 
 The repository includes PlatformIO examples for:

@@ -265,6 +265,45 @@ enum class GlobalSignalTarget : std::uint8_t {
   X1B = 0x02
 };
 
+/// \brief Target interface selector used by C24 mode switching (`1612`).
+enum class SerialModuleChannel : std::uint8_t {
+  Ch1 = 0x01,
+  Ch2 = 0x02
+};
+
+/// \brief Operation mode number used by C24 mode switching (`1612`).
+enum class SerialModuleModeNo : std::uint8_t {
+  McProtocolFormat1 = 0x01,
+  McProtocolFormat2 = 0x02,
+  McProtocolFormat3 = 0x03,
+  McProtocolFormat4 = 0x04,
+  McProtocolFormat5 = 0x05,
+  Nonprocedural = 0x06,
+  Bidirectional = 0x07,
+  Predefined = 0x09,
+  ModbusRtu = 0x0A,
+  ModbusAscii = 0x0B,
+  MelsoftConnection = 0xFF
+};
+
+/// \brief Communication speed selector used by C24 mode switching (`1612`).
+enum class SerialModuleCommunicationSpeed : std::uint8_t {
+  Bps300 = 0x00,
+  Bps600 = 0x01,
+  Bps1200 = 0x02,
+  Bps2400 = 0x03,
+  Bps4800 = 0x04,
+  Bps9600 = 0x05,
+  Bps14400 = 0x06,
+  Bps19200 = 0x07,
+  Bps28800 = 0x08,
+  Bps38400 = 0x09,
+  Bps57600 = 0x0A,
+  Bps115200 = 0x0B,
+  Bps230400 = 0x0C,
+  Bps50 = 0x0F
+};
+
 /// \brief Decoded PLC response class before command-specific parsing.
 enum class ResponseType : std::uint8_t {
   /// Successful response carrying payload bytes.
@@ -583,6 +622,28 @@ struct GlobalSignalControlRequest {
   bool turn_on = false;
   /// Station number encoded in the `1618` specification word.
   std::uint8_t station_no = 0;
+};
+
+/// \brief C24 mode switching request (`1612`).
+///
+/// The three `switch_*` flags form the documented switching instruction byte:
+/// bit0 = mode number, bit1 = transmission setting, bit2 = communication speed.
+/// When a flag is false, the C24 uses the Engineering tool setting for that field.
+struct SerialModuleModeSwitchRequest {
+  /// Target interface.
+  SerialModuleChannel channel = SerialModuleChannel::Ch1;
+  /// `true` to use `mode_no` from this command.
+  bool switch_mode_no = false;
+  /// `true` to use `transmission_setting` from this command.
+  bool switch_transmission_setting = false;
+  /// `true` to use `communication_speed` from this command.
+  bool switch_communication_speed = false;
+  /// Operation mode number. The manual requires a valid non-zero value even when `switch_mode_no` is false.
+  SerialModuleModeNo mode_no = SerialModuleModeNo::McProtocolFormat1;
+  /// Raw transmission-setting bit field used when `switch_transmission_setting` is true.
+  std::uint8_t transmission_setting = 0;
+  /// Communication speed used when `switch_communication_speed` is true.
+  SerialModuleCommunicationSpeed communication_speed = SerialModuleCommunicationSpeed::Bps300;
 };
 /// @}
 
