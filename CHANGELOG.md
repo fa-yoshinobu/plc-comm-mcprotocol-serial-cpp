@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.7 - 2026-05-03
+
+- Tightened string-device parsers so oversized decimal or hexadecimal values fail instead of
+  overflowing in plain, link-direct, and qualified-buffer address helpers.
+- Added regression coverage for all-letter hexadecimal device numbers and invalid known-code
+  number fallbacks.
+
 ## 0.2.6 - 2026-05-02
 
 - Made host `mcprotocol_cli` protocol selection explicit: live commands now
