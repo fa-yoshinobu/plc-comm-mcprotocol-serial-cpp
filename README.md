@@ -7,6 +7,14 @@
 
 # MC Protocol Serial C++ Library
 
+[![ci](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/ci.yml)
+[![pages](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/pages.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/pages.yml)
+[![release](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/release.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/release.yml)
+
+[![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![C++](https://img.shields.io/badge/C%2B%2B-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/)
+[![CMake](https://img.shields.io/badge/CMake-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
+
 MC protocol serial library for MCU-oriented environments.
 
 This repository is for cases like these:
