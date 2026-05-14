@@ -7,7 +7,6 @@
 
 # MC Protocol Serial C++ Library
 
-[![ci](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/ci.yml)
 [![pages](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/pages.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/pages.yml)
 [![release](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/release.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/release.yml)
 
