@@ -10,6 +10,8 @@
 namespace mcprotocol::serial {
 namespace {
 
+// Constants, lookup tables, and byte-writing primitives.
+
 constexpr std::uint8_t kAsciiEnq = 0x05;
 constexpr std::uint8_t kAsciiAck = 0x06;
 constexpr std::uint8_t kAsciiNak = 0x15;
@@ -124,6 +126,8 @@ class ByteWriter {
   std::span<std::uint8_t> buffer_;
   std::size_t size_ = 0;
 };
+
+// Protocol feature predicates and frame/device sizing helpers.
 
 [[nodiscard]] constexpr bool is_iq_r_series(const ProtocolConfig& config) noexcept {
   return config.target_series == PlcSeries::IQ_R;
@@ -460,6 +464,8 @@ class ByteWriter {
   return wire_config;
 }
 
+// Device lookup and primitive ASCII/binary field encoders.
+
 [[nodiscard]] constexpr std::size_t ascii_device_modification_width(
     const ProtocolConfig& config) noexcept {
   return is_iq_r_series(config) ? 4U : 3U;
@@ -607,6 +613,8 @@ class ByteWriter {
     std::size_t offset,
     std::uint16_t& value) noexcept;
 
+// 1C command-family helpers.
+
 enum class C1CommandFamily : std::uint8_t {
   AcpuCommon,
   QnaCommon,
@@ -750,6 +758,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
+// User-frame and serial-module dedicated command validators.
+
 [[nodiscard]] constexpr bool is_user_frame_readable_frame_no(std::uint16_t frame_no) noexcept {
   return (frame_no >= 0x0001U && frame_no <= 0x04AFU) || (frame_no >= 0x8001U && frame_no <= 0x801FU);
 }
@@ -886,6 +896,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
       (request.switch_transmission_setting ? 0x02U : 0x00U) |
       (request.switch_communication_speed ? 0x04U : 0x00U));
 }
+
+// 1E and extended file-register address encoders.
 
 [[nodiscard]] bool append_e1_subheader(
     ByteWriter& writer,
@@ -1026,6 +1038,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_bit_device(const DeviceAddress& device, const char* message) noexcept;
 [[nodiscard]] bool is_bit_device_code(DeviceCode code) noexcept;
 [[nodiscard]] bool is_c1_word_unit_bit_head(const DeviceAddress& device) noexcept;
+
+// C1 random/monitor item helpers and link-direct device extensions.
 
 [[nodiscard]] Status validate_c1_random_write_word_item(
     const ProtocolConfig& config,
@@ -1339,6 +1353,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return append_extended_device_reference_binary(writer, config, device);
 }
 
+// Shared response parsing, checksums, and route encoders.
+
 [[nodiscard]] Status parse_word_values_response(
     const ProtocolConfig& config,
     std::uint16_t points,
@@ -1515,6 +1531,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
           (static_cast<std::uint32_t>(bytes[offset + 3U]) << 24U);
   return true;
 }
+
+// Command payload field encoders.
 
 [[nodiscard]] bool append_command_header(
     ByteWriter& writer,
@@ -1776,6 +1794,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
+// Command request validators and trailing frame helpers.
+
 [[nodiscard]] bool append_ascii_response_data(
     RawResponseFrame& frame,
     std::span<const std::uint8_t> bytes) noexcept {
@@ -2013,6 +2033,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 }  // namespace
+
+// FrameCodec public implementation.
 
 Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
   if (!is_frame_kind_enabled(config.frame_kind)) {
@@ -2916,6 +2938,8 @@ DecodeResult FrameCodec::decode_response(
 
 namespace CommandCodec {
 
+// Batch device and extended file-register access commands.
+
 Status encode_batch_read_words(
     const ProtocolConfig& config,
     const BatchReadWordsRequest& request,
@@ -3706,6 +3730,8 @@ Status encode_link_direct_batch_write_bits(
   return ok_status();
 }
 
+// Random access commands.
+
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
 Status encode_link_direct_random_read(
     const ProtocolConfig& config,
@@ -4359,6 +4385,8 @@ Status encode_link_direct_random_write_bits(
 }
 #endif
 
+// Multi-block commands.
+
 #if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
 Status encode_link_direct_multi_block_read(
     const ProtocolConfig& config,
@@ -4800,6 +4828,8 @@ Status encode_link_direct_multi_block_write(
   return unsupported("Multi-block commands are disabled at build time");
 }
 #endif
+
+// Monitor commands.
 
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
 Status encode_link_direct_register_monitor(
@@ -5254,6 +5284,8 @@ Status parse_read_extended_file_register_monitor_response(
 }
 #endif
 
+// User-frame and serial-module dedicated commands.
+
 Status encode_read_user_frame(
     const ProtocolConfig& config,
     const UserFrameReadRequest& request,
@@ -5479,6 +5511,8 @@ Status encode_initialize_transmission_sequence(
   out_size = writer.size();
   return ok_status();
 }
+
+// Host and module buffer commands.
 
 #if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
 Status encode_read_host_buffer(
@@ -5783,6 +5817,8 @@ Status encode_write_module_buffer(
 }
 #endif
 
+// CPU model and remote operation commands.
+
 #if MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS
 Status encode_read_cpu_model(
     const ProtocolConfig& config,
@@ -6037,6 +6073,8 @@ Status encode_clear_error_information(
   out_size = writer.size();
   return ok_status();
 }
+
+// Loopback command.
 
 #if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
 Status encode_loopback(
