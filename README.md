@@ -154,6 +154,18 @@ The library exposes three practical entry paths:
 - synchronous host-side bring-up in [`mcprotocol/serial/host_sync.hpp`](include/mcprotocol/serial/host_sync.hpp)
 - low-level async integration through `MelsecSerialClient`
 
+This library currently uses typed C++ request structures and plain device
+strings such as `D100`, `M100`, and `X10`, but any future named-address helper
+syntax in this repo must follow the same convention as the other PLC helper
+libraries:
+
+- `:` is for data types and special views, for example `D100:D` or `D100:F`
+  if typed named views are added here later
+- `.` is only for bit-in-word access, for example `D100.0` through `D100.F`
+- `D100.D` means bit `0xD` / bit 13, not a 32-bit data type request
+- current APIs express 32-bit intent through typed C++ fields such as
+  `double_word`, not by using `.D` in a string address
+
 Use these docs for the details:
 
 - [Library Entrypoints](docsrc/user/LIBRARY_ENTRYPOINTS.md)
