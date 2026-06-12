@@ -35,6 +35,7 @@ using mcprotocol::serial::FrameCodec;
 using mcprotocol::serial::FrameKind;
 using mcprotocol::serial::GlobalSignalControlRequest;
 using mcprotocol::serial::GlobalSignalTarget;
+using mcprotocol::serial::HostBufferReadRequest;
 using mcprotocol::serial::LinkDirectDevice;
 using mcprotocol::serial::LinkDirectMonitorRegistration;
 using mcprotocol::serial::LinkDirectMultiBlockReadBlock;
@@ -511,6 +512,40 @@ void test_encode_control_global_signal_binary_request() {
   assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
 }
 
+void test_encode_control_global_signal_uses_route_station_not_specification_word() {
+  auto config = make_binary_c4_config();
+  config.route.kind = RouteKind::MultidropStation;
+  config.route.station_no = 0xFFU;
+
+  std::array<std::uint8_t, 16> request_data {};
+  std::size_t request_size = 0;
+  Status status = CommandCodec::encode_control_global_signal(
+      config,
+      GlobalSignalControlRequest {
+          .target = GlobalSignalTarget::X1B,
+          .turn_on = false,
+          .station_no = 3,
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 6> expected_request {0x18, 0x16, 0x00, 0x00, 0x02, 0x00};
+  assert(request_size == expected_request.size());
+  assert(std::equal(expected_request.begin(), expected_request.end(), request_data.begin()));
+
+  std::array<std::uint8_t, 32> frame {};
+  std::size_t frame_size = 0;
+  status = FrameCodec::encode_request(
+      config,
+      std::span<const std::uint8_t>(request_data.data(), request_size),
+      frame,
+      frame_size);
+  assert(status.ok());
+  assert(frame_size >= 5U);
+  assert(frame[3] == 0xFFU);
+}
+
 void test_encode_switch_serial_module_mode_binary_request_matches_manual() {
   const auto config = make_binary_c4_config();
   std::array<std::uint8_t, 16> request_data {};
@@ -754,7 +789,40 @@ void test_validate_ascii_c1_config_and_reject_binary() {
   assert(status.code == StatusCode::UnsupportedConfiguration);
 }
 
-void test_encode_ascii_c2_format3_request_uses_short_route_without_frame_id() {
+void test_validate_c4_routed_access_and_connected_station_only_commands() {
+  auto config = make_binary_c4_config();
+  config.route.kind = RouteKind::MultidropStation;
+  config.route.station_no = 0x02U;
+  config.route.network_no = 0x01U;
+  config.route.pc_no = 0x7DU;
+  config.route.request_destination_module_io_no = 0x0100U;
+  config.route.request_destination_module_station_no = 0x03U;
+
+  Status status = FrameCodec::validate_config(config);
+  assert(status.ok());
+
+  std::array<std::uint8_t, 16> request_data {};
+  std::size_t request_size = 0;
+  status = CommandCodec::encode_batch_read_words(
+      config,
+      BatchReadWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100},
+          .points = 1,
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  status = CommandCodec::encode_read_host_buffer(
+      config,
+      HostBufferReadRequest {.start_address = 0, .word_length = 1},
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+}
+
+void test_encode_ascii_c2_format3_request_uses_fb_frame_id_and_short_command() {
   auto config = make_ascii_c2_format3_config();
   config.route.kind = RouteKind::MultidropStation;
   config.route.station_no = 0x11;
@@ -780,7 +848,7 @@ void test_encode_ascii_c2_format3_request_uses_short_route_without_frame_id() {
       frame_size);
   assert(status.ok());
 
-  constexpr std::string_view expected_body = "110504010000D*0001000001";
+  constexpr std::string_view expected_body = "FB11052D*0001000001";
   assert(frame_size == (1U + expected_body.size() + 1U + 2U));
   assert(frame[0] == 0x02);
   assert(std::memcmp(frame.data() + 1, expected_body.data(), expected_body.size()) == 0);
@@ -800,7 +868,7 @@ void test_decode_ascii_c2_format3_data_response() {
   Status status = FrameCodec::encode_success_response(config, response_data, frame, frame_size);
   assert(status.ok());
 
-  constexpr std::string_view expected_prefix = "1105QACK";
+  constexpr std::string_view expected_prefix = "FB1105QACK";
   assert(frame[0] == 0x02);
   assert(std::memcmp(frame.data() + 1, expected_prefix.data(), expected_prefix.size()) == 0);
 
@@ -813,7 +881,7 @@ void test_decode_ascii_c2_format3_data_response() {
   assert(std::memcmp(decode.frame.response_data.data(), response_data.data(), response_data.size()) == 0);
 }
 
-void test_decode_ascii_c2_format3_two_digit_error_response() {
+void test_decode_ascii_c2_format3_four_digit_error_response() {
   auto config = make_ascii_c2_format3_config();
   config.route.kind = RouteKind::MultidropStation;
   config.route.station_no = 0x11;
@@ -821,7 +889,7 @@ void test_decode_ascii_c2_format3_two_digit_error_response() {
   config.route.self_station_no = 0x05;
   config.sum_check_enabled = false;
 
-  constexpr std::string_view frame = "\x02""1105NN06\x03";
+  constexpr std::string_view frame = "\x02""FB1105QNAK0006\x03";
   const auto decode = FrameCodec::decode_response(
       config,
       std::span<const std::uint8_t>(
@@ -862,7 +930,7 @@ void test_encode_ascii_format2_request_inserts_block_number() {
   assert(std::memcmp(frame.data(), expected.data(), expected.size()) == 0);
 }
 
-void test_encode_ascii_c2_format2_request_uses_short_route_without_frame_id() {
+void test_encode_ascii_c2_format2_request_uses_fb_frame_id_and_short_command() {
   auto config = make_ascii_c2_format2_config();
   config.sum_check_enabled = false;
   config.ascii_block_number = 0x7AU;
@@ -890,7 +958,7 @@ void test_encode_ascii_c2_format2_request_uses_short_route_without_frame_id() {
       frame_size);
   assert(status.ok());
 
-  constexpr std::string_view expected = "\x05""7A110504010000D*0001000001";
+  constexpr std::string_view expected = "\x05""7AFB11052D*0001000001";
   assert(frame_size == expected.size());
   assert(std::memcmp(frame.data(), expected.data(), expected.size()) == 0);
 }
@@ -916,12 +984,12 @@ void test_decode_ascii_format2_ack_response() {
   assert(decode.bytes_consumed == frame_size);
 }
 
-void test_decode_ascii_c2_format2_two_digit_error_response() {
+void test_decode_ascii_c2_format2_four_digit_error_response() {
   auto config = make_ascii_c2_format2_config();
   config.sum_check_enabled = false;
   config.ascii_block_number = 0x7AU;
 
-  constexpr std::string_view frame = "\x15""7A000006";
+  constexpr std::string_view frame = "\x15""7AFB0000QNAK0006";
   const auto decode = FrameCodec::decode_response(
       config,
       std::span<const std::uint8_t>(
@@ -956,7 +1024,7 @@ void test_encode_ascii_c1_batch_read_words_qna_request_shape() {
       frame,
       frame_size);
   assert(status.ok());
-  constexpr std::string_view expected_frame = "\x05""00QR0D00010001FF\r\n";
+  constexpr std::string_view expected_frame = "\x05""00FFQR0D00010001\r\n";
   assert(frame_size == expected_frame.size());
   assert(std::memcmp(frame.data(), expected_frame.data(), frame_size) == 0);
 }
@@ -1324,7 +1392,7 @@ void test_encode_ascii_c1_loopback_request_shape() {
       frame_size);
   assert(status.ok());
 
-  constexpr std::string_view expected_frame = "\x05""00TT005ABCDEFF\r\n";
+  constexpr std::string_view expected_frame = "\x05""00FFTT005ABCDE\r\n";
   assert(frame_size == expected_frame.size());
   assert(std::memcmp(frame.data(), expected_frame.data(), frame_size) == 0);
 }
@@ -1907,11 +1975,11 @@ void test_decode_ascii_c2_format4_ack_response() {
   Status status = FrameCodec::encode_success_response(config, {}, frame, frame_size);
   assert(status.ok());
 
-  assert(frame_size == 7U);
+  assert(frame_size == 9U);
   assert(frame[0] == 0x06);
-  assert(std::memcmp(frame.data() + 1, "0102", 4U) == 0);
-  assert(frame[5] == 0x0D);
-  assert(frame[6] == 0x0A);
+  assert(std::memcmp(frame.data() + 1, "FB0102", 6U) == 0);
+  assert(frame[7] == 0x0D);
+  assert(frame[8] == 0x0A);
 
   const auto decode = FrameCodec::decode_response(
       config,
@@ -1921,12 +1989,12 @@ void test_decode_ascii_c2_format4_ack_response() {
   assert(decode.bytes_consumed == frame_size);
 }
 
-void test_decode_ascii_c2_format4_two_digit_error_response() {
+void test_decode_ascii_c2_format4_four_digit_error_response() {
   auto config = make_ascii_c2_format4_config();
   config.route.self_station_enabled = false;
   config.sum_check_enabled = true;
 
-  constexpr std::string_view frame = "\x15""000006\r\n";
+  constexpr std::string_view frame = "\x15""FB0100QNAK0006\r\n";
   const auto decode = FrameCodec::decode_response(
       config,
       std::span<const std::uint8_t>(
@@ -3097,6 +3165,165 @@ void test_encode_batch_write_bits_ascii_limit_matches_buffer() {
   assert(status.code == StatusCode::InvalidArgument);
 }
 
+void test_encode_batch_read_bits_binary_c24_limit_is_7904_points() {
+  const auto config = make_binary_c4_config();
+  std::array<std::uint8_t, 32> request_data {};
+  std::size_t request_size = 0;
+
+  Status status = CommandCodec::encode_batch_read_bits(
+      config,
+      BatchReadBitsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::M, .number = 0},
+          .points = 7904,
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  status = CommandCodec::encode_batch_read_bits(
+      config,
+      BatchReadBitsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::M, .number = 0},
+          .points = 7905,
+      },
+      request_data,
+      request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+}
+
+void test_c1_e1_word_unit_bit_device_limits_and_alignment() {
+  std::array<std::uint8_t, 256> request_data {};
+  std::size_t request_size = 0;
+
+  const auto c1_config = make_ascii_c1_format4_qna_config();
+  Status status = CommandCodec::encode_batch_read_words(
+      c1_config,
+      BatchReadWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::M, .number = 0},
+          .points = 32,
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  status = CommandCodec::encode_batch_read_words(
+      c1_config,
+      BatchReadWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::M, .number = 0},
+          .points = 33,
+      },
+      request_data,
+      request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+
+  status = CommandCodec::encode_batch_read_words(
+      c1_config,
+      BatchReadWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::M, .number = 1},
+          .points = 1,
+      },
+      request_data,
+      request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+
+  std::array<std::uint16_t, 10> ten_words {};
+  std::array<std::uint16_t, 11> eleven_words {};
+  status = CommandCodec::encode_batch_write_words(
+      c1_config,
+      BatchWriteWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::M, .number = 0},
+          .words = ten_words,
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  status = CommandCodec::encode_batch_write_words(
+      c1_config,
+      BatchWriteWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::M, .number = 0},
+          .words = eleven_words,
+      },
+      request_data,
+      request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+
+  const auto e1_config = make_binary_e1_a_config();
+  status = CommandCodec::encode_batch_read_words(
+      e1_config,
+      BatchReadWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::M, .number = 0},
+          .points = 128,
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  status = CommandCodec::encode_batch_read_words(
+      e1_config,
+      BatchReadWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::M, .number = 0},
+          .points = 129,
+      },
+      request_data,
+      request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+
+  std::array<std::uint16_t, 40> forty_words {};
+  std::array<std::uint16_t, 41> forty_one_words {};
+  status = CommandCodec::encode_batch_write_words(
+      e1_config,
+      BatchWriteWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::M, .number = 0},
+          .words = forty_words,
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  status = CommandCodec::encode_batch_write_words(
+      e1_config,
+      BatchWriteWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::M, .number = 0},
+          .words = forty_one_words,
+      },
+      request_data,
+      request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+}
+
+void test_encode_ascii_e1_l_and_s_devices_use_internal_relay_code() {
+  const auto config = make_ascii_e1_a_config();
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  Status status = CommandCodec::encode_batch_read_words(
+      config,
+      BatchReadWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::L, .number = 0x10U},
+          .points = 1,
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+  constexpr std::string_view expected_l = "014D20000000100100";
+  assert(request_size == expected_l.size());
+  assert(std::memcmp(request_data.data(), expected_l.data(), expected_l.size()) == 0);
+
+  status = CommandCodec::encode_batch_read_words(
+      config,
+      BatchReadWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::S, .number = 0x20U},
+          .points = 1,
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+  constexpr std::string_view expected_s = "014D20000000200100";
+  assert(request_size == expected_s.size());
+  assert(std::memcmp(request_data.data(), expected_s.data(), expected_s.size()) == 0);
+}
+
 void test_encode_random_write_words_ascii_matches_manual() {
   const auto config = make_ascii_c4_format4_config();
   const std::array<RandomWriteWordItem, 7> items {{
@@ -3119,7 +3346,7 @@ void test_encode_random_write_words_ascii_matches_manual() {
   assert(status.ok());
 
   constexpr std::string_view expected =
-      "1402000000040003"
+      "140200000403"
       "D*0000000550"
       "D*0000010575"
       "M*0001000540"
@@ -3255,7 +3482,7 @@ void test_encode_random_write_bits_ascii_matches_manual() {
       request_size);
   assert(status.ok());
 
-  constexpr std::string_view expected = "140200010002M*00005000Y*00002F01";
+  constexpr std::string_view expected = "1402000102M*00005000Y*00002F01";
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
@@ -3276,7 +3503,7 @@ void test_encode_random_write_bits_ascii_iqr_shape() {
       request_size);
   assert(status.ok());
 
-  constexpr std::string_view expected = "140200030002M***000000500000Y***0000002F0001";
+  constexpr std::string_view expected = "1402000302M***000000500000Y***0000002F0001";
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
@@ -3330,6 +3557,83 @@ void test_encode_random_write_bits_binary_ql_keeps_device_numbers() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
+void test_qna_family_random_access_uses_smaller_limits() {
+  auto config = make_binary_c4_config();
+  config.target_series = PlcSeries::AnA_AnU;
+  static_assert(static_cast<std::uint8_t>(PlcSeries::AnA_AnU) == static_cast<std::uint8_t>(PlcSeries::QnA));
+
+  std::array<std::uint8_t, 2048> request_data {};
+  std::size_t request_size = 0;
+
+  std::array<RandomReadItem, 97> read_items {};
+  for (std::size_t index = 0; index < read_items.size(); ++index) {
+    read_items[index] = RandomReadItem {
+        .device = {.code = mcprotocol::serial::DeviceCode::D, .number = static_cast<std::uint32_t>(index)},
+        .double_word = false,
+    };
+  }
+  Status status = CommandCodec::encode_random_read(
+      config,
+      RandomReadRequest {
+          .items = std::span<const RandomReadItem>(read_items.data(), 96U),
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  status = CommandCodec::encode_random_read(
+      config,
+      RandomReadRequest {
+          .items = std::span<const RandomReadItem>(read_items.data(), read_items.size()),
+      },
+      request_data,
+      request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+
+  std::array<RandomWriteBitItem, 95> bit_items {};
+  for (std::size_t index = 0; index < bit_items.size(); ++index) {
+    bit_items[index] = RandomWriteBitItem {
+        .device = {.code = mcprotocol::serial::DeviceCode::M, .number = static_cast<std::uint32_t>(index)},
+        .value = BitValue::On,
+    };
+  }
+  status = CommandCodec::encode_random_write_bits(
+      config,
+      std::span<const RandomWriteBitItem>(bit_items.data(), 94U),
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  status = CommandCodec::encode_random_write_bits(
+      config,
+      std::span<const RandomWriteBitItem>(bit_items.data(), bit_items.size()),
+      request_data,
+      request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+
+  std::array<RandomWriteWordItem, 81> word_items {};
+  for (std::size_t index = 0; index < word_items.size(); ++index) {
+    word_items[index] = RandomWriteWordItem {
+        .device = {.code = mcprotocol::serial::DeviceCode::D, .number = static_cast<std::uint32_t>(index)},
+        .value = static_cast<std::uint16_t>(index),
+        .double_word = false,
+    };
+  }
+  status = CommandCodec::encode_random_write_words(
+      config,
+      std::span<const RandomWriteWordItem>(word_items.data(), 80U),
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  status = CommandCodec::encode_random_write_words(
+      config,
+      std::span<const RandomWriteWordItem>(word_items.data(), word_items.size()),
+      request_data,
+      request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+}
+
 void test_encode_multi_block_read_ascii_matches_manual() {
   const auto config = make_ascii_c4_format4_config();
   const std::array<MultiBlockReadBlock, 5> blocks {{
@@ -3352,7 +3656,7 @@ void test_encode_multi_block_read_ascii_matches_manual() {
   assert(status.ok());
 
   constexpr std::string_view expected =
-      "0406000000020003"
+      "040600000203"
       "D*0000000004"
       "W*0001000008"
       "M*0000000002"
@@ -3419,6 +3723,24 @@ void test_encode_multi_block_read_binary_matches_capture_counts() {
   assert(std::memcmp(request_data.data(), expected_word_request.data(), expected_word_request.size()) == 0);
 }
 
+void test_encode_multi_block_read_rejects_total_points_over_960() {
+  const auto config = make_binary_c4_config();
+  const std::array<MultiBlockReadBlock, 2> blocks {{
+      {.head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 0}, .points = 600, .bit_block = false},
+      {.head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 1000}, .points = 361, .bit_block = false},
+  }};
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_multi_block_read(
+      config,
+      MultiBlockReadRequest {
+          .blocks = std::span<const MultiBlockReadBlock>(blocks.data(), blocks.size()),
+      },
+      request_data,
+      request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+}
+
 void test_encode_multi_block_write_binary_uses_single_byte_block_counts() {
   const auto config = make_binary_c4_config();
 
@@ -3459,6 +3781,33 @@ void test_encode_multi_block_write_binary_uses_single_byte_block_counts() {
   };
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_multi_block_write_iqr_uses_coefficient_nine() {
+  const auto config = make_binary_c4_iqr_config();
+  std::array<std::uint16_t, 472> first_words {};
+  std::array<std::uint16_t, 471> second_words {};
+  const std::array<MultiBlockWriteBlock, 2> blocks {{
+      {.head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 0},
+       .points = 472,
+       .bit_block = false,
+       .words = std::span<const std::uint16_t>(first_words.data(), first_words.size())},
+      {.head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 1000},
+       .points = 471,
+       .bit_block = false,
+       .words = std::span<const std::uint16_t>(second_words.data(), second_words.size())},
+  }};
+
+  std::array<std::uint8_t, mcprotocol::serial::kMaxRequestDataBytes> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_multi_block_write(
+      config,
+      MultiBlockWriteRequest {
+          .blocks = std::span<const MultiBlockWriteBlock>(blocks.data(), blocks.size()),
+      },
+      request_data,
+      request_size);
+  assert(status.code == StatusCode::InvalidArgument);
 }
 
 void test_encode_multi_block_write_binary_bit_blocks_use_lsb_first_word_packing() {
@@ -3502,6 +3851,37 @@ void test_encode_multi_block_write_binary_bit_blocks_use_lsb_first_word_packing(
   assert(request_size == expected.size() + expected_bit_words.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
   assert(std::memcmp(request_data.data() + expected.size(), expected_bit_words.data(), expected_bit_words.size()) == 0);
+}
+
+void test_encode_multi_block_write_ascii_bit_blocks_use_lsb_first_word_packing() {
+  const auto config = make_ascii_c4_format4_config();
+  const std::array<BitValue, 16> bit_values {{
+      BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
+      BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
+      BitValue::Off, BitValue::On, BitValue::Off, BitValue::On,
+      BitValue::Off, BitValue::On, BitValue::Off, BitValue::On,
+  }};
+  const std::array<MultiBlockWriteBlock, 1> blocks {{
+      {.head_device = {.code = mcprotocol::serial::DeviceCode::M, .number = 100},
+       .points = 1,
+       .bit_block = true,
+       .bits = std::span<const BitValue>(bit_values.data(), bit_values.size())},
+  }};
+
+  std::array<std::uint8_t, 128> request_data {};
+  std::size_t request_size = 0;
+  const Status status = CommandCodec::encode_multi_block_write(
+      config,
+      MultiBlockWriteRequest {
+          .blocks = std::span<const MultiBlockWriteBlock>(blocks.data(), blocks.size()),
+      },
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected = "140600000001M*0001000001AA55";
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
 void test_encode_register_monitor_ascii_reuses_random_read_layout() {
@@ -4899,6 +5279,7 @@ int main() {
   test_encode_initialize_transmission_sequence_binary_request();
   test_encode_initialize_transmission_sequence_rejects_ascii();
   test_encode_control_global_signal_binary_request();
+  test_encode_control_global_signal_uses_route_station_not_specification_word();
   test_encode_switch_serial_module_mode_binary_request_matches_manual();
   test_encode_switch_serial_module_mode_ascii_request_matches_manual();
   test_encode_switch_serial_module_mode_rejects_invalid_request();
@@ -4910,13 +5291,14 @@ int main() {
   test_encode_binary_delete_user_frame_request_shape();
   test_validate_ascii_c2_config_and_reject_binary();
   test_validate_ascii_c1_config_and_reject_binary();
+  test_validate_c4_routed_access_and_connected_station_only_commands();
   test_encode_ascii_format2_request_inserts_block_number();
-  test_encode_ascii_c2_format2_request_uses_short_route_without_frame_id();
+  test_encode_ascii_c2_format2_request_uses_fb_frame_id_and_short_command();
   test_decode_ascii_format2_ack_response();
-  test_decode_ascii_c2_format2_two_digit_error_response();
-  test_encode_ascii_c2_format3_request_uses_short_route_without_frame_id();
+  test_decode_ascii_c2_format2_four_digit_error_response();
+  test_encode_ascii_c2_format3_request_uses_fb_frame_id_and_short_command();
   test_decode_ascii_c2_format3_data_response();
-  test_decode_ascii_c2_format3_two_digit_error_response();
+  test_decode_ascii_c2_format3_four_digit_error_response();
   test_encode_ascii_c1_batch_read_words_qna_request_shape();
   test_encode_ascii_c1_batch_read_bits_a_request_shape();
   test_encode_ascii_c1_batch_write_words_qna_request_shape();
@@ -4942,6 +5324,7 @@ int main() {
   test_validate_e1_config_and_route_constraints();
   test_encode_ascii_e1_batch_read_words_request_shape();
   test_encode_binary_e1_batch_read_bits_request_shape();
+  test_encode_ascii_e1_l_and_s_devices_use_internal_relay_code();
   test_decode_ascii_e1_success_response();
   test_decode_binary_e1_error_response_with_abnormal_code();
   test_encode_binary_e1_random_write_words_request_shape();
@@ -4952,7 +5335,7 @@ int main() {
   test_encode_binary_e1_module_buffer_read_request_shape();
   test_encode_ascii_format4_request_appends_crlf();
   test_decode_ascii_c2_format4_ack_response();
-  test_decode_ascii_c2_format4_two_digit_error_response();
+  test_decode_ascii_c2_format4_four_digit_error_response();
   test_decode_ascii_format4_ack_response();
   test_high_level_parse_device_address();
   test_parse_link_direct_device_surface();
@@ -4991,6 +5374,8 @@ int main() {
   test_parse_batch_read_bits_binary_two_points_use_high_then_low_nibbles();
   test_encode_batch_write_words_ascii_limit_matches_buffer();
   test_encode_batch_write_bits_ascii_limit_matches_buffer();
+  test_encode_batch_read_bits_binary_c24_limit_is_7904_points();
+  test_c1_e1_word_unit_bit_device_limits_and_alignment();
   test_encode_random_write_words_ascii_matches_manual();
   test_encode_random_read_binary_iqr_layout();
   test_encode_random_read_binary_ql_layout();
@@ -5000,10 +5385,14 @@ int main() {
   test_encode_random_write_bits_ascii_iqr_shape();
   test_encode_random_write_bits_binary_iqr_layout();
   test_encode_random_write_bits_binary_ql_keeps_device_numbers();
+  test_qna_family_random_access_uses_smaller_limits();
   test_encode_multi_block_read_ascii_matches_manual();
   test_encode_multi_block_read_binary_matches_capture_counts();
+  test_encode_multi_block_read_rejects_total_points_over_960();
   test_encode_multi_block_write_binary_uses_single_byte_block_counts();
+  test_encode_multi_block_write_iqr_uses_coefficient_nine();
   test_encode_multi_block_write_binary_bit_blocks_use_lsb_first_word_packing();
+  test_encode_multi_block_write_ascii_bit_blocks_use_lsb_first_word_packing();
   test_encode_register_monitor_ascii_reuses_random_read_layout();
   test_encode_register_monitor_binary_iqr_layout();
   test_encode_register_monitor_binary_iqr_allows_lz_shape();

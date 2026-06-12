@@ -44,7 +44,7 @@ namespace mcprotocol::serial {
 #endif
 
 #ifndef MCPROTOCOL_SERIAL_MAX_BATCH_BIT_POINTS_BINARY
-#define MCPROTOCOL_SERIAL_MAX_BATCH_BIT_POINTS_BINARY 3584U
+#define MCPROTOCOL_SERIAL_MAX_BATCH_BIT_POINTS_BINARY 7904U
 #endif
 
 #ifndef MCPROTOCOL_SERIAL_MAX_RANDOM_ACCESS_ITEMS
@@ -183,14 +183,16 @@ enum class PlcSeries : std::uint8_t {
   IQ_L,
   Q_L,
   QnA,
+  /// AnA/AnUCPU common-command family. Kept value-compatible with the legacy QnA selector.
+  AnA_AnU = QnA,
   A
 };
 
 /// \brief Route layout inside the request header.
 enum class RouteKind : std::uint8_t {
-  /// Host-station route with fixed `station=0`, `network=0`, and `pc=FF`.
+  /// Host-station route with fixed `station=0`, `network=0`, `pc=FF`, and local module fields.
   HostStation,
-  /// Multidrop route where the destination station number is encoded in the frame.
+  /// Multidrop/routed route. `1C/2C` use the station fields; `3C/4C` also carry network/PC fields.
   MultidropStation
 };
 
@@ -447,7 +449,7 @@ struct ExtendedFileRegisterBatchReadWordsRequest {
   std::uint16_t points = 0;
 };
 
-/// \brief Direct extended file-register batch read (`NR` on 1C QnA-common, chapter-18 direct path on 1E).
+/// \brief Direct extended file-register batch read (`NR` on 1C AnA/AnUCPU common, chapter-18 direct path on 1E).
 struct ExtendedFileRegisterDirectBatchReadWordsRequest {
   /// \brief `NR/NW` direct address on 1C or the chapter-18 direct `R` address on 1E.
   std::uint32_t head_device_number = 0;
@@ -463,7 +465,7 @@ struct ExtendedFileRegisterBatchWriteWordsRequest {
   std::span<const std::uint16_t> words {};
 };
 
-/// \brief Direct extended file-register batch write (`NW` on 1C QnA-common, chapter-18 direct path on 1E).
+/// \brief Direct extended file-register batch write (`NW` on 1C AnA/AnUCPU common, chapter-18 direct path on 1E).
 struct ExtendedFileRegisterDirectBatchWriteWordsRequest {
   /// \brief `NR/NW` direct address on 1C or the chapter-18 direct `R` address on 1E.
   std::uint32_t head_device_number = 0;
@@ -620,7 +622,8 @@ struct GlobalSignalControlRequest {
   GlobalSignalTarget target = GlobalSignalTarget::ReceivedSide;
   /// `true` for ON, `false` for OFF.
   bool turn_on = false;
-  /// Station number encoded in the `1618` specification word.
+  /// Deprecated: `1618` target station is selected by `ProtocolConfig::route.station_no`.
+  /// This field is ignored and kept for source compatibility.
   std::uint8_t station_no = 0;
 };
 

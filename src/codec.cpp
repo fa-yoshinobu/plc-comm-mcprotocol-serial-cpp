@@ -133,6 +133,11 @@ class ByteWriter {
   return config.target_series == PlcSeries::IQ_R;
 }
 
+[[nodiscard]] constexpr bool is_qna_family_series(const ProtocolConfig& config) noexcept {
+  return config.target_series == PlcSeries::QnA ||
+         config.target_series == PlcSeries::AnA_AnU;
+}
+
 [[nodiscard]] constexpr bool is_ascii_mode(const ProtocolConfig& config) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_ASCII_MODE
   return config.code_mode == CodeMode::Ascii;
@@ -272,6 +277,9 @@ class ByteWriter {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_C3
     case FrameKind::C3:
 #endif
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C2
+    case FrameKind::C2:
+#endif
       return 2;
     default:
       return 0;
@@ -284,10 +292,7 @@ class ByteWriter {
 
 [[nodiscard]] constexpr std::size_t ascii_error_code_width(const ProtocolConfig& config) noexcept {
   return ((MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && config.frame_kind == FrameKind::C1) ||
-          (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && config.frame_kind == FrameKind::E1) ||
-          (MCPROTOCOL_SERIAL_ENABLE_FRAME_C2 && config.frame_kind == FrameKind::C2 &&
-           (config.ascii_format == AsciiFormat::Format2 ||
-            config.ascii_format == AsciiFormat::Format4)))
+          (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && config.frame_kind == FrameKind::E1))
              ? 2U
              : 4U;
 }
@@ -307,18 +312,12 @@ class ByteWriter {
 }
 
 [[nodiscard]] inline std::string_view ascii_alt_success_end_code(const ProtocolConfig& config) noexcept {
-  if (MCPROTOCOL_SERIAL_ENABLE_FRAME_C2 && config.frame_kind == FrameKind::C2 &&
-      config.ascii_format == AsciiFormat::Format3) {
-    return "GG";
-  }
+  (void)config;
   return {};
 }
 
 [[nodiscard]] inline std::string_view ascii_alt_error_end_code(const ProtocolConfig& config) noexcept {
-  if (MCPROTOCOL_SERIAL_ENABLE_FRAME_C2 && config.frame_kind == FrameKind::C2 &&
-      config.ascii_format == AsciiFormat::Format3) {
-    return "NN";
-  }
+  (void)config;
   return {};
 }
 
@@ -347,6 +346,10 @@ class ByteWriter {
     case FrameKind::C3:
       return 0xF9;
 #endif
+#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C2
+    case FrameKind::C2:
+      return 0xFB;
+#endif
     default:
       return 0x00;
   }
@@ -374,7 +377,7 @@ class ByteWriter {
 }
 
 [[nodiscard]] constexpr std::size_t request_command_header_size(const ProtocolConfig& config) noexcept {
-  return is_ascii_mode(config) ? 8U : 4U;
+  return is_ascii_mode(config) && is_c2_frame(config) ? 1U : (is_ascii_mode(config) ? 8U : 4U);
 }
 
 [[nodiscard]] constexpr std::size_t request_word_count_size(const ProtocolConfig& config) noexcept {
@@ -435,6 +438,31 @@ class ByteWriter {
 [[nodiscard]] constexpr std::uint16_t clear_error_information_word(
     const ProtocolConfig& config) noexcept {
   return is_iq_r_series(config) ? 0x0000U : 0x00FFU;
+}
+
+[[nodiscard]] constexpr std::uint16_t random_read_access_point_limit(
+    const ProtocolConfig& config) noexcept {
+  return word_subcommand(config) == 0x0000U && !is_qna_family_series(config) ? 192U : 96U;
+}
+
+[[nodiscard]] constexpr std::uint16_t random_write_word_weighted_limit(
+    const ProtocolConfig& config) noexcept {
+  return word_subcommand(config) == 0x0000U && !is_qna_family_series(config) ? 1920U : 960U;
+}
+
+[[nodiscard]] constexpr std::uint16_t random_write_bit_access_point_limit(
+    const ProtocolConfig& config) noexcept {
+  return bit_subcommand(config) == 0x0001U && !is_qna_family_series(config) ? 188U : 94U;
+}
+
+[[nodiscard]] constexpr std::uint16_t multi_block_access_block_limit(
+    const ProtocolConfig& config) noexcept {
+  return word_subcommand(config) == 0x0000U ? 120U : 60U;
+}
+
+[[nodiscard]] constexpr std::uint16_t multi_block_write_weight_coefficient(
+    const ProtocolConfig& config) noexcept {
+  return is_iq_r_series(config) ? 9U : 4U;
 }
 
 [[nodiscard]] constexpr std::uint16_t e1_acpu_monitoring_timer(
@@ -693,8 +721,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     return make_status(
         StatusCode::UnsupportedConfiguration,
         is_e1_frame(config)
-            ? "1E command support currently targets PlcSeries::A or PlcSeries::QnA"
-            : "1C command support currently targets PlcSeries::A or PlcSeries::QnA");
+            ? "1E command support currently targets PlcSeries::A or PlcSeries::AnA_AnU/QnA"
+            : "1C command support currently targets PlcSeries::A or PlcSeries::AnA_AnU/QnA");
   }
   return ok_status();
 }
@@ -826,9 +854,6 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     default:
       return invalid_argument("Global signal target must be current, x1a, or x1b");
   }
-  if (request.station_no > 31U) {
-    return invalid_argument("Global signal station number must be in range 0..31");
-  }
   return ok_status();
 }
 
@@ -936,9 +961,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     case DeviceCode::M:
       return 0x4D20U;
     case DeviceCode::L:
-      return 0x4C20U;
     case DeviceCode::S:
-      return 0x5320U;
+      return 0x4D20U;
     case DeviceCode::F:
       return 0x4620U;
     case DeviceCode::B:
@@ -1143,6 +1167,31 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] bool is_c1_word_unit_bit_head(const DeviceAddress& device) noexcept {
   return !is_bit_device_code(device.code) || (device.number % 16U) == 0U;
+}
+
+[[nodiscard]] Status validate_word_unit_bit_head(
+    const DeviceAddress& device,
+    const char* message) noexcept {
+  if (!is_c1_word_unit_bit_head(device)) {
+    return invalid_argument(message);
+  }
+  return ok_status();
+}
+
+[[nodiscard]] std::uint16_t c1_batch_read_word_limit_for_device(DeviceCode code) noexcept {
+  return is_bit_device_code(code) ? 32U : 64U;
+}
+
+[[nodiscard]] std::uint16_t c1_batch_write_word_limit_for_device(DeviceCode code) noexcept {
+  return is_bit_device_code(code) ? 10U : 64U;
+}
+
+[[nodiscard]] std::uint16_t e1_batch_read_word_limit_for_device(DeviceCode code) noexcept {
+  return is_bit_device_code(code) ? 128U : 256U;
+}
+
+[[nodiscard]] std::uint16_t e1_batch_write_word_limit_for_device(DeviceCode code) noexcept {
+  return is_bit_device_code(code) ? 40U : 256U;
 }
 
 [[nodiscard]] bool c1_monitor_uses_bit_units(std::span<const RandomReadItem> items) noexcept {
@@ -1460,6 +1509,42 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return make_status(StatusCode::InvalidArgument, message);
 }
 
+[[nodiscard]] constexpr bool is_valid_multidrop_station_no(std::uint8_t station_no) noexcept {
+  return station_no <= 0x1FU || station_no == 0xFFU;
+}
+
+[[nodiscard]] constexpr bool is_valid_routed_network_no(std::uint8_t network_no) noexcept {
+  return network_no <= 0xEFU || network_no == 0xFEU;
+}
+
+[[nodiscard]] constexpr bool is_valid_routed_pc_no(std::uint8_t pc_no) noexcept {
+  return pc_no == 0xFFU ||
+         (pc_no >= 0x01U && pc_no <= 0x78U) ||
+         pc_no == 0x7DU ||
+         pc_no == 0x7EU ||
+         pc_no == 0xFEU;
+}
+
+[[nodiscard]] constexpr bool uses_routed_header(const ProtocolConfig& config) noexcept {
+  return is_c3_frame(config) || is_c4_frame(config);
+}
+
+[[nodiscard]] constexpr bool is_connected_station_route(const ProtocolConfig& config) noexcept {
+  return config.route.network_no == 0x00U &&
+         config.route.pc_no == 0xFFU &&
+         config.route.request_destination_module_io_no == 0x03FFU &&
+         config.route.request_destination_module_station_no == 0x00U;
+}
+
+[[nodiscard]] Status validate_connected_station_only_command_config(
+    const ProtocolConfig& config,
+    const char* message) noexcept {
+  if (!is_connected_station_route(config)) {
+    return invalid_argument(message);
+  }
+  return ok_status();
+}
+
 [[nodiscard]] Status buffer_too_small(const char* message) noexcept {
   return make_status(StatusCode::BufferTooSmall, message);
 }
@@ -1540,6 +1625,42 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     std::uint16_t command,
     std::uint16_t subcommand) noexcept {
   if (is_ascii_mode(config)) {
+    if (is_c2_frame(config)) {
+      switch (command) {
+        case 0x0401U:
+          if (subcommand == 0x0001U) {
+            return writer.push(static_cast<std::uint8_t>('1'));
+          }
+          if (subcommand == 0x0000U) {
+            return writer.push(static_cast<std::uint8_t>('2'));
+          }
+          break;
+        case 0x1401U:
+          if (subcommand == 0x0001U) {
+            return writer.push(static_cast<std::uint8_t>('3'));
+          }
+          if (subcommand == 0x0000U) {
+            return writer.push(static_cast<std::uint8_t>('4'));
+          }
+          break;
+        case 0x0403U:
+          return writer.push(static_cast<std::uint8_t>('5'));
+        case 0x1402U:
+          if (subcommand == 0x0001U) {
+            return writer.push(static_cast<std::uint8_t>('6'));
+          }
+          if (subcommand == 0x0000U) {
+            return writer.push(static_cast<std::uint8_t>('7'));
+          }
+          break;
+        case 0x0801U:
+          return writer.push(static_cast<std::uint8_t>('8'));
+        case 0x0802U:
+          return writer.push(static_cast<std::uint8_t>('9'));
+        default:
+          break;
+      }
+    }
     return append_ascii_hex(writer, command, 4) && append_ascii_hex(writer, subcommand, 4);
   }
   return writer.append_le16(command) && writer.append_le16(subcommand);
@@ -1560,7 +1681,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     std::uint16_t count) noexcept {
   if (is_ascii_mode(config)) {
-    return append_ascii_hex(writer, count, 4);
+    return count <= 0xFFU && append_ascii_hex(writer, count, 2);
   }
   return count <= 0xFFU && writer.push(static_cast<std::uint8_t>(count));
 }
@@ -1570,7 +1691,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     std::uint16_t count) noexcept {
   if (is_ascii_mode(config)) {
-    return append_ascii_hex(writer, count, 4);
+    return count <= 0xFFU && append_ascii_hex(writer, count, 2);
   }
   return count <= 0xFFU && writer.push(static_cast<std::uint8_t>(count));
 }
@@ -1580,7 +1701,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     std::uint16_t count) noexcept {
   if (is_ascii_mode(config)) {
-    return append_ascii_hex(writer, count, 4);
+    return count <= 0xFFU && append_ascii_hex(writer, count, 2);
   }
   return count <= 0xFFU && writer.push(static_cast<std::uint8_t>(count));
 }
@@ -1664,7 +1785,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     std::uint16_t value = 0;
     for (std::size_t index = 0; index < 16U; ++index) {
       if (bits[offset + index] == BitValue::On) {
-        value = static_cast<std::uint16_t>(value | (1U << (15U - index)));
+        value = static_cast<std::uint16_t>(value | (1U << index));
       }
     }
     if (!append_word_data_ascii(writer, value)) {
@@ -1748,8 +1869,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   }
   if (is_c1_frame(config)) {
     if (!append_ascii_hex(payload_writer, config.route.station_no, 2) ||
-        !payload_writer.append(request_data) ||
-        !append_ascii_hex(payload_writer, config.route.pc_no, 2)) {
+        !append_ascii_hex(payload_writer, config.route.pc_no, 2) ||
+        !payload_writer.append(request_data)) {
       return buffer_too_small("ASCII frame payload buffer is too small");
     }
     out_size = payload_writer.size();
@@ -2090,11 +2211,32 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
   }
 
   if (config.route.kind == RouteKind::HostStation) {
-    if (config.route.station_no != 0x00U || config.route.network_no != 0x00U || config.route.pc_no != 0xFFU) {
-      return invalid_argument("Host station route must use station=0, network=0, pc=FF");
+    if (config.route.station_no != 0x00U ||
+        config.route.network_no != 0x00U ||
+        config.route.pc_no != 0xFFU ||
+        config.route.request_destination_module_io_no != 0x03FFU ||
+        config.route.request_destination_module_station_no != 0x00U) {
+      return invalid_argument("Host station route must use station=0, network=0, pc=FF, module_io=03FF, module_station=0");
     }
-  } else if (config.route.station_no > 0x1FU || config.route.network_no != 0x00U || config.route.pc_no != 0xFFU) {
-    return invalid_argument("Multidrop route must use station=0x00..0x1F, network=0, pc=FF");
+  } else {
+    if (!is_valid_multidrop_station_no(config.route.station_no)) {
+      return invalid_argument("Multidrop route station must be 0x00..0x1F or 0xFF");
+    }
+    if (!uses_routed_header(config)) {
+      if (config.route.network_no != 0x00U ||
+          config.route.pc_no != 0xFFU ||
+          config.route.request_destination_module_io_no != 0x03FFU ||
+          config.route.request_destination_module_station_no != 0x00U) {
+        return invalid_argument("1C/2C multidrop route uses only station and self-station fields");
+      }
+    } else {
+      if (!is_valid_routed_network_no(config.route.network_no)) {
+        return invalid_argument("3C/4C network number must be 0x00..0xEF or 0xFE");
+      }
+      if (!is_valid_routed_pc_no(config.route.pc_no)) {
+        return invalid_argument("3C/4C PC No. must be 0xFF, 0x01..0x78, 0x7D, 0x7E, or 0xFE");
+      }
+    }
   }
 
   return ok_status();
@@ -2961,8 +3103,15 @@ Status encode_batch_read_words(
     return invalid_argument("1E batch read words does not support this device");
   }
   if (is_e1_frame(config)) {
-    if (request.points == 0U || request.points > 256U) {
-      return invalid_argument("1E batch read words points must be in range 1..256");
+    const Status bit_head_status = validate_word_unit_bit_head(
+        request.head_device,
+        "1E batch read words requires bit-device heads aligned to 16 points");
+    if (!bit_head_status.ok()) {
+      return bit_head_status;
+    }
+    const std::uint16_t limit = e1_batch_read_word_limit_for_device(request.head_device.code);
+    if (request.points == 0U || request.points > limit) {
+      return invalid_argument("1E batch read words points exceed the supported range for this device");
     }
     ByteWriter writer(out_request_data);
     if (!append_e1_subheader(writer, config, 0x01U) ||
@@ -2975,8 +3124,15 @@ Status encode_batch_read_words(
     return ok_status();
   }
   if (is_c1_frame(config)) {
-    if (request.points == 0U || request.points > 64U) {
-      return invalid_argument("1C batch read words points must be in range 1..64");
+    const Status bit_head_status = validate_word_unit_bit_head(
+        request.head_device,
+        "1C batch read words requires bit-device heads aligned to 16 points");
+    if (!bit_head_status.ok()) {
+      return bit_head_status;
+    }
+    const std::uint16_t limit = c1_batch_read_word_limit_for_device(request.head_device.code);
+    if (request.points == 0U || request.points > limit) {
+      return invalid_argument("1C batch read words points exceed the supported range for this device");
     }
     ByteWriter writer(out_request_data);
     if (!append_c1_command(writer, config, kC1BatchReadWordsCommand) ||
@@ -3095,7 +3251,7 @@ Status encode_direct_read_extended_file_register_words(
   if (config.target_series != PlcSeries::QnA) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
-        "Direct extended file-register NR command requires PlcSeries::QnA");
+        "Direct extended file-register NR command requires PlcSeries::AnA_AnU/QnA");
   }
   const Status head_status = validate_extended_file_register_direct_head(request.head_device_number);
   if (!head_status.ok()) {
@@ -3387,8 +3543,15 @@ Status encode_batch_write_words(
     return invalid_argument("1E batch write words does not support this device");
   }
   if (is_e1_frame(config)) {
-    if (request.words.empty() || request.words.size() > 256U) {
-      return invalid_argument("1E batch write words count must be in range 1..256");
+    const Status bit_head_status = validate_word_unit_bit_head(
+        request.head_device,
+        "1E batch write words requires bit-device heads aligned to 16 points");
+    if (!bit_head_status.ok()) {
+      return bit_head_status;
+    }
+    const std::uint16_t limit = e1_batch_write_word_limit_for_device(request.head_device.code);
+    if (request.words.empty() || request.words.size() > limit) {
+      return invalid_argument("1E batch write words count exceeds the supported range for this device");
     }
     ByteWriter writer(out_request_data);
     if (!append_e1_subheader(writer, config, 0x03U) ||
@@ -3402,8 +3565,15 @@ Status encode_batch_write_words(
     return ok_status();
   }
   if (is_c1_frame(config)) {
-    if (request.words.empty() || request.words.size() > 64U) {
-      return invalid_argument("1C batch write words count must be in range 1..64");
+    const Status bit_head_status = validate_word_unit_bit_head(
+        request.head_device,
+        "1C batch write words requires bit-device heads aligned to 16 points");
+    if (!bit_head_status.ok()) {
+      return bit_head_status;
+    }
+    const std::uint16_t limit = c1_batch_write_word_limit_for_device(request.head_device.code);
+    if (request.words.empty() || request.words.size() > limit) {
+      return invalid_argument("1C batch write words count exceeds the supported range for this device");
     }
     ByteWriter writer(out_request_data);
     if (!append_c1_command(writer, config, kC1BatchWriteWordsCommand) ||
@@ -3528,7 +3698,7 @@ Status encode_direct_write_extended_file_register_words(
   if (config.target_series != PlcSeries::QnA) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
-        "Direct extended file-register NW command requires PlcSeries::QnA");
+        "Direct extended file-register NW command requires PlcSeries::AnA_AnU/QnA");
   }
   const Status head_status = validate_extended_file_register_direct_head(request.head_device_number);
   if (!head_status.ok()) {
@@ -3806,7 +3976,7 @@ Status encode_random_read(
     item.double_word ? ++dword_count : ++word_count;
   }
 
-  const std::uint16_t limit = word_subcommand(config) == 0x0000U ? 192U : 96U;
+  const std::uint16_t limit = random_read_access_point_limit(config);
   if (static_cast<std::uint16_t>(word_count + dword_count) > limit) {
     return invalid_argument("Random read access-point count exceeds supported range");
   }
@@ -4065,7 +4235,7 @@ Status encode_random_write_words(
     }
     item.double_word ? ++dword_count : ++word_count;
   }
-  const std::uint16_t weighted_limit = word_subcommand(config) == 0x0000U ? 1920U : 960U;
+  const std::uint16_t weighted_limit = random_write_word_weighted_limit(config);
   const std::uint16_t weighted_size = static_cast<std::uint16_t>((word_count * 12U) + (dword_count * 14U));
   if (weighted_size == 0U || weighted_size > weighted_limit) {
     return invalid_argument("Random write words exceeds the supported request size");
@@ -4274,7 +4444,7 @@ Status encode_random_write_bits(
     out_size = writer.size();
     return ok_status();
   }
-  const std::uint16_t limit = bit_subcommand(config) == 0x0001U ? 188U : 94U;
+  const std::uint16_t limit = random_write_bit_access_point_limit(config);
   if (items.size() > limit) {
     return invalid_argument("Random write bits count exceeds supported range");
   }
@@ -4467,6 +4637,7 @@ Status encode_multi_block_read(
 
   std::uint16_t word_blocks = 0;
   std::uint16_t bit_blocks = 0;
+  std::uint32_t total_points = 0;
   for (const MultiBlockReadBlock& block : request.blocks) {
     if (block.points == 0U || block.points > 960U) {
       return invalid_argument("Each multi-block read block must be in range 1..960 points");
@@ -4479,10 +4650,11 @@ Status encode_multi_block_read(
     } else {
       ++word_blocks;
     }
+    total_points += block.points;
   }
-  const std::uint16_t limit = word_subcommand(config) == 0x0000U ? 120U : 60U;
-  if (static_cast<std::uint16_t>(word_blocks + bit_blocks) > limit) {
-    return invalid_argument("Multi-block read block count exceeds supported range");
+  const std::uint16_t limit = multi_block_access_block_limit(config);
+  if (static_cast<std::uint16_t>(word_blocks + bit_blocks) > limit || total_points > 960U) {
+    return invalid_argument("Multi-block read request exceeds supported range");
   }
 
   ByteWriter writer(out_request_data);
@@ -4642,9 +4814,9 @@ Status encode_multi_block_write(
       }
       ++word_blocks;
     }
-    weighted_points += 4U + block.points;
+    weighted_points += multi_block_write_weight_coefficient(config) + block.points;
   }
-  const std::uint16_t block_limit = word_subcommand(config) == 0x0000U ? 120U : 60U;
+  const std::uint16_t block_limit = multi_block_access_block_limit(config);
   if (static_cast<std::uint16_t>(word_blocks + bit_blocks) > block_limit || weighted_points > 960U) {
     return invalid_argument("Multi-block write request exceeds supported range");
   }
@@ -5442,8 +5614,7 @@ Status encode_control_global_signal(
   }
 
   const std::uint16_t specification =
-      static_cast<std::uint16_t>(static_cast<std::uint8_t>(request.target)) |
-      (static_cast<std::uint16_t>(request.station_no) << 8U);
+      static_cast<std::uint16_t>(static_cast<std::uint8_t>(request.target));
   const std::uint16_t subcommand = request.turn_on ? 0x0001U : 0x0000U;
 
   ByteWriter writer(out_request_data);
@@ -5526,6 +5697,12 @@ Status encode_read_host_buffer(
     (void)out_size;
     return unsupported("1E frame does not define host-buffer access");
   }
+  const Status route_status = validate_connected_station_only_command_config(
+      config,
+      "Host buffer read is available only for the connected station route");
+  if (!route_status.ok()) {
+    return route_status;
+  }
   if (request.word_length == 0U || request.word_length > 480U) {
     return invalid_argument("Host buffer read length must be in range 1..480");
   }
@@ -5572,6 +5749,12 @@ Status encode_write_host_buffer(
     (void)out_request_data;
     (void)out_size;
     return unsupported("1E frame does not define host-buffer access");
+  }
+  const Status route_status = validate_connected_station_only_command_config(
+      config,
+      "Host buffer write is available only for the connected station route");
+  if (!route_status.ok()) {
+    return route_status;
   }
   if (request.words.empty() || request.words.size() > 480U) {
     return invalid_argument("Host buffer write length must be in range 1..480");
@@ -6012,6 +6195,12 @@ Status encode_unlock_remote_password(
     (void)out_size;
     return unsupported("1E frame does not define remote password unlock");
   }
+  const Status route_status = validate_connected_station_only_command_config(
+      config,
+      "Remote password unlock is available only for the connected station route");
+  if (!route_status.ok()) {
+    return route_status;
+  }
   const Status validate = validate_remote_password(config, remote_password);
   if (!validate.ok()) {
     return validate;
@@ -6037,6 +6226,12 @@ Status encode_lock_remote_password(
     (void)out_request_data;
     (void)out_size;
     return unsupported("1E frame does not define remote password lock");
+  }
+  const Status route_status = validate_connected_station_only_command_config(
+      config,
+      "Remote password lock is available only for the connected station route");
+  if (!route_status.ok()) {
+    return route_status;
   }
   const Status validate = validate_remote_password(config, remote_password);
   if (!validate.ok()) {
@@ -6113,6 +6308,12 @@ Status encode_loopback(
     }
     out_size = writer.size();
     return ok_status();
+  }
+  const Status route_status = validate_connected_station_only_command_config(
+      config,
+      "Loopback is available only for the connected station route");
+  if (!route_status.ok()) {
+    return route_status;
   }
   ByteWriter writer(out_request_data);
   const bool header_ok = append_command_header(writer, config, 0x0619U, 0x0000U) &&
