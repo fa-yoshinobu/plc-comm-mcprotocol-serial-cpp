@@ -14,6 +14,8 @@
 [![C++](https://img.shields.io/badge/C%2B%2B-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/)
 [![CMake](https://img.shields.io/badge/CMake-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
 
+![MC Protocol Serial C++ eyecatch](https://raw.githubusercontent.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/main/docs/assets/mc-serial-eyecatch.png)
+
 MC protocol serial library for MCU-oriented environments.
 
 This repository is for cases like these:
