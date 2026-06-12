@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.8 - 2026-06-12
+
+- Bumped release metadata after the resolved live-validation pass.
+- Kept the remaining RJ71C24-R2 remote-password item as a target-dependent
+  follow-up, not a release blocker for the supported command surface.
+
 ## 0.2.7 - 2026-05-03
 
 - Tightened string-device parsers so oversized decimal or hexadecimal values fail instead of
