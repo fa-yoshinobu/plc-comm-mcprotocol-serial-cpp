@@ -8,7 +8,6 @@
 # MC Protocol Serial C++ Library
 
 [![pages](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/pages.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/pages.yml)
-[![release](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/release.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/release.yml)
 
 [![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![C++](https://img.shields.io/badge/C%2B%2B-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/)
