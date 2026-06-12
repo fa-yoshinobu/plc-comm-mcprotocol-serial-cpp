@@ -4,6 +4,7 @@
 /.pio/
 /.venv-platformio/
 /docs/api/
+/release-artifacts/
 /.vscode/
 /.codex
 /cap/
