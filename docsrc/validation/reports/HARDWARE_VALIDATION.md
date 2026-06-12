@@ -8,6 +8,8 @@ Use it together with:
 
 - [../../../README.md](../../../README.md) for the repository overview
 - [../../user/MCU_QUICKSTART.md](../../user/MCU_QUICKSTART.md) for the firmware-side entry path
+- [../../maintainer/TARGET_DEPENDENT_NATIVE_COMMANDS.md](../../maintainer/TARGET_DEPENDENT_NATIVE_COMMANDS.md)
+  for focused unresolved native-command follow-up and preserved raw evidence
 - [FX5UC_32MT_D_RS232C.md](FX5UC_32MT_D_RS232C.md) for the consolidated FX/iQ-F target report
 - [LJ71C24_RS232C.md](LJ71C24_RS232C.md) for the consolidated L-series target report
 - [QJ71C24N_RS232C.md](QJ71C24N_RS232C.md) for the consolidated Q-series target report
@@ -61,9 +63,9 @@ Validated target:
 | Format3 ASCII raw module-buffer family (`4C` / `3C`) | raw `0601/1601` probe path | native ng / target-dependent | `probe-module-buffer` returned `0x4043` and `probe-write-module-buffer` failed on the same `0x4043`, while helper `U3E0\\G0` still passed |
 | Clear error information | `1617` via `error-clear` | native pass | validated on `R120PCPU / RJ71C24-R2` under `--series iqr`, `Format1 ASCII / --series ql`, `Format2 ASCII (4C/3C) / --series ql`, `Format3 ASCII (4C/3C) / --series ql`, and `Format4 ASCII (4C/3C) / --series ql` |
 | Remote RUN/STOP/PAUSE | `1001/1002/1003` via `remote-run` / `remote-stop` / `remote-pause` | native pass | validated on `R120PCPU / RJ71C24-R2` under `--series iqr`, `Format1 ASCII / --series ql`, `Format2 ASCII (4C/3C) / --series ql`, `Format3 ASCII (4C/3C) / --series ql`, and `Format4 ASCII (4C/3C) / --series ql`; the final `remote-run` restored the original state |
-| Remote latch clear | `1005` via `latch-clear` | native ng / target-dependent | focused `R120PCPU / RJ71C24-R2 / c4-binary / --series iqr` check returned `0x4013`; read-only `cpu-model` and `read-words D0 1` still passed immediately afterward |
+| Remote latch clear | `1005` via `latch-clear` | native pass with STOP precondition | `latch-clear` while the CPU is not in STOP returns `0x4013` (seen on `R120PCPU` and reproduced on `R08CPU`); on `R08CPU` (2026-06-12) the same-channel sequence `remote-stop` -> `latch-clear` -> `remote-run no-force no-clear` passed with read-only sanity intact |
 | Remote RESET | `1006` via `remote-reset` | native pass | validated on `R120PCPU / RJ71C24-R2 / 28800 / 8E2 / MC Protocol Format5 Binary / station 0 / --series ql` after enabling the target-side remote RESET parameter; `remote-reset` completed as `ok response=none` and a follow-up `cpu-model` confirmed communication recovery |
-| Remote password unlock/lock | `1630` / `1631` via `unlock` / `lock` | native ng / target-dependent | focused `R120PCPU / RJ71C24-R2 / c4-binary / --series iqr` checks returned `0x7FE7` for a `6`-character `unlock` attempt and `0x7F22` for `lock` plus longer `unlock` attempts (`10` and `32` characters); read-only `cpu-model` and `read-words D0 1` still passed |
+| Remote password unlock/lock | `1630` / `1631` via `unlock` / `lock` | native ng / target-dependent | focused `R120PCPU / RJ71C24-R2 / c4-binary / --series iqr` checks returned `0x7FE7` for a `6`-character `unlock` attempt and `0x7F22` for `lock` plus longer `unlock` attempts (`10` and `32` characters); on `R08CPU` (2026-06-12), user-configured `123456melsec` returned `0x7F22` for both `unlock` and `lock`, while changed password `abcdef1` returned `0x7FE7` on `unlock`; read-only `cpu-model` and `read-words D0 1` still passed |
 | Contiguous word read | `0401` via `read-words` | native pass | validated up to `960` words |
 | Contiguous word write | `1401` via `write-words` | native pass | validated up to `960` words |
 | Contiguous bit read | `0401` via `read-bits` | native pass | validated up to `3584` bits |
@@ -80,8 +82,8 @@ Validated target:
 | Multi-block read | native `0406` | native pass | validated on the current setup |
 | Multi-block write | native `1406` | native pass | validated with restore on the current setup |
 | Monitor register/read | native `0801/0802` | native pass | validated under both `--series ql` and `--series iqr` on the current RJ71C24-R2 targets |
-| iQ-R-only spot devices and `Jn\\...` surface | `SM`, `SD`, `RD`, `LZ`, `J1\\...`, `LTN/LSTN/LCN` | native pass with one target-dependent write follow-up | current per-device read/write matrix lives in [RJ71C24_R2_RS232C.md](RJ71C24_R2_RS232C.md); `LZ1` native `1402` remains unresolved on the validated target |
-| Special-device post-control sanity | `SM`, `SD`, `RD`, `LZ`, `LCN`, `J1\\...` under `--series iqr` | native pass with one target-dependent write follow-up | current focused read/write/restore checks pass on the validated target, except `LZ1` native `1402` |
+| iQ-R-only spot devices and `Jn\\...` surface | `SM`, `SD`, `RD`, `LZ`, `J1\\...`, `LTN/LSTN/LCN` | native pass | current per-device read/write matrix lives in [RJ71C24_R2_RS232C.md](RJ71C24_R2_RS232C.md); `LZ1` native `1402` passed full write/readback/restore on `R08CPU` (2026-06-12); the earlier `R120PCPU` unchanged-readback result stays recorded as target-dependent |
+| Special-device post-control sanity | `SM`, `SD`, `RD`, `LZ`, `LCN`, `J1\\...` under `--series iqr` | native pass | current focused read/write/restore checks pass on the validated targets, including `LZ1` native `1402` on `R08CPU` |
 | User frame / serial-module extras | `0610`, `1610`, `1615`, `1618` | native pass, split by link mode | binary recheck on `R120PCPU / RJ71C24-R2 / c4-binary / --series ql` validated `0610/1610`, `1615`, and `1618`; `Format1 ASCII`, `Format2 ASCII (4C/3C) / --series ql`, `Format3 ASCII (4C/3C) / --series ql`, and `Format4 ASCII (4C/3C) / --series ql` also validated temporary flash user-frame `0x03E8` register/read/delete; `Format2/3/4 ASCII (4C/3C)` additionally validated `1618` with `global-signal on/off current 0`; missing `0x03E8` and `0x8001` reads returned `0x7E51`; `init-sequence` is not applicable on ASCII links because it requires binary `4C Format5` |
 | Raw module-buffer family | raw `0601/1601` probe path | native ng / target-dependent | on `R120PCPU / RJ71C24-R2 / c4-binary / --series ql`, `probe-module-buffer` returned `0x4043` and `probe-write-module-buffer` failed on the same `0x4043`, while helper `U3E0\\G0` read/write/restore still passed |
 | Device-family read probe | `probe-all` | pass | `26/26` passed after dropping `RD` from the supported device set |
@@ -180,15 +182,17 @@ Additional validated target:
 
 Hardware validation follow-up:
 
-- `1005`: remote latch clear is implemented but still not hardware-validated in this repo.
+- none currently; `1005` remote latch clear was hardware-validated on `RJ71C24-R2 + R08CPU`
+  (2026-06-12) with the STOP-first sequence, and `0x4013` is now understood as the
+  not-in-STOP rejection.
 
 Target-dependent follow-up:
 
-- `RJ71C24-R2 + R120PCPU`: `1630` / `1631` currently return `0x7F22` on the focused
-  `--series iqr` checks, while read-only access still passes.
-
-- `RJ71C24-R2 + R120PCPU`: `LZ1` native `1402` currently returns `ok` but leaves the current value
-  unchanged on immediate readback, while `LZ0` full 32-bit write/readback/restore passes.
+- `RJ71C24-R2`: `1630` / `1631` currently return `0x7F22` on the focused `--series iqr`
+  checks, while read-only access still passes. This includes the 2026-06-12 `R08CPU` recheck with
+  user-configured password `123456melsec`; after changing the password to `abcdef1`, `unlock`
+  returned `0x7FE7`. Focused setup, raw frames, and the next recheck plan are preserved in
+  [TARGET_DEPENDENT_NATIVE_COMMANDS.md](../../maintainer/TARGET_DEPENDENT_NATIVE_COMMANDS.md).
 
 Command-family holds:
 
@@ -202,8 +206,8 @@ Unsupported / diagnostic-only items:
 
 - request encoding now matches the documented MC protocol request shapes used by the validated targets
 - `RJ71C24-R2`, `LJ71C24`, and `QJ71C24N` pass the practical native random / write / multi-block / monitor families under `--series ql`
-- `RJ71C24-R2` supports native `0403/1402/0801` on the validated `--series iqr` spot-device path,
-  with the current focused `LZ1` `1402` behavior still treated as target-dependent
+- `RJ71C24-R2` supports native `0403/1402/0801` on the validated `--series iqr` spot-device path;
+  `LZ1` native `1402` is closed after the same write/readback/restore check passed on `R08CPU`
 - `FX5UC-32MT/D` passes native `0403`, `1402`, `0406`, and `1406`
 - `FX5UC-32MT/D` `0801/0802` should be treated as unsupported on serial `3C/4C`
 - qualified helper commands and native qualified probes remain separate paths; native qualified stays unsupported by specification

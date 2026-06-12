@@ -8,19 +8,14 @@ Current active follow-up items only.
 
 ## Target-dependent Follow-up
 
-- [ ] **RJ71C24-R2 + R120PCPU remote password**: `1630` / `1631` remote password unlock/lock remain unresolved.
+- [ ] **RJ71C24-R2 remote password**: `1630` / `1631` remote password unlock/lock remain unresolved.
   Focused `--series iqr` checks returned `0x7FE7` for a `6`-character `unlock` attempt and
   `0x7F22` for `lock` plus longer `unlock` attempts (`10` and `32` characters), while read-only
-  access such as `cpu-model` and `read-words D0 1` remained available.
-
-- [ ] **RJ71C24-R2 + R120PCPU remote latch clear**: `1005` remote latch clear remains target-dependent.
-  A focused `--series iqr` check returned `0x4013`, while `cpu-model` and `read-words D0 1`
-  still passed immediately afterward.
-
-- [ ] **RJ71C24-R2 + R120PCPU LZ1 native `1402`**: `LZ1` native `1402` remains target-dependent.
-  Focused `--series iqr` checks returned `random-write-words=ok mode=native`, but an immediate
-  `random-read LZ1` stayed at `1234`; `LZ0` full 32-bit write/readback/restore passed on the same
-  target.
+  access such as `cpu-model` and `read-words D0 1` remained available. On 2026-06-12 against
+  `RJ71C24-R2 + R08CPU`, user-configured password `123456melsec` still returned `0x7F22` for both
+  `unlock` and `lock`; after changing the password to `abcdef1`, `unlock` returned `0x7FE7`.
+  Read-only sanity still passed afterward. Focused setup, raw frames, and the next recheck plan are
+  kept in [TARGET_DEPENDENT_NATIVE_COMMANDS.md](TARGET_DEPENDENT_NATIVE_COMMANDS.md).
 
 ## Notes
 
