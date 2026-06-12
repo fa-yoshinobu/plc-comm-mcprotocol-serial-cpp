@@ -22,6 +22,11 @@ Use [`mcprotocol/serial/high_level.hpp`](../../include/mcprotocol/serial/high_le
 - string-address parsing such as `D100`, `M100`, `X10`
 - request builders for common contiguous, sparse random, and monitor operations
 
+The current helper layer parses plain device strings only. If typed named
+address views are added later, they must follow the shared PLC helper convention:
+use `:` for data types such as `D100:D` / `D100:F`, and reserve `.` for
+bit-in-word access such as `D100.D` meaning bit `0xD` / bit 13.
+
 Smallest helper-based setup:
 
 ```cpp

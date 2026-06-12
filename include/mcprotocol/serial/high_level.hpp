@@ -21,6 +21,10 @@ namespace mcprotocol::serial::highlevel {
 /// - choose a baseline `ProtocolConfig`
 /// - parse `D100`, `M100`, `X10`, `B20` style addresses
 /// - build contiguous and sparse request items without hand-filling `DeviceAddress`
+///
+/// The current parser accepts plain device strings only. If this layer grows typed named-address
+/// views later, `:` is reserved for data types such as `D100:D`, while `.` is reserved for
+/// bit-in-word access such as `D100.D` meaning bit `0xD` / bit 13.
 
 namespace detail {
 
