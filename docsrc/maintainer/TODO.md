@@ -17,6 +17,14 @@ Current active follow-up items only.
   Read-only sanity still passed afterward. Focused setup, raw frames, and the next recheck plan are
   kept in [TARGET_DEPENDENT_NATIVE_COMMANDS.md](TARGET_DEPENDENT_NATIVE_COMMANDS.md).
 
+## Cross-Library API Alignment
+
+- [ ] **Unify public PLC profile naming**: Review the public selector currently exposed around
+  `PlcSeries` and align the user-facing API with the cross-library `PlcProfile` policy where
+  practical. The standard route should derive frame format, series, and legacy/iQ-R style access
+  from one explicit profile, and saved/displayed names should use canonical lowercase strings such
+  as `melsec:iq-r`. Short labels such as `iqr` or `iq-r` may remain input aliases only.
+
 ## Notes
 
 - Do not add unsupported access paths here.
