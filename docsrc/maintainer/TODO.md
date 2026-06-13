@@ -1,29 +1,37 @@
 # TODO
 
-Current active follow-up items only.
+Current active follow-up items only. As of 2026-06-13, there are no known
+codec/client/CLI implementation gaps waiting for code changes.
 
-## Native Command Holds
+## Current status
 
-- [x] **No command-family holds**: None at the command-family level on the currently validated targets.
+| Area | Status | Notes |
+|---|---|---|
+| Implementation gaps | none open | `1630` / `1631` encoder, client, sync wrapper, CLI, and tests already exist. |
+| Command-family holds | none open | No whole native command family is blocked on the currently validated targets. |
+| Target-dependent validation | one open | `RJ71C24-R2` remote password unlock/lock still needs a focused hardware recheck. |
 
-## Target-dependent Follow-up
+## Active follow-up
 
-- [ ] **RJ71C24-R2 remote password**: `1630` / `1631` remote password unlock/lock remain unresolved.
-  Focused `--plc-profile melsec:iq-r` checks returned `0x7FE7` for a `6`-character `unlock` attempt and
-  `0x7F22` for `lock` plus longer `unlock` attempts (`10` and `32` characters), while read-only
-  access such as `cpu-model` and `read-words D0 1` remained available. On 2026-06-12 against
-  `RJ71C24-R2 + R08CPU`, user-configured password `123456melsec` still returned `0x7F22` for both
-  `unlock` and `lock`; after changing the password to `abcdef1`, `unlock` returned `0x7FE7`.
-  Read-only sanity still passed afterward. Focused setup, raw frames, and the next recheck plan are
-  kept in [TARGET_DEPENDENT_NATIVE_COMMANDS.md](TARGET_DEPENDENT_NATIVE_COMMANDS.md).
+- [ ] **RJ71C24-R2 remote password (`1630` / `1631`)**
+
+| Field | Detail |
+|---|---|
+| Type | Target-dependent hardware validation, not a known request encoder bug. |
+| Focused setup | `RJ71C24-R2`, `R08CPU`, `COM3`, `28800 / 8E2`, `c4-binary`, station `0`, sum-check on, `--plc-profile melsec:iq-r`. |
+| Known evidence | Historical `6`-character `unlock` returned `0x7FE7`; `lock` and longer `unlock` attempts returned `0x7F22`. On 2026-06-12, configured password `123456melsec` returned `0x7F22` for both `unlock` and `lock`; changed password `abcdef1` returned `0x7FE7` for `unlock`. |
+| Link sanity | `cpu-model` and `read-words D0 1` still passed after each failure. |
+| Next action | Re-run only after the target-side remote password setting and CPU/module state are known. Capture raw TX/RX frames and immediate read-only sanity results. |
+| Helper | [scripts/recheck_remote_password.ps1](../../scripts/recheck_remote_password.ps1) runs read-only sanity by default and requires `-AllowRemotePasswordCommands` before sending `1630` / `1631`. |
+| Evidence file | Keep setup, raw frames, and interpretation in [TARGET_DEPENDENT_NATIVE_COMMANDS.md](TARGET_DEPENDENT_NATIVE_COMMANDS.md). |
+| Close when | A known target-side password configuration produces either a successful unlock/lock sequence or a deterministic PLC end code that is explained by target settings and documented in the validation reports. |
 
 ## Cross-Library API Alignment
 
-- [x] **Unify public PLC profile naming**: Public configuration now uses `PlcProfile` and canonical
-  lowercase strings such as `melsec:q-l` and `melsec:iq-r`. The CLI requires
-  `--plc-profile`; short labels such as `iqr`, `iq-r`, `ql`, and `qna` are intentionally rejected.
-  The lower-level `PlcSeries` concept remains only as an internal device-layout / command-family
-  selector derived from `PlcProfile`.
+Public configuration now uses `PlcProfile` and canonical lowercase strings such as `melsec:q-l`
+and `melsec:iq-r`. The CLI requires `--plc-profile`; short labels such as `iqr`, `iq-r`, `ql`,
+and `qna` are intentionally rejected. The lower-level `PlcSeries` concept remains only as an
+internal device-layout / command-family selector derived from `PlcProfile`.
 
 ## Notes
 
@@ -31,5 +39,7 @@ Current active follow-up items only.
 - Do not add TODOs for manual families that are explicitly not needed by this library. The current
   omitted-family policy is documented in
   [MANUAL_COMMAND_COVERAGE.md](MANUAL_COMMAND_COVERAGE.md).
+- Do not mark a target-dependent PLC rejection as an implementation bug unless request-shape tests
+  or new hardware evidence point to the encoder/client code.
 - For long timer / long retentive timer contact+coil devices, use the structured `LTN/LSTN`
   `0401` path instead of direct probes.

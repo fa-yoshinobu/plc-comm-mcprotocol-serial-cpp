@@ -23,7 +23,9 @@ Track current follow-up items in [TODO.md](TODO.md).
 
 ## Implementation Gaps
 
-Track current implementation gaps in [TODO.md](TODO.md).
+There are no current implementation gaps. If a new codec/client/CLI gap is found, track it in
+[TODO.md](TODO.md) with the affected command, request shape, validation evidence, and close
+criteria.
 
 ## Follow-up Rules
 

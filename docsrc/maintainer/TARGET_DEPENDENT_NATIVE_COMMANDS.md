@@ -28,6 +28,24 @@ CLI prefix used for the 2026-06-12 focused checks:
 .\build\manual\mcprotocol_cli.exe --device COM3 --baud 28800 --data-bits 8 --parity E --stop-bits 2 --frame c4-binary --plc-profile melsec:iq-r --station 0 --sum-check on --response-timeout-ms 5000 --inter-byte-timeout-ms 250
 ```
 
+The helper script [scripts/recheck_remote_password.ps1](../../scripts/recheck_remote_password.ps1)
+captures the same focused setup with `--dump-frames on` and writes a timestamped log under
+`logs/`. Without the explicit opt-in switch it runs only the read-only sanity checks:
+
+```powershell
+.\scripts\recheck_remote_password.ps1
+```
+
+Run the native `1630` / `1631` password commands only after the target-side remote password
+configuration is known:
+
+```powershell
+.\scripts\recheck_remote_password.ps1 -Password "<known-target-password>" -AllowRemotePasswordCommands
+```
+
+The raw frame log includes password bytes in hexadecimal, so preserve it as validation evidence and
+avoid sharing it as a public user-facing artifact.
+
 For general contiguous/helper traffic on the same hardware, the practical setting was usually
 `--plc-profile melsec:q-l`. The `--plc-profile melsec:iq-r` setting was used for iQ-R-only spot devices such as `SM`, `SD`,
 `RD`, `LZ`, `J1\...`, and long current-value focused checks.
