@@ -25,7 +25,7 @@ int main() {
       .parity = 'E',
       .rts_cts = false,
   };
-  auto protocol = make_c4_binary_protocol();
+  auto protocol = make_c4_binary_protocol(mcprotocol::serial::PlcProfile::MelsecQL);
   protocol.route.station_no = 0;
 
   mcprotocol::serial::Status status = plc.open(serial, protocol);

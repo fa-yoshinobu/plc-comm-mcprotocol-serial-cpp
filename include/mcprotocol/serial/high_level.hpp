@@ -133,8 +133,7 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
 }  // namespace detail
 
 /// \brief Returns a practical default for Q/L-era `Format5 / Binary / C4`.
-[[nodiscard]] constexpr ProtocolConfig make_c4_binary_protocol(
-    PlcProfile profile = PlcProfile::MelsecQL) noexcept {
+[[nodiscard]] constexpr ProtocolConfig make_c4_binary_protocol(PlcProfile profile) noexcept {
   ProtocolConfig config {};
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Binary;
@@ -155,8 +154,7 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
 }
 
 /// \brief Returns a practical default for `Format4 / ASCII / C4`.
-[[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format4_protocol(
-    PlcProfile profile = PlcProfile::MelsecQL) noexcept {
+[[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format4_protocol(PlcProfile profile) noexcept {
   ProtocolConfig config {};
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Ascii;
@@ -181,8 +179,7 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
 /// `Format2` is the `Format1` style `ENQ/ACK/NAK/STX/ETX` link with an extra 1-byte block
 /// number inserted before the frame ID. The default block number is `0x00`; change
 /// `ProtocolConfig::ascii_block_number` if the host side needs a different value.
-[[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format2_protocol(
-    PlcProfile profile = PlcProfile::MelsecQL) noexcept {
+[[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format2_protocol(PlcProfile profile) noexcept {
   ProtocolConfig config = make_c4_ascii_format4_protocol(profile);
   config.ascii_format = AsciiFormat::Format2;
   config.sum_check_enabled = true;

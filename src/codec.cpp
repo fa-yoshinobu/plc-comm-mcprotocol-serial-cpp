@@ -2161,6 +2161,10 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 // FrameCodec public implementation.
 
 Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
+  if (!is_plc_profile_specified(config.plc_profile)) {
+    return invalid_argument("PLC profile is required. Set ProtocolConfig::plc_profile to an explicit canonical profile.");
+  }
+
   if (!is_frame_kind_enabled(config.frame_kind)) {
     return unsupported("Selected frame family is compiled out");
   }

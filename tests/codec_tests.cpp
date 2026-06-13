@@ -2204,14 +2204,18 @@ void test_high_level_make_contiguous_requests() {
 }
 
 void test_high_level_protocol_presets() {
-  const ProtocolConfig config = make_c4_binary_protocol();
+  const ProtocolConfig unspecified_config {};
+  assert(!FrameCodec::validate_config(unspecified_config).ok());
+
+  const ProtocolConfig config = make_c4_binary_protocol(PlcProfile::MelsecQL);
   assert(config.frame_kind == FrameKind::C4);
   assert(config.code_mode == CodeMode::Binary);
   assert(config.plc_profile == PlcProfile::MelsecQL);
   assert(config.sum_check_enabled);
   assert(config.route.station_no == 0x00);
 
-  const ProtocolConfig ascii_config = mcprotocol::serial::highlevel::make_c4_ascii_format2_protocol();
+  const ProtocolConfig ascii_config =
+      mcprotocol::serial::highlevel::make_c4_ascii_format2_protocol(PlcProfile::MelsecQL);
   assert(ascii_config.frame_kind == FrameKind::C4);
   assert(ascii_config.code_mode == CodeMode::Ascii);
   assert(ascii_config.ascii_format == AsciiFormat::Format2);
@@ -2225,6 +2229,7 @@ void test_plc_profile_canonical_names_only() {
   assert(profile == PlcProfile::MelsecIqR);
   assert(plc_series_from_profile(profile) == PlcSeries::IQ_R);
   assert(std::string_view(plc_profile_name(profile)) == "melsec:iq-r");
+  assert(!parse_plc_profile_text("MELSEC:IQ-R", profile));
 
   assert(parse_plc_profile_text("melsec:q-l", profile));
   assert(profile == PlcProfile::MelsecQL);

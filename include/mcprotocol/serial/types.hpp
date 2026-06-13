@@ -193,17 +193,20 @@ enum class PlcSeries : std::uint8_t {
 /// Use `PlcProfile` as the public configuration surface. The lower-level `PlcSeries` enum is kept
 /// as an internal compatibility/layout family derived from this profile.
 enum class PlcProfile : std::uint8_t {
-  MelsecIqR,
-  MelsecIqL,
-  MelsecQL,
-  MelsecQnA,
-  MelsecAnAAnU,
-  MelsecA
+  Unspecified = 0,
+  MelsecIqR = 1,
+  MelsecIqL = 2,
+  MelsecQL = 3,
+  MelsecQnA = 4,
+  MelsecAnAAnU = 5,
+  MelsecA = 6
 };
 
 /// \brief Returns the canonical saved/displayed string for a PLC profile.
 [[nodiscard]] constexpr const char* plc_profile_name(PlcProfile profile) noexcept {
   switch (profile) {
+    case PlcProfile::Unspecified:
+      return "";
     case PlcProfile::MelsecIqR:
       return "melsec:iq-r";
     case PlcProfile::MelsecIqL:
@@ -217,7 +220,7 @@ enum class PlcProfile : std::uint8_t {
     case PlcProfile::MelsecA:
       return "melsec:a";
   }
-  return "melsec:q-l";
+  return "";
 }
 
 /// \brief Compares a bounded text buffer with a canonical PLC profile string.
@@ -279,6 +282,8 @@ enum class PlcProfile : std::uint8_t {
 /// \brief Derives the internal device-layout / command-family selector from a public profile.
 [[nodiscard]] constexpr PlcSeries plc_series_from_profile(PlcProfile profile) noexcept {
   switch (profile) {
+    case PlcProfile::Unspecified:
+      return PlcSeries::Q_L;
     case PlcProfile::MelsecIqR:
       return PlcSeries::IQ_R;
     case PlcProfile::MelsecIqL:
@@ -293,6 +298,10 @@ enum class PlcProfile : std::uint8_t {
       return PlcSeries::A;
   }
   return PlcSeries::Q_L;
+}
+
+[[nodiscard]] constexpr bool is_plc_profile_specified(PlcProfile profile) noexcept {
+  return profile != PlcProfile::Unspecified;
 }
 
 /// \brief Route layout inside the request header.
@@ -481,7 +490,7 @@ struct ProtocolConfig {
   /// `Format1`, `Format3`, `Format4`, binary `Format5`, `1C`, and `1E`.
   std::uint8_t ascii_block_number = 0x00;
   /// Public PLC profile used to derive frame-family compatibility and device/subcommand layout.
-  PlcProfile plc_profile = PlcProfile::MelsecQL;
+  PlcProfile plc_profile = PlcProfile::Unspecified;
   /// Enables or disables the ASCII/binary sum-check where that frame family supports it.
   bool sum_check_enabled = true;
   /// Route header fields used for every encoded request.
