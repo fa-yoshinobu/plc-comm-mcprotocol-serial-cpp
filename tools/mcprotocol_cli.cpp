@@ -1084,7 +1084,7 @@ void print_usage() {
   options.protocol.code_mode = CodeMode::Binary;
   options.protocol.ascii_format = AsciiFormat::Format3;
   options.protocol.ascii_block_number = 0x00;
-  options.protocol.plc_profile = PlcProfile::MelsecQL;
+  options.protocol.plc_profile = PlcProfile::Unspecified;
   options.protocol.sum_check_enabled = true;
   options.protocol.route.kind = RouteKind::HostStation;
   options.protocol.route.station_no = 0x00;
