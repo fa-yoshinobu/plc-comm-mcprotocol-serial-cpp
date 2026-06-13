@@ -22,7 +22,7 @@ The example projects keep simple starting values so the code stays easy to read.
 the authority for the current validated settings of your actual target.
 
 The host CLI does not use those sample defaults for protocol selection. Live CLI commands require
-explicit `--frame` and `--series` values.
+explicit `--frame` and `--plc-profile` values.
 
 ## Which MCU targets are prepared today?
 
@@ -40,7 +40,7 @@ The new real-UART MCU example is read-only. It repeatedly reads `D100-D103` and 
 
 Because support is target-dependent.
 
-- support depends on the target module and the selected `--series`
+- support depends on the target module and the selected `--plc-profile`
 - helper and contiguous paths are often the practical public workflow even when a direct native
   probe is target-dependent
 - native qualified access is not a supported public workflow

@@ -48,7 +48,7 @@ Current compile-time trimming does not work at these units:
   for example, you cannot keep only `0403` and drop `1402`
 - per-device paths inside one family
   for example, you cannot compile out only `Jn\\...` or only `U...`
-- per-series support
+- per-profile support
   `IQ-R`, `Q/L`, `QnA`, and `A` are still runtime protocol choices, not separate build switches
 
 ## Where The Settings Live

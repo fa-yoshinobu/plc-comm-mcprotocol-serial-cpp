@@ -43,7 +43,7 @@ Compile-time trimming does not yet work at these units:
   you cannot compile out only `0403` while keeping `1402`
 - per-device variants inside one family
   you cannot compile out only `Jn\\...` or only helper-qualified `U...`
-- per-series behavior
+- per-profile behavior
   `IQ-R`, `Q/L`, `QnA`, and `A` remain runtime protocol choices
 
 For target-specific PASS/HOLD results, use
@@ -70,7 +70,7 @@ For target-specific PASS/HOLD results, use
 | Chapter 11 remote operation | `1003` remote PAUSE | implemented | `async_remote_pause`, `PosixSyncClient::remote_pause`, CLI | Public API exposes mode; CLI defaults to `no-force`; hardware-validated on `RJ71C24-R2 + R120PCPU` |
 | Chapter 11 remote operation | `1005` remote latch clear | implemented | `async_remote_latch_clear`, `PosixSyncClient::remote_latch_clear`, CLI | Encodes the documented fixed `0001H` value; hardware-validated on `RJ71C24-R2 + R08CPU` (2026-06-12) with the manual's STOP-first sequence (`remote-stop` -> `latch-clear` -> `remote-run`); running it while the CPU is not in STOP returns `0x4013` |
 | Chapter 11 password/error control | `1617` clear error information | implemented | `async_clear_error_information`, `PosixSyncClient::clear_error_information`, CLI | Implements the serial/C24 clear-error-information variant; request includes both communication-error-information words using the documented default values |
-| Chapter 11 password/error control | `1630`, `1631` remote password unlock/lock | implemented | `async_unlock_remote_password`, `async_lock_remote_password`, sync wrappers, CLI | Enforces documented password-length rules: Q/L fixed `4`, iQ-R `6..32`; focused `RJ71C24-R2 + R120PCPU` `--series iqr` checks return `0x7FE7` for a `6`-character `unlock` attempt and `0x7F22` for `lock` plus longer `unlock` attempts (`10` and `32` characters); `RJ71C24-R2 + R08CPU` with user-configured `123456melsec` returns `0x7F22` for both `unlock` and `lock`, and changed password `abcdef1` returns `0x7FE7` for `unlock`, so this remains target-dependent |
+| Chapter 11 password/error control | `1630`, `1631` remote password unlock/lock | implemented | `async_unlock_remote_password`, `async_lock_remote_password`, sync wrappers, CLI | Enforces documented password-length rules: Q/L fixed `4`, iQ-R `6..32`; focused `RJ71C24-R2 + R120PCPU` `--plc-profile melsec:iq-r` checks return `0x7FE7` for a `6`-character `unlock` attempt and `0x7F22` for `lock` plus longer `unlock` attempts (`10` and `32` characters); `RJ71C24-R2 + R08CPU` with user-configured `123456melsec` returns `0x7F22` for both `unlock` and `lock`, and changed password `abcdef1` returns `0x7FE7` for `unlock`, so this remains target-dependent |
 | Chapter 11 remote operation | `1006` remote RESET | implemented | `async_remote_reset`, `PosixSyncClient::remote_reset`, CLI | Manual notes some targets may reset before returning a response; this library treats a pure no-response timeout as success for this command. Hardware-validated on `RJ71C24-R2 + R120PCPU` after enabling the target-side remote RESET parameter |
 | Chapter 11 control/diagnostic | `0619` loopback | implemented | `async_loopback`, CLI | Implemented and validated |
 | Chapter 12 file control | `1810`..`182A` | not needed | none | File-control access is not needed for this library and is not an implementation TODO |
@@ -91,14 +91,14 @@ For target-specific PASS/HOLD results, use
   yet.
 - `1C` now has initial ASCII support through the existing APIs for contiguous device-memory
   read/write, random write, monitor, module-buffer access, extended-file register access, and
-  loopback on `PlcSeries::A` and `PlcSeries::QnA`. Extended-file support uses ACPU-common
-  `ER/EW/ET/EM/ME` on `PlcSeries::A` and direct `NR/NW` on `PlcSeries::QnA`. Hardware validation
-  remains open.
-- `1E` now has initial ASCII/binary support on `PlcSeries::A` and `PlcSeries::QnA` through the
+  loopback on `PlcProfile` values `melsec:a`, `melsec:ana-anu`, and `melsec:qna`.
+  Extended-file support uses ACPU-common `ER/EW/ET/EM/ME` on `melsec:a` and direct `NR/NW`
+  on `melsec:ana-anu` / `melsec:qna`. Hardware validation remains open.
+- `1E` now has initial ASCII/binary support on `melsec:a`, `melsec:ana-anu`, and `melsec:qna` through the
   existing APIs for contiguous device-memory read/write, random write, monitor register/read,
   block-addressed extended-file-register read/write/random-write/monitor, and special-function-
   module buffer read/write. The direct extended-file-register read/write path is currently
-  `PlcSeries::A` only. `1E` still excludes CPU-model, host-buffer, remote control,
+  `melsec:a` only. `1E` still excludes CPU-model, host-buffer, remote control,
   password/error control, loopback, multi-block, qualified helper, and link-direct paths.
 - "Implemented" in this table means the library has codec/client/public entry points. It does not
   mean every PLC/serial target accepts that command family.

@@ -20,8 +20,8 @@ For exact target settings, do not rely on the sample defaults alone. Use
 [../docsrc/validation/reports/HARDWARE_VALIDATION.md](../docsrc/validation/reports/HARDWARE_VALIDATION.md)
 as the authority.
 
-Host CLI examples require explicit frame and PLC-family selection. Set
-`MCPROTOCOL_FRAME` and `MCPROTOCOL_SERIES`, or pass `--frame` and `--series`
+Host CLI examples require explicit frame and PLC profile selection. Set
+`MCPROTOCOL_FRAME` and `MCPROTOCOL_PLC_PROFILE`, or pass `--frame` and `--plc-profile`
 directly when using `mcprotocol_cli`. The shell wrappers also require those
 environment variables before they touch a PLC.
 

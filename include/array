@@ -38,7 +38,26 @@ struct array {
   [[nodiscard]] constexpr const_pointer data() const noexcept { return elems; }
   [[nodiscard]] constexpr size_type size() const noexcept { return N; }
   [[nodiscard]] constexpr bool empty() const noexcept { return N == 0; }
+  [[nodiscard]] constexpr reference front() noexcept { return elems[0]; }
+  [[nodiscard]] constexpr const_reference front() const noexcept { return elems[0]; }
+  [[nodiscard]] constexpr reference back() noexcept { return elems[N - 1]; }
+  [[nodiscard]] constexpr const_reference back() const noexcept { return elems[N - 1]; }
 };
+
+template <typename T, size_t N>
+[[nodiscard]] constexpr bool operator==(const array<T, N>& lhs, const array<T, N>& rhs) {
+  for (size_t index = 0; index < N; ++index) {
+    if (!(lhs[index] == rhs[index])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+template <typename T, size_t N>
+[[nodiscard]] constexpr bool operator!=(const array<T, N>& lhs, const array<T, N>& rhs) {
+  return !(lhs == rhs);
+}
 
 }  // namespace std
 #endif

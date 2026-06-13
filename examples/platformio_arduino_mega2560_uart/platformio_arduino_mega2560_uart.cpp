@@ -28,7 +28,7 @@ using mcprotocol::serial::DeviceAddress;
 using mcprotocol::serial::DeviceCode;
 using mcprotocol::serial::FrameKind;
 using mcprotocol::serial::MelsecSerialClient;
-using mcprotocol::serial::PlcSeries;
+using mcprotocol::serial::PlcProfile;
 using mcprotocol::serial::ProtocolConfig;
 using mcprotocol::serial::RouteConfig;
 using mcprotocol::serial::RouteKind;
@@ -57,7 +57,7 @@ ProtocolConfig make_protocol() {
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Ascii;
   config.ascii_format = AsciiFormat::Format4;
-  config.target_series = PlcSeries::Q_L;
+  config.plc_profile = PlcProfile::MelsecQL;
   config.sum_check_enabled = false;
   config.route = RouteConfig {
       .kind = RouteKind::HostStation,

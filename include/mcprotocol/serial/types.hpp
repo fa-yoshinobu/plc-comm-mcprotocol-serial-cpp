@@ -188,6 +188,113 @@ enum class PlcSeries : std::uint8_t {
   A
 };
 
+/// \brief Public PLC profile selector.
+///
+/// Use `PlcProfile` as the public configuration surface. The lower-level `PlcSeries` enum is kept
+/// as an internal compatibility/layout family derived from this profile.
+enum class PlcProfile : std::uint8_t {
+  MelsecIqR,
+  MelsecIqL,
+  MelsecQL,
+  MelsecQnA,
+  MelsecAnAAnU,
+  MelsecA
+};
+
+/// \brief Returns the canonical saved/displayed string for a PLC profile.
+[[nodiscard]] constexpr const char* plc_profile_name(PlcProfile profile) noexcept {
+  switch (profile) {
+    case PlcProfile::MelsecIqR:
+      return "melsec:iq-r";
+    case PlcProfile::MelsecIqL:
+      return "melsec:iq-l";
+    case PlcProfile::MelsecQL:
+      return "melsec:q-l";
+    case PlcProfile::MelsecQnA:
+      return "melsec:qna";
+    case PlcProfile::MelsecAnAAnU:
+      return "melsec:ana-anu";
+    case PlcProfile::MelsecA:
+      return "melsec:a";
+  }
+  return "melsec:q-l";
+}
+
+/// \brief Compares a bounded text buffer with a canonical PLC profile string.
+[[nodiscard]] constexpr bool plc_profile_text_equals(
+    const char* text,
+    std::size_t text_size,
+    const char* expected,
+    std::size_t expected_size) noexcept {
+  if (text == nullptr || text_size != expected_size) {
+    return false;
+  }
+  for (std::size_t index = 0U; index < expected_size; ++index) {
+    if (text[index] != expected[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// \brief Parses only canonical PLC profile strings.
+///
+/// Short labels such as `iqr`, `iq-r`, `ql`, or `qna` are intentionally rejected so saved
+/// configuration, CLI arguments, and documentation use one stable cross-library spelling.
+[[nodiscard]] constexpr bool parse_plc_profile(
+    const char* text,
+    std::size_t text_size,
+    PlcProfile& out_profile) noexcept {
+  if (plc_profile_text_equals(text, text_size, "melsec:iq-r", sizeof("melsec:iq-r") - 1U)) {
+    out_profile = PlcProfile::MelsecIqR;
+    return true;
+  }
+  if (plc_profile_text_equals(text, text_size, "melsec:iq-l", sizeof("melsec:iq-l") - 1U)) {
+    out_profile = PlcProfile::MelsecIqL;
+    return true;
+  }
+  if (plc_profile_text_equals(text, text_size, "melsec:q-l", sizeof("melsec:q-l") - 1U)) {
+    out_profile = PlcProfile::MelsecQL;
+    return true;
+  }
+  if (plc_profile_text_equals(text, text_size, "melsec:qna", sizeof("melsec:qna") - 1U)) {
+    out_profile = PlcProfile::MelsecQnA;
+    return true;
+  }
+  if (plc_profile_text_equals(
+          text,
+          text_size,
+          "melsec:ana-anu",
+          sizeof("melsec:ana-anu") - 1U)) {
+    out_profile = PlcProfile::MelsecAnAAnU;
+    return true;
+  }
+  if (plc_profile_text_equals(text, text_size, "melsec:a", sizeof("melsec:a") - 1U)) {
+    out_profile = PlcProfile::MelsecA;
+    return true;
+  }
+  return false;
+}
+
+/// \brief Derives the internal device-layout / command-family selector from a public profile.
+[[nodiscard]] constexpr PlcSeries plc_series_from_profile(PlcProfile profile) noexcept {
+  switch (profile) {
+    case PlcProfile::MelsecIqR:
+      return PlcSeries::IQ_R;
+    case PlcProfile::MelsecIqL:
+      return PlcSeries::IQ_L;
+    case PlcProfile::MelsecQL:
+      return PlcSeries::Q_L;
+    case PlcProfile::MelsecQnA:
+      return PlcSeries::QnA;
+    case PlcProfile::MelsecAnAAnU:
+      return PlcSeries::AnA_AnU;
+    case PlcProfile::MelsecA:
+      return PlcSeries::A;
+  }
+  return PlcSeries::Q_L;
+}
+
 /// \brief Route layout inside the request header.
 enum class RouteKind : std::uint8_t {
   /// Host-station route with fixed `station=0`, `network=0`, `pc=FF`, and local module fields.
@@ -373,8 +480,8 @@ struct ProtocolConfig {
   /// The external device chooses this value in the range `0x00..0xFF`. It is ignored by
   /// `Format1`, `Format3`, `Format4`, binary `Format5`, `1C`, and `1E`.
   std::uint8_t ascii_block_number = 0x00;
-  /// PLC family used for device and subcommand differences.
-  PlcSeries target_series = PlcSeries::Q_L;
+  /// Public PLC profile used to derive frame-family compatibility and device/subcommand layout.
+  PlcProfile plc_profile = PlcProfile::MelsecQL;
   /// Enables or disables the ASCII/binary sum-check where that frame family supports it.
   bool sum_check_enabled = true;
   /// Route header fields used for every encoded request.

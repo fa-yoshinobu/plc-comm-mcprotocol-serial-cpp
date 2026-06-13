@@ -130,12 +130,12 @@ class ByteWriter {
 // Protocol feature predicates and frame/device sizing helpers.
 
 [[nodiscard]] constexpr bool is_iq_r_series(const ProtocolConfig& config) noexcept {
-  return config.target_series == PlcSeries::IQ_R;
+  return plc_series_from_profile(config.plc_profile) == PlcSeries::IQ_R;
 }
 
 [[nodiscard]] constexpr bool is_qna_family_series(const ProtocolConfig& config) noexcept {
-  return config.target_series == PlcSeries::QnA ||
-         config.target_series == PlcSeries::AnA_AnU;
+  const PlcSeries series = plc_series_from_profile(config.plc_profile);
+  return series == PlcSeries::QnA || series == PlcSeries::AnA_AnU;
 }
 
 [[nodiscard]] constexpr bool is_ascii_mode(const ProtocolConfig& config) noexcept {
@@ -475,7 +475,7 @@ class ByteWriter {
 }
 
 [[nodiscard]] constexpr bool is_remote_password_iq_r(const ProtocolConfig& config) noexcept {
-  return config.target_series == PlcSeries::IQ_R;
+  return is_iq_r_series(config);
 }
 
 // Hardware compatibility exception:
@@ -488,7 +488,7 @@ class ByteWriter {
   }
 
   ProtocolConfig wire_config = config;
-  wire_config.target_series = PlcSeries::Q_L;
+  wire_config.plc_profile = PlcProfile::MelsecQL;
   return wire_config;
 }
 
@@ -717,18 +717,21 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (is_c1_frame(config) && !is_ascii_mode(config)) {
     return make_status(StatusCode::UnsupportedConfiguration, "1C frame supports ASCII only");
   }
-  if (!is_c1_supported_series(config.target_series)) {
+  const PlcSeries series = plc_series_from_profile(config.plc_profile);
+  if (!is_c1_supported_series(series)) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         is_e1_frame(config)
-            ? "1E command support currently targets PlcSeries::A or PlcSeries::AnA_AnU/QnA"
-            : "1C command support currently targets PlcSeries::A or PlcSeries::AnA_AnU/QnA");
+            ? "1E command support currently targets PlcProfile melsec:a, melsec:ana-anu, or melsec:qna"
+            : "1C command support currently targets PlcProfile melsec:a, melsec:ana-anu, or melsec:qna");
   }
   return ok_status();
 }
 
 [[nodiscard]] constexpr C1CommandFamily c1_command_family(const ProtocolConfig& config) noexcept {
-  return config.target_series == PlcSeries::A ? C1CommandFamily::AcpuCommon : C1CommandFamily::QnaCommon;
+  return plc_series_from_profile(config.plc_profile) == PlcSeries::A
+      ? C1CommandFamily::AcpuCommon
+      : C1CommandFamily::QnaCommon;
 }
 
 [[nodiscard]] bool append_c1_command(
@@ -2492,9 +2495,15 @@ Status FrameCodec::encode_error_response(
     const std::size_t error_width = ascii_error_code_width(config);
     ByteWriter writer(out_frame);
     if (is_ascii_enq_family(config)) {
+      const std::string_view end_code = ascii_error_end_code(config.frame_kind);
       if (!writer.push(kAsciiNak) ||
-          !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
-          !append_ascii_hex(writer, error_code & 0xFFU, error_width)) {
+          !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size))) {
+        return buffer_too_small("ASCII error response frame buffer is too small");
+      }
+      if (!is_c1_frame(config) && !append_text_bytes(writer, end_code)) {
+        return buffer_too_small("ASCII error response frame buffer is too small");
+      }
+      if (!append_ascii_hex(writer, error_code & 0xFFU, error_width)) {
         return buffer_too_small("ASCII error response frame buffer is too small");
       }
     } else {
@@ -2714,19 +2723,28 @@ DecodeResult FrameCodec::decode_response(
       }
 
       if (bytes[0] == kAsciiNak) {
-        if (bytes.size() < (prefix_size + error_width + terminator_size)) {
+        const std::string_view end_code = ascii_error_end_code(config.frame_kind);
+        std::size_t end_code_width = 0U;
+        if (!is_c1_frame(config) &&
+            bytes.size() >= (prefix_size + end_code.size()) &&
+            std::memcmp(bytes.data() + prefix_size, end_code.data(), end_code.size()) == 0) {
+          end_code_width = end_code.size();
+        }
+
+        const std::size_t error_offset = prefix_size + end_code_width;
+        if (bytes.size() < (error_offset + error_width + terminator_size)) {
           return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
         }
-        if (terminator_size != 0U && !has_ascii_crlf(bytes, prefix_size + error_width)) {
+        if (terminator_size != 0U && !has_ascii_crlf(bytes, error_offset + error_width)) {
           return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
         }
         std::uint32_t parsed_error = 0;
-        if (!parse_ascii_hex(bytes.subspan(prefix_size, error_width), parsed_error) || parsed_error > 0xFFFFU) {
+        if (!parse_ascii_hex(bytes.subspan(error_offset, error_width), parsed_error) || parsed_error > 0xFFFFU) {
           return DecodeResult {
               .status = DecodeStatus::Error,
               .frame = RawResponseFrame {},
               .error = parse_error("Failed to parse ASCII Format1/2/4 error code"),
-              .bytes_consumed = prefix_size + error_width + terminator_size,
+              .bytes_consumed = error_offset + error_width + terminator_size,
           };
         }
         return DecodeResult {
@@ -2737,7 +2755,7 @@ DecodeResult FrameCodec::decode_response(
                 .error_code = static_cast<std::uint16_t>(parsed_error),
             },
             .error = ok_status(),
-            .bytes_consumed = prefix_size + error_width + terminator_size,
+            .bytes_consumed = error_offset + error_width + terminator_size,
         };
       }
 
@@ -3190,10 +3208,10 @@ Status encode_read_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.target_series != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
-        "Extended file-register ER command requires PlcSeries::A");
+        "Extended file-register ER command requires PlcProfile melsec:a");
   }
   const Status address_status = validate_extended_file_register_address(request.head_device);
   if (!address_status.ok()) {
@@ -3223,10 +3241,10 @@ Status encode_direct_read_extended_file_register_words(
     if (!series_status.ok()) {
       return series_status;
     }
-    if (config.target_series != PlcSeries::A) {
+    if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
       return make_status(
           StatusCode::UnsupportedConfiguration,
-          "1E direct extended file-register read requires PlcSeries::A");
+          "1E direct extended file-register read requires PlcProfile melsec:a");
     }
     if (request.points == 0U || request.points > 256U) {
       return invalid_argument("1E direct extended file-register read points must be in range 1..256");
@@ -3248,10 +3266,10 @@ Status encode_direct_read_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.target_series != PlcSeries::QnA) {
+  if (plc_series_from_profile(config.plc_profile) != PlcSeries::QnA) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
-        "Direct extended file-register NR command requires PlcSeries::AnA_AnU/QnA");
+        "Direct extended file-register NR command requires PlcProfile melsec:ana-anu or melsec:qna");
   }
   const Status head_status = validate_extended_file_register_direct_head(request.head_device_number);
   if (!head_status.ok()) {
@@ -3635,10 +3653,10 @@ Status encode_write_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.target_series != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
-        "Extended file-register EW command requires PlcSeries::A");
+        "Extended file-register EW command requires PlcProfile melsec:a");
   }
   const Status address_status = validate_extended_file_register_address(request.head_device);
   if (!address_status.ok()) {
@@ -3669,10 +3687,10 @@ Status encode_direct_write_extended_file_register_words(
     if (!series_status.ok()) {
       return series_status;
     }
-    if (config.target_series != PlcSeries::A) {
+    if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
       return make_status(
           StatusCode::UnsupportedConfiguration,
-          "1E direct extended file-register write requires PlcSeries::A");
+          "1E direct extended file-register write requires PlcProfile melsec:a");
     }
     if (request.words.empty() || request.words.size() > 256U) {
       return invalid_argument("1E direct extended file-register write points must be in range 1..256");
@@ -3695,10 +3713,10 @@ Status encode_direct_write_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.target_series != PlcSeries::QnA) {
+  if (plc_series_from_profile(config.plc_profile) != PlcSeries::QnA) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
-        "Direct extended file-register NW command requires PlcSeries::AnA_AnU/QnA");
+        "Direct extended file-register NW command requires PlcProfile melsec:ana-anu or melsec:qna");
   }
   const Status head_status = validate_extended_file_register_direct_head(request.head_device_number);
   if (!head_status.ok()) {
@@ -4313,10 +4331,10 @@ Status encode_random_write_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.target_series != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
-        "Extended file-register ET command requires PlcSeries::A");
+        "Extended file-register ET command requires PlcProfile melsec:a");
   }
   if (items.empty() || items.size() > 10U) {
     return invalid_argument("Extended file-register random write count must be in range 1..10");
@@ -5164,10 +5182,10 @@ Status encode_register_extended_file_register_monitor(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.target_series != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
-        "Extended file-register EM command requires PlcSeries::A");
+        "Extended file-register EM command requires PlcProfile melsec:a");
   }
   if (request.items.empty() || request.items.size() > 20U) {
     return invalid_argument("Extended file-register monitor registration count must be in range 1..20");
@@ -5292,10 +5310,10 @@ Status encode_read_extended_file_register_monitor(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.target_series != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
-        "Extended file-register ME command requires PlcSeries::A");
+        "Extended file-register ME command requires PlcProfile melsec:a");
   }
   if (items.empty()) {
     return invalid_argument("Extended file-register monitor read requires registered items");
@@ -5729,7 +5747,7 @@ Status parse_read_host_buffer_response(
           .code_mode = config.code_mode,
           .ascii_format = config.ascii_format,
           .ascii_block_number = config.ascii_block_number,
-          .target_series = config.target_series,
+          .plc_profile = config.plc_profile,
           .sum_check_enabled = config.sum_check_enabled,
           .route = config.route,
           .timeout = config.timeout,

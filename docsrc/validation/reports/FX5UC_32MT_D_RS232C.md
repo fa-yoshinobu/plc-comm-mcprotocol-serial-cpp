@@ -9,7 +9,7 @@ This page is the single report for this hardware target.
 - PLC CPU: Mitsubishi iQ-F `FX5UC-32MT/D`
 - Link: `RS-232C`
 - Settings: `38400 / 8E2 / MC Protocol Format5 Binary / sum-check on / station 0`
-- Practical family selection: `ql`
+- Practical profile selection: `melsec:q-l`
 
 ## Summary
 

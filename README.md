@@ -72,9 +72,10 @@ Before building against real hardware, confirm the exact serial settings for you
 The example projects keep intentionally simple defaults. Those defaults are example defaults, not
 the authority for the current validated settings.
 
-The host-side `mcprotocol_cli` is stricter: pass `--frame` and `--series`
-explicitly for live commands so the tool never infers a PLC family or frame
-format from omitted options.
+The host-side `mcprotocol_cli` is stricter: pass `--frame` and `--plc-profile`
+explicitly for live commands so the tool never infers a PLC profile or frame
+format from omitted options. Canonical profile strings use lowercase values such
+as `melsec:q-l` and `melsec:iq-r`.
 
 ## Documentation Map
 
@@ -129,7 +130,7 @@ For the exact PASS / status matrix and the verified serial settings for each tar
   implemented and intentionally omitted command families.
 - `1C` and `1E` remain subset implementations. They are useful, but they do not expose the full
   `3C` / `4C` surface.
-- Some command families are target-dependent and require the right `--series` selection.
+- Some command families are target-dependent and require the right `--plc-profile` selection.
 - Native qualified access is not a supported public workflow. Keep `U...` access on the helper
   path only.
 - `Jn\\...` random and monitor remain outside the currently validated public surface.

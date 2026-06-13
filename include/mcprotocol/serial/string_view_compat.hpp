@@ -3,13 +3,13 @@
 #include <cstddef>
 #include <cstring>
 
-#if defined(__has_include)
+#if defined(__has_include) && !defined(_MSC_VER)
 #if __has_include(<string_view>)
 #include <string_view>
 #endif
 #endif
 
-#if !defined(__cpp_lib_string_view) || (__cpp_lib_string_view < 201606L)
+#if defined(_MSC_VER) || !defined(__cpp_lib_string_view) || (__cpp_lib_string_view < 201606L)
 namespace std {
 
 class string_view {
@@ -27,8 +27,8 @@ class string_view {
 
   constexpr string_view(const char* text, size_type size) noexcept : data_(text), size_(size) {}
 
-  string_view(const char* text) noexcept
-      : data_(text), size_(text ? std::strlen(text) : 0U) {}
+  constexpr string_view(const char* text) noexcept
+      : data_(text ? text : ""), size_(literal_length(text)) {}
 
   [[nodiscard]] constexpr const_iterator begin() const noexcept { return data_; }
   [[nodiscard]] constexpr const_iterator end() const noexcept { return data_ + size_; }
@@ -51,10 +51,54 @@ class string_view {
     return string_view(data_ + pos, actual);
   }
 
+  constexpr void remove_prefix(size_type count) noexcept {
+    if (count > size_) {
+      count = size_;
+    }
+    data_ += count;
+    size_ -= count;
+  }
+
+  [[nodiscard]] constexpr size_type find(value_type ch, size_type pos = 0U) const noexcept {
+    for (size_type index = pos; index < size_; ++index) {
+      if (data_[index] == ch) {
+        return index;
+      }
+    }
+    return npos;
+  }
+
  private:
+  [[nodiscard]] static constexpr size_type literal_length(const char* text) noexcept {
+    if (text == nullptr) {
+      return 0U;
+    }
+    size_type size = 0U;
+    while (text[size] != '\0') {
+      ++size;
+    }
+    return size;
+  }
+
   const char* data_ = "";
   size_type size_ = 0U;
 };
+
+[[nodiscard]] constexpr bool operator==(string_view lhs, string_view rhs) noexcept {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+  for (string_view::size_type index = 0U; index < lhs.size(); ++index) {
+    if (lhs[index] != rhs[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+[[nodiscard]] constexpr bool operator!=(string_view lhs, string_view rhs) noexcept {
+  return !(lhs == rhs);
+}
 
 }  // namespace std
 #endif

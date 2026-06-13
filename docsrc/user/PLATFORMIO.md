@@ -78,7 +78,7 @@ What can be compiled out:
   You can remove whole code modes and whole frame families from the codec dispatch
 - not yet a trim unit
   This repository does not yet cut individual commands inside one family, per-device paths, or
-  per-PLC-series support as separate compile-time switches
+  per-PLC-profile support as separate compile-time switches
 
 Capacity tuning:
 

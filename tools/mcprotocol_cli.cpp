@@ -1,6 +1,4 @@
 #include <array>
-#include <charconv>
-#include <chrono>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -8,7 +6,19 @@
 #include <cstdlib>
 #include <cstring>
 #include "mcprotocol/serial/span_compat.hpp"
-#include <string_view>
+#include "mcprotocol/serial/string_view_compat.hpp"
+
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <time.h>
+#endif
 
 #include "mcprotocol/serial/client.hpp"
 #include "mcprotocol/serial/link_direct.hpp"
@@ -64,6 +74,7 @@ using mcprotocol::serial::MultiBlockReadBlockResult;
 using mcprotocol::serial::MultiBlockReadRequest;
 using mcprotocol::serial::MultiBlockWriteBlock;
 using mcprotocol::serial::MultiBlockWriteRequest;
+using mcprotocol::serial::PlcProfile;
 using mcprotocol::serial::PlcSeries;
 using mcprotocol::serial::PosixSerialConfig;
 using mcprotocol::serial::PosixSerialPort;
@@ -88,6 +99,8 @@ using mcprotocol::serial::make_qualified_buffer_read_words_request;
 using mcprotocol::serial::make_qualified_buffer_write_words_request;
 using mcprotocol::serial::parse_qualified_buffer_word_device;
 using mcprotocol::serial::parse_link_direct_device;
+using mcprotocol::serial::parse_plc_profile;
+using mcprotocol::serial::plc_series_from_profile;
 using mcprotocol::serial::qualified_buffer_kind_name;
 
 enum class CommandKind : std::uint8_t {
@@ -173,7 +186,7 @@ struct CliOptions {
   PosixSerialConfig serial {};
   ProtocolConfig protocol {};
   bool frame_specified = false;
-  bool series_specified = false;
+  bool plc_profile_specified = false;
   bool rts_toggle = false;
   bool dump_frames = false;
   CommandKind command = CommandKind::None;
@@ -297,9 +310,17 @@ constexpr std::size_t kCliMaxExtendedFileRegisterWordPoints = 256U;
 constexpr std::size_t kCliMaxExtendedFileRegisterRandomWriteItems = 40U;
 
 [[nodiscard]] std::uint32_t now_ms() {
-  const auto now = std::chrono::steady_clock::now().time_since_epoch();
+#if defined(_WIN32)
+  return static_cast<std::uint32_t>(GetTickCount64());
+#else
+  struct timespec ts {};
+  if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+    return 0U;
+  }
   return static_cast<std::uint32_t>(
-      std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
+      (static_cast<std::uint64_t>(ts.tv_sec) * 1000ULL) +
+      (static_cast<std::uint64_t>(ts.tv_nsec) / 1000000ULL));
+#endif
 }
 
 [[nodiscard]] bool equals_ignore_case(std::string_view lhs, std::string_view rhs) {
@@ -325,10 +346,11 @@ constexpr std::size_t kCliMaxExtendedFileRegisterRandomWriteItems = 40U;
 }
 
 [[nodiscard]] constexpr std::size_t cli_request_device_reference_size(const ProtocolConfig& config) {
+  const bool iqr = plc_series_from_profile(config.plc_profile) == PlcSeries::IQ_R;
   if (config.code_mode == CodeMode::Ascii) {
-    return config.target_series == PlcSeries::IQ_R ? 12U : 8U;
+    return iqr ? 12U : 8U;
   }
-  return config.target_series == PlcSeries::IQ_R ? 6U : 4U;
+  return iqr ? 6U : 4U;
 }
 
 [[nodiscard]] constexpr std::size_t cli_max_batch_write_words_points(const ProtocolConfig& config) {
@@ -477,7 +499,7 @@ void print_usage() {
       "  --rts-toggle on|off        Toggle RTS during TX for RS-485 DE control\n"
       "  --dump-frames on|off       Print raw TX/RX frame bytes to stderr (default: off)\n"
       "  --frame MODE               Required. c4-binary | c4-ascii-f1 | c4-ascii-f2 | c4-ascii-f3 | c4-ascii-f4 | c3-ascii-f1 | c3-ascii-f2 | c3-ascii-f3 | c3-ascii-f4 | c2-ascii-f1 | c2-ascii-f2 | c2-ascii-f3 | c2-ascii-f4 | c1-ascii-f1 | c1-ascii-f3 | c1-ascii-f4 | e1-binary | e1-ascii\n"
-      "  --series ql|iqr|qna|a      Required. Target PLC family for device encoding\n"
+      "  --plc-profile PROFILE      Required. Canonical PLC profile: melsec:q-l | melsec:iq-l | melsec:iq-r | melsec:qna | melsec:ana-anu | melsec:a\n"
       "  --block-no N               ASCII Format2 block number 0..255 (default: 0)\n"
       "  --station N                Station number; non-zero implies multidrop\n"
       "  --self-station N           Self-station number for m:n connections\n"
@@ -488,7 +510,7 @@ void print_usage() {
       "Notes:\n"
       "  remote-run defaults to no-force + no-clear. Use force or all-clear only when you intend that effect.\n"
       "  remote-pause defaults to no-force. remote-stop and latch-clear change PLC state.\n"
-      "  unlock/lock send the configured remote password as ASCII bytes; non-iQ-R targets use exactly 4 chars, iQ-R uses 6..32.\n"
+      "  unlock/lock send the configured remote password as ASCII bytes; non-iQ-R profiles use exactly 4 chars, melsec:iq-r uses 6..32.\n"
       "  error-clear sends C24 clear-error-information (1617); it is not the E71 COM.ERR-only variant.\n"
       "  remote-reset may complete without a response; this CLI treats a pure response-timeout after TX as success.\n"
       "  global-signal maps to C24 command 1618 on 2C/3C/4C; STATION defaults to 0.\n"
@@ -498,10 +520,10 @@ void print_usage() {
       "  read-qualified-words / write-qualified-words use the practical 0601/1601 helper path.\n"
       "  read-native-qualified-words / write-native-qualified-words are unsupported diagnostic probes, not a supported workflow.\n"
       "  link-direct commands use binary-only device extension specification for Jn\\\\X/Y/B/W/SB/SW.\n"
-      "  c1-ascii-* targets --series a or --series qna. File-register commands also map onto e1-* where chapter-18 supports them.\n"
+      "  c1-ascii-* targets --plc-profile melsec:a, melsec:ana-anu, or melsec:qna. File-register commands also map onto e1-* where chapter-18 supports them.\n"
       "  loopback maps to TT on c1-ascii-* and 0619 on 2C/3C/4C.\n"
       "  read/register/delete-user-frame map to 0610/1610 on 2C/3C/4C only; HEXBYTES is raw registration data in hexadecimal.\n"
-      "  e1-* targets --series a or --series qna. E1 exposes chapter-18 device-memory, extended-file-register, and special-function-module commands only.\n"
+      "  e1-* targets --plc-profile melsec:a, melsec:ana-anu, or melsec:qna. E1 exposes chapter-18 device-memory, extended-file-register, and special-function-module commands only.\n"
       "  read/write/random-write/monitor-file-register use BLOCK:RDEVICE. On c1-ascii-* this is ER/EW/ET/EM/ME; on e1-* it is the chapter-18 block-addressed path.\n"
       "  read/write-file-register-direct use a direct R-device number. On c1-ascii-* this is QnA-common NR/NW; on e1-* it is the chapter-18 direct path.\n"
       "  multi-block-read-link-direct-bits uses POINTS in 16-bit units.\n"
@@ -513,10 +535,33 @@ void print_usage() {
 }
 
 [[nodiscard]] bool parse_u32(std::string_view text, std::uint32_t& out_value, int base = 10) {
-  const char* begin = text.data();
-  const char* end = text.data() + text.size();
-  const auto result = std::from_chars(begin, end, out_value, base);
-  return result.ec == std::errc() && result.ptr == end;
+  if (text.empty() || (base != 10 && base != 16)) {
+    return false;
+  }
+
+  std::uint32_t value = 0U;
+  for (char ch : text) {
+    int digit = -1;
+    if (ch >= '0' && ch <= '9') {
+      digit = ch - '0';
+    } else if (base == 16 && ch >= 'A' && ch <= 'F') {
+      digit = 10 + (ch - 'A');
+    } else if (base == 16 && ch >= 'a' && ch <= 'f') {
+      digit = 10 + (ch - 'a');
+    }
+
+    if (digit < 0 || digit >= base) {
+      return false;
+    }
+    const auto digit_value = static_cast<std::uint32_t>(digit);
+    if (value > ((0xFFFFFFFFU - digit_value) / static_cast<std::uint32_t>(base))) {
+      return false;
+    }
+    value = (value * static_cast<std::uint32_t>(base)) + digit_value;
+  }
+
+  out_value = value;
+  return true;
 }
 
 [[nodiscard]] bool parse_u32_auto(std::string_view text, std::uint32_t& out_value) {
@@ -800,24 +845,13 @@ void print_usage() {
   return false;
 }
 
-[[nodiscard]] bool parse_series(std::string_view text, ProtocolConfig& config) {
-  if (text == "ql") {
-    config.target_series = PlcSeries::Q_L;
-    return true;
+[[nodiscard]] bool parse_profile(std::string_view text, ProtocolConfig& config) {
+  PlcProfile profile = PlcProfile::MelsecQL;
+  if (!parse_plc_profile(text.data(), text.size(), profile)) {
+    return false;
   }
-  if (text == "iqr") {
-    config.target_series = PlcSeries::IQ_R;
-    return true;
-  }
-  if (text == "qna") {
-    config.target_series = PlcSeries::QnA;
-    return true;
-  }
-  if (text == "a") {
-    config.target_series = PlcSeries::A;
-    return true;
-  }
-  return false;
+  config.plc_profile = profile;
+  return true;
 }
 
 [[nodiscard]] bool parse_device_address(std::string_view text, DeviceAddress& out_device) {
@@ -1050,7 +1084,7 @@ void print_usage() {
   options.protocol.code_mode = CodeMode::Binary;
   options.protocol.ascii_format = AsciiFormat::Format3;
   options.protocol.ascii_block_number = 0x00;
-  options.protocol.target_series = PlcSeries::Q_L;
+  options.protocol.plc_profile = PlcProfile::MelsecQL;
   options.protocol.sum_check_enabled = true;
   options.protocol.route.kind = RouteKind::HostStation;
   options.protocol.route.station_no = 0x00;
@@ -1104,11 +1138,11 @@ void print_usage() {
         return false;
       }
       options.frame_specified = true;
-    } else if (arg == "--series" && (index + 1) < argc) {
-      if (!parse_series(argv[++index], options.protocol)) {
+    } else if (arg == "--plc-profile" && (index + 1) < argc) {
+      if (!parse_profile(argv[++index], options.protocol)) {
         return false;
       }
-      options.series_specified = true;
+      options.plc_profile_specified = true;
     } else if (arg == "--block-no" && (index + 1) < argc) {
       std::uint32_t value = 0;
       if (!parse_u32_auto(argv[++index], value) || value > 0xFFU) {
@@ -1284,7 +1318,7 @@ void print_usage() {
   }
 
   if (options.command != CommandKind::RecoverC24 &&
-      (!options.frame_specified || !options.series_specified)) {
+      (!options.frame_specified || !options.plc_profile_specified)) {
     return false;
   }
 

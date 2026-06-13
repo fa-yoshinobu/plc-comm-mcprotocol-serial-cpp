@@ -134,12 +134,12 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
 
 /// \brief Returns a practical default for Q/L-era `Format5 / Binary / C4`.
 [[nodiscard]] constexpr ProtocolConfig make_c4_binary_protocol(
-    PlcSeries series = PlcSeries::Q_L) noexcept {
+    PlcProfile profile = PlcProfile::MelsecQL) noexcept {
   ProtocolConfig config {};
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Binary;
   config.ascii_format = AsciiFormat::Format3;
-  config.target_series = series;
+  config.plc_profile = profile;
   config.sum_check_enabled = true;
   config.route.kind = RouteKind::HostStation;
   config.route.station_no = 0x00;
@@ -156,12 +156,12 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
 
 /// \brief Returns a practical default for `Format4 / ASCII / C4`.
 [[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format4_protocol(
-    PlcSeries series = PlcSeries::Q_L) noexcept {
+    PlcProfile profile = PlcProfile::MelsecQL) noexcept {
   ProtocolConfig config {};
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Ascii;
   config.ascii_format = AsciiFormat::Format4;
-  config.target_series = series;
+  config.plc_profile = profile;
   config.sum_check_enabled = false;
   config.route.kind = RouteKind::MultidropStation;
   config.route.station_no = 0x00;
@@ -182,8 +182,8 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
 /// number inserted before the frame ID. The default block number is `0x00`; change
 /// `ProtocolConfig::ascii_block_number` if the host side needs a different value.
 [[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format2_protocol(
-    PlcSeries series = PlcSeries::Q_L) noexcept {
-  ProtocolConfig config = make_c4_ascii_format4_protocol(series);
+    PlcProfile profile = PlcProfile::MelsecQL) noexcept {
+  ProtocolConfig config = make_c4_ascii_format4_protocol(profile);
   config.ascii_format = AsciiFormat::Format2;
   config.sum_check_enabled = true;
   config.route.kind = RouteKind::HostStation;

@@ -19,17 +19,17 @@ Current target for the remaining hold:
 - Frame: `c4-binary`, MC Protocol `4C Format5 Binary`
 - Station: `0`
 - Sum-check: on
-- Focused series setting: `--series iqr`
+- Focused profile setting: `--plc-profile melsec:iq-r`
 - Manual PDF used for command applicability checks: `D:\_github_plc\sh080003ah.pdf`
 
 CLI prefix used for the 2026-06-12 focused checks:
 
 ```text
-.\build\manual\mcprotocol_cli.exe --device COM3 --baud 28800 --data-bits 8 --parity E --stop-bits 2 --frame c4-binary --series iqr --station 0 --sum-check on --response-timeout-ms 5000 --inter-byte-timeout-ms 250
+.\build\manual\mcprotocol_cli.exe --device COM3 --baud 28800 --data-bits 8 --parity E --stop-bits 2 --frame c4-binary --plc-profile melsec:iq-r --station 0 --sum-check on --response-timeout-ms 5000 --inter-byte-timeout-ms 250
 ```
 
 For general contiguous/helper traffic on the same hardware, the practical setting was usually
-`--series ql`. The `--series iqr` setting was used for iQ-R-only spot devices such as `SM`, `SD`,
+`--plc-profile melsec:q-l`. The `--plc-profile melsec:iq-r` setting was used for iQ-R-only spot devices such as `SM`, `SD`,
 `RD`, `LZ`, `J1\...`, and long current-value focused checks.
 
 ## COM3 Sanity Check
@@ -60,7 +60,7 @@ remote password failures.
 Date: 2026-06-12
 
 Conditions: `R08CPU`, `RJ71C24-R2` on `COM3`, `c4-binary`, `28800 / 8E2`, sum-check on,
-station `0`, `--series iqr`.
+station `0`, `--plc-profile melsec:iq-r`.
 
 Sequence and results:
 
@@ -111,7 +111,7 @@ These items are no longer active holds.
 
 Date: 2026-06-12
 
-Focused setup: `COM3 / 28800 / 8E2 / c4-binary / station 0 / sum-check on / --series iqr`.
+Focused setup: `COM3 / 28800 / 8E2 / c4-binary / station 0 / sum-check on / --plc-profile melsec:iq-r`.
 
 - Before: `random-read LZ0 LZ1` returned `LZ0=0x00000000`, `LZ1=0x00000000`.
 - `random-write-words LZ1=5678` returned `ok`; immediate `random-read LZ1 LZ0` returned
@@ -143,7 +143,7 @@ The manual's execution condition is to put the accessed unit into STOP state bef
 remote latch clear. If the target was put into remote STOP or remote PAUSE by a request from another
 external device, remote latch clear cannot be executed until that remote STOP/PAUSE is released.
 
-Focused setup: `COM3 / 28800 / 8E2 / c4-binary / station 0 / sum-check on / --series iqr`.
+Focused setup: `COM3 / 28800 / 8E2 / c4-binary / station 0 / sum-check on / --plc-profile melsec:iq-r`.
 
 - `latch-clear` with the CPU in its normal RUN state reproduced `0x4013`; `read-words D0 1` still
   passed immediately afterward.
@@ -173,7 +173,7 @@ The validated same-channel sequence is `remote-stop` -> `latch-clear` -> `remote
 Before re-running the remaining remote-password hold, record:
 
 - PLC model, serial module, firmware if available, and CPU state.
-- Serial settings, frame format, station, sum-check, and `--series` value.
+- Serial settings, frame format, station, sum-check, and `--plc-profile` value.
 - Target-side remote password and remote operation parameters.
 
 Suggested order:

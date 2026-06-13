@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Replaced the public PLC selector with `PlcProfile`: `ProtocolConfig::plc_profile`
+  now carries canonical profiles such as `melsec:q-l` and `melsec:iq-r`, while
+  `PlcSeries` remains an internal layout/command-family derivation.
+- Changed `mcprotocol_cli` from `--series` to required `--plc-profile`; short
+  labels such as `ql` and `iqr` are rejected.
+- Renamed Linux CLI wrapper configuration from `MCPROTOCOL_SERIES` to
+  `MCPROTOCOL_PLC_PROFILE`.
+
 ## 0.2.8 - 2026-06-12
 
 - Bumped release metadata after the resolved live-validation pass.
@@ -16,9 +26,9 @@
 ## 0.2.6 - 2026-05-02
 
 - Made host `mcprotocol_cli` protocol selection explicit: live commands now
-  require `--frame` and `--series` instead of falling back to `c4-binary` + `ql`.
+  require `--frame` and `--plc-profile` instead of falling back to `c4-binary` + `melsec:q-l`.
 - Updated host shell examples to require `MCPROTOCOL_FRAME` and
-  `MCPROTOCOL_SERIES` unless a target-specific wrapper supplies them.
+  `MCPROTOCOL_PLC_PROFILE` unless a target-specific wrapper supplies them.
 - Removed `0631` CPU-monitoring deregistration from the public API, codec, CLI,
   and tests, and documented `0630` / `0631` CPU monitoring as explicitly not
   needed for this library.

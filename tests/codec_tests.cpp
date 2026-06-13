@@ -3,14 +3,29 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <iostream>
-#include <span>
-#include <string_view>
 
 #include "mcprotocol/serial/client.hpp"
 #include "mcprotocol/serial/high_level.hpp"
 #include "mcprotocol/serial/link_direct.hpp"
 #include "mcprotocol/serial/qualified_buffer.hpp"
+#include "mcprotocol/serial/span_compat.hpp"
+#include "mcprotocol/serial/string_view_compat.hpp"
+
+#if defined(_MSC_VER)
+namespace std {
+template <typename InputIt1, typename InputIt2>
+constexpr bool equal(InputIt1 first1, InputIt1 last1, InputIt2 first2) {
+  while (first1 != last1) {
+    if (!(*first1 == *first2)) {
+      return false;
+    }
+    ++first1;
+    ++first2;
+  }
+  return true;
+}
+}  // namespace std
+#endif
 
 namespace {
 
@@ -54,6 +69,7 @@ using mcprotocol::serial::MultiBlockReadBlockResult;
 using mcprotocol::serial::MultiBlockReadRequest;
 using mcprotocol::serial::MultiBlockWriteBlock;
 using mcprotocol::serial::MultiBlockWriteRequest;
+using mcprotocol::serial::PlcProfile;
 using mcprotocol::serial::PlcSeries;
 using mcprotocol::serial::ProtocolConfig;
 using mcprotocol::serial::QualifiedBufferDeviceKind;
@@ -68,6 +84,9 @@ using mcprotocol::serial::SerialModuleChannel;
 using mcprotocol::serial::SerialModuleCommunicationSpeed;
 using mcprotocol::serial::SerialModuleModeNo;
 using mcprotocol::serial::SerialModuleModeSwitchRequest;
+using mcprotocol::serial::parse_plc_profile;
+using mcprotocol::serial::plc_profile_name;
+using mcprotocol::serial::plc_series_from_profile;
 using mcprotocol::serial::sparse_native_mask_word;
 using mcprotocol::serial::sparse_native_requested_bit_value;
 using mcprotocol::serial::Status;
@@ -96,6 +115,10 @@ using mcprotocol::serial::make_qualified_buffer_write_words_request;
 using mcprotocol::serial::parse_link_direct_device;
 using mcprotocol::serial::parse_qualified_buffer_word_device;
 
+[[nodiscard]] bool parse_plc_profile_text(std::string_view text, PlcProfile& profile) {
+  return parse_plc_profile(text.data(), text.size(), profile);
+}
+
 namespace CommandCodec = mcprotocol::serial::CommandCodec;
 
 ProtocolConfig make_binary_c4_config() {
@@ -103,7 +126,7 @@ ProtocolConfig make_binary_c4_config() {
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Binary;
   config.ascii_format = AsciiFormat::Format3;
-  config.target_series = PlcSeries::Q_L;
+  config.plc_profile = PlcProfile::MelsecQL;
   config.sum_check_enabled = true;
   config.route = RouteConfig {
       .kind = RouteKind::HostStation,
@@ -120,7 +143,7 @@ ProtocolConfig make_binary_c4_config() {
 
 ProtocolConfig make_binary_c4_iqr_config() {
   ProtocolConfig config = make_binary_c4_config();
-  config.target_series = PlcSeries::IQ_R;
+  config.plc_profile = PlcProfile::MelsecIqR;
   return config;
 }
 
@@ -129,7 +152,7 @@ ProtocolConfig make_ascii_c3_format3_config() {
   config.frame_kind = FrameKind::C3;
   config.code_mode = CodeMode::Ascii;
   config.ascii_format = AsciiFormat::Format3;
-  config.target_series = PlcSeries::Q_L;
+  config.plc_profile = PlcProfile::MelsecQL;
   config.sum_check_enabled = true;
   config.route = RouteConfig {
       .kind = RouteKind::HostStation,
@@ -156,7 +179,7 @@ ProtocolConfig make_ascii_c4_format2_config() {
   config.code_mode = CodeMode::Ascii;
   config.ascii_format = AsciiFormat::Format2;
   config.ascii_block_number = 0x00U;
-  config.target_series = PlcSeries::Q_L;
+  config.plc_profile = PlcProfile::MelsecQL;
   config.sum_check_enabled = true;
   config.route = RouteConfig {
       .kind = RouteKind::HostStation,
@@ -182,7 +205,7 @@ ProtocolConfig make_ascii_c4_format4_config() {
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Ascii;
   config.ascii_format = AsciiFormat::Format4;
-  config.target_series = PlcSeries::Q_L;
+  config.plc_profile = PlcProfile::MelsecQL;
   config.sum_check_enabled = false;
   config.route = RouteConfig {
       .kind = RouteKind::MultidropStation,
@@ -206,7 +229,7 @@ ProtocolConfig make_ascii_c2_format4_config() {
 ProtocolConfig make_ascii_c1_format4_qna_config() {
   ProtocolConfig config = make_ascii_c4_format4_config();
   config.frame_kind = FrameKind::C1;
-  config.target_series = PlcSeries::QnA;
+  config.plc_profile = PlcProfile::MelsecQnA;
   config.route = RouteConfig {
       .kind = RouteKind::HostStation,
       .station_no = 0x00,
@@ -222,14 +245,14 @@ ProtocolConfig make_ascii_c1_format4_qna_config() {
 
 ProtocolConfig make_ascii_c1_format4_a_config() {
   ProtocolConfig config = make_ascii_c1_format4_qna_config();
-  config.target_series = PlcSeries::A;
+  config.plc_profile = PlcProfile::MelsecA;
   return config;
 }
 
 ProtocolConfig make_ascii_e1_a_config() {
   ProtocolConfig config = make_ascii_c4_format4_config();
   config.frame_kind = FrameKind::E1;
-  config.target_series = PlcSeries::A;
+  config.plc_profile = PlcProfile::MelsecA;
   config.route = RouteConfig {
       .kind = RouteKind::HostStation,
       .station_no = 0x00,
@@ -247,14 +270,14 @@ ProtocolConfig make_ascii_e1_a_config() {
 ProtocolConfig make_binary_e1_a_config() {
   ProtocolConfig config = make_binary_c4_config();
   config.frame_kind = FrameKind::E1;
-  config.target_series = PlcSeries::A;
+  config.plc_profile = PlcProfile::MelsecA;
   config.timeout.response_timeout_ms = 4000;
   return config;
 }
 
 ProtocolConfig make_ascii_c4_format4_iqr_config() {
   ProtocolConfig config = make_ascii_c4_format4_config();
-  config.target_series = PlcSeries::IQ_R;
+  config.plc_profile = PlcProfile::MelsecIqR;
   return config;
 }
 
@@ -542,8 +565,8 @@ void test_encode_control_global_signal_uses_route_station_not_specification_word
       frame,
       frame_size);
   assert(status.ok());
-  assert(frame_size >= 5U);
-  assert(frame[3] == 0xFFU);
+  assert(frame_size >= 6U);
+  assert(frame[5] == 0xFFU);
 }
 
 void test_encode_switch_serial_module_mode_binary_request_matches_manual() {
@@ -1126,7 +1149,7 @@ void test_decode_ascii_c1_error_uses_two_digit_code() {
 
 void test_encode_ascii_c1_rejects_unsupported_series() {
   ProtocolConfig config = make_ascii_c1_format4_qna_config();
-  config.target_series = PlcSeries::Q_L;
+  config.plc_profile = PlcProfile::MelsecQL;
   const BatchReadWordsRequest request {
       .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100},
       .points = 1,
@@ -2184,7 +2207,7 @@ void test_high_level_protocol_presets() {
   const ProtocolConfig config = make_c4_binary_protocol();
   assert(config.frame_kind == FrameKind::C4);
   assert(config.code_mode == CodeMode::Binary);
-  assert(config.target_series == PlcSeries::Q_L);
+  assert(config.plc_profile == PlcProfile::MelsecQL);
   assert(config.sum_check_enabled);
   assert(config.route.station_no == 0x00);
 
@@ -2194,6 +2217,31 @@ void test_high_level_protocol_presets() {
   assert(ascii_config.ascii_format == AsciiFormat::Format2);
   assert(ascii_config.ascii_block_number == 0x00U);
   assert(ascii_config.sum_check_enabled);
+}
+
+void test_plc_profile_canonical_names_only() {
+  PlcProfile profile = PlcProfile::MelsecQL;
+  assert(parse_plc_profile_text("melsec:iq-r", profile));
+  assert(profile == PlcProfile::MelsecIqR);
+  assert(plc_series_from_profile(profile) == PlcSeries::IQ_R);
+  assert(std::string_view(plc_profile_name(profile)) == "melsec:iq-r");
+
+  assert(parse_plc_profile_text("melsec:q-l", profile));
+  assert(profile == PlcProfile::MelsecQL);
+  assert(plc_series_from_profile(profile) == PlcSeries::Q_L);
+
+  assert(parse_plc_profile_text("melsec:iq-l", profile));
+  assert(profile == PlcProfile::MelsecIqL);
+  assert(plc_series_from_profile(profile) == PlcSeries::IQ_L);
+
+  assert(parse_plc_profile_text("melsec:ana-anu", profile));
+  assert(profile == PlcProfile::MelsecAnAAnU);
+  assert(plc_series_from_profile(profile) == PlcSeries::QnA);
+
+  assert(!parse_plc_profile_text("iqr", profile));
+  assert(!parse_plc_profile_text("iq-r", profile));
+  assert(!parse_plc_profile_text("ql", profile));
+  assert(!parse_plc_profile_text("qna", profile));
 }
 
 void test_high_level_make_random_bit_item() {
@@ -3559,7 +3607,7 @@ void test_encode_random_write_bits_binary_ql_keeps_device_numbers() {
 
 void test_qna_family_random_access_uses_smaller_limits() {
   auto config = make_binary_c4_config();
-  config.target_series = PlcSeries::AnA_AnU;
+  config.plc_profile = PlcProfile::MelsecAnAAnU;
   static_assert(static_cast<std::uint8_t>(PlcSeries::AnA_AnU) == static_cast<std::uint8_t>(PlcSeries::QnA));
 
   std::array<std::uint8_t, 2048> request_data {};
@@ -5342,6 +5390,7 @@ int main() {
   test_parse_qualified_buffer_word_device_rejects_overflow();
   test_high_level_make_contiguous_requests();
   test_high_level_protocol_presets();
+  test_plc_profile_canonical_names_only();
   test_high_level_make_random_bit_item();
   test_high_level_make_random_dword_item_defaults();
   test_high_level_make_random_request_from_specs();
@@ -5433,6 +5482,5 @@ int main() {
   test_encode_multi_block_read_rejects_long_devices_as_head();
   test_encode_multi_block_write_rejects_long_devices_as_head();
 
-  std::cout << "codec_tests: ok\n";
   return 0;
 }

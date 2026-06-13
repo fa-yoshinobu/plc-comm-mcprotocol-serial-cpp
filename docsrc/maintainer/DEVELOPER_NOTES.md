@@ -60,7 +60,7 @@ Keep host-side tests aligned with the documented request shapes before blaming h
 
 - Pin representative `1402`, `0406`, `0801`, and `0802` request layouts against manual-backed
   fixtures in `tests/codec_tests.cpp`.
-- Match `--series` to the actual CPU family before interpreting PLC end codes.
+- Match `--plc-profile` to the actual CPU/profile family before interpreting PLC end codes.
 - Keep binary non-iQ-R bit and multi-block layouts covered by tests. Count-width and bit-packing
   mistakes are a common source of false hardware mismatches.
 - Revalidate helper/buffer workflows per target. Do not project the C24-era behavior onto FX

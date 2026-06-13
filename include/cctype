@@ -15,6 +15,7 @@ namespace std {
 using ::isalnum;
 using ::isalpha;
 using ::isdigit;
+using ::isprint;
 using ::isspace;
 using ::tolower;
 using ::toupper;

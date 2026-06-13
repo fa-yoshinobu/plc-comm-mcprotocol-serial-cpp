@@ -3,19 +3,24 @@
 #include <array>
 #include <cstddef>
 
-#if defined(__has_include)
+#if defined(__has_include) && !defined(_MSC_VER)
 #if __has_include(<span>)
 #include <span>
 #endif
 #endif
 
-#if !defined(__cpp_lib_span) || (__cpp_lib_span < 202002L)
+#if defined(_MSC_VER) || !defined(__cpp_lib_span) || (__cpp_lib_span < 202002L)
 namespace std {
 
 constexpr size_t dynamic_extent = static_cast<size_t>(-1);
 
-#if !defined(__cpp_lib_byte) || (__cpp_lib_byte < 201603L)
+#if defined(_MSC_VER) || !defined(__cpp_lib_byte) || (__cpp_lib_byte < 201603L)
 enum class byte : unsigned char {};
+
+template <typename IntegerType>
+[[nodiscard]] constexpr IntegerType to_integer(byte value) noexcept {
+  return static_cast<IntegerType>(value);
+}
 #endif
 
 template <typename T>
