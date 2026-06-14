@@ -35,6 +35,7 @@ struct AppState {
 AppState g_app;
 
 ProtocolConfig make_protocol() {
+  // Keep frame/profile explicit. See docsrc/user/GOTCHAS.md before changing them.
   ProtocolConfig config;
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Ascii;
@@ -61,11 +62,13 @@ void on_request_complete(void* user, Status status) {
 }
 
 void start_uart_tx(AppState& app, std::span<const std::byte> frame) {
+  // A real UART driver would start DMA or interrupt-driven transmission here.
   (void)frame;
   app.tx_started = true;
 }
 
 void simulate_response(AppState& app, std::uint32_t now_ms) {
+  // This example feeds a generated success frame into the async decoder.
   const ProtocolConfig config = make_protocol();
   const std::array<std::uint8_t, 8> response_data {'1', '2', '3', '4', '5', '6', '7', '8'};
   std::array<std::uint8_t, mcprotocol::serial::kMaxResponseFrameBytes> response_frame {};
@@ -81,6 +84,7 @@ void simulate_response(AppState& app, std::uint32_t now_ms) {
     return;
   }
 
+  // Feed received bytes back to the state machine.
   app.client.on_rx_bytes(
       now_ms,
       std::span<const std::byte>(
@@ -110,6 +114,7 @@ void report_once(AppState& app) {
 
 void setup() {
   Serial.begin(115200);
+  // Configure once with the explicit protocol before starting requests.
   const Status status = g_app.client.configure(make_protocol());
   if (!status.ok()) {
     g_app.done = true;
@@ -121,6 +126,7 @@ void loop() {
   const std::uint32_t now = millis();
 
   if (!g_app.done && !g_app.started) {
+    // Start a read-only request; the transport sends pending_tx_frame().
     const Status status = g_app.client.async_batch_read_words(
         now,
         BatchReadWordsRequest {
@@ -140,6 +146,7 @@ void loop() {
   }
 
   if (!g_app.done && g_app.tx_started && !g_app.tx_completed) {
+    // Notify the client after the transport reports the frame was sent.
     const Status status = g_app.client.notify_tx_complete(now);
     if (status.ok()) {
       g_app.tx_completed = true;
@@ -151,6 +158,7 @@ void loop() {
   }
 
   if (!g_app.done) {
+    // Poll drives request timeout handling between UART events.
     g_app.client.poll(now);
   }
 

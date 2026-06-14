@@ -1,17 +1,15 @@
-# User Docs
+# User docs
 
-This section is for library entrypoints, wiring, and MCU integration.
+Start with [GETTING_STARTED.md](GETTING_STARTED.md) if you are bringing up the library for the first time.
 
-If you want the smallest library usage example first, start from:
-
-- [../../examples/host_sync_quickstart.cpp](../../examples/host_sync_quickstart.cpp)
-- [../../README.md](../../README.md)
-
-Current pages:
-
-- [LIBRARY_ENTRYPOINTS.md](LIBRARY_ENTRYPOINTS.md)
-- [PROFILES.md](PROFILES.md)
-- [PLATFORMIO.md](PLATFORMIO.md)
-- [WIRING_GUIDE.md](WIRING_GUIDE.md)
-- [MCU_QUICKSTART.md](MCU_QUICKSTART.md)
-- [FAQ.md](FAQ.md)
+| Page | Use it for |
+| --- | --- |
+| [GETTING_STARTED.md](GETTING_STARTED.md) | Install the library, choose a profile, and perform your first read. |
+| [USAGE_GUIDE.md](USAGE_GUIDE.md) | Choose the high-level, host sync, or low-level async API path. |
+| [SUPPORTED_REGISTERS.md](SUPPORTED_REGISTERS.md) | Check device families and current string-address syntax. |
+| [PROFILES.md](PROFILES.md) | Choose the exact canonical PLC profile. |
+| [PLATFORMIO.md](PLATFORMIO.md) | Build PlatformIO examples and tune footprint profiles. |
+| [WIRING_GUIDE.md](WIRING_GUIDE.md) | Check serial wiring before live communication. |
+| [MCU_QUICKSTART.md](MCU_QUICKSTART.md) | Read the older MCU-focused quickstart. |
+| [GOTCHAS.md](GOTCHAS.md) | Troubleshoot common setup mistakes. |
+| [FAQ.md](FAQ.md) | Check common questions. |

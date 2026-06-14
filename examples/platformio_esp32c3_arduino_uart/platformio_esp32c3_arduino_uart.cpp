@@ -55,6 +55,7 @@ AppState g_app;
 HardwareSerial& g_plc_serial = Serial1;
 
 ProtocolConfig make_protocol() {
+  // Keep frame/profile explicit. See docsrc/user/GOTCHAS.md before changing them.
   ProtocolConfig config;
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Ascii;
@@ -84,6 +85,7 @@ void on_request_complete(void* user, Status status) {
 }
 
 void configure_plc_uart() {
+  // PLC baud, parity, stop bits, and pins must match the serial module wiring.
   g_plc_serial.begin(kPlcBaud, SERIAL_8E1, kRxPin, kTxPin);
 }
 
@@ -92,6 +94,7 @@ void pump_uart_tx(std::uint32_t now_ms) {
     return;
   }
 
+  // The client owns the encoded MC frame; this function only transmits bytes.
   const std::span<const std::byte> frame = g_app.client.pending_tx_frame();
   if (frame.empty()) {
     return;
@@ -99,6 +102,7 @@ void pump_uart_tx(std::uint32_t now_ms) {
 
   g_plc_serial.write(reinterpret_cast<const std::uint8_t*>(frame.data()), frame.size());
   g_plc_serial.flush();
+  // Notify only after the UART has accepted the frame for transmission.
   const Status status = g_app.client.notify_tx_complete(now_ms);
   if (!status.ok()) {
     on_request_complete(&g_app, status);
@@ -122,6 +126,7 @@ void pump_uart_rx(std::uint32_t now_ms) {
       break;
     }
 
+    // Feed raw response bytes back into the client decoder.
     g_app.client.on_rx_bytes(
         now_ms,
         std::span<const std::byte>(
@@ -138,6 +143,7 @@ void start_read_if_due(std::uint32_t now_ms) {
   g_app.request_done = false;
   g_app.request_reported = false;
   g_app.tx_sent = false;
+  // Start a read-only request. Check GOTCHAS.md before switching to writes.
   const Status status = g_app.client.async_batch_read_words(
       now_ms,
       BatchReadWordsRequest {
@@ -183,6 +189,7 @@ void setup() {
   Serial.begin(MCPROTOCOL_EXAMPLE_DEBUG_BAUD);
   configure_plc_uart();
 
+  // Configure once with the explicit protocol before starting requests.
   const Status status = g_app.client.configure(make_protocol());
   if (!status.ok()) {
     on_request_complete(&g_app, status);

@@ -1,56 +1,45 @@
-# PLC Profiles
+# PLC profiles
 
-Choose one canonical PLC profile explicitly. The profile controls the command
-family and device-layout assumptions used by the serial MC Protocol helpers.
+Each profile selects the command family and device-layout assumptions used by the serial MC Protocol codecs.
 
-Do not rely on omitted profile values or short aliases for live commands.
+Choose one explicit profile in your application or configuration UI. The library intentionally does not infer it from `ReadTypeName`, CPU model text, or omitted configuration.
 
-| Canonical profile | Human label | API selector | Notes |
+## Profiles
+
+| Profile string | Hardware | API selector | Notes |
 | --- | --- | --- | --- |
-| `melsec:iq-r` | MELSEC iQ-R serial modules | `PlcProfile::MelsecIqR` | Validated for RJ71C24-R2 class iQ-R routes. |
-| `melsec:iq-l` | MELSEC iQ-L serial modules | `PlcProfile::MelsecIqL` | iQ-L profile selector for serial MC Protocol routing. |
-| `melsec:q-l` | MELSEC-Q / MELSEC-L serial modules | `PlcProfile::MelsecQL` | Q/L profile for 3C/4C serial paths. |
-| `melsec:qna` | MELSEC QnA-compatible targets | `PlcProfile::MelsecQnA` | Enables QnA-style command-family selection. |
+| `melsec:iq-r` | MELSEC iQ-R serial modules | `PlcProfile::MelsecIqR` | iQ-R command and device-layout profile. |
+| `melsec:iq-l` | MELSEC iQ-L serial modules | `PlcProfile::MelsecIqL` | Separate public profile for iQ-L targets. |
+| `melsec:q-l` | MELSEC-Q / MELSEC-L serial modules | `PlcProfile::MelsecQL` | Used by the host quickstart examples. |
+| `melsec:qna` | MELSEC QnA-compatible targets | `PlcProfile::MelsecQnA` | Enables QnA command-family selection. |
 | `melsec:ana-anu` | MELSEC AnA / AnU-compatible targets | `PlcProfile::MelsecAnAAnU` | Enables AnA/AnU command-family selection. |
 | `melsec:a` | MELSEC-A-compatible targets | `PlcProfile::MelsecA` | Enables A-series command-family selection. |
 
 ## How to select
 
-For live CLI commands, pass `--plc-profile` every time. The CLI intentionally
-does not infer the profile from the serial module, CPU model response, or frame
-format.
-
-```powershell
-.\build\manual\mcprotocol_cli.exe `
-  --device COM3 `
-  --baud 28800 `
-  --data-bits 8 `
-  --parity E `
-  --stop-bits 2 `
-  --frame c4-binary `
-  --plc-profile melsec:iq-r `
-  --station 0 `
-  --sum-check on `
-  cpu-model
+```cpp
+auto protocol = mcprotocol::serial::highlevel::make_c4_binary_protocol(
+    mcprotocol::serial::PlcProfile::MelsecQL);
 ```
 
-In C++ code, set `ProtocolConfig::plc_profile` explicitly before encoding or
-executing a request. `PlcProfile::Unspecified` is a configuration error for
-live communication.
+Or assign the field directly when you build a custom `ProtocolConfig`:
+
+```cpp
+mcprotocol::serial::ProtocolConfig protocol {};
+protocol.plc_profile = mcprotocol::serial::PlcProfile::MelsecQL;
+```
+
+`PlcProfile::Unspecified` is a configuration error. It is useful only as the default internal value before your application selects a real profile.
 
 ## Profile-specific cautions
 
-| Canonical profile | Caution |
+| Profile string | Caution |
 | --- | --- |
-| `melsec:iq-r` | Use for iQ-R serial-module routes such as the validated RJ71C24-R2 setups. Remote password length and some native command behavior remain target-dependent. |
-| `melsec:iq-l` | Kept separate from iQ-R so iQ-L serial behavior can diverge later without changing public configuration names. |
-| `melsec:q-l` | Q/L serial paths use the Q/L command-family assumptions for 3C/4C frames. |
-| `melsec:qna` | Select only for QnA-compatible targets where QnA-style command selection is intended. |
-| `melsec:ana-anu` | Select only for AnA / AnU-compatible targets. |
-| `melsec:a` | Select only for A-series-compatible targets. |
+| `melsec:iq-r` | Use for iQ-R serial-module routes. Some native command behavior remains target-dependent. |
+| `melsec:iq-l` | Kept separate from iQ-R so iQ-L behavior can diverge later without changing saved configuration names. |
+| `melsec:q-l` | Use for MELSEC-Q and MELSEC-L serial paths that use the Q/L command-family assumptions. |
+| `melsec:qna` | Select only when the target should use QnA-style command selection. |
+| `melsec:ana-anu` | Select only when the target should use AnA/AnU command-family selection. |
+| `melsec:a` | Select for A-series-compatible targets; extended file-register ER/EW commands require this profile. |
 
-## Related pages
-
-- [Library entrypoints](LIBRARY_ENTRYPOINTS.md)
-- [MCU quickstart](MCU_QUICKSTART.md)
-- [Hardware validation matrix](../validation/reports/HARDWARE_VALIDATION.md)
+The profile does not replace serial settings. Baud rate, parity, stop bits, frame type, sum-check behavior, and station number still have to match the PLC serial module.

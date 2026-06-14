@@ -13,7 +13,7 @@ int main() {
 
   PosixSyncClient plc;
 
-  // Replace these values with the settings validated for your actual target.
+  // The serial port settings must match the PLC serial module exactly.
   PosixSerialConfig serial {
 #if defined(_WIN32)
       .device_path = "COM3",
@@ -26,9 +26,12 @@ int main() {
       .parity = 'E',
       .rts_cts = false,
   };
+
+  // Keep the PLC profile explicit. See docsrc/user/GOTCHAS.md before changing it.
   auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQL);
   protocol.route.station_no = 0;
 
+  // Open configures the blocking host facade and the underlying async client.
   mcprotocol::serial::Status status = plc.open(serial, protocol);
   if (!status.ok()) {
     std::fprintf(stderr, "open failed: %s\n", status.message);
@@ -36,6 +39,7 @@ int main() {
   }
 
   CpuModelInfo model {};
+  // Read-only model information is a useful first sanity check after open.
   status = plc.read_cpu_model(model);
   if (!status.ok()) {
     std::fprintf(stderr, "cpu-model failed: %s\n", status.message);
@@ -43,6 +47,7 @@ int main() {
   }
 
   std::array<std::uint16_t, 2> words {};
+  // Batch reads are the simplest data path for contiguous word devices.
   status = plc.read_words("D100", words);
   if (!status.ok()) {
     std::fprintf(stderr, "read_words failed: %s\n", status.message);
@@ -50,6 +55,7 @@ int main() {
   }
 
   std::uint32_t sparse_d100 = 0;
+  // Random read shows the sparse-device path without writing to the PLC.
   status = plc.random_read("D100", sparse_d100);
   if (!status.ok()) {
     std::fprintf(stderr, "random_read failed: %s\n", status.message);

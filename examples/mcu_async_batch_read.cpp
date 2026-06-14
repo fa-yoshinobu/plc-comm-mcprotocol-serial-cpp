@@ -34,6 +34,7 @@ struct ExampleApp {
 };
 
 ProtocolConfig make_protocol() {
+  // Keep frame/profile explicit. See docsrc/user/GOTCHAS.md before changing them.
   ProtocolConfig config;
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Ascii;
@@ -60,11 +61,13 @@ void on_request_complete(void* user, Status status) {
 }
 
 void uart_start_tx_async(ExampleApp& app, std::span<const std::byte> frame) {
+  // A real UART driver would start DMA or interrupt-driven transmission here.
   (void)frame;
   app.tx_started = true;
 }
 
 void simulate_plc_response(ExampleApp& app, const ProtocolConfig& config) {
+  // This host-runnable example feeds a generated success frame into the decoder.
   const std::array<std::uint8_t, 8> response_data {'1', '2', '3', '4', '5', '6', '7', '8'};
   std::array<std::uint8_t, mcprotocol::serial::kMaxResponseFrameBytes> response_frame {};
   std::size_t response_frame_size = 0;
@@ -90,12 +93,14 @@ int main() {
   ExampleApp app;
   const ProtocolConfig config = make_protocol();
 
+  // Configure the async client once before starting any request.
   Status status = app.client.configure(config);
   if (!status.ok()) {
     std::fprintf(stderr, "configure failed: %s\n", status.message);
     return 1;
   }
 
+  // Start a read-only batch request; the transport sends pending_tx_frame().
   status = app.client.async_batch_read_words(
       0,
       BatchReadWordsRequest {
@@ -114,6 +119,7 @@ int main() {
 
   for (std::uint32_t tick = 1; tick <= 4 && !app.request_done; ++tick) {
     if (app.tx_started && !app.tx_completed) {
+      // Notify the client after the transport reports the frame was sent.
       status = app.client.notify_tx_complete(tick);
       if (!status.ok()) {
         std::fprintf(stderr, "notify_tx_complete failed: %s\n", status.message);
@@ -124,12 +130,14 @@ int main() {
     }
 
     if (app.rx_ready) {
+      // Feed received bytes back to the state machine.
       app.client.on_rx_bytes(
           tick,
           std::span<const std::byte>(app.rx_chunk.data(), app.rx_chunk_size));
       app.rx_ready = false;
     }
 
+    // Poll drives request timeout handling between transport events.
     app.client.poll(tick);
   }
 
