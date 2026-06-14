@@ -36,51 +36,10 @@ jobs:
       - name: Check Markdown links
         run: python3 scripts/check_markdown_links.py
 
-  platformio-build:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        env:
-          - native-example
-          - rpipico-arduino-example
-          - esp32-c3-devkitm-1-example
-          - native-example-ultra-minimal
-          - rpipico-arduino-example-ultra-minimal
-          - esp32-c3-devkitm-1-example-ultra-minimal
-          - rpipico-arduino-uart-example
-          - esp32-c3-devkitm-1-uart-example
-          - mega2560-arduino-uart-example
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6.0.2
-
-      - name: Set up Python
-        uses: actions/setup-python@v6.2.0
-        with:
-          python-version: "3.12"
-
-      - name: Cache PlatformIO
-        uses: actions/cache@v5.0.4
-        with:
-          path: |
-            ~/.platformio
-            ~/.cache/pip
-          key: ${{ runner.os }}-pio-${{ matrix.env }}
-          restore-keys: |
-            ${{ runner.os }}-pio-
-
-      - name: Install PlatformIO
-        run: python3 -m pip install --upgrade pip platformio
-
-      - name: Build PlatformIO environment
-        run: pio run -e ${{ matrix.env }}
-
   trigger-docs-rebuild:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       - host-build-and-checks
-      - platformio-build
     runs-on: ubuntu-latest
     steps:
       - name: Trigger docs rebuild

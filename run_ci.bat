@@ -4,7 +4,7 @@ setlocal
 set "STATUS=0"
 set "INTERACTIVE=0"
 set "SCRIPT_DIR=%~dp0"
-for %%I in ("%SCRIPT_DIR%..") do set "REPO_ROOT=%%~fI"
+for %%I in ("%SCRIPT_DIR%.") do set "REPO_ROOT=%%~fI"
 set "BUILD_DIR=%REPO_ROOT%\build_win"
 set "RUN_PLATFORMIO=0"
 set "CMAKE_GENERATOR_ARG="

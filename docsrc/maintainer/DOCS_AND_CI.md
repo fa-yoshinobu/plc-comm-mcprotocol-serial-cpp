@@ -17,6 +17,7 @@ GitHub Actions verifies:
 - host build
 - `ctest`
 - Markdown link checks
-- PlatformIO compile checks for the supported example environments
+
+PlatformIO compile checks are intentionally manual because they download large toolchains and may use external package mirrors. Run `run_ci.bat --with-platformio` only when you intentionally validate embedded examples or PlatformIO package metadata.
 
 The central documentation site is rebuilt from tracked Markdown through `plc-comm-docs-site`.
