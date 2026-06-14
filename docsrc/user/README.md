@@ -1,4 +1,4 @@
-# User docs
+# MC Protocol Serial C++
 
 Start with [GETTING_STARTED.md](GETTING_STARTED.md) if you are bringing up the library for the first time.
 
