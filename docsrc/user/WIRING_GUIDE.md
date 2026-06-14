@@ -1,6 +1,6 @@
 # Wiring Guide
 
-Audience: users wiring a Linux host or MCU board to a Mitsubishi serial module.
+Audience: users wiring a Linux host or MCU board to a MELSEC serial module.
 
 This repository validates protocol behavior, not every cable pinout. Use this page as the high-level wiring plan, then confirm the connector pin numbers against your actual module and adapter hardware.
 

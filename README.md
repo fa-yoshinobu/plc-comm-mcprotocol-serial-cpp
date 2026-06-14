@@ -5,7 +5,7 @@
 [![PlatformIO Registry](https://badges.registry.platformio.org/packages/fa-yoshinobu/library/mcprotocol-serial-cpp.svg)](https://registry.platformio.org/libraries/fa-yoshinobu/mcprotocol-serial-cpp)
 [![Lint: PIO Check](https://img.shields.io/badge/Lint-PIO%20Check-blue.svg)](https://docs.platformio.org/en/latest/core/userguide/cmd_check.html)
 
-# MC Protocol Serial C++ Library
+# MELSEC MC Protocol Serial for C++
 
 [![pages](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/pages.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/pages.yml)
 
@@ -15,11 +15,11 @@
 
 ![MC Protocol Serial C++ eyecatch](https://raw.githubusercontent.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/main/docs/assets/mc-serial-eyecatch.jpg)
 
-MC protocol serial library for MCU-oriented environments.
+MC Protocol serial library for MELSEC PLC communication in MCU-oriented environments.
 
 This repository is for cases like these:
 
-- You want to talk to a Mitsubishi PLC over `serial / RS-232C / RS-485`
+- You want to talk to a MELSEC PLC over `serial / RS-232C / RS-485`
 - You want a `C++` library that does not allocate dynamically
 - You want to run the same core logic on `Linux`, `RP2040`, `ESP32-C3`, or `Arduino Mega 2560`
 
@@ -31,10 +31,6 @@ The current codebase includes:
 - Board-specific Arduino samples for `RP2040`, `ESP32-C3`, and `Arduino Mega 2560`
 - GitHub Actions for host build/test/docs and PlatformIO compile checks
 - Real-hardware validation records for `RJ71C24-R2`, `LJ71C24`, `QJ71C24N`, and `FX5UC-32MT/D`
-
-PlatformIO Registry:
-
-- <https://registry.platformio.org/libraries/fa-yoshinobu/mcprotocol-serial-cpp>
 
 ## Start Here
 
@@ -77,41 +73,40 @@ explicitly for live commands so the tool never infers a PLC profile or frame
 format from omitted options. Canonical profile strings use lowercase values such
 as `melsec:q-l` and `melsec:iq-r`.
 
-Supported canonical PLC profiles are:
+## Supported PLC profiles
 
-| Canonical profile | `PlcProfile` value | Target family | Notes |
-| --- | --- | --- | --- |
-| `melsec:iq-r` | `PlcProfile::MelsecIqR` | MELSEC iQ-R serial modules | Validated for RJ71C24-R2 class iQ-R routes. |
-| `melsec:iq-l` | `PlcProfile::MelsecIqL` | MELSEC iQ-L serial modules | iQ-L profile selector for serial MC protocol routing. |
-| `melsec:q-l` | `PlcProfile::MelsecQL` | MELSEC-Q / MELSEC-L serial modules | Q/L profile for 3C/4C serial paths. |
-| `melsec:qna` | `PlcProfile::MelsecQnA` | MELSEC QnA-compatible targets | Enables QnA-style command-family selection. |
-| `melsec:ana-anu` | `PlcProfile::MelsecAnAAnU` | MELSEC AnA / AnU-compatible targets | Enables AnA/AnU command-family selection. |
-| `melsec:a` | `PlcProfile::MelsecA` | MELSEC-A-compatible targets | Enables A-series command-family selection. |
+The maintained profile table is in [PLC profiles](docsrc/user/PROFILES.md).
+Choose one exact canonical PLC profile from that table.
 
-## Documentation Map
+## Documentation
 
 ### For Users
 
-- [Examples Index](examples/README.md)
-- [Library Entrypoints](docsrc/user/LIBRARY_ENTRYPOINTS.md)
-- [PlatformIO](docsrc/user/PLATFORMIO.md)
-- [Wiring Guide](docsrc/user/WIRING_GUIDE.md)
-- [MCU Quickstart](docsrc/user/MCU_QUICKSTART.md)
-- [FAQ](docsrc/user/FAQ.md)
-- [Hardware Validation Matrix](docsrc/validation/reports/HARDWARE_VALIDATION.md)
-- [Footprint Profiles](docsrc/validation/reports/FOOTPRINT_PROFILES.md)
-- [Generated API Docs](https://fa-yoshinobu.github.io/plc-comm-mcprotocol-serial-cpp/)
+| Page | Use it for |
+| --- | --- |
+| [Examples Index](examples/README.md) | Choose a maintained host or MCU example. |
+| [Library Entrypoints](docsrc/user/LIBRARY_ENTRYPOINTS.md) | Select the C++ API surface for host sync, high-level builders, or async use. |
+| [PLC Profiles](docsrc/user/PROFILES.md) | Choose the explicit canonical profile for live serial commands. |
+| [PlatformIO](docsrc/user/PLATFORMIO.md) | Use PlatformIO packages, environments, and build profiles. |
+| [Wiring Guide](docsrc/user/WIRING_GUIDE.md) | Wire serial modules, level shifters, and host or MCU boards. |
+| [MCU Quickstart](docsrc/user/MCU_QUICKSTART.md) | Bring up an MCU board with the smallest practical path. |
+| [FAQ](docsrc/user/FAQ.md) | Check common setup and command-scope questions. |
+| [Hardware Validation Matrix](docsrc/validation/reports/HARDWARE_VALIDATION.md) | Review retained real-hardware validation records. |
+| [Footprint Profiles](docsrc/validation/reports/FOOTPRINT_PROFILES.md) | Compare reduced and ultra build profiles. |
+| [Generated API Docs](https://fa-yoshinobu.github.io/plc-comm-mcprotocol-serial-cpp/) | Browse generated API documentation. |
 
 ### For Maintainers
 
-- [Maintainer Docs Index](docsrc/maintainer/README.md)
-- [Developer Notes](docsrc/maintainer/DEVELOPER_NOTES.md)
-- [Manual Command Coverage](docsrc/maintainer/MANUAL_COMMAND_COVERAGE.md)
-- [Docs And CI](docsrc/maintainer/DOCS_AND_CI.md)
-- [TODO / Current Follow-up](docsrc/maintainer/TODO.md)
-- [Native Command Backlog](docsrc/maintainer/NATIVE_COMMAND_BACKLOG.md)
-- [Release Process](docsrc/maintainer/RELEASE_PROCESS.md)
-- [Changelog](CHANGELOG.md)
+| Page | Use it for |
+| --- | --- |
+| [Maintainer Docs Index](docsrc/maintainer/README.md) | Start maintainer-focused documentation. |
+| [Developer Notes](docsrc/maintainer/DEVELOPER_NOTES.md) | Review design notes and target-dependent cautions. |
+| [Manual Command Coverage](docsrc/maintainer/MANUAL_COMMAND_COVERAGE.md) | Track implemented command families against manuals. |
+| [Docs And CI](docsrc/maintainer/DOCS_AND_CI.md) | Maintain documentation generation and CI flows. |
+| [TODO / Current Follow-up](docsrc/maintainer/TODO.md) | Track current validation and implementation follow-up. |
+| [Native Command Backlog](docsrc/maintainer/NATIVE_COMMAND_BACKLOG.md) | Review intentionally deferred native command probes. |
+| [Release Process](docsrc/maintainer/RELEASE_PROCESS.md) | Prepare and publish releases. |
+| [Changelog](CHANGELOG.md) | Review release history. |
 
 ## What Works Today
 
@@ -192,8 +187,16 @@ documented here:
 - [PlatformIO](docsrc/user/PLATFORMIO.md)
 - [Footprint Profiles](docsrc/validation/reports/FOOTPRINT_PROFILES.md)
 
-## Docs and CI
+## Documentation and CI
 
 Local documentation tasks and GitHub automation are documented here:
 
 - [Docs And CI](docsrc/maintainer/DOCS_AND_CI.md)
+
+## License and registry
+
+| Item | Value |
+| --- | --- |
+| License | [MIT](LICENSE) |
+| Registry | [PlatformIO Registry](https://registry.platformio.org/libraries/fa-yoshinobu/mcprotocol-serial-cpp) |
+| Package | `mcprotocol-serial-cpp` |

@@ -37,7 +37,7 @@ Use it together with:
 
 Validated target:
 
-- PLC CPU: Mitsubishi iQ-R `R120PCPU`
+- PLC CPU: MELSEC iQ-R `R120PCPU`
 - Serial module: `RJ71C24-R2`
 - Link: `RS-232C`
 - Current practical ASCII settings: `28800 / 8E2 / station 0`
@@ -91,7 +91,7 @@ Validated target:
 
 Additional validated target:
 
-- PLC CPU: Mitsubishi iQ-F `FX5UC-32MT/D`
+- PLC CPU: MELSEC iQ-F `FX5UC-32MT/D`
 - Link: `RS-232C`
 - Settings: `38400 / 8E2 / MC Protocol Format5 Binary / sum-check on / station 0`
 - Validated profile selection: use `melsec:q-l`; `melsec:iq-r` caused contiguous `D100` / `M100` reads to fail with `0x7E40`
@@ -115,7 +115,7 @@ Additional validated target:
 
 Additional validated target:
 
-- PLC CPU: Mitsubishi L-series `L26CPU-BT`
+- PLC CPU: MELSEC L-series `L26CPU-BT`
 - Serial module: `LJ71C24`
 - Link: `RS-232C`
 - Settings: `28800 / 8E2 / MC Protocol Format5 Binary / sum-check on / station 0`
@@ -140,7 +140,7 @@ Additional validated target:
 
 Additional validated target:
 
-- PLC CPU: Mitsubishi Q-series `Q06UDVCPU`
+- PLC CPU: MELSEC Q-series `Q06UDVCPU`
 - Serial module: `QJ71C24N`
 - Link: `RS-232C`
 - Settings: `19200 / 8E2 / MC Protocol Format5 Binary / sum-check on / station 0`

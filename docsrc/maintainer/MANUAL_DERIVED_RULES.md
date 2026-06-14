@@ -1,6 +1,6 @@
 # Manual-Derived Rules
 
-Keep these rules aligned with the current Mitsubishi serial manuals and validated hardware results.
+Keep these rules aligned with the current MELSEC serial manuals and validated hardware results.
 
 ## Address and Device Parsing
 

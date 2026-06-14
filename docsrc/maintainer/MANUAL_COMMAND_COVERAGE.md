@@ -4,7 +4,7 @@ This page tracks which MC protocol serial command families are implemented in th
 
 Scope:
 
-- Primary reference: the Mitsubishi MC protocol serial manual
+- Primary reference: the MELSEC MC protocol serial manual
 - Primary wire scope: serial `2C/3C/4C` frame families plus initial `1C/1E` support
 - Current ASCII wire scope for `2C/3C/4C`: `Format1`, `Format2`, `Format3`, and `Format4`
 - Public library scope: device memory access, buffer memory access, CPU-model, remote control,
