@@ -20,7 +20,7 @@ Current target for the remaining hold:
 - Station: `0`
 - Sum-check: on
 - Focused profile setting: `--plc-profile melsec:iq-r`
-- Manual PDF used for command applicability checks: `D:\_github_plc\sh080003ah.pdf`
+- Manual command applicability table was used for command applicability checks.
 
 CLI prefix used for the 2026-06-12 focused checks:
 
