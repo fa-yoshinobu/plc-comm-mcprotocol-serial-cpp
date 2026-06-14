@@ -84,7 +84,7 @@ void on_request_complete(void* user, Status status) {
 
 void configure_plc_uart() {
   // PLC baud, parity, and stop bits must match the serial module settings.
-  g_plc_serial.begin(kPlcBaud, SERIAL_8E1);
+  g_plc_serial.begin(kPlcBaud, SERIAL_8E2);
 }
 
 void pump_uart_tx(std::uint32_t now_ms) {

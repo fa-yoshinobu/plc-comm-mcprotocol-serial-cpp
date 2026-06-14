@@ -66,6 +66,22 @@ Set `MCPROTOCOL_FRAME` and `MCPROTOCOL_PLC_PROFILE` before running the CLI wrapp
 | `platformio_rpipico_arduino_async/` | RP2040 Arduino | Async client lifecycle with simulated response bytes. |
 | `platformio_esp32c3_arduino_async/` | ESP32-C3 Arduino | Async client lifecycle with simulated response bytes. |
 
+## Real UART sample defaults
+
+The real-UART PlatformIO samples are read-only bring-up examples for `D100-D103`.
+They use explicit PLC profile and protocol settings in source, and the UART
+settings must match the PLC serial module.
+
+| Board | UART | Pins | Serial | Protocol |
+| --- | --- | --- | --- | --- |
+| RP2040 / Raspberry Pi Pico | `Serial1` | TX `0`, RX `1` | `19200 / 8E2` | `4C ASCII Format4`, `CR/LF`, station `0`, sum check off |
+| ESP32-C3 DevKitM-1 | `Serial1` | TX `7`, RX `6` | `19200 / 8E2` | `4C ASCII Format4`, `CR/LF`, station `0`, sum check off |
+| Arduino Mega 2560 | `Serial1` | TX1 `18`, RX1 `19` | `19200 / 8E2` | `4C ASCII Format4`, `CR/LF`, station `0`, sum check off |
+
+Treat the pins and serial settings as sample defaults. Change them to match
+your board wiring, level shifter, and PLC serial module settings before live
+hardware use.
+
 ## Before live hardware
 
 Read [Gotchas](../docsrc/user/GOTCHAS.md) before changing frame type, profile, serial settings, or write commands. Profile selection is not automatic, and serial framing must match the PLC serial module settings exactly.

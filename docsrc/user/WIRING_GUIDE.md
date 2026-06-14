@@ -64,6 +64,6 @@ Confirm these before sending frames:
 
 ## Related Pages
 
-- [MCU_QUICKSTART.md](MCU_QUICKSTART.md)
+- [examples/README.md](../../examples/README.md)
 - [FAQ.md](FAQ.md)
 - the maintainer validation archive

@@ -111,9 +111,9 @@ Start from the real-UART PlatformIO examples:
 
 | Board | Example | Default PLC UART |
 | --- | --- | --- |
-| RP2040 / Raspberry Pi Pico | [platformio_rpipico_arduino_uart](../../examples/platformio_rpipico_arduino_uart/platformio_rpipico_arduino_uart.cpp) | `Serial1`, TX `0`, RX `1`, `19200 / 8E1` |
-| ESP32-C3 DevKitM-1 | [platformio_esp32c3_arduino_uart](../../examples/platformio_esp32c3_arduino_uart/platformio_esp32c3_arduino_uart.cpp) | `Serial1`, TX `7`, RX `6`, `19200 / 8E1` |
-| Arduino Mega 2560 | [platformio_arduino_mega2560_uart](../../examples/platformio_arduino_mega2560_uart/platformio_arduino_mega2560_uart.cpp) | `Serial1`, TX1 `18`, RX1 `19`, `19200 / 8E1` |
+| RP2040 / Raspberry Pi Pico | [platformio_rpipico_arduino_uart](../../examples/platformio_rpipico_arduino_uart/platformio_rpipico_arduino_uart.cpp) | `Serial1`, TX `0`, RX `1`, `19200 / 8E2` |
+| ESP32-C3 DevKitM-1 | [platformio_esp32c3_arduino_uart](../../examples/platformio_esp32c3_arduino_uart/platformio_esp32c3_arduino_uart.cpp) | `Serial1`, TX `7`, RX `6`, `19200 / 8E2` |
+| Arduino Mega 2560 | [platformio_arduino_mega2560_uart](../../examples/platformio_arduino_mega2560_uart/platformio_arduino_mega2560_uart.cpp) | `Serial1`, TX1 `18`, RX1 `19`, `19200 / 8E2` |
 
 The pin numbers are sample defaults. Change them to match your actual board wiring and level shifter.
 

@@ -4,7 +4,7 @@
 
 - If you want the simplest host-side example, start with [../../examples/README.md](../../examples/README.md)
   and `host_sync_quickstart.cpp`.
-- If you want to run on a real MCU UART, start with [MCU_QUICKSTART.md](MCU_QUICKSTART.md).
+- If you want to run on a real MCU UART, start with [Getting started](GETTING_STARTED.md) and the [examples README](../../examples/README.md).
 - If you need the exact validated serial settings for your target, use
   the maintainer validation archive.
 

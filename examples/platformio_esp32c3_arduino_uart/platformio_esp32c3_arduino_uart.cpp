@@ -86,7 +86,7 @@ void on_request_complete(void* user, Status status) {
 
 void configure_plc_uart() {
   // PLC baud, parity, stop bits, and pins must match the serial module wiring.
-  g_plc_serial.begin(kPlcBaud, SERIAL_8E1, kRxPin, kTxPin);
+  g_plc_serial.begin(kPlcBaud, SERIAL_8E2, kRxPin, kTxPin);
 }
 
 void pump_uart_tx(std::uint32_t now_ms) {
