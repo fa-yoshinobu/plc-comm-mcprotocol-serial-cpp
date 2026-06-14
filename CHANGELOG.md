@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 - 2026-06-14
 
 - Replaced the public PLC selector with `PlcProfile`: `ProtocolConfig::plc_profile`
   now carries canonical profiles such as `melsec:q-l` and `melsec:iq-r`, while
