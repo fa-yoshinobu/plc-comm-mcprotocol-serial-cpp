@@ -15,31 +15,11 @@ MELSEC MC Protocol over RS-232C/RS-485 in transport-agnostic C++ for MCU firmwar
 
 ## Supported PLC profiles
 
-Choose one exact canonical PLC profile. The library does not infer the profile from the PLC model or serial frame.
-
-| Canonical profile | Hardware | API selector | Notes |
-| --- | --- | --- | --- |
-| `melsec:iq-r` | MELSEC iQ-R serial modules | `PlcProfile::MelsecIqR` | iQ-R command and device-layout profile. |
-| `melsec:iq-l` | MELSEC iQ-L serial modules | `PlcProfile::MelsecIqL` | Kept separate from iQ-R for future iQ-L divergence. |
-| `melsec:q-l` | MELSEC-Q / MELSEC-L serial modules | `PlcProfile::MelsecQL` | Practical default for the host quickstart examples. |
-| `melsec:qna` | MELSEC QnA-compatible targets | `PlcProfile::MelsecQnA` | QnA command-family profile. |
-| `melsec:ana-anu` | MELSEC AnA / AnU-compatible targets | `PlcProfile::MelsecAnAAnU` | AnA/AnU command-family profile. |
-| `melsec:a` | MELSEC-A-compatible targets | `PlcProfile::MelsecA` | A-series command-family profile. |
+The maintained profile table is in [PLC profiles](docsrc/user/PROFILES.md). Choose one exact canonical PLC profile from that table.
 
 ## Supported device types
 
-The high-level parser accepts plain device strings such as `D100`, `M100`, and `X10`. See [Supported registers](docsrc/user/SUPPORTED_REGISTERS.md) for the full table.
-
-| Device family | Kind | Example | Notes |
-| --- | --- | --- | --- |
-| `D`, `SD` | Word | `D100` | Decimal address. |
-| `M`, `L`, `SM`, `F`, `V`, `S` | Bit | `M100` | Decimal address. |
-| `X`, `Y`, `B`, `SB`, `DX`, `DY` | Bit | `X10` | Hexadecimal address. |
-| `W`, `SW` | Word | `W100` | Hexadecimal address. |
-| `TS`, `TC`, `STS`, `STC`, `CS`, `CC` | Bit | `TS0` | Timer, retentive timer, and counter contact/coil devices. |
-| `TN`, `STN`, `CN` | Word | `TN0` | Timer, retentive timer, and counter current-value devices. |
-| `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC` | Bit | `LTS0` | Long timer/counter contact/coil devices. |
-| `LTN`, `LSTN`, `LCN`, `LZ`, `R`, `RD`, `ZR`, `Z` | Word | `LZ0` | Long current-value, index, and file-register devices. |
+The maintained device and range tables are in [Supported registers](docsrc/user/SUPPORTED_REGISTERS.md). Use that page for supported device families, address syntax, and profile-specific notes.
 
 ## Installation
 
@@ -104,17 +84,24 @@ int main() {
 
 | Page | Use it for |
 | --- | --- |
+| [Full documentation site](https://fa-yoshinobu.github.io/plc-comm-docs-site/) | Unified docs for all PLC communication libraries. |
 | [Getting started](docsrc/user/GETTING_STARTED.md) | Install the library, choose a profile, and perform your first read. |
 | [Usage guide](docsrc/user/USAGE_GUIDE.md) | Choose the high-level, host sync, or low-level async entry path. |
 | [Wiring guide](docsrc/user/WIRING_GUIDE.md) | Check RS-232C/RS-485 wiring and physical-layer cautions. |
 | [Supported registers](docsrc/user/SUPPORTED_REGISTERS.md) | Check device families, address examples, and current string syntax. |
 | [PLC profiles](docsrc/user/PROFILES.md) | Choose the exact canonical profile for your target PLC. |
+| [Gotchas](docsrc/user/GOTCHAS.md) | Troubleshoot common profile, frame, serial, and address mistakes. |
 | [Examples](examples/README.md) | Run maintained host and MCU examples. |
 
 ## Hardware verified
 
-Real-hardware validation records cover RJ71C24-R2, LJ71C24, QJ71C24N, and FX5UC-32MT/D serial paths.
+Live-device verification is maintained in [Latest communication verification](docsrc/user/LATEST_COMMUNICATION_VERIFICATION.md).
+See that page for verified PLC models, transports, dates, limitations, and retained validation notes.
 
 ## License and registry
 
-MIT licensed. Published as [`mcprotocol-serial-cpp`](https://registry.platformio.org/libraries/fa-yoshinobu/mcprotocol-serial-cpp) on the PlatformIO Registry.
+| Item | Value |
+| --- | --- |
+| License | [MIT](LICENSE) |
+| Registry | [PlatformIO Registry](https://registry.platformio.org/libraries/fa-yoshinobu/mcprotocol-serial-cpp) |
+| Package | `mcprotocol-serial-cpp` |
