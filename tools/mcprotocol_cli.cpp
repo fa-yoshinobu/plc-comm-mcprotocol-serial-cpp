@@ -846,7 +846,7 @@ void print_usage() {
 }
 
 [[nodiscard]] bool parse_profile(std::string_view text, ProtocolConfig& config) {
-  PlcProfile profile = PlcProfile::MelsecQL;
+  PlcProfile profile = PlcProfile::Unspecified;
   if (!parse_plc_profile(text.data(), text.size(), profile)) {
     return false;
   }

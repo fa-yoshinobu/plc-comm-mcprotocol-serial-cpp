@@ -1512,6 +1512,13 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return make_status(StatusCode::InvalidArgument, message);
 }
 
+[[nodiscard]] Status validate_plc_profile_config(const ProtocolConfig& config) noexcept {
+  if (!is_plc_profile_specified(config.plc_profile)) {
+    return invalid_argument("PLC profile is required. Set ProtocolConfig::plc_profile to an explicit canonical profile.");
+  }
+  return ok_status();
+}
+
 [[nodiscard]] constexpr bool is_valid_multidrop_station_no(std::uint8_t station_no) noexcept {
   return station_no <= 0x1FU || station_no == 0xFFU;
 }
@@ -2161,8 +2168,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 // FrameCodec public implementation.
 
 Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
-  if (!is_plc_profile_specified(config.plc_profile)) {
-    return invalid_argument("PLC profile is required. Set ProtocolConfig::plc_profile to an explicit canonical profile.");
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
   }
 
   if (!is_frame_kind_enabled(config.frame_kind)) {
@@ -3109,6 +3117,10 @@ Status encode_batch_read_words(
     const BatchReadWordsRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status c1_status = validate_c1_supported_config(config);
   if (!c1_status.ok()) {
     return c1_status;
@@ -3183,6 +3195,10 @@ Status encode_read_extended_file_register_words(
     const ExtendedFileRegisterBatchReadWordsRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     const Status series_status = validate_c1_supported_config(config);
     if (!series_status.ok()) {
@@ -3240,6 +3256,10 @@ Status encode_direct_read_extended_file_register_words(
     const ExtendedFileRegisterDirectBatchReadWordsRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     const Status series_status = validate_c1_supported_config(config);
     if (!series_status.ok()) {
@@ -3299,6 +3319,10 @@ Status encode_extended_batch_read_words(
     std::uint16_t points,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)device;
     (void)points;
@@ -3329,6 +3353,10 @@ Status encode_link_direct_batch_read_words(
     std::uint16_t points,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)device;
     (void)points;
@@ -3400,6 +3428,10 @@ Status encode_batch_read_bits(
     const BatchReadBitsRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status c1_status = validate_c1_supported_config(config);
   if (!c1_status.ok()) {
     return c1_status;
@@ -3464,6 +3496,10 @@ Status encode_link_direct_batch_read_bits(
     std::uint16_t points,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)device;
     (void)points;
@@ -3549,6 +3585,10 @@ Status encode_batch_write_words(
     const BatchWriteWordsRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status c1_status = validate_c1_supported_config(config);
   if (!c1_status.ok()) {
     return c1_status;
@@ -3627,6 +3667,10 @@ Status encode_write_extended_file_register_words(
     const ExtendedFileRegisterBatchWriteWordsRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     const Status series_status = validate_c1_supported_config(config);
     if (!series_status.ok()) {
@@ -3686,6 +3730,10 @@ Status encode_direct_write_extended_file_register_words(
     const ExtendedFileRegisterDirectBatchWriteWordsRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     const Status series_status = validate_c1_supported_config(config);
     if (!series_status.ok()) {
@@ -3747,6 +3795,10 @@ Status encode_link_direct_batch_write_words(
     std::span<const std::uint16_t> words,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)device;
     (void)words;
@@ -3780,6 +3832,10 @@ Status encode_extended_batch_write_words(
     std::span<const std::uint16_t> words,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)device;
     (void)words;
@@ -3811,6 +3867,10 @@ Status encode_batch_write_bits(
     const BatchWriteBitsRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status c1_status = validate_c1_supported_config(config);
   if (!c1_status.ok()) {
     return c1_status;
@@ -3884,6 +3944,10 @@ Status encode_link_direct_batch_write_bits(
     std::span<const BitValue> bits,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)device;
     (void)bits;
@@ -3930,6 +3994,10 @@ Status encode_link_direct_random_read(
     std::span<const LinkDirectRandomReadItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)items;
     (void)out_request_data;
@@ -3975,6 +4043,10 @@ Status encode_random_read(
     const RandomReadRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)request;
     (void)out_request_data;
@@ -4030,6 +4102,10 @@ Status encode_link_direct_random_read(
     std::span<const LinkDirectRandomReadItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)items;
   (void)out_request_data;
@@ -4042,6 +4118,10 @@ Status encode_random_read(
     const RandomReadRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)request;
   (void)out_request_data;
@@ -4127,6 +4207,10 @@ Status encode_link_direct_random_write_words(
     std::span<const LinkDirectRandomWriteWordItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)items;
     (void)out_request_data;
@@ -4175,6 +4259,10 @@ Status encode_random_write_words(
     std::span<const RandomWriteWordItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status c1_status = validate_c1_supported_config(config);
   if (!c1_status.ok()) {
     return c1_status;
@@ -4300,6 +4388,10 @@ Status encode_random_write_extended_file_register_words(
     std::span<const ExtendedFileRegisterRandomWriteWordItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     const Status series_status = validate_c1_supported_config(config);
     if (!series_status.ok()) {
@@ -4369,6 +4461,10 @@ Status encode_link_direct_random_write_words(
     std::span<const LinkDirectRandomWriteWordItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)items;
   (void)out_request_data;
@@ -4381,6 +4477,10 @@ Status encode_random_write_words(
     std::span<const RandomWriteWordItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)items;
   (void)out_request_data;
@@ -4393,6 +4493,10 @@ Status encode_random_write_extended_file_register_words(
     std::span<const ExtendedFileRegisterRandomWriteWordItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)items;
   (void)out_request_data;
@@ -4407,6 +4511,10 @@ Status encode_random_write_bits(
     std::span<const RandomWriteBitItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status c1_status = validate_c1_supported_config(config);
   if (!c1_status.ok()) {
     return c1_status;
@@ -4508,6 +4616,10 @@ Status encode_link_direct_random_write_bits(
     std::span<const LinkDirectRandomWriteBitItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)items;
     (void)out_request_data;
@@ -4557,6 +4669,10 @@ Status encode_random_write_bits(
     std::span<const RandomWriteBitItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)items;
   (void)out_request_data;
@@ -4569,6 +4685,10 @@ Status encode_link_direct_random_write_bits(
     std::span<const LinkDirectRandomWriteBitItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)items;
   (void)out_request_data;
@@ -4585,6 +4705,10 @@ Status encode_link_direct_multi_block_read(
     const LinkDirectMultiBlockReadRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)request;
     (void)out_request_data;
@@ -4647,6 +4771,10 @@ Status encode_multi_block_read(
     const MultiBlockReadRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)request;
     (void)out_request_data;
@@ -4805,6 +4933,10 @@ Status encode_multi_block_write(
     const MultiBlockWriteRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)request;
     (void)out_request_data;
@@ -4883,6 +5015,10 @@ Status encode_link_direct_multi_block_write(
     const LinkDirectMultiBlockWriteRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)request;
     (void)out_request_data;
@@ -4963,6 +5099,10 @@ Status encode_link_direct_multi_block_read(
     const LinkDirectMultiBlockReadRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)request;
   (void)out_request_data;
@@ -4975,6 +5115,10 @@ Status encode_multi_block_read(
     const MultiBlockReadRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)request;
   (void)out_request_data;
@@ -5003,6 +5147,10 @@ Status encode_multi_block_write(
     const MultiBlockWriteRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)request;
   (void)out_request_data;
@@ -5015,6 +5163,10 @@ Status encode_link_direct_multi_block_write(
     const LinkDirectMultiBlockWriteRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)request;
   (void)out_request_data;
@@ -5031,6 +5183,10 @@ Status encode_link_direct_register_monitor(
     const LinkDirectMonitorRegistration& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)request;
     (void)out_request_data;
@@ -5067,6 +5223,10 @@ Status encode_register_monitor(
     const MonitorRegistration& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status c1_status = validate_c1_supported_config(config);
   if (!c1_status.ok()) {
     return c1_status;
@@ -5153,6 +5313,10 @@ Status encode_register_extended_file_register_monitor(
     const ExtendedFileRegisterMonitorRegistration& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     const Status series_status = validate_c1_supported_config(config);
     if (!series_status.ok()) {
@@ -5217,6 +5381,10 @@ Status encode_read_monitor(
     const ProtocolConfig& config,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     return invalid_argument("1E monitor read requires registered item metadata");
   }
@@ -5236,6 +5404,10 @@ Status encode_read_monitor(
     std::span<const RandomReadItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status c1_status = validate_c1_supported_config(config);
   if (!c1_status.ok()) {
     return c1_status;
@@ -5287,6 +5459,10 @@ Status encode_read_extended_file_register_monitor(
     std::span<const ExtendedFileRegisterAddress> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     const Status series_status = validate_c1_supported_config(config);
     if (!series_status.ok()) {
@@ -5388,6 +5564,10 @@ Status encode_link_direct_register_monitor(
     const LinkDirectMonitorRegistration& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)request;
   (void)out_request_data;
@@ -5400,6 +5580,10 @@ Status encode_register_monitor(
     const MonitorRegistration& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)request;
   (void)out_request_data;
@@ -5412,6 +5596,10 @@ Status encode_register_extended_file_register_monitor(
     const ExtendedFileRegisterMonitorRegistration& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)request;
   (void)out_request_data;
@@ -5423,6 +5611,10 @@ Status encode_read_monitor(
     const ProtocolConfig& config,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)out_request_data;
   (void)out_size;
@@ -5434,6 +5626,10 @@ Status encode_read_monitor(
     std::span<const RandomReadItem> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)items;
   (void)out_request_data;
@@ -5446,6 +5642,10 @@ Status encode_read_extended_file_register_monitor(
     std::span<const ExtendedFileRegisterAddress> items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)items;
   (void)out_request_data;
@@ -5485,6 +5685,10 @@ Status encode_read_user_frame(
     const UserFrameReadRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status config_status = validate_user_frame_command_config(config);
   if (!config_status.ok()) {
     return config_status;
@@ -5573,6 +5777,10 @@ Status encode_write_user_frame(
     const UserFrameWriteRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status config_status = validate_user_frame_command_config(config);
   if (!config_status.ok()) {
     return config_status;
@@ -5599,6 +5807,10 @@ Status encode_delete_user_frame(
     const UserFrameDeleteRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status config_status = validate_user_frame_command_config(config);
   if (!config_status.ok()) {
     return config_status;
@@ -5624,6 +5836,10 @@ Status encode_control_global_signal(
     const GlobalSignalControlRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status config_status = validate_serial_module_dedicated_command_config(
       config,
       "C24 global-signal control is implemented only for 2C/3C/4C serial frames");
@@ -5653,6 +5869,10 @@ Status encode_switch_serial_module_mode(
     const SerialModuleModeSwitchRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status config_status = validate_serial_module_dedicated_command_config(
       config,
       "C24 mode switching is implemented only for 2C/3C/4C serial frames");
@@ -5690,6 +5910,10 @@ Status encode_initialize_transmission_sequence(
     const ProtocolConfig& config,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (config.frame_kind != FrameKind::C4 || !is_binary_mode(config)) {
     (void)out_request_data;
     (void)out_size;
@@ -5713,6 +5937,10 @@ Status encode_read_host_buffer(
     const HostBufferReadRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)request;
     (void)out_request_data;
@@ -5766,6 +5994,10 @@ Status encode_write_host_buffer(
     const HostBufferWriteRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)request;
     (void)out_request_data;
@@ -5799,6 +6031,10 @@ Status encode_read_host_buffer(
     const HostBufferReadRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)request;
   (void)out_request_data;
@@ -5823,6 +6059,10 @@ Status encode_write_host_buffer(
     const HostBufferWriteRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)request;
   (void)out_request_data;
@@ -5837,6 +6077,10 @@ Status encode_read_module_buffer(
     const ModuleBufferReadRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status c1_status = validate_c1_supported_config(config);
   if (!c1_status.ok()) {
     return c1_status;
@@ -5926,6 +6170,10 @@ Status encode_write_module_buffer(
     const ModuleBufferWriteRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   const Status c1_status = validate_c1_supported_config(config);
   if (!c1_status.ok()) {
     return c1_status;
@@ -5990,6 +6238,10 @@ Status encode_read_module_buffer(
     const ModuleBufferReadRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)request;
   (void)out_request_data;
@@ -6014,6 +6266,10 @@ Status encode_write_module_buffer(
     const ModuleBufferWriteRequest& request,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)request;
   (void)out_request_data;
@@ -6029,6 +6285,10 @@ Status encode_read_cpu_model(
     const ProtocolConfig& config,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)out_request_data;
     (void)out_size;
@@ -6072,6 +6332,10 @@ Status encode_read_cpu_model(
     const ProtocolConfig& config,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)out_request_data;
   (void)out_size;
@@ -6095,6 +6359,10 @@ Status encode_remote_run(
     RemoteRunClearMode clear_mode,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)mode;
     (void)clear_mode;
@@ -6127,6 +6395,10 @@ Status encode_remote_stop(
     const ProtocolConfig& config,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)out_request_data;
     (void)out_size;
@@ -6147,6 +6419,10 @@ Status encode_remote_pause(
     RemoteOperationMode mode,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)mode;
     (void)out_request_data;
@@ -6172,6 +6448,10 @@ Status encode_remote_latch_clear(
     const ProtocolConfig& config,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)out_request_data;
     (void)out_size;
@@ -6191,6 +6471,10 @@ Status encode_remote_reset(
     const ProtocolConfig& config,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)out_request_data;
     (void)out_size;
@@ -6211,6 +6495,10 @@ Status encode_unlock_remote_password(
     std::string_view remote_password,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)remote_password;
     (void)out_request_data;
@@ -6243,6 +6531,10 @@ Status encode_lock_remote_password(
     std::string_view remote_password,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)remote_password;
     (void)out_request_data;
@@ -6274,6 +6566,10 @@ Status encode_clear_error_information(
     const ProtocolConfig& config,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)out_request_data;
     (void)out_size;
@@ -6299,6 +6595,10 @@ Status encode_loopback(
     std::span<const char> hex_ascii,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   if (is_e1_frame(config)) {
     (void)hex_ascii;
     (void)out_request_data;
@@ -6401,6 +6701,10 @@ Status encode_loopback(
     std::span<const char> hex_ascii,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  const Status plc_profile_status = validate_plc_profile_config(config);
+  if (!plc_profile_status.ok()) {
+    return plc_profile_status;
+  }
   (void)config;
   (void)hex_ascii;
   (void)out_request_data;

@@ -85,6 +85,7 @@ using mcprotocol::serial::SerialModuleCommunicationSpeed;
 using mcprotocol::serial::SerialModuleModeNo;
 using mcprotocol::serial::SerialModuleModeSwitchRequest;
 using mcprotocol::serial::parse_plc_profile;
+using mcprotocol::serial::is_plc_profile_specified;
 using mcprotocol::serial::plc_profile_name;
 using mcprotocol::serial::plc_series_from_profile;
 using mcprotocol::serial::sparse_native_mask_word;
@@ -2205,6 +2206,7 @@ void test_high_level_make_contiguous_requests() {
 
 void test_high_level_protocol_presets() {
   const ProtocolConfig unspecified_config {};
+  assert(unspecified_config.plc_profile == PlcProfile::Unspecified);
   assert(!FrameCodec::validate_config(unspecified_config).ok());
 
   const ProtocolConfig config = make_c4_binary_protocol(PlcProfile::MelsecQL);
@@ -2225,6 +2227,11 @@ void test_high_level_protocol_presets() {
 
 void test_plc_profile_canonical_names_only() {
   PlcProfile profile = PlcProfile::MelsecQL;
+  assert(std::string_view(plc_profile_name(PlcProfile::Unspecified)).empty());
+  assert(!is_plc_profile_specified(PlcProfile::Unspecified));
+  assert(plc_series_from_profile(PlcProfile::Unspecified) == PlcSeries::Unspecified);
+  assert(is_plc_profile_specified(PlcProfile::MelsecQL));
+
   assert(parse_plc_profile_text("melsec:iq-r", profile));
   assert(profile == PlcProfile::MelsecIqR);
   assert(plc_series_from_profile(profile) == PlcSeries::IQ_R);
@@ -2247,6 +2254,32 @@ void test_plc_profile_canonical_names_only() {
   assert(!parse_plc_profile_text("iq-r", profile));
   assert(!parse_plc_profile_text("ql", profile));
   assert(!parse_plc_profile_text("qna", profile));
+}
+
+void test_plc_profile_is_required_for_encoding() {
+  ProtocolConfig config {};
+  BatchReadWordsRequest request {};
+  request.head_device = mcprotocol::serial::DeviceAddress {
+      .code = mcprotocol::serial::DeviceCode::D,
+      .number = 100U,
+  };
+  request.points = 1;
+
+  std::array<std::uint8_t, mcprotocol::serial::kMaxRequestDataBytes> request_data {};
+  std::size_t request_size = 0;
+  Status status = CommandCodec::encode_batch_read_words(config, request, request_data, request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(std::strcmp(
+             status.message,
+             "PLC profile is required. Set ProtocolConfig::plc_profile to an explicit canonical profile.") == 0);
+
+  std::array<std::uint8_t, mcprotocol::serial::kMaxRequestFrameBytes> frame {};
+  std::size_t frame_size = 0;
+  status = FrameCodec::encode_request(config, {}, frame, frame_size);
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(std::strcmp(
+             status.message,
+             "PLC profile is required. Set ProtocolConfig::plc_profile to an explicit canonical profile.") == 0);
 }
 
 void test_high_level_make_random_bit_item() {
@@ -5396,6 +5429,7 @@ int main() {
   test_high_level_make_contiguous_requests();
   test_high_level_protocol_presets();
   test_plc_profile_canonical_names_only();
+  test_plc_profile_is_required_for_encoding();
   test_high_level_make_random_bit_item();
   test_high_level_make_random_dword_item_defaults();
   test_high_level_make_random_request_from_specs();

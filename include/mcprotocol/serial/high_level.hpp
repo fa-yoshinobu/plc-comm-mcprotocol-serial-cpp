@@ -132,7 +132,7 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
 
 }  // namespace detail
 
-/// \brief Returns a practical default for Q/L-era `Format5 / Binary / C4`.
+/// \brief Returns a practical `Format5 / Binary / C4` configuration for an explicit PLC profile.
 [[nodiscard]] constexpr ProtocolConfig make_c4_binary_protocol(PlcProfile profile) noexcept {
   ProtocolConfig config {};
   config.frame_kind = FrameKind::C4;
@@ -153,7 +153,7 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
   return config;
 }
 
-/// \brief Returns a practical default for `Format4 / ASCII / C4`.
+/// \brief Returns a practical `Format4 / ASCII / C4` configuration for an explicit PLC profile.
 [[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format4_protocol(PlcProfile profile) noexcept {
   ProtocolConfig config {};
   config.frame_kind = FrameKind::C4;

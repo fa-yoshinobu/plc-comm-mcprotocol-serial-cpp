@@ -185,7 +185,8 @@ enum class PlcSeries : std::uint8_t {
   QnA,
   /// AnA/AnUCPU common-command family. Kept value-compatible with the legacy QnA selector.
   AnA_AnU = QnA,
-  A
+  A,
+  Unspecified = 0xFFU
 };
 
 /// \brief Public PLC profile selector.
@@ -283,7 +284,7 @@ enum class PlcProfile : std::uint8_t {
 [[nodiscard]] constexpr PlcSeries plc_series_from_profile(PlcProfile profile) noexcept {
   switch (profile) {
     case PlcProfile::Unspecified:
-      return PlcSeries::Q_L;
+      return PlcSeries::Unspecified;
     case PlcProfile::MelsecIqR:
       return PlcSeries::IQ_R;
     case PlcProfile::MelsecIqL:
@@ -297,7 +298,7 @@ enum class PlcProfile : std::uint8_t {
     case PlcProfile::MelsecA:
       return PlcSeries::A;
   }
-  return PlcSeries::Q_L;
+  return PlcSeries::Unspecified;
 }
 
 [[nodiscard]] constexpr bool is_plc_profile_specified(PlcProfile profile) noexcept {
@@ -490,6 +491,8 @@ struct ProtocolConfig {
   /// `Format1`, `Format3`, `Format4`, binary `Format5`, `1C`, and `1E`.
   std::uint8_t ascii_block_number = 0x00;
   /// Public PLC profile used to derive frame-family compatibility and device/subcommand layout.
+  ///
+  /// Applications must set this explicitly before encoding requests or running a client.
   PlcProfile plc_profile = PlcProfile::Unspecified;
   /// Enables or disables the ASCII/binary sum-check where that frame family supports it.
   bool sum_check_enabled = true;

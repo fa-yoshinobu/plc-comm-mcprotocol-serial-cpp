@@ -6,6 +6,7 @@
 
 int main() {
   using mcprotocol::serial::CpuModelInfo;
+  using mcprotocol::serial::PlcProfile;
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
   using mcprotocol::serial::highlevel::make_c4_binary_protocol;
@@ -25,7 +26,7 @@ int main() {
       .parity = 'E',
       .rts_cts = false,
   };
-  auto protocol = make_c4_binary_protocol(mcprotocol::serial::PlcProfile::MelsecQL);
+  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQL);
   protocol.route.station_no = 0;
 
   mcprotocol::serial::Status status = plc.open(serial, protocol);

@@ -83,7 +83,7 @@ Supported canonical PLC profiles are:
 | --- | --- | --- | --- |
 | `melsec:iq-r` | `PlcProfile::MelsecIqR` | MELSEC iQ-R serial modules | Validated for RJ71C24-R2 class iQ-R routes. |
 | `melsec:iq-l` | `PlcProfile::MelsecIqL` | MELSEC iQ-L serial modules | iQ-L profile selector for serial MC protocol routing. |
-| `melsec:q-l` | `PlcProfile::MelsecQL` | MELSEC-Q / MELSEC-L serial modules | Default Q/L profile for 3C/4C serial paths. |
+| `melsec:q-l` | `PlcProfile::MelsecQL` | MELSEC-Q / MELSEC-L serial modules | Q/L profile for 3C/4C serial paths. |
 | `melsec:qna` | `PlcProfile::MelsecQnA` | MELSEC QnA-compatible targets | Enables QnA-style command-family selection. |
 | `melsec:ana-anu` | `PlcProfile::MelsecAnAAnU` | MELSEC AnA / AnU-compatible targets | Enables AnA/AnU command-family selection. |
 | `melsec:a` | `PlcProfile::MelsecA` | MELSEC-A-compatible targets | Enables A-series command-family selection. |
