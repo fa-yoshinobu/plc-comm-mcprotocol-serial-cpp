@@ -55,10 +55,7 @@ echo [ci] Test
 call "%CTEST_EXE%" --test-dir "%BUILD_DIR%" --output-on-failure
 if errorlevel 1 goto fail
 
-echo [ci] Docs and Markdown links
-call "%CMAKE_EXE%" --build "%BUILD_DIR%" --target docs
-if errorlevel 1 goto fail
-
+echo [ci] Markdown links
 call "%PYTHON_EXE%" %PYTHON_ARGS% "%REPO_ROOT%\scripts\check_markdown_links.py"
 if errorlevel 1 goto fail
 
@@ -73,7 +70,6 @@ goto finish
 :prepend_common_tool_paths
 if exist "C:\msys64\ucrt64\bin" set "PATH=C:\msys64\ucrt64\bin;%PATH%"
 if exist "C:\Program Files\CMake\bin" set "PATH=C:\Program Files\CMake\bin;%PATH%"
-if exist "C:\Program Files\Doxygen\bin" set "PATH=C:\Program Files\Doxygen\bin;%PATH%"
 exit /b 0
 
 :find_tool

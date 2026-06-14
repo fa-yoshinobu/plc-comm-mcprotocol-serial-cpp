@@ -5,8 +5,6 @@ This repository uses the tag name as the release trigger.
 ## Files To Update For A Version Bump
 
 - `CMakeLists.txt`
-- `Doxyfile`
-- `Doxyfile.in`
 - `library.json`
 - `library.properties`
 - `CHANGELOG.md`
@@ -17,7 +15,7 @@ This repository uses the tag name as the release trigger.
 cmake -S . -B build
 cmake --build build
 ctest --test-dir build --output-on-failure
-cmake --build build --target docs-all
+cmake --build build --target check-markdown-links
 pio run -e native-example
 pio run -e rpipico-arduino-example
 pio run -e esp32-c3-devkitm-1-example

@@ -58,8 +58,6 @@
       "CMakeLists.txt",
       "docsrc",
       "docs",
-      "Doxyfile",
-      "Doxyfile.in",
       "examples/linux_cli",
       "platformio.ini",
       "release-artifacts",

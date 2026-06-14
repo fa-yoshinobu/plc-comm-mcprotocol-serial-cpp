@@ -83,11 +83,6 @@ if(NOT MCPROTOCOL_EFFECTIVE_BUILD_HOST_SUPPORT AND MCPROTOCOL_EFFECTIVE_BUILD_CL
   message(STATUS "mcprotocol_cli requires host support; the CLI target will not be built.")
   set(MCPROTOCOL_EFFECTIVE_BUILD_CLI OFF)
 endif()
-if(WIN32)
-  set(MCPROTOCOL_DOXYGEN_RUNNER ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_doxygen.bat)
-else()
-  set(MCPROTOCOL_DOXYGEN_RUNNER ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_doxygen.sh)
-endif()
 set(MCPROTOCOL_MARKDOWN_LINK_CHECKER ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_markdown_links.py)
 
 set(MCPROTOCOL_SERIAL_PLATFORM_SOURCES)
@@ -199,26 +194,9 @@ if(MCPROTOCOL_BUILD_EXAMPLES)
   endif()
 endif()
 
-set(MCPROTOCOL_DOXYFILE_IN ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in)
-set(MCPROTOCOL_DOXYFILE_OUT ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
-
-configure_file(${MCPROTOCOL_DOXYFILE_IN} ${MCPROTOCOL_DOXYFILE_OUT} @ONLY)
-
-add_custom_target(docs
-  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/docs/api
-  COMMAND ${MCPROTOCOL_DOXYGEN_RUNNER} ${MCPROTOCOL_DOXYFILE_OUT}
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMENT "Generating API documentation with Doxygen"
-  VERBATIM
-)
-
 add_custom_target(check-markdown-links
   COMMAND ${MCPROTOCOL_PYTHON_EXECUTABLE} ${MCPROTOCOL_MARKDOWN_LINK_CHECKER}
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   COMMENT "Checking Markdown links"
   VERBATIM
-)
-
-add_custom_target(docs-all
-  DEPENDS docs check-markdown-links
 )
