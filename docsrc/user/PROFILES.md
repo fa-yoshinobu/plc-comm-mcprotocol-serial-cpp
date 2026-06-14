@@ -6,7 +6,7 @@ Choose one explicit profile in your application or configuration UI. The library
 
 ## Profiles
 
-| Profile string | Hardware | API selector | Notes |
+| Canonical profile | Hardware | API selector | Notes |
 | --- | --- | --- | --- |
 | `melsec:iq-r` | MELSEC iQ-R serial modules | `PlcProfile::MelsecIqR` | iQ-R command and device-layout profile. |
 | `melsec:iq-l` | MELSEC iQ-L serial modules | `PlcProfile::MelsecIqL` | Separate public profile for iQ-L targets. |
@@ -33,7 +33,7 @@ protocol.plc_profile = mcprotocol::serial::PlcProfile::MelsecQL;
 
 ## Profile-specific cautions
 
-| Profile string | Caution |
+| Canonical profile | Caution |
 | --- | --- |
 | `melsec:iq-r` | Use for iQ-R serial-module routes. Some native command behavior remains target-dependent. |
 | `melsec:iq-l` | Kept separate from iQ-R so iQ-L behavior can diverge later without changing saved configuration names. |
