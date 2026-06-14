@@ -1,9 +1,6 @@
-[![Documentation](https://img.shields.io/badge/docs-GitHub_Pages-blue.svg)](https://fa-yoshinobu.github.io/plc-comm-docs-site/mcprotocol/cpp/GETTING_STARTED/)
-[![Release](https://img.shields.io/github/v/release/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp?label=release)](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/releases/latest)
-[![CI](https://img.shields.io/github/actions/workflow/status/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/ci.yml?branch=main&label=CI&logo=github)](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/actions/workflows/ci.yml)
 [![PlatformIO Registry](https://badges.registry.platformio.org/packages/fa-yoshinobu/library/mcprotocol-serial-cpp.svg)](https://registry.platformio.org/libraries/fa-yoshinobu/mcprotocol-serial-cpp)
-[![C++](https://img.shields.io/badge/C%2B%2B-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 # MELSEC MC Protocol Serial for C++
 
