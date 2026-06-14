@@ -11,7 +11,7 @@ If you are trying to use the library rather than maintain it, go back to:
 Current pages:
 
 - [DEVELOPER_NOTES.md](DEVELOPER_NOTES.md)
-- [MANUAL_COMMAND_COVERAGE.md](MANUAL_COMMAND_COVERAGE.md)
+- Manual command coverage
 - [MANUAL_DERIVED_RULES.md](MANUAL_DERIVED_RULES.md)
 - [DOCS_AND_CI.md](DOCS_AND_CI.md)
 - [TODO.md](TODO.md)

@@ -22,7 +22,7 @@ Important points:
 - Do not copy protocol settings from an old sample or old log without checking the current
   validation matrix.
 - For the exact current settings that were validated on each target, use
-  [../validation/reports/HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md).
+  the maintainer validation archive.
 
 ## MCU-side Path
 
@@ -57,7 +57,7 @@ Confirm these before sending frames:
 
 ## Recommended Bring-up Order
 
-1. Confirm the target settings in `HARDWARE_VALIDATION.md`
+1. Confirm the target settings in the maintainer validation archive
 2. Prove the line with a read-only identification check
 3. Prove a small read-only device range
 4. Add write traffic only against a safe test area
@@ -66,4 +66,4 @@ Confirm these before sending frames:
 
 - [MCU_QUICKSTART.md](MCU_QUICKSTART.md)
 - [FAQ.md](FAQ.md)
-- [../validation/reports/HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md)
+- the maintainer validation archive

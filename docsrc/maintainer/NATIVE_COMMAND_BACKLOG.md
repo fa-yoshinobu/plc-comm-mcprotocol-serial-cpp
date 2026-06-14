@@ -29,8 +29,8 @@ criteria.
 
 ## Follow-up Rules
 
-- Add every new hardware result to `docsrc/validation/reports/HARDWARE_VALIDATION.md`.
-- Add or extend the consolidated report under `docsrc/validation/reports/` for that hardware
+- Add every new hardware result to the maintainer archive.
+- Add or extend the consolidated report under the maintainer archive for that hardware
   target, including raw evidence and command examples.
 - Keep the top-level `README.md` summary short. Push detailed failure evidence into validation docs.
 - Preserve request-shape conformance tests before treating hardware rejection as an encoder bug.

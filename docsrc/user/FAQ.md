@@ -6,7 +6,7 @@
   and `host_sync_quickstart.cpp`.
 - If you want to run on a real MCU UART, start with [MCU_QUICKSTART.md](MCU_QUICKSTART.md).
 - If you need the exact validated serial settings for your target, use
-  [../validation/reports/HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md).
+  the maintainer validation archive.
 
 ## Is this library Linux-only?
 
@@ -18,7 +18,7 @@ tools and MCU examples.
 No.
 
 The example projects keep simple starting values so the code stays easy to read. Use
-[../validation/reports/HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md) as
+the maintainer validation archive as
 the authority for the current validated settings of your actual target.
 
 The host CLI does not use those sample defaults for protocol selection. Live CLI commands require
@@ -61,8 +61,8 @@ The repository already includes `reduced` and `ultra-minimal` example profiles.
 
 Use:
 
-- [../validation/reports/HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md)
-- [../validation/reports/RJ71C24_R2_RS232C.md](../validation/reports/RJ71C24_R2_RS232C.md)
-- [../validation/reports/LJ71C24_RS232C.md](../validation/reports/LJ71C24_RS232C.md)
-- [../validation/reports/QJ71C24N_RS232C.md](../validation/reports/QJ71C24N_RS232C.md)
-- [../validation/reports/FX5UC_32MT_D_RS232C.md](../validation/reports/FX5UC_32MT_D_RS232C.md)
+- the maintainer validation archive
+- RJ71C24-R2 RS-232C report
+- the maintainer archive
+- QJ71C24N RS-232C report
+- FX5UC-32MT/D RS-232C report

@@ -6,7 +6,7 @@ serial native-command results.
 This page preserves the active hold and recently resolved evidence that used to live in the
 workspace-root `TARGET_DEPENDENT_NATIVE_COMMANDS.md`. The policy-level backlog remains in
 [NATIVE_COMMAND_BACKLOG.md](NATIVE_COMMAND_BACKLOG.md), while target reports and raw validation
-history live under [validation reports](../validation/reports/).
+history live under validation reports.
 
 ## Focused Setup
 
@@ -206,9 +206,9 @@ Suggested order:
 For every new result, update:
 
 - [TODO.md](TODO.md) for the active hold status.
-- [HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md) for the consolidated
+- the maintainer validation archive for the consolidated
   status.
-- [RJ71C24_R2_RS232C.md](../validation/reports/RJ71C24_R2_RS232C.md) for target-specific command
+- the target-specific maintainer archive for target-specific command
   examples and raw evidence.
 
 Keep the raw PLC end code, command arguments, target state, and immediate follow-up read result in

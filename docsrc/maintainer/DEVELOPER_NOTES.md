@@ -5,14 +5,14 @@ Audience: maintainers of this repository.
 ## Documentation Layout
 
 - `docsrc/user/`: user-facing bring-up and usage
-- `docsrc/validation/reports/`: validation matrix and one consolidated report per hardware target
+- the maintainer archive: validation matrix and one consolidated report per hardware target
 - `docsrc/maintainer/`: repository-maintenance notes
 
 ## Documentation Boundary
 
 - Keep `docsrc/user/` and the top-level `README.md` focused on current user workflows.
 - Keep unresolved hardware evidence, command coverage detail, and backlog policy in
-  `docsrc/validation/reports/` or `docsrc/maintainer/`.
+  the maintainer archive or `docsrc/maintainer/`.
 - Keep manual-derived operational rules in [MANUAL_DERIVED_RULES.md](MANUAL_DERIVED_RULES.md).
 - Label sample defaults as sample defaults. Do not describe example-code defaults as the current
   validated target settings.
@@ -70,8 +70,8 @@ Keep host-side tests aligned with the documented request shapes before blaming h
 
 When adding new hardware results:
 
-1. Update `docsrc/validation/reports/HARDWARE_VALIDATION.md`.
-2. Add or extend the consolidated report for that hardware target in `docsrc/validation/reports/`.
+1. Update the maintainer archive.
+2. Add or extend the consolidated report for that hardware target in the maintainer archive.
 3. Keep the top-level `README.md` summary short and point to the detailed report.
 4. Record the native result and PLC end code without masking it with a different command path.
 

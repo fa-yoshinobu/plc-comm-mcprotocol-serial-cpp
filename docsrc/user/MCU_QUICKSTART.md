@@ -18,7 +18,7 @@ The sample:
 
 Those settings are intentionally simple sample defaults. They are not the authority for the
 current validated settings of every target. Before wiring real hardware, check
-`HARDWARE_VALIDATION.md`.
+the maintainer validation archive.
 
 Sample source:
 
@@ -46,7 +46,7 @@ pio run -e mega2560-arduino-uart-example
 Use this section only to understand what the sample code does by default.
 
 For exact validated target settings, use
-[../validation/reports/HARDWARE_VALIDATION.md](../validation/reports/HARDWARE_VALIDATION.md).
+the maintainer validation archive.
 
 The board environments also define default UART pins:
 
@@ -79,7 +79,7 @@ In a production firmware port you may replace `flush()` with:
 
 ## Recommended Sequence
 
-1. Confirm the target settings in `HARDWARE_VALIDATION.md`.
+1. Confirm the target settings in the maintainer validation archive.
 2. Wire the MCU through a `TTL <-> RS-232C` level shifter.
 3. Build the matching PlatformIO UART example.
 4. Confirm a read-only `D` range works from the MCU.
