@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 - 2026-06-15
+
+### Breaking Changes
+
+- Removed `GlobalSignalControlRequest::station_no`. Users who assigned this
+  ignored field will now get a compile error; delete the assignment and use
+  `ProtocolConfig::route.station_no` for the actual target station.
+
 ## 0.6.0 - 2026-06-14
 
 - Replaced the public PLC selector with `PlcProfile`: `ProtocolConfig::plc_profile`

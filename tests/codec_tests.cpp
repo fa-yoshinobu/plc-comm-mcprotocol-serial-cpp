@@ -11,22 +11,6 @@
 #include "mcprotocol/serial/span_compat.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
 
-#if defined(_MSC_VER)
-namespace std {
-template <typename InputIt1, typename InputIt2>
-constexpr bool equal(InputIt1 first1, InputIt1 last1, InputIt2 first2) {
-  while (first1 != last1) {
-    if (!(*first1 == *first2)) {
-      return false;
-    }
-    ++first1;
-    ++first2;
-  }
-  return true;
-}
-}  // namespace std
-#endif
-
 namespace {
 
 using mcprotocol::serial::AsciiFormat;
@@ -525,7 +509,6 @@ void test_encode_control_global_signal_binary_request() {
       GlobalSignalControlRequest {
           .target = GlobalSignalTarget::X1A,
           .turn_on = true,
-          .station_no = 0,
       },
       request_data,
       request_size);
@@ -548,7 +531,6 @@ void test_encode_control_global_signal_uses_route_station_not_specification_word
       GlobalSignalControlRequest {
           .target = GlobalSignalTarget::X1B,
           .turn_on = false,
-          .station_no = 3,
       },
       request_data,
       request_size);
@@ -4819,7 +4801,6 @@ void test_client_c24_small_command_roundtrips() {
         GlobalSignalControlRequest {
             .target = GlobalSignalTarget::X1B,
             .turn_on = false,
-            .station_no = 3,
         },
         completion_callback,
         &capture);
@@ -4914,7 +4895,6 @@ void test_client_global_signal_timeout_without_response_is_success() {
       GlobalSignalControlRequest {
           .target = GlobalSignalTarget::ReceivedSide,
           .turn_on = true,
-          .station_no = 0,
       },
       completion_callback,
       &capture);

@@ -3,8 +3,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cctype>
 
+#include "mcprotocol/serial/detail/parse_helpers.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
 #include "mcprotocol/serial/status.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
@@ -77,46 +77,8 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
     {"R", 1U, DeviceCode::R, 10},
 }};
 
-[[nodiscard]] constexpr char ascii_upper(char value) noexcept {
-  return (value >= 'a' && value <= 'z') ? static_cast<char>(value - ('a' - 'A')) : value;
-}
-
-[[nodiscard]] inline bool parse_u32(
-    std::string_view text,
-    std::uint32_t& out_value,
-    int base) noexcept {
-  if (text.empty()) {
-    return false;
-  }
-
-  std::uint32_t value = 0U;
-  for (char ch : text) {
-    std::uint32_t digit = 0U;
-    if (ch >= '0' && ch <= '9') {
-      digit = static_cast<std::uint32_t>(ch - '0');
-    } else if (base == 16 && ch >= 'A' && ch <= 'F') {
-      digit = static_cast<std::uint32_t>(ch - 'A' + 10);
-    } else if (base == 16 && ch >= 'a' && ch <= 'f') {
-      digit = static_cast<std::uint32_t>(ch - 'a' + 10);
-    } else {
-      return false;
-    }
-
-    if (digit >= static_cast<std::uint32_t>(base)) {
-      return false;
-    }
-
-    const std::uint32_t radix = static_cast<std::uint32_t>(base);
-    constexpr std::uint32_t max_u32 = static_cast<std::uint32_t>(0xFFFFFFFFULL);
-    if (value > ((max_u32 - digit) / radix)) {
-      return false;
-    }
-    value = static_cast<std::uint32_t>(value * radix + digit);
-  }
-
-  out_value = value;
-  return true;
-}
+using mcprotocol::serial::detail::ascii_upper;
+using mcprotocol::serial::detail::parse_u32;
 
 [[nodiscard]] constexpr bool is_double_word_device(DeviceCode code) noexcept {
   switch (code) {

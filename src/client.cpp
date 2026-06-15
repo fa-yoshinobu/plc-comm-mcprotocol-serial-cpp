@@ -1,5 +1,7 @@
 #include "mcprotocol/serial/client.hpp"
 
+#include "protocol_predicates.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -30,24 +32,6 @@ namespace {
 
 [[nodiscard]] constexpr Status feature_disabled(const char* message) noexcept {
   return make_status(StatusCode::UnsupportedConfiguration, message);
-}
-
-[[nodiscard]] constexpr bool is_ascii_mode(const ProtocolConfig& config) noexcept {
-#if MCPROTOCOL_SERIAL_ENABLE_ASCII_MODE
-  return config.code_mode == CodeMode::Ascii;
-#else
-  (void)config;
-  return false;
-#endif
-}
-
-[[nodiscard]] constexpr bool is_binary_mode(const ProtocolConfig& config) noexcept {
-#if MCPROTOCOL_SERIAL_ENABLE_BINARY_MODE
-  return config.code_mode == CodeMode::Binary;
-#else
-  (void)config;
-  return false;
-#endif
 }
 
 [[nodiscard]] constexpr bool is_c1_frame(const ProtocolConfig& config) noexcept {

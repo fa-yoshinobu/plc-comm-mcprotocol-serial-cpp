@@ -1,5 +1,7 @@
 #include "mcprotocol/serial/codec.hpp"
 
+#include "protocol_predicates.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -129,31 +131,9 @@ class ByteWriter {
 
 // Protocol feature predicates and frame/device sizing helpers.
 
-[[nodiscard]] constexpr bool is_iq_r_series(const ProtocolConfig& config) noexcept {
-  return plc_series_from_profile(config.plc_profile) == PlcSeries::IQ_R;
-}
-
 [[nodiscard]] constexpr bool is_qna_family_series(const ProtocolConfig& config) noexcept {
   const PlcSeries series = plc_series_from_profile(config.plc_profile);
   return series == PlcSeries::QnA || series == PlcSeries::AnA_AnU;
-}
-
-[[nodiscard]] constexpr bool is_ascii_mode(const ProtocolConfig& config) noexcept {
-#if MCPROTOCOL_SERIAL_ENABLE_ASCII_MODE
-  return config.code_mode == CodeMode::Ascii;
-#else
-  (void)config;
-  return false;
-#endif
-}
-
-[[nodiscard]] constexpr bool is_binary_mode(const ProtocolConfig& config) noexcept {
-#if MCPROTOCOL_SERIAL_ENABLE_BINARY_MODE
-  return config.code_mode == CodeMode::Binary;
-#else
-  (void)config;
-  return false;
-#endif
 }
 
 [[nodiscard]] constexpr bool is_frame_kind_enabled(FrameKind frame_kind) noexcept {

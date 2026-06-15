@@ -8,22 +8,12 @@
 #include "mcprotocol/serial/span_compat.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
 
-#if defined(_WIN32)
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#else
-#include <time.h>
-#endif
-
 #include "mcprotocol/serial/client.hpp"
 #include "mcprotocol/serial/link_direct.hpp"
 #include "mcprotocol/serial/posix_serial.hpp"
 #include "mcprotocol/serial/qualified_buffer.hpp"
+#include "../src/host_now_ms.hpp"
+#include "../src/protocol_predicates.hpp"
 
 namespace {
 
@@ -75,7 +65,6 @@ using mcprotocol::serial::MultiBlockReadRequest;
 using mcprotocol::serial::MultiBlockWriteBlock;
 using mcprotocol::serial::MultiBlockWriteRequest;
 using mcprotocol::serial::PlcProfile;
-using mcprotocol::serial::PlcSeries;
 using mcprotocol::serial::PosixSerialConfig;
 using mcprotocol::serial::PosixSerialPort;
 using mcprotocol::serial::ProtocolConfig;
@@ -95,12 +84,13 @@ using mcprotocol::serial::UserFrameReadRequest;
 using mcprotocol::serial::UserFrameRegistrationData;
 using mcprotocol::serial::UserFrameWriteRequest;
 using mcprotocol::serial::decode_qualified_buffer_word_values;
+using mcprotocol::serial::is_iq_r_series;
 using mcprotocol::serial::make_qualified_buffer_read_words_request;
 using mcprotocol::serial::make_qualified_buffer_write_words_request;
+using mcprotocol::serial::now_ms;
 using mcprotocol::serial::parse_qualified_buffer_word_device;
 using mcprotocol::serial::parse_link_direct_device;
 using mcprotocol::serial::parse_plc_profile;
-using mcprotocol::serial::plc_series_from_profile;
 using mcprotocol::serial::qualified_buffer_kind_name;
 
 enum class CommandKind : std::uint8_t {
@@ -309,20 +299,6 @@ constexpr std::size_t kCliMaxBatchBitPoints = mcprotocol::serial::kMaxBatchBitPo
 constexpr std::size_t kCliMaxExtendedFileRegisterWordPoints = 256U;
 constexpr std::size_t kCliMaxExtendedFileRegisterRandomWriteItems = 40U;
 
-[[nodiscard]] std::uint32_t now_ms() {
-#if defined(_WIN32)
-  return static_cast<std::uint32_t>(GetTickCount64());
-#else
-  struct timespec ts {};
-  if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
-    return 0U;
-  }
-  return static_cast<std::uint32_t>(
-      (static_cast<std::uint64_t>(ts.tv_sec) * 1000ULL) +
-      (static_cast<std::uint64_t>(ts.tv_nsec) / 1000000ULL));
-#endif
-}
-
 [[nodiscard]] bool equals_ignore_case(std::string_view lhs, std::string_view rhs) {
   if (lhs.size() != rhs.size()) {
     return false;
@@ -346,7 +322,7 @@ constexpr std::size_t kCliMaxExtendedFileRegisterRandomWriteItems = 40U;
 }
 
 [[nodiscard]] constexpr std::size_t cli_request_device_reference_size(const ProtocolConfig& config) {
-  const bool iqr = plc_series_from_profile(config.plc_profile) == PlcSeries::IQ_R;
+  const bool iqr = is_iq_r_series(config);
   if (config.code_mode == CodeMode::Ascii) {
     return iqr ? 12U : 8U;
   }
@@ -2911,7 +2887,6 @@ int main(int argc, char** argv) {
           GlobalSignalControlRequest {
               .target = target,
               .turn_on = turn_on,
-              .station_no = station_no,
           },
           request_complete,
           &command_state);
