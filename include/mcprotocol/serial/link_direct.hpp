@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "mcprotocol/serial/detail/parse_helpers.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
 #include "mcprotocol/serial/status.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
@@ -68,50 +69,9 @@ struct LinkDirectMonitorRegistration {
 
 namespace link_direct_detail {
 
-[[nodiscard]] constexpr char ascii_upper(char value) noexcept {
-  return (value >= 'a' && value <= 'z') ? static_cast<char>(value - ('a' - 'A')) : value;
-}
-
-[[nodiscard]] constexpr bool is_separator(char value) noexcept {
-  return value == '\\' || value == '/';
-}
-
-[[nodiscard]] inline bool parse_u32_chars(
-    std::string_view text,
-    int base,
-    std::uint32_t& out_value) noexcept {
-  if (text.empty()) {
-    return false;
-  }
-
-  std::uint32_t value = 0U;
-  for (char ch : text) {
-    std::uint32_t digit = 0U;
-    if (ch >= '0' && ch <= '9') {
-      digit = static_cast<std::uint32_t>(ch - '0');
-    } else if (base == 16 && ch >= 'A' && ch <= 'F') {
-      digit = static_cast<std::uint32_t>(ch - 'A' + 10);
-    } else if (base == 16 && ch >= 'a' && ch <= 'f') {
-      digit = static_cast<std::uint32_t>(ch - 'a' + 10);
-    } else {
-      return false;
-    }
-
-    if (digit >= static_cast<std::uint32_t>(base)) {
-      return false;
-    }
-
-    const std::uint32_t radix = static_cast<std::uint32_t>(base);
-    constexpr std::uint32_t max_u32 = static_cast<std::uint32_t>(0xFFFFFFFFULL);
-    if (value > ((max_u32 - digit) / radix)) {
-      return false;
-    }
-    value = static_cast<std::uint32_t>(value * radix + digit);
-  }
-
-  out_value = value;
-  return true;
-}
+using mcprotocol::serial::detail::ascii_upper;
+using mcprotocol::serial::detail::is_separator;
+using mcprotocol::serial::detail::parse_u32;
 
 struct LinkDirectParseSpec {
   const char* prefix;
@@ -149,7 +109,7 @@ constexpr LinkDirectParseSpec kLinkDirectParseSpecs[] = {
     }
 
     std::uint32_t number = 0;
-    if (!parse_u32_chars(text.substr(spec.prefix_length), spec.base, number)) {
+    if (!parse_u32(text.substr(spec.prefix_length), number, spec.base)) {
       return false;
     }
 
@@ -189,7 +149,7 @@ constexpr LinkDirectParseSpec kLinkDirectParseSpecs[] = {
   }
 
   std::uint32_t network_number = 0;
-  if (!link_direct_detail::parse_u32_chars(text.substr(1U, separator - 1U), 16, network_number) ||
+  if (!link_direct_detail::parse_u32(text.substr(1U, separator - 1U), network_number, 16) ||
       network_number > 0xFFFFU) {
     return make_status(
         StatusCode::InvalidArgument,

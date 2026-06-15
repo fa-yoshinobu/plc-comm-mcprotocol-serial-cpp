@@ -741,9 +741,6 @@ struct GlobalSignalControlRequest {
   GlobalSignalTarget target = GlobalSignalTarget::ReceivedSide;
   /// `true` for ON, `false` for OFF.
   bool turn_on = false;
-  /// Deprecated: `1618` target station is selected by `ProtocolConfig::route.station_no`.
-  /// This field is ignored and kept for source compatibility.
-  std::uint8_t station_no = 0;
 };
 
 /// \brief C24 mode switching request (`1612`).
