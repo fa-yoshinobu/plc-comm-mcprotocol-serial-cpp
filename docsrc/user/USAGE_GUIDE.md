@@ -115,8 +115,15 @@ int main() {
     return 1;
   }
 
+  std::array<std::uint16_t, 2> original {};
+  if (!plc.read_words("D100", original).ok()) {
+    return 1;
+  }
+
   const std::array<std::uint16_t, 2> words {0x1234, 0x5678};
-  return plc.write_words("D100", words).ok() ? 0 : 1;
+  const auto write_status = plc.write_words("D100", words);
+  const auto restore_status = plc.write_words("D100", original);
+  return write_status.ok() && restore_status.ok() ? 0 : 1;
 }
 ```
 
@@ -152,8 +159,15 @@ int main() {
     return 1;
   }
 
+  std::array<std::uint16_t, 1> original_d101 {};
+  if (!plc.read_words("D101", original_d101).ok()) {
+    return 1;
+  }
+
   const std::array<RandomWriteWordSpec, 1> writes {{{.device = "D101", .value = d100, .double_word = false}}};
-  return plc.random_write_words(writes).ok() ? 0 : 1;
+  const auto write_status = plc.random_write_words(writes);
+  const auto restore_status = plc.write_words("D101", original_d101);
+  return write_status.ok() && restore_status.ok() ? 0 : 1;
 }
 ```
 

@@ -31,6 +31,7 @@ Smallest helper-based setup:
 
 ```cpp
 #include <array>
+#include <cstdint>
 #include <mcprotocol_serial.hpp>
 
 mcprotocol::serial::ProtocolConfig config =
@@ -72,6 +73,8 @@ It wraps `PosixSerialPort` and `MelsecSerialClient` into a single helper for:
 Smallest synchronous host-side setup:
 
 ```cpp
+#include <array>
+#include <cstdint>
 #include <mcprotocol_serial.hpp>
 
 mcprotocol::serial::PosixSyncClient plc;
