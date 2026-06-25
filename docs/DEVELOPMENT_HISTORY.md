@@ -1,5 +1,11 @@
 # Development History
 
+## 2026-06-25 Explicit frame/profile documentation
+
+- Clarified in user docs that MC Protocol Serial does not infer the serial frame or PLC profile from CPU model text, serial settings, response data, or device strings.
+- Recorded that `PlcProfile::Unspecified` is a configuration error rather than a fallback profile.
+- Recorded that Linux CLI wrappers require both `MCPROTOCOL_FRAME` and `MCPROTOCOL_PLC_PROFILE` before sending requests.
+
 ## 2026-06-11 Archived Refactor Plan
 
 The previous refactor instructions were archived into this history file.

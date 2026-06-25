@@ -4,6 +4,15 @@ Each profile selects the command family and device-layout assumptions used by th
 
 Choose one explicit profile in your application or configuration UI. The library intentionally does not infer it from `ReadTypeName`, CPU model text, or omitted configuration.
 
+## Explicit selection is required
+
+Always select one concrete `PlcProfile` value before sending real PLC requests.
+
+- `PlcProfile::Unspecified` is a configuration error, not a fallback profile.
+- No profile is inferred from CPU model text, response data, serial settings, or device strings.
+- Old names, short names, aliases, and case variants are rejected by text parsing.
+- Linux CLI wrappers require both `MCPROTOCOL_FRAME` and `MCPROTOCOL_PLC_PROFILE`; neither value is auto-filled.
+
 ## Profiles
 
 | Canonical profile | Hardware | API selector | Notes |
