@@ -2495,7 +2495,7 @@ Status FrameCodec::encode_error_response(
       if (!is_c1_frame(config) && !append_text_bytes(writer, end_code)) {
         return buffer_too_small("ASCII error response frame buffer is too small");
       }
-      if (!append_ascii_hex(writer, error_code & 0xFFU, error_width)) {
+      if (!append_ascii_hex(writer, error_code, error_width)) {
         return buffer_too_small("ASCII error response frame buffer is too small");
       }
     } else {
@@ -2503,7 +2503,7 @@ Status FrameCodec::encode_error_response(
       if (!writer.push(kAsciiStx) ||
           !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
           !append_text_bytes(writer, end_code) ||
-          !append_ascii_hex(writer, error_code & 0xFFU, error_width) ||
+          !append_ascii_hex(writer, error_code, error_width) ||
           !writer.push(kAsciiEtx)) {
         return buffer_too_small("ASCII error response frame buffer is too small");
       }

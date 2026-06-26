@@ -908,6 +908,31 @@ void test_decode_ascii_c2_format3_four_digit_error_response() {
   assert(decode.bytes_consumed == frame.size());
 }
 
+void test_encode_ascii_c2_format3_error_preserves_four_digit_code() {
+  auto config = make_ascii_c2_format3_config();
+  config.route.kind = RouteKind::MultidropStation;
+  config.route.station_no = 0x11;
+  config.route.self_station_enabled = true;
+  config.route.self_station_no = 0x05;
+  config.sum_check_enabled = false;
+
+  std::array<std::uint8_t, 32> frame {};
+  std::size_t frame_size = 0;
+  Status status = FrameCodec::encode_error_response(config, 0x7151U, frame, frame_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected = "\x02""FB1105QNAK7151\x03";
+  assert(frame_size == expected.size());
+  assert(std::memcmp(frame.data(), expected.data(), frame_size) == 0);
+
+  const auto decode = FrameCodec::decode_response(
+      config,
+      std::span<const std::uint8_t>(frame.data(), frame_size));
+  assert(decode.status == DecodeStatus::Complete);
+  assert(decode.frame.type == mcprotocol::serial::ResponseType::PlcError);
+  assert(decode.frame.error_code == 0x7151U);
+}
+
 void test_encode_ascii_format2_request_inserts_block_number() {
   auto config = make_ascii_c4_format2_config();
   config.sum_check_enabled = false;
@@ -1006,6 +1031,28 @@ void test_decode_ascii_c2_format2_four_digit_error_response() {
   assert(decode.frame.type == mcprotocol::serial::ResponseType::PlcError);
   assert(decode.frame.error_code == 0x0006U);
   assert(decode.bytes_consumed == frame.size());
+}
+
+void test_encode_ascii_c2_format2_error_preserves_four_digit_code() {
+  auto config = make_ascii_c2_format2_config();
+  config.sum_check_enabled = false;
+  config.ascii_block_number = 0x7AU;
+
+  std::array<std::uint8_t, 32> frame {};
+  std::size_t frame_size = 0;
+  Status status = FrameCodec::encode_error_response(config, 0x7151U, frame, frame_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected = "\x15""7AFB0000QNAK7151";
+  assert(frame_size == expected.size());
+  assert(std::memcmp(frame.data(), expected.data(), frame_size) == 0);
+
+  const auto decode = FrameCodec::decode_response(
+      config,
+      std::span<const std::uint8_t>(frame.data(), frame_size));
+  assert(decode.status == DecodeStatus::Complete);
+  assert(decode.frame.type == mcprotocol::serial::ResponseType::PlcError);
+  assert(decode.frame.error_code == 0x7151U);
 }
 
 void test_encode_ascii_c1_batch_read_words_qna_request_shape() {
@@ -5363,9 +5410,11 @@ int main() {
   test_encode_ascii_c2_format2_request_uses_fb_frame_id_and_short_command();
   test_decode_ascii_format2_ack_response();
   test_decode_ascii_c2_format2_four_digit_error_response();
+  test_encode_ascii_c2_format2_error_preserves_four_digit_code();
   test_encode_ascii_c2_format3_request_uses_fb_frame_id_and_short_command();
   test_decode_ascii_c2_format3_data_response();
   test_decode_ascii_c2_format3_four_digit_error_response();
+  test_encode_ascii_c2_format3_error_preserves_four_digit_code();
   test_encode_ascii_c1_batch_read_words_qna_request_shape();
   test_encode_ascii_c1_batch_read_bits_a_request_shape();
   test_encode_ascii_c1_batch_write_words_qna_request_shape();
