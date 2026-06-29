@@ -17,7 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-29
+
 ### Changed
+- Release: Bumped CMake, PlatformIO, Arduino, and public version-header metadata to `1.0.2`.
 - Docs: Added a maintainer TODO for the `remote_reset` no-response timeout success policy so the behavior is treated as a specification-policy investigation before any implementation change.
 
 ### Fixed
