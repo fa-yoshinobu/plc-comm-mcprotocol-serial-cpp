@@ -363,8 +363,21 @@ Status PosixSyncClient::read_bits(
     std::string_view head_device,
     std::uint16_t points,
     std::span<BitValue> out_bits) noexcept {
+  DeviceAddress parsed {};
+  Status status = highlevel::parse_device_address(head_device, parsed);
+  if (!status.ok()) {
+    return status;
+  }
+  highlevel::LongStateReadSpec long_state_spec {};
+  status = highlevel::get_long_state_read_spec(parsed.code, long_state_spec);
+  if (status.ok()) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "Long timer/counter state devices must be read with read_long_state_bits");
+  }
+
   BatchReadBitsRequest request {};
-  Status status = highlevel::make_batch_read_bits_request(head_device, points, request);
+  status = highlevel::make_batch_read_bits_request(head_device, points, request);
   if (!status.ok()) {
     return status;
   }
@@ -416,6 +429,23 @@ Status PosixSyncClient::read_long_state_bits(
   status = highlevel::get_long_state_read_spec(parsed.code, spec);
   if (!status.ok()) {
     return status;
+  }
+
+  if (spec.route == highlevel::LongStateReadRoute::DirectBits) {
+    const BatchReadBitsRequest request {
+        .head_device = parsed,
+        .points = points,
+    };
+    status = client_.async_batch_read_bits(
+        now_ms(),
+        request,
+        out_bits,
+        &PosixSyncClient::on_request_complete,
+        &completion_);
+    if (!status.ok()) {
+      return status;
+    }
+    return run_until_complete();
   }
 
   if (parsed.number > (0xFFFFFFFFU - static_cast<std::uint32_t>(points - 1U))) {

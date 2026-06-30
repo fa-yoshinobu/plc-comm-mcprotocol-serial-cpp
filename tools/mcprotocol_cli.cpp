@@ -9,6 +9,7 @@
 #include "mcprotocol/serial/string_view_compat.hpp"
 
 #include "mcprotocol/serial/client.hpp"
+#include "mcprotocol/serial/high_level.hpp"
 #include "mcprotocol/serial/link_direct.hpp"
 #include "mcprotocol/serial/posix_serial.hpp"
 #include "mcprotocol/serial/qualified_buffer.hpp"
@@ -84,6 +85,10 @@ using mcprotocol::serial::UserFrameReadRequest;
 using mcprotocol::serial::UserFrameRegistrationData;
 using mcprotocol::serial::UserFrameWriteRequest;
 using mcprotocol::serial::decode_qualified_buffer_word_values;
+using mcprotocol::serial::highlevel::decode_long_state_bit;
+using mcprotocol::serial::highlevel::get_long_state_read_spec;
+using mcprotocol::serial::highlevel::LongStateReadRoute;
+using mcprotocol::serial::highlevel::LongStateReadSpec;
 using mcprotocol::serial::is_iq_r_series;
 using mcprotocol::serial::make_qualified_buffer_read_words_request;
 using mcprotocol::serial::make_qualified_buffer_write_words_request;
@@ -115,6 +120,7 @@ enum class CommandKind : std::uint8_t {
   ReadFileRegisterWords,
   ReadFileRegisterWordsDirect,
   ReadBits,
+  ReadLongStateBits,
   ReadLinkDirectWords,
   ReadLinkDirectBits,
   WriteLinkDirectWords,
@@ -393,6 +399,7 @@ void print_usage() {
       "  mcprotocol_cli [options] cpu-model\n"
       "  mcprotocol_cli [options] read-words DEVICE POINTS\n"
       "  mcprotocol_cli [options] read-bits DEVICE POINTS\n"
+      "  mcprotocol_cli [options] read-long-state-bits DEVICE POINTS\n"
       "  mcprotocol_cli [options] write-words DEVICE=VALUE [DEVICE=VALUE ...]\n"
       "  mcprotocol_cli [options] write-bits DEVICE=0|1 [DEVICE=0|1 ...]\n"
       "  mcprotocol_cli [options] loopback HEXASCII\n"
@@ -1196,6 +1203,8 @@ void print_usage() {
         options.command = CommandKind::ReadFileRegisterWordsDirect;
       } else if (arg == "read-bits") {
         options.command = CommandKind::ReadBits;
+      } else if (arg == "read-long-state-bits" || arg == "read-long-bits") {
+        options.command = CommandKind::ReadLongStateBits;
       } else if (arg == "read-link-direct-words") {
         options.command = CommandKind::ReadLinkDirectWords;
       } else if (arg == "read-link-direct-bits") {
@@ -1339,6 +1348,7 @@ void print_usage() {
     case CommandKind::ReadFileRegisterWords:
     case CommandKind::ReadFileRegisterWordsDirect:
     case CommandKind::ReadBits:
+    case CommandKind::ReadLongStateBits:
     case CommandKind::ReadLinkDirectWords:
     case CommandKind::ReadLinkDirectBits:
     case CommandKind::ReadHostBuffer:
@@ -2204,6 +2214,68 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     return start_status;
   }
   return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_long_state_read_bits_group(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    const DeviceAddress& head_device,
+    std::uint16_t points,
+    std::span<BitValue> out_values) {
+  if (points == 0U) {
+    return mcprotocol::serial::make_status(
+        StatusCode::InvalidArgument,
+        "Long state bit-read points must be in range 1..65535");
+  }
+  if (out_values.size() < points) {
+    return mcprotocol::serial::make_status(
+        StatusCode::BufferTooSmall,
+        "Long state bit-read output buffer is too small");
+  }
+
+  LongStateReadSpec spec {};
+  Status status = get_long_state_read_spec(head_device.code, spec);
+  if (!status.ok()) {
+    return status;
+  }
+
+  if (spec.route == LongStateReadRoute::DirectBits) {
+    return run_batch_read_bits_group(client, port, command_state, head_device, points, out_values);
+  }
+
+  if (head_device.number > (0xFFFFFFFFU - static_cast<std::uint32_t>(points - 1U))) {
+    return mcprotocol::serial::make_status(
+        StatusCode::InvalidArgument,
+        "Long state bit-read address range overflows");
+  }
+
+  std::array<std::uint16_t, 4> status_block {};
+  for (std::uint16_t index = 0; index < points; ++index) {
+    status = run_batch_read_words_group(
+        client,
+        port,
+        command_state,
+        DeviceAddress {
+            .code = spec.base_code,
+            .number = head_device.number + static_cast<std::uint32_t>(index),
+        },
+        static_cast<std::uint16_t>(status_block.size()),
+        std::span<std::uint16_t>(status_block.data(), status_block.size()));
+    if (!status.ok()) {
+      return status;
+    }
+
+    status = decode_long_state_bit(
+        spec,
+        std::span<const std::uint16_t>(status_block.data(), status_block.size()),
+        out_values[index]);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+
+  return mcprotocol::serial::ok_status();
 }
 
 [[nodiscard]] Status run_link_direct_batch_read_bits(
@@ -5539,6 +5611,13 @@ int main(int argc, char** argv) {
                      points_arg.data());
         return 2;
       }
+      LongStateReadSpec long_state_spec {};
+      if (get_long_state_read_spec(device.code, long_state_spec).ok()) {
+        std::fprintf(
+            stderr,
+            "Long timer/counter state devices must be read with read-long-state-bits\n");
+        return 2;
+      }
 
       std::array<BitValue, 7904> bits {};
       status = client.async_batch_read_bits(
@@ -5554,6 +5633,42 @@ int main(int argc, char** argv) {
       status = drive_request(client, port, command_state);
       if (!status.ok()) {
         print_status_error("read-bits request failed", status);
+        return 1;
+      }
+      for (std::uint32_t index = 0; index < points; ++index) {
+        std::printf("[%u] %u\n", index, bits[index] == BitValue::On ? 1U : 0U);
+      }
+      return 0;
+    }
+
+    case CommandKind::ReadLongStateBits: {
+      DeviceAddress device {};
+      const std::string_view device_arg(options.command_argv[0]);
+      const std::string_view points_arg(options.command_argv[1]);
+      if (!parse_device_address(device_arg, device)) {
+        std::fprintf(stderr, "Invalid device address: %.*s\n",
+                     static_cast<int>(device_arg.size()),
+                     device_arg.data());
+        return 2;
+      }
+      std::uint32_t points = 0;
+      if (!parse_u32(points_arg, points) || points == 0U || points > 7904U) {
+        std::fprintf(stderr, "Invalid bit count: %.*s\n",
+                     static_cast<int>(points_arg.size()),
+                     points_arg.data());
+        return 2;
+      }
+
+      std::array<BitValue, 7904> bits {};
+      status = run_long_state_read_bits_group(
+          client,
+          port,
+          command_state,
+          device,
+          static_cast<std::uint16_t>(points),
+          std::span<BitValue>(bits.data(), points));
+      if (!status.ok()) {
+        print_status_error("read-long-state-bits request failed", status);
         return 1;
       }
       for (std::uint32_t index = 0; index < points; ++index) {

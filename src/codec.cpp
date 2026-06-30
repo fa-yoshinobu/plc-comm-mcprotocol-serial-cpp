@@ -1964,6 +1964,21 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   }
 }
 
+// LTS/LTC/LSTS/LSTC are decoded through the long timer current-value status block.
+// LCS/LCC are still routed through the high-level long-state helper, but the helper uses
+// direct bit access internally for those devices.
+[[nodiscard]] constexpr bool is_long_timer_status_block_device(DeviceCode code) noexcept {
+  switch (code) {
+    case DeviceCode::LTS:
+    case DeviceCode::LTC:
+    case DeviceCode::LSTS:
+    case DeviceCode::LSTC:
+      return true;
+    default:
+      return false;
+  }
+}
+
 // All long timer/counter/index devices are excluded as head devices for 0406/1406 multi-block.
 [[nodiscard]] constexpr bool is_multi_block_excluded_device(DeviceCode code) noexcept {
   switch (code) {
@@ -3420,8 +3435,8 @@ Status encode_batch_read_bits(
   if (!bit_status.ok()) {
     return bit_status;
   }
-  if (is_long_contact_coil_device(request.head_device.code)) {
-    return invalid_argument("Batch read bits does not support long timer/counter contact/coil devices");
+  if (is_long_timer_status_block_device(request.head_device.code)) {
+    return invalid_argument("Batch read bits does not support long timer contact/coil devices");
   }
   if (is_c1_frame(config) && !is_c1_supported_device(request.head_device.code)) {
     return invalid_argument("1C batch read bits does not support this device");

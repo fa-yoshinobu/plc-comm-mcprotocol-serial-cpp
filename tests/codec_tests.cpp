@@ -96,6 +96,7 @@ using mcprotocol::serial::highlevel::parse_device_address;
 using mcprotocol::serial::highlevel::decode_long_state_bit;
 using mcprotocol::serial::highlevel::get_long_state_read_spec;
 using mcprotocol::serial::highlevel::LongStateReadKind;
+using mcprotocol::serial::highlevel::LongStateReadRoute;
 using mcprotocol::serial::highlevel::LongStateReadSpec;
 using mcprotocol::serial::highlevel::RandomReadSpec;
 using mcprotocol::serial::highlevel::RandomWriteBitSpec;
@@ -2434,9 +2435,10 @@ void test_high_level_make_monitor_registration_from_specs() {
 
 void test_high_level_long_state_read_spec_and_decode() {
   LongStateReadSpec spec {};
-  Status status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::LCS, spec);
+  Status status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::LTS, spec);
   assert(status.ok());
-  assert(spec.base_code == mcprotocol::serial::DeviceCode::LCN);
+  assert(spec.route == LongStateReadRoute::StatusBlock);
+  assert(spec.base_code == mcprotocol::serial::DeviceCode::LTN);
   assert(spec.kind == LongStateReadKind::Contact);
 
   std::array<std::uint16_t, 4> words {{0x1234U, 0x0000U, 0x0002U, 0x0000U}};
@@ -2445,9 +2447,10 @@ void test_high_level_long_state_read_spec_and_decode() {
   assert(status.ok());
   assert(value == BitValue::On);
 
-  status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::LCC, spec);
+  status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::LTC, spec);
   assert(status.ok());
-  assert(spec.base_code == mcprotocol::serial::DeviceCode::LCN);
+  assert(spec.route == LongStateReadRoute::StatusBlock);
+  assert(spec.base_code == mcprotocol::serial::DeviceCode::LTN);
   assert(spec.kind == LongStateReadKind::Coil);
   status = decode_long_state_bit(spec, std::span<const std::uint16_t>(words.data(), words.size()), value);
   assert(status.ok());
@@ -2457,6 +2460,18 @@ void test_high_level_long_state_read_spec_and_decode() {
   status = decode_long_state_bit(spec, std::span<const std::uint16_t>(words.data(), words.size()), value);
   assert(status.ok());
   assert(value == BitValue::On);
+
+  status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::LCS, spec);
+  assert(status.ok());
+  assert(spec.route == LongStateReadRoute::DirectBits);
+  assert(spec.base_code == mcprotocol::serial::DeviceCode::LCS);
+  assert(spec.kind == LongStateReadKind::Contact);
+
+  status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::LCC, spec);
+  assert(status.ok());
+  assert(spec.route == LongStateReadRoute::DirectBits);
+  assert(spec.base_code == mcprotocol::serial::DeviceCode::LCC);
+  assert(spec.kind == LongStateReadKind::Coil);
 
   status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::M, spec);
   assert(!status.ok());
@@ -5189,22 +5204,21 @@ void test_client_link_direct_register_monitor_roundtrip() {
   assert(!client.busy());
 }
 
-// Validate that 0401 batch bit read rejects long timer/counter contact/coil devices
-// (LTS, LTC, LSTS, LSTC, LCS, LCC). These are not allowed per the serial manual restriction.
-void test_encode_batch_read_bits_rejects_long_contact_coil_devices() {
+// Validate that 0401 batch bit read rejects long timer state devices but allows
+// long counter contact/coil devices. The high-level sync API still routes all
+// long timer/counter states through read_long_state_bits.
+void test_encode_batch_read_bits_long_state_device_rules() {
   const auto config = make_binary_c4_iqr_config();
   std::array<std::uint8_t, 64> request_data {};
   std::size_t request_size = 0;
 
-  const mcprotocol::serial::DeviceCode excluded[] = {
+  const mcprotocol::serial::DeviceCode rejected[] = {
       mcprotocol::serial::DeviceCode::LTS,
       mcprotocol::serial::DeviceCode::LTC,
       mcprotocol::serial::DeviceCode::LSTS,
       mcprotocol::serial::DeviceCode::LSTC,
-      mcprotocol::serial::DeviceCode::LCS,
-      mcprotocol::serial::DeviceCode::LCC,
   };
-  for (const auto code : excluded) {
+  for (const auto code : rejected) {
     const BatchReadBitsRequest request {.head_device = {.code = code, .number = 10}, .points = 1};
     const Status status = CommandCodec::encode_batch_read_bits(
         config,
@@ -5213,6 +5227,20 @@ void test_encode_batch_read_bits_rejects_long_contact_coil_devices() {
         request_size);
     assert(!status.ok());
     assert(status.code == StatusCode::InvalidArgument);
+  }
+
+  const mcprotocol::serial::DeviceCode allowed[] = {
+      mcprotocol::serial::DeviceCode::LCS,
+      mcprotocol::serial::DeviceCode::LCC,
+  };
+  for (const auto code : allowed) {
+    const BatchReadBitsRequest request {.head_device = {.code = code, .number = 10}, .points = 1};
+    const Status status = CommandCodec::encode_batch_read_bits(
+        config,
+        request,
+        request_data,
+        request_size);
+    assert(status.ok());
   }
 }
 
@@ -5564,7 +5592,7 @@ int main() {
   test_encode_random_write_bits_ascii_iqr_shape();
   test_encode_random_write_bits_binary_iqr_layout();
   test_encode_random_write_bits_binary_ql_keeps_device_numbers();
-  test_encode_batch_read_bits_rejects_long_contact_coil_devices();
+  test_encode_batch_read_bits_long_state_device_rules();
   test_qna_family_random_access_uses_smaller_limits();
   test_encode_multi_block_read_ascii_matches_manual();
   test_encode_multi_block_read_binary_matches_capture_counts();
