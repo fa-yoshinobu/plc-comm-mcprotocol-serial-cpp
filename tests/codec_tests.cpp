@@ -93,6 +93,11 @@ using mcprotocol::serial::highlevel::make_random_write_bit_items;
 using mcprotocol::serial::highlevel::make_random_write_word_item;
 using mcprotocol::serial::highlevel::make_random_write_word_items;
 using mcprotocol::serial::highlevel::parse_device_address;
+using mcprotocol::serial::highlevel::decode_long_state_bit;
+using mcprotocol::serial::highlevel::get_long_state_read_spec;
+using mcprotocol::serial::highlevel::LongStateReadKind;
+using mcprotocol::serial::highlevel::LongStateReadRoute;
+using mcprotocol::serial::highlevel::LongStateReadSpec;
 using mcprotocol::serial::highlevel::RandomReadSpec;
 using mcprotocol::serial::highlevel::RandomWriteBitSpec;
 using mcprotocol::serial::highlevel::RandomWriteWordSpec;
@@ -2428,6 +2433,51 @@ void test_high_level_make_monitor_registration_from_specs() {
   assert(request.items[1].double_word);
 }
 
+void test_high_level_long_state_read_spec_and_decode() {
+  LongStateReadSpec spec {};
+  Status status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::LTS, spec);
+  assert(status.ok());
+  assert(spec.route == LongStateReadRoute::StatusBlock);
+  assert(spec.base_code == mcprotocol::serial::DeviceCode::LTN);
+  assert(spec.kind == LongStateReadKind::Contact);
+
+  std::array<std::uint16_t, 4> words {{0x1234U, 0x0000U, 0x0002U, 0x0000U}};
+  BitValue value = BitValue::Off;
+  status = decode_long_state_bit(spec, std::span<const std::uint16_t>(words.data(), words.size()), value);
+  assert(status.ok());
+  assert(value == BitValue::On);
+
+  status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::LTC, spec);
+  assert(status.ok());
+  assert(spec.route == LongStateReadRoute::StatusBlock);
+  assert(spec.base_code == mcprotocol::serial::DeviceCode::LTN);
+  assert(spec.kind == LongStateReadKind::Coil);
+  status = decode_long_state_bit(spec, std::span<const std::uint16_t>(words.data(), words.size()), value);
+  assert(status.ok());
+  assert(value == BitValue::Off);
+
+  words[2] = 0x0001U;
+  status = decode_long_state_bit(spec, std::span<const std::uint16_t>(words.data(), words.size()), value);
+  assert(status.ok());
+  assert(value == BitValue::On);
+
+  status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::LCS, spec);
+  assert(status.ok());
+  assert(spec.route == LongStateReadRoute::DirectBits);
+  assert(spec.base_code == mcprotocol::serial::DeviceCode::LCS);
+  assert(spec.kind == LongStateReadKind::Contact);
+
+  status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::LCC, spec);
+  assert(status.ok());
+  assert(spec.route == LongStateReadRoute::DirectBits);
+  assert(spec.base_code == mcprotocol::serial::DeviceCode::LCC);
+  assert(spec.kind == LongStateReadKind::Coil);
+
+  status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::M, spec);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+}
+
 void test_encode_sm_sd_and_lz_device_codes() {
   const auto config = make_binary_c4_config();
 
@@ -2453,10 +2503,8 @@ void test_encode_sm_sd_and_lz_device_codes() {
     std::array<std::uint8_t, 32> request_data {};
     std::size_t request_data_size = 0;
     Status status = CommandCodec::encode_batch_read_bits(config, request, request_data, request_data_size);
-    assert(status.ok());
-    const std::array<std::uint8_t, 10> expected {0x01, 0x04, 0x01, 0x00, 0x03, 0x00, 0x00, 0x51, 0x01, 0x00};
-    assert(request_data_size == expected.size());
-    assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
   }
 
   {
@@ -2571,6 +2619,41 @@ void test_encode_batch_write_words_ascii_order() {
   constexpr std::string_view expected = "14010000D*0001000002007B01C8";
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_batch_word_access_rejects_standalone_qualified_only_devices() {
+  const auto config = make_binary_c4_iqr_config();
+  const std::array<std::uint16_t, 1> values {0x1234U};
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const mcprotocol::serial::DeviceCode rejected[] = {
+      mcprotocol::serial::DeviceCode::G,
+      mcprotocol::serial::DeviceCode::HG,
+  };
+  for (const auto code : rejected) {
+    const Status read_status = CommandCodec::encode_batch_read_words(
+        config,
+        BatchReadWordsRequest {
+            .head_device = {.code = code, .number = 10},
+            .points = 1,
+        },
+        request_data,
+        request_size);
+    assert(!read_status.ok());
+    assert(read_status.code == StatusCode::InvalidArgument);
+
+    const Status write_status = CommandCodec::encode_batch_write_words(
+        config,
+        BatchWriteWordsRequest {
+            .head_device = {.code = code, .number = 10},
+            .words = values,
+        },
+        request_data,
+        request_size);
+    assert(!write_status.ok());
+    assert(write_status.code == StatusCode::InvalidArgument);
+  }
 }
 
 void test_encode_extended_batch_read_words_ascii_matches_manual_shape() {
@@ -2787,6 +2870,50 @@ void test_encode_link_direct_batch_read_bits_binary_single_uses_addressed_point(
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
+void test_encode_link_direct_batch_read_words_ascii_iqr_shape() {
+  const auto config = make_ascii_c4_format4_iqr_config();
+  const LinkDirectDevice device {
+      .network_number = 0x0001U,
+      .device = {.code = mcprotocol::serial::DeviceCode::SW, .number = 0x0011U},
+  };
+  std::array<std::uint8_t, 96> request_data {};
+  std::size_t request_size = 0;
+
+  const Status status = CommandCodec::encode_link_direct_batch_read_words(
+      config,
+      device,
+      1U,
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected = "0401008200J0010000SW**00000000110001";
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_link_direct_batch_read_bits_ascii_iqr_shape() {
+  const auto config = make_ascii_c4_format4_iqr_config();
+  const LinkDirectDevice device {
+      .network_number = 0x0001U,
+      .device = {.code = mcprotocol::serial::DeviceCode::SB, .number = 0x0010U},
+  };
+  std::array<std::uint8_t, 96> request_data {};
+  std::size_t request_size = 0;
+
+  const Status status = CommandCodec::encode_link_direct_batch_read_bits(
+      config,
+      device,
+      4U,
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected = "0401008300J0010000SB**00000000100004";
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
 void test_encode_batch_read_bits_binary_single_uses_addressed_point() {
   const auto config = make_binary_c4_iqr_config();
   std::array<std::uint8_t, 32> request_data {};
@@ -2874,6 +3001,52 @@ void test_encode_link_direct_batch_write_bits_binary_iqr_shape() {
       0x04, 0x00,
       0x10, 0x10,
   };
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_link_direct_batch_write_words_ascii_iqr_shape() {
+  const auto config = make_ascii_c4_format4_iqr_config();
+  const LinkDirectDevice device {
+      .network_number = 0x0001U,
+      .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0040U},
+  };
+  const std::array<std::uint16_t, 2> words {0x1234U, 0xABCDU};
+  std::array<std::uint8_t, 96> request_data {};
+  std::size_t request_size = 0;
+
+  const Status status = CommandCodec::encode_link_direct_batch_write_words(
+      config,
+      device,
+      words,
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected = "1401008200J0010000W***000000004000021234ABCD";
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_link_direct_batch_write_bits_ascii_iqr_shape() {
+  const auto config = make_ascii_c4_format4_iqr_config();
+  const LinkDirectDevice device {
+      .network_number = 0x0001U,
+      .device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0x0030U},
+  };
+  const std::array<BitValue, 4> bits {BitValue::On, BitValue::Off, BitValue::On, BitValue::Off};
+  std::array<std::uint8_t, 96> request_data {};
+  std::size_t request_size = 0;
+
+  const Status status = CommandCodec::encode_link_direct_batch_write_bits(
+      config,
+      device,
+      bits,
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected = "1401008300J0010000B***000000003000041010";
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
@@ -5156,6 +5329,46 @@ void test_client_link_direct_register_monitor_roundtrip() {
   assert(!client.busy());
 }
 
+// Validate that 0401 batch bit read rejects long timer state devices but allows
+// long counter contact/coil devices. The high-level sync API still routes all
+// long timer/counter states through read_long_state_bits.
+void test_encode_batch_read_bits_long_state_device_rules() {
+  const auto config = make_binary_c4_iqr_config();
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const mcprotocol::serial::DeviceCode rejected[] = {
+      mcprotocol::serial::DeviceCode::LTS,
+      mcprotocol::serial::DeviceCode::LTC,
+      mcprotocol::serial::DeviceCode::LSTS,
+      mcprotocol::serial::DeviceCode::LSTC,
+  };
+  for (const auto code : rejected) {
+    const BatchReadBitsRequest request {.head_device = {.code = code, .number = 10}, .points = 1};
+    const Status status = CommandCodec::encode_batch_read_bits(
+        config,
+        request,
+        request_data,
+        request_size);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+  }
+
+  const mcprotocol::serial::DeviceCode allowed[] = {
+      mcprotocol::serial::DeviceCode::LCS,
+      mcprotocol::serial::DeviceCode::LCC,
+  };
+  for (const auto code : allowed) {
+    const BatchReadBitsRequest request {.head_device = {.code = code, .number = 10}, .points = 1};
+    const Status status = CommandCodec::encode_batch_read_bits(
+        config,
+        request,
+        request_data,
+        request_size);
+    assert(status.ok());
+  }
+}
+
 // Validate that 0403 random read rejects long timer/counter contact/coil devices
 // (LTS, LTC, LSTS, LSTC, LCS, LCC). These are not allowed per the serial manual restriction.
 void test_encode_random_read_rejects_long_contact_coil_devices() {
@@ -5182,6 +5395,32 @@ void test_encode_random_read_rejects_long_contact_coil_devices() {
         request_size);
     assert(!status.ok());
     assert(status.code == StatusCode::InvalidArgument);
+  }
+}
+
+void test_encode_random_read_rejects_standalone_qualified_only_devices() {
+  const auto config = make_binary_c4_iqr_config();
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const mcprotocol::serial::DeviceCode rejected[] = {
+      mcprotocol::serial::DeviceCode::G,
+      mcprotocol::serial::DeviceCode::HG,
+  };
+  const bool double_word_modes[] = {false, true};
+  for (const auto code : rejected) {
+    for (const bool double_word : double_word_modes) {
+      const RandomReadItem item {.device = {.code = code, .number = 10}, .double_word = double_word};
+      const Status status = CommandCodec::encode_random_read(
+          config,
+          mcprotocol::serial::RandomReadRequest {
+              .items = std::span<const mcprotocol::serial::RandomReadItem>(&item, 1),
+          },
+          request_data,
+          request_size);
+      assert(!status.ok());
+      assert(status.code == StatusCode::InvalidArgument);
+    }
   }
 }
 
@@ -5215,6 +5454,34 @@ void test_encode_random_write_words_allows_ltn_and_lstn() {
     assert(status.ok());
     assert(request_size == entry.expected.size());
     assert(std::memcmp(request_data.data(), entry.expected.data(), entry.expected.size()) == 0);
+  }
+}
+
+void test_encode_random_write_words_rejects_standalone_qualified_only_devices() {
+  const auto config = make_binary_c4_iqr_config();
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const mcprotocol::serial::DeviceCode rejected[] = {
+      mcprotocol::serial::DeviceCode::G,
+      mcprotocol::serial::DeviceCode::HG,
+  };
+  const bool double_word_modes[] = {false, true};
+  for (const auto code : rejected) {
+    for (const bool double_word : double_word_modes) {
+      const RandomWriteWordItem item {
+          .device = {.code = code, .number = 10},
+          .value = 0x1234U,
+          .double_word = double_word,
+      };
+      const Status status = CommandCodec::encode_random_write_words(
+          config,
+          std::span<const RandomWriteWordItem>(&item, 1),
+          request_data,
+          request_size);
+      assert(!status.ok());
+      assert(status.code == StatusCode::InvalidArgument);
+    }
   }
 }
 
@@ -5303,8 +5570,8 @@ void test_encode_random_write_bits_binary_iqr_lcc_layout() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
-// Validate that 0406 multi-block read rejects all long timer/counter/index devices
-// as head devices. Per the serial manual: LTS/LTC/LTN/LSTS/LSTC/LSTN/LCS/LCC/LCN/LZ all excluded.
+// Validate that 0406 multi-block read rejects long timer/counter/index devices
+// and qualified-only G/HG standalone heads.
 void test_encode_multi_block_read_rejects_long_devices_as_head() {
   const auto config = make_binary_c4_config();
   std::array<std::uint8_t, 256> request_data {};
@@ -5321,6 +5588,8 @@ void test_encode_multi_block_read_rejects_long_devices_as_head() {
       mcprotocol::serial::DeviceCode::LCC,
       mcprotocol::serial::DeviceCode::LCN,
       mcprotocol::serial::DeviceCode::LZ,
+      mcprotocol::serial::DeviceCode::G,
+      mcprotocol::serial::DeviceCode::HG,
   };
   for (const auto code : excluded) {
     const MultiBlockReadBlock block {.head_device = {.code = code, .number = 0}, .points = 1, .bit_block = false};
@@ -5336,8 +5605,8 @@ void test_encode_multi_block_read_rejects_long_devices_as_head() {
   }
 }
 
-// Validate that 1406 multi-block write rejects all long timer/counter/index devices
-// as head devices. Per the serial manual: LTS/LTC/LTN/LSTS/LSTC/LSTN/LCS/LCC/LCN/LZ all excluded.
+// Validate that 1406 multi-block write rejects long timer/counter/index devices
+// and qualified-only G/HG standalone heads.
 void test_encode_multi_block_write_rejects_long_devices_as_head() {
   const auto config = make_binary_c4_config();
   std::array<std::uint8_t, 256> request_data {};
@@ -5354,6 +5623,8 @@ void test_encode_multi_block_write_rejects_long_devices_as_head() {
       mcprotocol::serial::DeviceCode::LCC,
       mcprotocol::serial::DeviceCode::LCN,
       mcprotocol::serial::DeviceCode::LZ,
+      mcprotocol::serial::DeviceCode::G,
+      mcprotocol::serial::DeviceCode::HG,
   };
   const std::array<std::uint16_t, 1> dummy_words {0};
   for (const auto code : excluded) {
@@ -5465,8 +5736,10 @@ int main() {
   test_high_level_make_random_request_from_specs();
   test_high_level_make_random_write_items_from_specs();
   test_high_level_make_monitor_registration_from_specs();
+  test_high_level_long_state_read_spec_and_decode();
   test_encode_sm_sd_and_lz_device_codes();
   test_encode_batch_write_words_ascii_order();
+  test_encode_batch_word_access_rejects_standalone_qualified_only_devices();
   test_encode_extended_batch_read_words_ascii_matches_manual_shape();
   test_encode_extended_batch_read_words_binary_matches_capture_shape();
   test_encode_extended_batch_read_words_binary_hg_matches_capture_shape();
@@ -5475,8 +5748,12 @@ int main() {
   test_encode_link_direct_batch_read_bits_binary_iqr_matches_manual_shape();
   test_encode_batch_read_bits_binary_single_uses_addressed_point();
   test_encode_link_direct_batch_read_bits_binary_single_uses_addressed_point();
+  test_encode_link_direct_batch_read_words_ascii_iqr_shape();
+  test_encode_link_direct_batch_read_bits_ascii_iqr_shape();
   test_encode_link_direct_batch_write_words_binary_iqr_shape();
   test_encode_link_direct_batch_write_bits_binary_iqr_shape();
+  test_encode_link_direct_batch_write_words_ascii_iqr_shape();
+  test_encode_link_direct_batch_write_bits_ascii_iqr_shape();
   test_encode_link_direct_random_read_binary_iqr_shape();
   test_encode_link_direct_random_write_words_binary_iqr_shape();
   test_encode_link_direct_random_write_bits_binary_iqr_shape();
@@ -5503,6 +5780,7 @@ int main() {
   test_encode_random_write_bits_ascii_iqr_shape();
   test_encode_random_write_bits_binary_iqr_layout();
   test_encode_random_write_bits_binary_ql_keeps_device_numbers();
+  test_encode_batch_read_bits_long_state_device_rules();
   test_qna_family_random_access_uses_smaller_limits();
   test_encode_multi_block_read_ascii_matches_manual();
   test_encode_multi_block_read_binary_matches_capture_counts();
@@ -5544,8 +5822,10 @@ int main() {
   test_client_ascii_format4_resynchronizes_on_stale_ack();
   test_client_write_rejects_unexpected_success_data();
   test_encode_random_read_rejects_long_contact_coil_devices();
+  test_encode_random_read_rejects_standalone_qualified_only_devices();
   test_encode_random_write_words_allows_ltn_and_lstn();
   test_encode_random_write_words_rejects_long_contact_coil_devices();
+  test_encode_random_write_words_rejects_standalone_qualified_only_devices();
   test_encode_random_write_bits_long_device_rules();
   test_encode_random_write_bits_binary_iqr_lcc_layout();
   test_encode_multi_block_read_rejects_long_devices_as_head();

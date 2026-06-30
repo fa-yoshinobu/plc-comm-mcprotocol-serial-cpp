@@ -2,6 +2,9 @@
 
 #include "host_now_ms.hpp"
 
+#include <cstdio>
+#include <cstdlib>
+
 namespace mcprotocol::serial {
 namespace {
 
@@ -15,6 +18,31 @@ namespace {
 
   out_points = static_cast<std::uint16_t>(size);
   return ok_status();
+}
+
+[[nodiscard]] bool trace_enabled() noexcept {
+#if defined(_MSC_VER)
+  char buffer[8] {};
+  std::size_t required = 0;
+  if (getenv_s(&required, buffer, sizeof(buffer), "MCPROTOCOL_SERIAL_TRACE") != 0 || required == 0U) {
+    return false;
+  }
+  return buffer[0] != '\0' && buffer[0] != '0';
+#else
+  const char* value = std::getenv("MCPROTOCOL_SERIAL_TRACE");
+  return value != nullptr && value[0] != '\0' && value[0] != '0';
+#endif
+}
+
+void trace_bytes(const char* label, std::span<const std::byte> bytes) noexcept {
+  if (!trace_enabled()) {
+    return;
+  }
+  std::fprintf(stderr, "%s len=%zu hex=", label, bytes.size());
+  for (const std::byte value : bytes) {
+    std::fprintf(stderr, "%02X", static_cast<unsigned int>(value));
+  }
+  std::fprintf(stderr, "\n");
 }
 
 }  // namespace
@@ -66,6 +94,7 @@ Status PosixSyncClient::run_until_complete() noexcept {
     return status;
   }
 
+  trace_bytes("MC TX", client_.pending_tx_frame());
   status = port_.write_all(client_.pending_tx_frame());
   if (!status.ok()) {
     client_.cancel();
@@ -96,6 +125,9 @@ Status PosixSyncClient::run_until_complete() noexcept {
     }
 
     if (received > 0U) {
+      trace_bytes(
+          "MC RX",
+          std::span<const std::byte>(rx_buffer_.data(), received));
       client_.on_rx_bytes(
           now_ms(),
           std::span<const std::byte>(rx_buffer_.data(), received));
@@ -363,8 +395,21 @@ Status PosixSyncClient::read_bits(
     std::string_view head_device,
     std::uint16_t points,
     std::span<BitValue> out_bits) noexcept {
+  DeviceAddress parsed {};
+  Status status = highlevel::parse_device_address(head_device, parsed);
+  if (!status.ok()) {
+    return status;
+  }
+  highlevel::LongStateReadSpec long_state_spec {};
+  status = highlevel::get_long_state_read_spec(parsed.code, long_state_spec);
+  if (status.ok()) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "Long timer/counter state devices must be read with read_long_state_bits");
+  }
+
   BatchReadBitsRequest request {};
-  Status status = highlevel::make_batch_read_bits_request(head_device, points, request);
+  status = highlevel::make_batch_read_bits_request(head_device, points, request);
   if (!status.ok()) {
     return status;
   }
@@ -395,6 +440,170 @@ Status PosixSyncClient::read_bits(
   return read_bits(head_device, points, out_bits);
 }
 
+Status PosixSyncClient::read_link_direct_words(
+    std::string_view head_device,
+    std::uint16_t points,
+    std::span<std::uint16_t> out_words) noexcept {
+  LinkDirectDevice device {};
+  Status status = parse_link_direct_device(head_device, device);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = client_.async_link_direct_batch_read_words(
+      now_ms(),
+      device,
+      points,
+      out_words,
+      &PosixSyncClient::on_request_complete,
+      &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status PosixSyncClient::read_link_direct_bits(
+    std::string_view head_device,
+    std::uint16_t points,
+    std::span<BitValue> out_bits) noexcept {
+  LinkDirectDevice device {};
+  Status status = parse_link_direct_device(head_device, device);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = client_.async_link_direct_batch_read_bits(
+      now_ms(),
+      device,
+      points,
+      out_bits,
+      &PosixSyncClient::on_request_complete,
+      &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status PosixSyncClient::read_native_qualified_words(
+    std::string_view head_device,
+    std::uint16_t points,
+    std::span<std::uint16_t> out_words) noexcept {
+  QualifiedBufferWordDevice device {};
+  Status status = parse_qualified_buffer_word_device(head_device, device);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = client_.async_extended_batch_read_words(
+      now_ms(),
+      device,
+      points,
+      out_words,
+      &PosixSyncClient::on_request_complete,
+      &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status PosixSyncClient::read_long_state_bits(
+    std::string_view head_device,
+    std::uint16_t points,
+    std::span<BitValue> out_bits) noexcept {
+  if (points == 0U) {
+    return make_status(StatusCode::InvalidArgument, "Long state bit-read points must be in range 1..65535");
+  }
+  if (out_bits.size() < points) {
+    return make_status(StatusCode::BufferTooSmall, "Long state bit-read output buffer is too small");
+  }
+
+  DeviceAddress parsed {};
+  Status status = highlevel::parse_device_address(head_device, parsed);
+  if (!status.ok()) {
+    return status;
+  }
+
+  highlevel::LongStateReadSpec spec {};
+  status = highlevel::get_long_state_read_spec(parsed.code, spec);
+  if (!status.ok()) {
+    return status;
+  }
+
+  if (spec.route == highlevel::LongStateReadRoute::DirectBits) {
+    const BatchReadBitsRequest request {
+        .head_device = parsed,
+        .points = points,
+    };
+    status = client_.async_batch_read_bits(
+        now_ms(),
+        request,
+        out_bits,
+        &PosixSyncClient::on_request_complete,
+        &completion_);
+    if (!status.ok()) {
+      return status;
+    }
+    return run_until_complete();
+  }
+
+  if (parsed.number > (0xFFFFFFFFU - static_cast<std::uint32_t>(points - 1U))) {
+    return make_status(StatusCode::InvalidArgument, "Long state bit-read address range overflows");
+  }
+
+  std::array<std::uint16_t, 4> status_block {};
+  for (std::uint16_t index = 0; index < points; ++index) {
+    const BatchReadWordsRequest request {
+        .head_device = {
+            .code = spec.base_code,
+            .number = parsed.number + static_cast<std::uint32_t>(index),
+        },
+        .points = 4,
+    };
+
+    status = client_.async_batch_read_words(
+        now_ms(),
+        request,
+        std::span<std::uint16_t>(status_block.data(), status_block.size()),
+        &PosixSyncClient::on_request_complete,
+        &completion_);
+    if (!status.ok()) {
+      return status;
+    }
+
+    status = run_until_complete();
+    if (!status.ok()) {
+      return status;
+    }
+
+    status = highlevel::decode_long_state_bit(
+        spec,
+        std::span<const std::uint16_t>(status_block.data(), status_block.size()),
+        out_bits[index]);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+
+  return ok_status();
+}
+
+Status PosixSyncClient::read_long_state_bits(
+    std::string_view head_device,
+    std::span<BitValue> out_bits) noexcept {
+  std::uint16_t points = 0;
+  const Status status = span_size_to_points(
+      out_bits.size(),
+      points,
+      "Long state bit-read output span exceeds the protocol point limit");
+  if (!status.ok()) {
+    return status;
+  }
+  return read_long_state_bits(head_device, points, out_bits);
+}
+
 Status PosixSyncClient::write_words(
     std::string_view head_device,
     std::span<const std::uint16_t> words) noexcept {
@@ -407,6 +616,69 @@ Status PosixSyncClient::write_words(
   status = client_.async_batch_write_words(
       now_ms(),
       request,
+      &PosixSyncClient::on_request_complete,
+      &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status PosixSyncClient::write_link_direct_words(
+    std::string_view head_device,
+    std::span<const std::uint16_t> words) noexcept {
+  LinkDirectDevice device {};
+  Status status = parse_link_direct_device(head_device, device);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = client_.async_link_direct_batch_write_words(
+      now_ms(),
+      device,
+      words,
+      &PosixSyncClient::on_request_complete,
+      &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status PosixSyncClient::write_link_direct_bits(
+    std::string_view head_device,
+    std::span<const BitValue> bits) noexcept {
+  LinkDirectDevice device {};
+  Status status = parse_link_direct_device(head_device, device);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = client_.async_link_direct_batch_write_bits(
+      now_ms(),
+      device,
+      bits,
+      &PosixSyncClient::on_request_complete,
+      &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status PosixSyncClient::write_native_qualified_words(
+    std::string_view head_device,
+    std::span<const std::uint16_t> words) noexcept {
+  QualifiedBufferWordDevice device {};
+  Status status = parse_qualified_buffer_word_device(head_device, device);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = client_.async_extended_batch_write_words(
+      now_ms(),
+      device,
+      words,
       &PosixSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {

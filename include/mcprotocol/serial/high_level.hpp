@@ -177,6 +177,27 @@ struct RandomWriteBitSpec {
   BitValue value = BitValue::Off;
 };
 
+/// \brief Logical state selected from a long timer/counter status block.
+enum class LongStateReadKind : std::uint8_t {
+  Contact,
+  Coil
+};
+
+enum class LongStateReadRoute : std::uint8_t {
+  StatusBlock,
+  DirectBits
+};
+
+/// \brief Mapping from a long-family state device to the helper's internal read route.
+struct LongStateReadSpec {
+  /// Read route used internally by the long-state helper.
+  LongStateReadRoute route = LongStateReadRoute::StatusBlock;
+  /// Base current-value device read with `0401` word access, or direct bit device for DirectBits.
+  DeviceCode base_code = DeviceCode::LTN;
+  /// Status bit selected from the third word of the block.
+  LongStateReadKind kind = LongStateReadKind::Contact;
+};
+
 /// \brief Parses a plain MC device string such as `D100`, `M100`, `X10`, or `B20`.
 ///
 /// This helper is intentionally limited to plain device syntax. It does not parse `Jn\\...` link-
@@ -214,6 +235,72 @@ struct RandomWriteBitSpec {
   }
 
   return make_status(StatusCode::InvalidArgument, "Device address prefix is not supported");
+}
+
+/// \brief Resolves the dedicated read path for long timer/counter state devices.
+///
+/// `LTS/LTC/LSTS/LSTC/LCS/LCC` are read through this helper. Timer state devices use the
+/// corresponding `LTN/LSTN` 4-word status block; long counter contacts/coils use direct bit access.
+[[nodiscard]] inline Status get_long_state_read_spec(
+    DeviceCode code,
+    LongStateReadSpec& out_spec) noexcept {
+  switch (code) {
+    case DeviceCode::LTS:
+      out_spec = LongStateReadSpec {
+          .route = LongStateReadRoute::StatusBlock,
+          .base_code = DeviceCode::LTN,
+          .kind = LongStateReadKind::Contact};
+      return ok_status();
+    case DeviceCode::LTC:
+      out_spec = LongStateReadSpec {
+          .route = LongStateReadRoute::StatusBlock,
+          .base_code = DeviceCode::LTN,
+          .kind = LongStateReadKind::Coil};
+      return ok_status();
+    case DeviceCode::LSTS:
+      out_spec = LongStateReadSpec {
+          .route = LongStateReadRoute::StatusBlock,
+          .base_code = DeviceCode::LSTN,
+          .kind = LongStateReadKind::Contact};
+      return ok_status();
+    case DeviceCode::LSTC:
+      out_spec = LongStateReadSpec {
+          .route = LongStateReadRoute::StatusBlock,
+          .base_code = DeviceCode::LSTN,
+          .kind = LongStateReadKind::Coil};
+      return ok_status();
+    case DeviceCode::LCS:
+      out_spec = LongStateReadSpec {
+          .route = LongStateReadRoute::DirectBits,
+          .base_code = DeviceCode::LCS,
+          .kind = LongStateReadKind::Contact};
+      return ok_status();
+    case DeviceCode::LCC:
+      out_spec = LongStateReadSpec {
+          .route = LongStateReadRoute::DirectBits,
+          .base_code = DeviceCode::LCC,
+          .kind = LongStateReadKind::Coil};
+      return ok_status();
+    default:
+      return make_status(StatusCode::InvalidArgument, "Device is not a long timer/counter state device");
+  }
+}
+
+/// \brief Decodes the contact/coil bit from a long-family 4-word status block.
+[[nodiscard]] inline Status decode_long_state_bit(
+    const LongStateReadSpec& spec,
+    std::span<const std::uint16_t> status_block_words,
+    BitValue& out_value) noexcept {
+  if (status_block_words.size() < 4U) {
+    return make_status(StatusCode::BufferTooSmall, "Long state status block requires 4 words");
+  }
+
+  const std::uint16_t status_word = status_block_words[2];
+  const std::uint16_t mask =
+      spec.kind == LongStateReadKind::Contact ? static_cast<std::uint16_t>(0x0002U)
+                                              : static_cast<std::uint16_t>(0x0001U);
+  out_value = (status_word & mask) == 0U ? BitValue::Off : BitValue::On;
+  return ok_status();
 }
 
 /// \brief Builds a contiguous word-read request from a string address such as `D100`.
