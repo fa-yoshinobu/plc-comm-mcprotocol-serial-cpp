@@ -26,11 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Library: Routed long counter contact and coil reads through the long-state helper path.
-- Docs: Documented that qualified `G` / `HG` practical access uses the `0601/1601` helper path and native qualified commands remain diagnostic-only.
+- Docs: Updated maintainer rules for long-state routing.
 
 ### Fixed
 - Library: Reject standalone `G` and `HG` device access in normal, random, and multi-block device routes.
-- Tests: Added coverage for long-state helper routing, standalone `G` / `HG` rejection, special-route sync helpers, and ASCII link-direct extension encoding.
+- Tests: Added coverage for long-state helper routing, standalone `G` / `HG` rejection, and ASCII link-direct extension encoding.
 
 ## [1.0.2] - 2026-06-29
 
