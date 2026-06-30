@@ -2621,6 +2621,41 @@ void test_encode_batch_write_words_ascii_order() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
+void test_encode_batch_word_access_rejects_standalone_qualified_only_devices() {
+  const auto config = make_binary_c4_iqr_config();
+  const std::array<std::uint16_t, 1> values {0x1234U};
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const mcprotocol::serial::DeviceCode rejected[] = {
+      mcprotocol::serial::DeviceCode::G,
+      mcprotocol::serial::DeviceCode::HG,
+  };
+  for (const auto code : rejected) {
+    const Status read_status = CommandCodec::encode_batch_read_words(
+        config,
+        BatchReadWordsRequest {
+            .head_device = {.code = code, .number = 10},
+            .points = 1,
+        },
+        request_data,
+        request_size);
+    assert(!read_status.ok());
+    assert(read_status.code == StatusCode::InvalidArgument);
+
+    const Status write_status = CommandCodec::encode_batch_write_words(
+        config,
+        BatchWriteWordsRequest {
+            .head_device = {.code = code, .number = 10},
+            .words = values,
+        },
+        request_data,
+        request_size);
+    assert(!write_status.ok());
+    assert(write_status.code == StatusCode::InvalidArgument);
+  }
+}
+
 void test_encode_extended_batch_read_words_ascii_matches_manual_shape() {
   const auto config = make_ascii_c4_format4_iqr_config();
   const QualifiedBufferWordDevice device {
@@ -5273,6 +5308,32 @@ void test_encode_random_read_rejects_long_contact_coil_devices() {
   }
 }
 
+void test_encode_random_read_rejects_standalone_qualified_only_devices() {
+  const auto config = make_binary_c4_iqr_config();
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const mcprotocol::serial::DeviceCode rejected[] = {
+      mcprotocol::serial::DeviceCode::G,
+      mcprotocol::serial::DeviceCode::HG,
+  };
+  const bool double_word_modes[] = {false, true};
+  for (const auto code : rejected) {
+    for (const bool double_word : double_word_modes) {
+      const RandomReadItem item {.device = {.code = code, .number = 10}, .double_word = double_word};
+      const Status status = CommandCodec::encode_random_read(
+          config,
+          mcprotocol::serial::RandomReadRequest {
+              .items = std::span<const mcprotocol::serial::RandomReadItem>(&item, 1),
+          },
+          request_data,
+          request_size);
+      assert(!status.ok());
+      assert(status.code == StatusCode::InvalidArgument);
+    }
+  }
+}
+
 // Validate that 1402 random write words supports LTN/LSTN as double-word devices on iQ-R.
 void test_encode_random_write_words_allows_ltn_and_lstn() {
   const auto config = make_binary_c4_iqr_config();
@@ -5303,6 +5364,34 @@ void test_encode_random_write_words_allows_ltn_and_lstn() {
     assert(status.ok());
     assert(request_size == entry.expected.size());
     assert(std::memcmp(request_data.data(), entry.expected.data(), entry.expected.size()) == 0);
+  }
+}
+
+void test_encode_random_write_words_rejects_standalone_qualified_only_devices() {
+  const auto config = make_binary_c4_iqr_config();
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const mcprotocol::serial::DeviceCode rejected[] = {
+      mcprotocol::serial::DeviceCode::G,
+      mcprotocol::serial::DeviceCode::HG,
+  };
+  const bool double_word_modes[] = {false, true};
+  for (const auto code : rejected) {
+    for (const bool double_word : double_word_modes) {
+      const RandomWriteWordItem item {
+          .device = {.code = code, .number = 10},
+          .value = 0x1234U,
+          .double_word = double_word,
+      };
+      const Status status = CommandCodec::encode_random_write_words(
+          config,
+          std::span<const RandomWriteWordItem>(&item, 1),
+          request_data,
+          request_size);
+      assert(!status.ok());
+      assert(status.code == StatusCode::InvalidArgument);
+    }
   }
 }
 
@@ -5391,8 +5480,8 @@ void test_encode_random_write_bits_binary_iqr_lcc_layout() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
-// Validate that 0406 multi-block read rejects all long timer/counter/index devices
-// as head devices. Per the serial manual: LTS/LTC/LTN/LSTS/LSTC/LSTN/LCS/LCC/LCN/LZ all excluded.
+// Validate that 0406 multi-block read rejects long timer/counter/index devices
+// and qualified-only G/HG standalone heads.
 void test_encode_multi_block_read_rejects_long_devices_as_head() {
   const auto config = make_binary_c4_config();
   std::array<std::uint8_t, 256> request_data {};
@@ -5409,6 +5498,8 @@ void test_encode_multi_block_read_rejects_long_devices_as_head() {
       mcprotocol::serial::DeviceCode::LCC,
       mcprotocol::serial::DeviceCode::LCN,
       mcprotocol::serial::DeviceCode::LZ,
+      mcprotocol::serial::DeviceCode::G,
+      mcprotocol::serial::DeviceCode::HG,
   };
   for (const auto code : excluded) {
     const MultiBlockReadBlock block {.head_device = {.code = code, .number = 0}, .points = 1, .bit_block = false};
@@ -5424,8 +5515,8 @@ void test_encode_multi_block_read_rejects_long_devices_as_head() {
   }
 }
 
-// Validate that 1406 multi-block write rejects all long timer/counter/index devices
-// as head devices. Per the serial manual: LTS/LTC/LTN/LSTS/LSTC/LSTN/LCS/LCC/LCN/LZ all excluded.
+// Validate that 1406 multi-block write rejects long timer/counter/index devices
+// and qualified-only G/HG standalone heads.
 void test_encode_multi_block_write_rejects_long_devices_as_head() {
   const auto config = make_binary_c4_config();
   std::array<std::uint8_t, 256> request_data {};
@@ -5442,6 +5533,8 @@ void test_encode_multi_block_write_rejects_long_devices_as_head() {
       mcprotocol::serial::DeviceCode::LCC,
       mcprotocol::serial::DeviceCode::LCN,
       mcprotocol::serial::DeviceCode::LZ,
+      mcprotocol::serial::DeviceCode::G,
+      mcprotocol::serial::DeviceCode::HG,
   };
   const std::array<std::uint16_t, 1> dummy_words {0};
   for (const auto code : excluded) {
@@ -5556,6 +5649,7 @@ int main() {
   test_high_level_long_state_read_spec_and_decode();
   test_encode_sm_sd_and_lz_device_codes();
   test_encode_batch_write_words_ascii_order();
+  test_encode_batch_word_access_rejects_standalone_qualified_only_devices();
   test_encode_extended_batch_read_words_ascii_matches_manual_shape();
   test_encode_extended_batch_read_words_binary_matches_capture_shape();
   test_encode_extended_batch_read_words_binary_hg_matches_capture_shape();
@@ -5634,8 +5728,10 @@ int main() {
   test_client_ascii_format4_resynchronizes_on_stale_ack();
   test_client_write_rejects_unexpected_success_data();
   test_encode_random_read_rejects_long_contact_coil_devices();
+  test_encode_random_read_rejects_standalone_qualified_only_devices();
   test_encode_random_write_words_allows_ltn_and_lstn();
   test_encode_random_write_words_rejects_long_contact_coil_devices();
+  test_encode_random_write_words_rejects_standalone_qualified_only_devices();
   test_encode_random_write_bits_long_device_rules();
   test_encode_random_write_bits_binary_iqr_lcc_layout();
   test_encode_multi_block_read_rejects_long_devices_as_head();

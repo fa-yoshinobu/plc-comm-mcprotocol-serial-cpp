@@ -1979,7 +1979,11 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   }
 }
 
-// All long timer/counter/index devices are excluded as head devices for 0406/1406 multi-block.
+[[nodiscard]] constexpr bool is_qualified_only_device(DeviceCode code) noexcept {
+  return code == DeviceCode::G || code == DeviceCode::HG;
+}
+
+// Long timer/counter/index and qualified-only devices are excluded as head devices for 0406/1406 multi-block.
 [[nodiscard]] constexpr bool is_multi_block_excluded_device(DeviceCode code) noexcept {
   switch (code) {
     case DeviceCode::LTS:
@@ -1992,6 +1996,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     case DeviceCode::LCC:
     case DeviceCode::LCN:
     case DeviceCode::LZ:
+    case DeviceCode::G:
+    case DeviceCode::HG:
       return true;
     default:
       return false;
@@ -2001,7 +2007,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_word_device(const ProtocolConfig& config, const DeviceAddress& device, const char* message)
     noexcept {
   const DeviceSpec* spec = find_device_spec(device.code);
-  if (spec == nullptr || device.code == DeviceCode::LZ) {
+  if (spec == nullptr || device.code == DeviceCode::LZ || is_qualified_only_device(device.code)) {
     return invalid_argument(message);
   }
   if (is_iq_r_only_device_code(device.code) && !is_iq_r_series(config)) {
@@ -2017,6 +2023,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const char* dword_message) noexcept {
   const DeviceSpec* spec = find_device_spec(item.device.code);
   if (spec == nullptr) {
+    return invalid_argument(item.double_word ? dword_message : word_message);
+  }
+  if (is_qualified_only_device(item.device.code)) {
     return invalid_argument(item.double_word ? dword_message : word_message);
   }
   if (requires_random_dword_access(item.device.code) != item.double_word &&
@@ -2039,6 +2048,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const char* dword_message) noexcept {
   const DeviceSpec* spec = find_device_spec(item.device.code);
   if (spec == nullptr) {
+    return invalid_argument(item.double_word ? dword_message : word_message);
+  }
+  if (is_qualified_only_device(item.device.code)) {
     return invalid_argument(item.double_word ? dword_message : word_message);
   }
   if (requires_random_dword_access(item.device.code) != item.double_word &&
