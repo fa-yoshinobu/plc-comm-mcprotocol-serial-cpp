@@ -1219,11 +1219,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_link_direct_word_device(
     const ProtocolConfig& config,
     const LinkDirectDevice& device) noexcept {
-  (void)config;
-  if (!is_binary_mode(config)) {
-    return make_status(
-        StatusCode::UnsupportedConfiguration,
-        "Link direct device extension is only implemented for binary mode");
+  if (is_ascii_mode(config) && device.network_number > 0x0FFFU) {
+    return invalid_argument("ASCII link-direct network number must be in range 0x000..0xFFF");
   }
   if (!is_link_direct_word_device(device.device.code)) {
     return invalid_argument("Link direct word access requires W or SW");
@@ -1234,11 +1231,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_link_direct_bit_device(
     const ProtocolConfig& config,
     const LinkDirectDevice& device) noexcept {
-  (void)config;
-  if (!is_binary_mode(config)) {
-    return make_status(
-        StatusCode::UnsupportedConfiguration,
-        "Link direct device extension is only implemented for binary mode");
+  if (is_ascii_mode(config) && device.network_number > 0x0FFFU) {
+    return invalid_argument("ASCII link-direct network number must be in range 0x000..0xFFF");
   }
   if (!is_link_direct_bit_device(device.device.code)) {
     return invalid_argument("Link direct bit access requires X, Y, B, or SB");
@@ -1375,6 +1369,32 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
          writer.push(0xF9U);
 }
 
+[[nodiscard]] bool append_link_direct_extension_specification_ascii(
+    ByteWriter& writer,
+    const LinkDirectDevice& device) noexcept {
+  return writer.push(static_cast<std::uint8_t>('J')) &&
+         append_ascii_hex(writer, device.network_number & 0x0FFFU, 3U);
+}
+
+[[nodiscard]] bool append_link_direct_device_reference_ascii(
+    ByteWriter& writer,
+    const ProtocolConfig& config,
+    const LinkDirectDevice& device) noexcept {
+  const DeviceSpec* spec = find_device_spec(device.device.code);
+  if (spec == nullptr) {
+    return false;
+  }
+  return append_extension_modification_ascii(writer) &&
+         append_link_direct_extension_specification_ascii(writer, device) &&
+         append_device_modification_ascii(writer, config) &&
+         append_ascii_device_code(writer, config, *spec) &&
+         append_ascii_device_number(
+             writer,
+             device.device.number,
+             ascii_extended_device_number_width(config),
+             spec->hexadecimal);
+}
+
 [[nodiscard]] bool append_extended_device_reference(
     ByteWriter& writer,
     const ProtocolConfig& config,
@@ -1383,6 +1403,16 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     return append_extended_device_reference_ascii(writer, config, device);
   }
   return append_extended_device_reference_binary(writer, config, device);
+}
+
+[[nodiscard]] bool append_link_direct_device_reference(
+    ByteWriter& writer,
+    const ProtocolConfig& config,
+    const LinkDirectDevice& device) noexcept {
+  if (is_ascii_mode(config)) {
+    return append_link_direct_device_reference_ascii(writer, config, device);
+  }
+  return append_link_direct_device_reference_binary(writer, config, device);
 }
 
 // Shared response parsing, checksums, and route encoders.
@@ -3380,7 +3410,7 @@ Status encode_link_direct_batch_read_words(
   }
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x0401U, extended_word_subcommand(config)) ||
-      !append_link_direct_device_reference_binary(writer, config, device) ||
+      !append_link_direct_device_reference(writer, config, device) ||
       !append_word_count(writer, config, points)) {
     return buffer_too_small("Link direct batch read words request buffer is too small");
   }
@@ -3533,7 +3563,7 @@ Status encode_link_direct_batch_read_bits(
   effective_device.device = effective_batch_read_bits_head_device(config, device.device, points);
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x0401U, extended_bit_subcommand(config)) ||
-      !append_link_direct_device_reference_binary(writer, config, effective_device) ||
+      !append_link_direct_device_reference(writer, config, effective_device) ||
       !append_word_count(writer, config, points)) {
     return buffer_too_small("Link direct batch read bits request buffer is too small");
   }
@@ -3830,7 +3860,7 @@ Status encode_link_direct_batch_write_words(
   }
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x1401U, extended_word_subcommand(config)) ||
-      !append_link_direct_device_reference_binary(writer, config, device) ||
+      !append_link_direct_device_reference(writer, config, device) ||
       !append_word_count(writer, config, static_cast<std::uint16_t>(words.size())) ||
       !append_word_data(writer, config, words)) {
     return buffer_too_small("Link direct batch write words request buffer is too small");
@@ -3985,7 +4015,7 @@ Status encode_link_direct_batch_write_bits(
   };
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x1401U, extended_bit_subcommand(config)) ||
-      !append_link_direct_device_reference_binary(writer, config, effective_device) ||
+      !append_link_direct_device_reference(writer, config, effective_device) ||
       !append_word_count(writer, config, static_cast<std::uint16_t>(bits.size()))) {
     return buffer_too_small("Link direct batch write bits request buffer is too small");
   }
@@ -4042,7 +4072,7 @@ Status encode_link_direct_random_read(
   }
 
   for (const LinkDirectRandomReadItem& item : items) {
-    if (!append_link_direct_device_reference_binary(writer, wire_config, item.device)) {
+    if (!append_link_direct_device_reference(writer, wire_config, item.device)) {
       return buffer_too_small("Link direct random read request buffer is too small");
     }
   }
@@ -4256,7 +4286,7 @@ Status encode_link_direct_random_write_words(
   }
 
   for (const LinkDirectRandomWriteWordItem& item : items) {
-    if (!append_link_direct_device_reference_binary(writer, wire_config, item.device) ||
+    if (!append_link_direct_device_reference(writer, wire_config, item.device) ||
         (is_ascii_mode(config) ? !append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))
                                              : !writer.append_le16(static_cast<std::uint16_t>(item.value & 0xFFFFU)))) {
       return buffer_too_small("Link direct random write words request buffer is too small");
@@ -4660,7 +4690,7 @@ Status encode_link_direct_random_write_bits(
     return buffer_too_small("Link direct random write bits request buffer is too small");
   }
   for (const LinkDirectRandomWriteBitItem& item : items) {
-    if (!append_link_direct_device_reference_binary(writer, wire_config, item.device)) {
+    if (!append_link_direct_device_reference(writer, wire_config, item.device)) {
       return buffer_too_small("Link direct random write bits request buffer is too small");
     }
     const std::uint16_t bit_value = item.value == BitValue::On ? 0x0001U : 0x0000U;
@@ -4761,7 +4791,7 @@ Status encode_link_direct_multi_block_read(
     if (block.bit_block) {
       continue;
     }
-    if (!append_link_direct_device_reference_binary(writer, config, block.head_device) ||
+    if (!append_link_direct_device_reference(writer, config, block.head_device) ||
         !append_word_count(writer, config, block.points)) {
       return buffer_too_small("Link direct multi-block read request buffer is too small");
     }
@@ -4770,7 +4800,7 @@ Status encode_link_direct_multi_block_read(
     if (!block.bit_block) {
       continue;
     }
-    if (!append_link_direct_device_reference_binary(writer, config, block.head_device) ||
+    if (!append_link_direct_device_reference(writer, config, block.head_device) ||
         !append_word_count(writer, config, block.points)) {
       return buffer_too_small("Link direct multi-block read request buffer is too small");
     }
@@ -5084,7 +5114,7 @@ Status encode_link_direct_multi_block_write(
     if (block.bit_block) {
       continue;
     }
-    if (!append_link_direct_device_reference_binary(writer, config, block.head_device) ||
+    if (!append_link_direct_device_reference(writer, config, block.head_device) ||
         !append_word_count(writer, config, block.points) ||
         !append_word_data(writer, config, block.words)) {
       return buffer_too_small("Link direct multi-block write request buffer is too small");
@@ -5095,7 +5125,7 @@ Status encode_link_direct_multi_block_write(
       continue;
     }
     const bool ok =
-        append_link_direct_device_reference_binary(writer, config, block.head_device) &&
+        append_link_direct_device_reference(writer, config, block.head_device) &&
         append_word_count(writer, config, block.points) &&
         (is_ascii_mode(config) ? append_word_units_from_bits_ascii(writer, block.bits)
                                              : append_word_units_from_bits_binary_direct(writer, block.bits));

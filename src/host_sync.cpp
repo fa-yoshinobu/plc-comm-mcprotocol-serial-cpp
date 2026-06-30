@@ -2,6 +2,9 @@
 
 #include "host_now_ms.hpp"
 
+#include <cstdio>
+#include <cstdlib>
+
 namespace mcprotocol::serial {
 namespace {
 
@@ -15,6 +18,31 @@ namespace {
 
   out_points = static_cast<std::uint16_t>(size);
   return ok_status();
+}
+
+[[nodiscard]] bool trace_enabled() noexcept {
+#if defined(_MSC_VER)
+  char buffer[8] {};
+  std::size_t required = 0;
+  if (getenv_s(&required, buffer, sizeof(buffer), "MCPROTOCOL_SERIAL_TRACE") != 0 || required == 0U) {
+    return false;
+  }
+  return buffer[0] != '\0' && buffer[0] != '0';
+#else
+  const char* value = std::getenv("MCPROTOCOL_SERIAL_TRACE");
+  return value != nullptr && value[0] != '\0' && value[0] != '0';
+#endif
+}
+
+void trace_bytes(const char* label, std::span<const std::byte> bytes) noexcept {
+  if (!trace_enabled()) {
+    return;
+  }
+  std::fprintf(stderr, "%s len=%zu hex=", label, bytes.size());
+  for (const std::byte value : bytes) {
+    std::fprintf(stderr, "%02X", static_cast<unsigned int>(value));
+  }
+  std::fprintf(stderr, "\n");
 }
 
 }  // namespace
@@ -66,6 +94,7 @@ Status PosixSyncClient::run_until_complete() noexcept {
     return status;
   }
 
+  trace_bytes("MC TX", client_.pending_tx_frame());
   status = port_.write_all(client_.pending_tx_frame());
   if (!status.ok()) {
     client_.cancel();
@@ -96,6 +125,9 @@ Status PosixSyncClient::run_until_complete() noexcept {
     }
 
     if (received > 0U) {
+      trace_bytes(
+          "MC RX",
+          std::span<const std::byte>(rx_buffer_.data(), received));
       client_.on_rx_bytes(
           now_ms(),
           std::span<const std::byte>(rx_buffer_.data(), received));
