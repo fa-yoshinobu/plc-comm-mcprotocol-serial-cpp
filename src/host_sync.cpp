@@ -408,6 +408,75 @@ Status PosixSyncClient::read_bits(
   return read_bits(head_device, points, out_bits);
 }
 
+Status PosixSyncClient::read_link_direct_words(
+    std::string_view head_device,
+    std::uint16_t points,
+    std::span<std::uint16_t> out_words) noexcept {
+  LinkDirectDevice device {};
+  Status status = parse_link_direct_device(head_device, device);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = client_.async_link_direct_batch_read_words(
+      now_ms(),
+      device,
+      points,
+      out_words,
+      &PosixSyncClient::on_request_complete,
+      &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status PosixSyncClient::read_link_direct_bits(
+    std::string_view head_device,
+    std::uint16_t points,
+    std::span<BitValue> out_bits) noexcept {
+  LinkDirectDevice device {};
+  Status status = parse_link_direct_device(head_device, device);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = client_.async_link_direct_batch_read_bits(
+      now_ms(),
+      device,
+      points,
+      out_bits,
+      &PosixSyncClient::on_request_complete,
+      &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status PosixSyncClient::read_native_qualified_words(
+    std::string_view head_device,
+    std::uint16_t points,
+    std::span<std::uint16_t> out_words) noexcept {
+  QualifiedBufferWordDevice device {};
+  Status status = parse_qualified_buffer_word_device(head_device, device);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = client_.async_extended_batch_read_words(
+      now_ms(),
+      device,
+      points,
+      out_words,
+      &PosixSyncClient::on_request_complete,
+      &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
 Status PosixSyncClient::read_long_state_bits(
     std::string_view head_device,
     std::uint16_t points,
@@ -515,6 +584,69 @@ Status PosixSyncClient::write_words(
   status = client_.async_batch_write_words(
       now_ms(),
       request,
+      &PosixSyncClient::on_request_complete,
+      &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status PosixSyncClient::write_link_direct_words(
+    std::string_view head_device,
+    std::span<const std::uint16_t> words) noexcept {
+  LinkDirectDevice device {};
+  Status status = parse_link_direct_device(head_device, device);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = client_.async_link_direct_batch_write_words(
+      now_ms(),
+      device,
+      words,
+      &PosixSyncClient::on_request_complete,
+      &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status PosixSyncClient::write_link_direct_bits(
+    std::string_view head_device,
+    std::span<const BitValue> bits) noexcept {
+  LinkDirectDevice device {};
+  Status status = parse_link_direct_device(head_device, device);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = client_.async_link_direct_batch_write_bits(
+      now_ms(),
+      device,
+      bits,
+      &PosixSyncClient::on_request_complete,
+      &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status PosixSyncClient::write_native_qualified_words(
+    std::string_view head_device,
+    std::span<const std::uint16_t> words) noexcept {
+  QualifiedBufferWordDevice device {};
+  Status status = parse_qualified_buffer_word_device(head_device, device);
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = client_.async_extended_batch_write_words(
+      now_ms(),
+      device,
+      words,
       &PosixSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {

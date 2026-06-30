@@ -139,6 +139,24 @@ class PosixSyncClient {
       std::string_view head_device,
       std::span<BitValue> out_bits) noexcept;
 
+  /// \brief Reads contiguous `Jn\\...` link-direct words synchronously.
+  [[nodiscard]] Status read_link_direct_words(
+      std::string_view head_device,
+      std::uint16_t points,
+      std::span<std::uint16_t> out_words) noexcept;
+
+  /// \brief Reads contiguous `Jn\\...` link-direct bits synchronously.
+  [[nodiscard]] Status read_link_direct_bits(
+      std::string_view head_device,
+      std::uint16_t points,
+      std::span<BitValue> out_bits) noexcept;
+
+  /// \brief Reads native qualified `Un\\Gn` or `Un\\HGn` words synchronously.
+  [[nodiscard]] Status read_native_qualified_words(
+      std::string_view head_device,
+      std::uint16_t points,
+      std::span<std::uint16_t> out_words) noexcept;
+
   /// \brief Reads long timer/counter contact or coil states through the dedicated status-block path.
   [[nodiscard]] Status read_long_state_bits(
       std::string_view head_device,
@@ -167,6 +185,21 @@ class PosixSyncClient {
   [[nodiscard]] Status write_bits(
       std::string_view head_device,
       std::span<const BitValue> bits) noexcept;
+
+  /// \brief Writes contiguous `Jn\\...` link-direct words synchronously.
+  [[nodiscard]] Status write_link_direct_words(
+      std::string_view head_device,
+      std::span<const std::uint16_t> words) noexcept;
+
+  /// \brief Writes contiguous `Jn\\...` link-direct bits synchronously.
+  [[nodiscard]] Status write_link_direct_bits(
+      std::string_view head_device,
+      std::span<const BitValue> bits) noexcept;
+
+  /// \brief Writes native qualified `Un\\Gn` or `Un\\HGn` words synchronously.
+  [[nodiscard]] Status write_native_qualified_words(
+      std::string_view head_device,
+      std::span<const std::uint16_t> words) noexcept;
 
   /// \brief Reads sparse word/dword items synchronously from string-address specs.
   [[nodiscard]] Status random_read(
