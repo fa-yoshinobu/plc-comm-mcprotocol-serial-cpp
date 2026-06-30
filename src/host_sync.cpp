@@ -395,6 +395,84 @@ Status PosixSyncClient::read_bits(
   return read_bits(head_device, points, out_bits);
 }
 
+Status PosixSyncClient::read_long_state_bits(
+    std::string_view head_device,
+    std::uint16_t points,
+    std::span<BitValue> out_bits) noexcept {
+  if (points == 0U) {
+    return make_status(StatusCode::InvalidArgument, "Long state bit-read points must be in range 1..65535");
+  }
+  if (out_bits.size() < points) {
+    return make_status(StatusCode::BufferTooSmall, "Long state bit-read output buffer is too small");
+  }
+
+  DeviceAddress parsed {};
+  Status status = highlevel::parse_device_address(head_device, parsed);
+  if (!status.ok()) {
+    return status;
+  }
+
+  highlevel::LongStateReadSpec spec {};
+  status = highlevel::get_long_state_read_spec(parsed.code, spec);
+  if (!status.ok()) {
+    return status;
+  }
+
+  if (parsed.number > (0xFFFFFFFFU - static_cast<std::uint32_t>(points - 1U))) {
+    return make_status(StatusCode::InvalidArgument, "Long state bit-read address range overflows");
+  }
+
+  std::array<std::uint16_t, 4> status_block {};
+  for (std::uint16_t index = 0; index < points; ++index) {
+    const BatchReadWordsRequest request {
+        .head_device = {
+            .code = spec.base_code,
+            .number = parsed.number + static_cast<std::uint32_t>(index),
+        },
+        .points = 4,
+    };
+
+    status = client_.async_batch_read_words(
+        now_ms(),
+        request,
+        std::span<std::uint16_t>(status_block.data(), status_block.size()),
+        &PosixSyncClient::on_request_complete,
+        &completion_);
+    if (!status.ok()) {
+      return status;
+    }
+
+    status = run_until_complete();
+    if (!status.ok()) {
+      return status;
+    }
+
+    status = highlevel::decode_long_state_bit(
+        spec,
+        std::span<const std::uint16_t>(status_block.data(), status_block.size()),
+        out_bits[index]);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+
+  return ok_status();
+}
+
+Status PosixSyncClient::read_long_state_bits(
+    std::string_view head_device,
+    std::span<BitValue> out_bits) noexcept {
+  std::uint16_t points = 0;
+  const Status status = span_size_to_points(
+      out_bits.size(),
+      points,
+      "Long state bit-read output span exceeds the protocol point limit");
+  if (!status.ok()) {
+    return status;
+  }
+  return read_long_state_bits(head_device, points, out_bits);
+}
+
 Status PosixSyncClient::write_words(
     std::string_view head_device,
     std::span<const std::uint16_t> words) noexcept {

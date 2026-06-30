@@ -19,12 +19,12 @@ Keep these rules aligned with the current MELSEC serial manuals and validated ha
 
 ## Long Timer and Counter Devices
 
-- Treat `LTS/LTC/LSTS/LSTC` as structured data carried by `LTN/LSTN` `0401` responses.
+- Treat `LTS/LTC/LSTS/LSTC/LCS/LCC` as structured data carried by `LTN/LSTN/LCN` `0401` responses.
 - On the validated `RJ71C24-R2 + R120PCPU` setup:
-  - the first two words of `LTN/LSTN` hold the current value
+  - the first two words of `LTN/LSTN/LCN` hold the current value
   - the third word holds contact/coil bits
   - `0x0001 = coil`, `0x0002 = contact`
-- Do not treat direct `LTS/LTC/LSTS/LSTC` probes as part of the supported interface.
+- Do not treat direct `LTS/LTC/LSTS/LSTC/LCS/LCC` probes as part of the supported interface.
 
 ## Qualified Access
 

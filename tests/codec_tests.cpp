@@ -93,6 +93,10 @@ using mcprotocol::serial::highlevel::make_random_write_bit_items;
 using mcprotocol::serial::highlevel::make_random_write_word_item;
 using mcprotocol::serial::highlevel::make_random_write_word_items;
 using mcprotocol::serial::highlevel::parse_device_address;
+using mcprotocol::serial::highlevel::decode_long_state_bit;
+using mcprotocol::serial::highlevel::get_long_state_read_spec;
+using mcprotocol::serial::highlevel::LongStateReadKind;
+using mcprotocol::serial::highlevel::LongStateReadSpec;
 using mcprotocol::serial::highlevel::RandomReadSpec;
 using mcprotocol::serial::highlevel::RandomWriteBitSpec;
 using mcprotocol::serial::highlevel::RandomWriteWordSpec;
@@ -2428,6 +2432,37 @@ void test_high_level_make_monitor_registration_from_specs() {
   assert(request.items[1].double_word);
 }
 
+void test_high_level_long_state_read_spec_and_decode() {
+  LongStateReadSpec spec {};
+  Status status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::LCS, spec);
+  assert(status.ok());
+  assert(spec.base_code == mcprotocol::serial::DeviceCode::LCN);
+  assert(spec.kind == LongStateReadKind::Contact);
+
+  std::array<std::uint16_t, 4> words {{0x1234U, 0x0000U, 0x0002U, 0x0000U}};
+  BitValue value = BitValue::Off;
+  status = decode_long_state_bit(spec, std::span<const std::uint16_t>(words.data(), words.size()), value);
+  assert(status.ok());
+  assert(value == BitValue::On);
+
+  status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::LCC, spec);
+  assert(status.ok());
+  assert(spec.base_code == mcprotocol::serial::DeviceCode::LCN);
+  assert(spec.kind == LongStateReadKind::Coil);
+  status = decode_long_state_bit(spec, std::span<const std::uint16_t>(words.data(), words.size()), value);
+  assert(status.ok());
+  assert(value == BitValue::Off);
+
+  words[2] = 0x0001U;
+  status = decode_long_state_bit(spec, std::span<const std::uint16_t>(words.data(), words.size()), value);
+  assert(status.ok());
+  assert(value == BitValue::On);
+
+  status = get_long_state_read_spec(mcprotocol::serial::DeviceCode::M, spec);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+}
+
 void test_encode_sm_sd_and_lz_device_codes() {
   const auto config = make_binary_c4_config();
 
@@ -2453,10 +2488,8 @@ void test_encode_sm_sd_and_lz_device_codes() {
     std::array<std::uint8_t, 32> request_data {};
     std::size_t request_data_size = 0;
     Status status = CommandCodec::encode_batch_read_bits(config, request, request_data, request_data_size);
-    assert(status.ok());
-    const std::array<std::uint8_t, 10> expected {0x01, 0x04, 0x01, 0x00, 0x03, 0x00, 0x00, 0x51, 0x01, 0x00};
-    assert(request_data_size == expected.size());
-    assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
   }
 
   {
@@ -5156,6 +5189,33 @@ void test_client_link_direct_register_monitor_roundtrip() {
   assert(!client.busy());
 }
 
+// Validate that 0401 batch bit read rejects long timer/counter contact/coil devices
+// (LTS, LTC, LSTS, LSTC, LCS, LCC). These are not allowed per the serial manual restriction.
+void test_encode_batch_read_bits_rejects_long_contact_coil_devices() {
+  const auto config = make_binary_c4_iqr_config();
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+
+  const mcprotocol::serial::DeviceCode excluded[] = {
+      mcprotocol::serial::DeviceCode::LTS,
+      mcprotocol::serial::DeviceCode::LTC,
+      mcprotocol::serial::DeviceCode::LSTS,
+      mcprotocol::serial::DeviceCode::LSTC,
+      mcprotocol::serial::DeviceCode::LCS,
+      mcprotocol::serial::DeviceCode::LCC,
+  };
+  for (const auto code : excluded) {
+    const BatchReadBitsRequest request {.head_device = {.code = code, .number = 10}, .points = 1};
+    const Status status = CommandCodec::encode_batch_read_bits(
+        config,
+        request,
+        request_data,
+        request_size);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+  }
+}
+
 // Validate that 0403 random read rejects long timer/counter contact/coil devices
 // (LTS, LTC, LSTS, LSTC, LCS, LCC). These are not allowed per the serial manual restriction.
 void test_encode_random_read_rejects_long_contact_coil_devices() {
@@ -5465,6 +5525,7 @@ int main() {
   test_high_level_make_random_request_from_specs();
   test_high_level_make_random_write_items_from_specs();
   test_high_level_make_monitor_registration_from_specs();
+  test_high_level_long_state_read_spec_and_decode();
   test_encode_sm_sd_and_lz_device_codes();
   test_encode_batch_write_words_ascii_order();
   test_encode_extended_batch_read_words_ascii_matches_manual_shape();
@@ -5503,6 +5564,7 @@ int main() {
   test_encode_random_write_bits_ascii_iqr_shape();
   test_encode_random_write_bits_binary_iqr_layout();
   test_encode_random_write_bits_binary_ql_keeps_device_numbers();
+  test_encode_batch_read_bits_rejects_long_contact_coil_devices();
   test_qna_family_random_access_uses_smaller_limits();
   test_encode_multi_block_read_ascii_matches_manual();
   test_encode_multi_block_read_binary_matches_capture_counts();

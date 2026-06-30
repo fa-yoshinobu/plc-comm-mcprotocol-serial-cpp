@@ -139,6 +139,17 @@ class PosixSyncClient {
       std::string_view head_device,
       std::span<BitValue> out_bits) noexcept;
 
+  /// \brief Reads long timer/counter contact or coil states through the dedicated status-block path.
+  [[nodiscard]] Status read_long_state_bits(
+      std::string_view head_device,
+      std::uint16_t points,
+      std::span<BitValue> out_bits) noexcept;
+
+  /// \brief Reads long timer/counter states using `out_bits.size()` as the point count.
+  [[nodiscard]] Status read_long_state_bits(
+      std::string_view head_device,
+      std::span<BitValue> out_bits) noexcept;
+
   /// \brief Writes contiguous words synchronously to a string address such as `D100`.
   [[nodiscard]] Status write_words(
       std::string_view head_device,

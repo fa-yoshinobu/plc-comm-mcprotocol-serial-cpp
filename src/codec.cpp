@@ -3420,6 +3420,9 @@ Status encode_batch_read_bits(
   if (!bit_status.ok()) {
     return bit_status;
   }
+  if (is_long_contact_coil_device(request.head_device.code)) {
+    return invalid_argument("Batch read bits does not support long timer/counter contact/coil devices");
+  }
   if (is_c1_frame(config) && !is_c1_supported_device(request.head_device.code)) {
     return invalid_argument("1C batch read bits does not support this device");
   }
@@ -3495,6 +3498,9 @@ Status encode_link_direct_batch_read_bits(
   const Status device_status = validate_link_direct_bit_device(config, device);
   if (!device_status.ok()) {
     return device_status;
+  }
+  if (is_long_contact_coil_device(device.device.code)) {
+    return invalid_argument("Link direct batch read bits does not support long timer/counter contact/coil devices");
   }
   LinkDirectDevice effective_device = device;
   effective_device.device = effective_batch_read_bits_head_device(config, device.device, points);
