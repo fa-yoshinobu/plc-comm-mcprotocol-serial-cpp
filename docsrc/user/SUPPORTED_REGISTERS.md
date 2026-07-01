@@ -54,6 +54,10 @@ The high-level string parser accepts plain device strings only. The examples bel
 | Hexadecimal address families | `X`, `Y`, `B`, `W`, `SB`, `SW`, `DX`, and `DY` parse their numeric part as hexadecimal. |
 | `:D` / `:F` suffix | Not supported by the current high-level parser. Use typed C++ fields such as `double_word` where available. |
 | `.n` bit-in-word suffix | Not supported by the current high-level parser. |
-| Long timer/counter restrictions | Some random and multi-block operations reject long contact/coil devices. Check `Status` and use simpler contiguous operations first. |
+| Long timer/counter state reads | Use `read_long_state_bits()` for `LTS/LTC/LSTS/LSTC/LCS/LCC`. `LTS/LTC/LSTS/LSTC` use status-block reads internally; `LCS/LCC` use direct bit reads internally. |
+| Long timer/counter restrictions | Random and multi-block operations reject some long contact/coil devices. Check `Status` and use the dedicated long-state helper for state reads. |
+| Link-direct access | Use the `read_link_direct_*()` / `write_link_direct_*()` helpers for `Jn\X/Y/B/SB` bit devices and `Jn\W/SW` word devices. Binary mode is the confirmed route on the current R120/RJ71C24 setup. |
+| Qualified buffer memory | Use `read_qualified_words()` / `write_qualified_words()` for practical `Un\Gn` / `Un\HGn` access. Native qualified helpers are diagnostic probes only. |
+| Trace logging | Set `MCPROTOCOL_SERIAL_TRACE=1` with the synchronous host client to log MC TX/RX frame bytes. |
 
 Profile-specific range limits depend on the PLC family and serial module. See [PROFILES.md](PROFILES.md) before choosing the final profile for a live system.

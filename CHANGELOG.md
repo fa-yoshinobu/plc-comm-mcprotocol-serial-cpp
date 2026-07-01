@@ -19,14 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Library: Added a long-state read helper for long timer, long retentive timer, and long counter contact/coil devices.
-- Library: Added synchronous special-route helpers for link-direct `Jn\...` and native qualified `Un\Gn` / `Un\HGn` access.
+- Library: Added synchronous special-route helpers for link-direct `Jn\...` access and diagnostic native qualified `Un\Gn` / `Un\HGn` probes.
 - Library: Added ASCII link-direct extension encoding for `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, and `Jn\SW` routes.
-- Tooling: Added `read-long-state-bits`, link-direct, and native-qualified commands to the CLI.
+- Tooling: Added the `read-long-state-bits` command to the CLI.
 - Tooling: Added `MCPROTOCOL_SERIAL_TRACE=1` support for logging MC TX/RX frame bytes from the synchronous host client.
 
 ### Changed
 - Library: Routed long counter contact and coil reads through the long-state helper path.
-- Docs: Updated maintainer rules for long-state routing.
+- Docs: Updated maintainer and user rules for long-state routing, special-route helpers, diagnostic native qualified probes, and trace logging.
 
 ### Fixed
 - Library: Reject standalone `G` and `HG` device access in normal, random, and multi-block device routes.

@@ -321,7 +321,15 @@ See [examples/mcu_async_batch_read.cpp](../../examples/mcu_async_batch_read.cpp)
 | Plain hexadecimal word device | `W100` | Supported. |
 | Typed suffix | `D100:D`, `D100:F` | Not supported by the current parser. |
 | Bit-in-word suffix | `D100.0`, `D100.F` | Not supported by the current parser. |
-| Link-direct string | `J1\D100` | Parsed by link-direct helpers, not by `parse_device_address()`. |
+| Link-direct string | `J1\W100` | Parsed by link-direct helpers, not by `parse_device_address()`. |
+
+## Special helper notes
+
+- Use `read_long_state_bits()` for `LTS/LTC/LSTS/LSTC/LCS/LCC` state reads. Timer and retentive timer state devices use the long-current status block internally; `LCS/LCC` use direct bit reads internally.
+- Use `read_link_direct_*()` / `write_link_direct_*()` for `Jn\X/Y/B/SB` bit devices and `Jn\W/SW` word devices. Binary mode is the confirmed route for the current R120/RJ71C24 setup; ASCII extension frames can be target-dependent.
+- Use `read_qualified_words()` / `write_qualified_words()` for practical `Un\Gn` / `Un\HGn` buffer-memory access through `0601/1601`.
+- Treat `read_native_qualified_words()` / `write_native_qualified_words()` as diagnostic probes only, not the supported workflow.
+- Set `MCPROTOCOL_SERIAL_TRACE=1` when using the synchronous host client to log MC TX/RX frame bytes to stderr.
 
 ## Serial config reference
 
