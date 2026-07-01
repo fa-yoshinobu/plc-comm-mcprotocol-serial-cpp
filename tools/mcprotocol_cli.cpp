@@ -503,7 +503,7 @@ void print_usage() {
       "  Use recover-c24 after timeout or mixed-response states on C24 ASCII links; no reply is expected.\n"
       "  read-native-qualified-words / write-native-qualified-words use the native 0401/1401 Un\\G/Un\\HG route when the selected profile supports it.\n"
       "  read-qualified-words / write-qualified-words expose the 0601/1601 helper route; profiles that require native-qualified access reject it.\n"
-      "  link-direct commands use binary-only device extension specification for Jn\\\\X/Y/B/W/SB/SW.\n"
+      "  link-direct commands use the device extension specification for Jn\\\\X/Y/B/W/SB/SW in both binary and ASCII code modes.\n"
       "  c1-ascii-* targets --plc-profile melsec:a, melsec:ana-anu, or melsec:qna. File-register commands also map onto e1-* where chapter-18 supports them.\n"
       "  loopback maps to TT on c1-ascii-* and 0619 on 2C/3C/4C.\n"
       "  read/register/delete-user-frame map to 0610/1610 on 2C/3C/4C only; HEXBYTES is raw registration data in hexadecimal.\n"

@@ -1,13 +1,14 @@
 # 4C ASCII Format4 Native Extension Analysis Packet
 
-Status: maintainer analysis packet. This is measurement evidence and a
-handoff note for deeper analysis; it is not a user-facing support contract.
+Status: resolved 2026-07-02. The issue was a client encoder bug (missing
+trailing ASCII device-modification field); the fix is verified on live iQ-R
+and Q/L targets. This packet is kept as the analysis and verification record.
 
 ## Purpose
 
-This document summarizes the unresolved 4C ASCII Format4 communication issue
-seen with native extended devices. It is intended for an external/manual review
-of the frame shape and target-side behavior.
+This document summarizes the 4C ASCII Format4 communication issue seen with
+native extended devices, the desk analysis that identified the root cause, and
+the post-fix hardware verification on both target families.
 
 The issue is not that all Format4 communication fails. Plain device access
 worked in the observed runs. The failing area is native extended access:
@@ -79,20 +80,21 @@ targets.
   in both ASCII extended-reference builders in `src/codec.cpp`.
 - Request-shape tests cover the Q/L manual example and iQ-R `Jn\...` / `Un\G`
   shapes.
-- The fix has not been re-verified on hardware yet. Keep the Binary Format5
-  operational guidance below until a Format4 ASCII recheck passes on a live
-  target.
+- A post-fix iQ-R hardware recheck confirmed `Un\G` and `Un\HG` reads in
+  Format4 ASCII. An interim `Jn\...` NG observation (partial response, then
+  stop) was traced to a stale pre-fix CLI binary; see the stale-build note in
+  the hardware recheck section. With rebuilt post-fix binaries, all `Jn\...`
+  read and write routes passed on the same target and session.
 
 ## Current conclusion
 
-Update 2026-07-02: the root cause is identified as a client encoder bug and the
-encoder fix is implemented (see above). The guidance below remains in force
-until the fix is re-verified on hardware.
-
-Use 4C Binary Format5 (`c4-binary`) for the native extended routes above until
-the fixed Format4 ASCII frames are rechecked on hardware. Do not treat the
-pre-fix evidence as proof that the PLC family itself cannot support these
-devices.
+Resolved on 2026-07-02 for both target families: the failure was the client
+encoder bug above, not a target or serial-module limitation. With the fixed
+encoder, ASCII Format4 native extended access (`Jn\...`, `Un\G`, `Un\HG`)
+passed read, write, random, multi-block, and monitor checks on the live iQ-R
+target (`R120PCPU`, subcommands `0082`/`0083`) and the live Q/L target
+(`Q06UDVCPU`, subcommands `0080`/`0081`). Every access in the original NG
+lists was re-run and passed. No follow-up remains for this issue.
 
 Do not block ordinary plain-device Format4 traffic based only on this issue.
 
@@ -100,8 +102,8 @@ Do not block ordinary plain-device Format4 traffic based only on this issue.
 
 | Target class | Setup summary | Result summary |
 | --- | --- | --- |
-| iQ-R serial validation | 4C ASCII Format4 through the serial MC path. Full target details are preserved in the validation logs/config. | Plain devices passed. Native extended routes failed or timed out. |
-| Q/L target | `Q06UDVCPU`, `melsec:q`, 4C ASCII Format4, station `0`, `19200 / 8E1`, sum-check off. | Plain devices passed. `Jn\...` and `U2\G1000` failed. |
+| iQ-R serial validation | `R120PCPU` (`cpu-model` `0x4844`) via C24 on `COM3`, 4C ASCII Format4, `19200 / 8E1`, station `0`, sum-check off. | Pre-fix runs showed native extended route failures. Post-fix, all native extended routes passed (see hardware recheck section). |
+| Q/L target | `Q06UDVCPU` (`cpu-model` `0x0368`), `melsec:q`, 4C ASCII Format4, station `0`, `19200 / 8E1`, sum-check off. | Pre-fix: plain devices passed, `Jn\...` and `U2\G1000` failed. Post-fix: all previously failing reads and writes passed (see hardware recheck section). |
 
 ## Source evidence
 
@@ -118,7 +120,110 @@ Do not block ordinary plain-device Format4 traffic based only on this issue.
 | iQ-R all-device cross-verify, 4C ASCII Format4 | `total: 125`, `ok: 112`, `ng: 13`. The meaningful Format4 issue was limited to native extended routes; `S` write failures are not part of this issue because `S` is read-only policy. |
 | iQ-R `Jn\...` recheck after ASCII J extension implementation | `total: 6`, `ok: 0`, `ng: 6`; all MC-side responses were `plc_error=0x7F22`. |
 | iQ-R `Un\G` / `Un\HG` recheck | `total: 4`, `ok: 0`, `ng: 4`; all MC-side responses were `plc_error=0x7F22`. |
+| iQ-R post-fix direct recheck | Format4 ASCII normal `D0` read passed. `U3E0\G10` and `U3E0\HG11` read passed. An interim `J1\X10` / `J1\W10` partial-response NG was reproduced only with the stale pre-fix binary; the rebuilt post-fix binary passed all `Jn\...` reads, writes, random, multi-block, and monitor checks (see hardware recheck section). |
 | Q/L `Q06UDVCPU` Format4 recheck | `total: 91`, `ok: 84`, `ng: 7`. Plain devices all passed. NG items were `J1\X0`, `J1\Y0`, `J1\B0`, `J1\W0`, `J1\SB10`, `J1\SW10`, and `U2\G1000`. |
+| Q/L post-fix direct recheck | All 7 previous NG items passed as reads, and the previously failing write routes passed with readback/restore. Random (0403), multi-block (0406), and monitor (0801/0802) link-direct reads also passed. |
+
+## Post-fix iQ-R hardware recheck
+
+Date: 2026-07-02
+
+Communication settings:
+
+| Item | Setting |
+| --- | --- |
+| Serial port | `COM3` |
+| Baud rate | `19200` |
+| Data bits | `8` |
+| Parity | even |
+| Stop bits | `1` |
+| Sum-check code | off |
+| Station | `0` |
+| Frame/code mode | `c4-ascii-f4`, MC Protocol 4C ASCII Format4 |
+| PLC profile | `melsec:iq-r` |
+
+Control checks:
+
+| Access | Result |
+| --- | --- |
+| `read-words D0 1`, Format4 ASCII | OK, `D0 = 0x0000` |
+| `read-words D0 1`, Format5 Binary | OK only when the serial module was set to Format5. Do not expect Format4 and Format5 to work at the same time. |
+
+Native-qualified results after the encoder fix:
+
+| Access | Result | TX shape |
+| --- | --- | --- |
+| `read-native-qualified-words U3E0\G10 1` | OK, `0x0000` | `... 0082 00 U3E0 0000 G*** 0000000010 0000 0001` |
+| `read-native-qualified-words U3E0\HG11 1` | OK, `0x0000` | `... 0082 00 U3E0 0000 HG** 0000000011 0000 0001` |
+
+Link-direct results after the encoder fix (rebuilt binary, session of
+2026-07-02, `R120PCPU` on `COM3`):
+
+| Access | Result |
+| --- | --- |
+| `read-link-direct-bits J1\X10 1` (0401/0083) | OK |
+| `read-link-direct-words J1\W10 1` (0401/0082) | OK, `0x0000` |
+| `read-link-direct-bits J1\SB10 1` | OK |
+| `read-link-direct-words J1\W40 1` | OK, `0x0000` |
+| `random-read-link-direct J1\W40 J1\SB10` (0403) | OK |
+| `multi-block-read-link-direct-words J1\W40:2` (0406) | OK |
+| `multi-block-read-link-direct-bits J1\SB10:1` (0406) | OK |
+| `monitor-link-direct J1\W40` (0801/0802) | OK |
+| `write-link-direct-words J1\W40 0x1234` (1401) + readback + restore `0` | OK |
+| `random-write-link-direct-words J1\W40=0x5678` (1402) + readback + restore `0` | OK |
+| `write-native-qualified-words U3E0\G10 0x0042` (1401) + readback + restore `0` | OK |
+
+Post-fix `J1\X10` read TX (59 chars) for reference:
+
+```text
+ENQ F80000FF03FF0000 0401 0083 00 J001 0000 X*** 0000000010 0000 0001 CR LF
+```
+
+### Stale-build reproduction of the interim `Jn\...` NG
+
+An interim recheck recorded `J1\X10` / `J1\W10` as NG ("response stopped
+midway"). That run used a stale pre-fix CLI binary (`build/Release`, built
+before the codec fix). The stale binary was re-run deliberately in the same
+session for confirmation:
+
+| Binary | `J1\X10` read | `U3E0\G10` read | TX length |
+| --- | --- | --- | --- |
+| Pre-fix (`build/Release`, 05:36) | timeout / stalls | NAK `7F22H` | 55 chars, no trailing `0000` |
+| Post-fix (rebuilt) | OK | OK | 59 chars, trailing `0000` present |
+
+This is direct hardware confirmation of the root cause. After the stale-binary
+timeout, `recover-c24 eot` restored the line as expected. All of
+`build/Release`, `build/Debug`, and `build_win` were rebuilt post-fix on
+2026-07-02; check the CLI binary timestamp before trusting any new NG
+observation.
+
+## Post-fix Q/L hardware recheck
+
+Date: 2026-07-02
+
+Communication settings: `Q06UDVCPU` (`cpu-model` `0x0368`) via C24 on `COM3`,
+`19200 / 8E1`, station `0`, sum-check off, `c4-ascii-f4`,
+`--plc-profile melsec:q` (subcommands `0080`/`0081`, trailing
+device-modification field `000`).
+
+| Access | Result |
+| --- | --- |
+| `cpu-model`, `read-words D0 1` (controls) | OK |
+| `read-link-direct-bits J1\SB10 1`, `J1\X0 1`, `J1\Y0 1`, `J1\B0 1` | OK |
+| `read-link-direct-words J1\SW10 1`, `J1\W0 1` | OK, `0x0000` |
+| `read-native-qualified-words U2\G1000 1` | OK, `0x0000` |
+| `write-link-direct-bits J1\B0 1` + readback `1` + restore `0` | OK |
+| `write-link-direct-bits J1\Y0 1` + restore `0` | OK |
+| `write-link-direct-bits J1\X0 1` + restore `0` | OK |
+| `write-link-direct-words J1\W0 0x1234` + readback + restore `0` | OK |
+| `write-native-qualified-words U2\G1000 0x0042` + readback + restore `0` | OK |
+| `random-read-link-direct J1\W0 J1\SB10` (0403) | OK |
+| `multi-block-read-link-direct-words J1\W0:2` (0406) | OK |
+| `monitor-link-direct J1\W0` (0801/0802) | OK |
+
+Every access in the original Q/L NG list (`J1\X0`, `J1\Y0`, `J1\B0`, `J1\W0`,
+`J1\SB10`, `J1\SW10`, `U2\G1000`) passed, including the previously failing
+write routes. This closes the Q/L side of the issue.
 
 ## Failure details
 
@@ -221,12 +326,12 @@ Use one serial client at a time. Do not overlap probes on the same COM port.
 After a timeout or mixed response, reset the transmission sequence with ASCII
 `EOT CRLF` or `CL CRLF` before continuing.
 
-Minimal read-only checks:
+Minimal remaining read-only checks:
 
 | Profile/target | Binary control check | Format4 ASCII check |
 | --- | --- | --- |
-| Q/L | Read a plain device, read `J1\SB10`, read `U2\G1000`. | Repeat the same reads and capture raw TX/RX. |
-| iQ-R | Read a plain device, read `J1\SB10`, read `U3E0\G10`, read `U3E0\HG11`. | Repeat the same reads and capture raw TX/RX. |
+| Q/L | Closed 2026-07-02: all native extended routes passed post-fix. | Closed 2026-07-02. |
+| iQ-R | Closed 2026-07-02: all native extended routes passed post-fix. | Closed 2026-07-02. |
 
 For each failed access, preserve:
 
@@ -239,11 +344,14 @@ For each failed access, preserve:
 - raw RX bytes
 - PLC end code or timeout point
 
-## Operational decision until resolved
+## Operational decision
 
-- Native extended routes should keep using Binary Format5 in operational
-  validation configs until the fixed Format4 ASCII frames pass on hardware.
-- Pre-fix Format4 ASCII observations should remain maintainer evidence only.
-- Public support tables should not claim Format4 ASCII support for `Jn\...`,
-  `Un\G`, or `Un\HG` until the post-fix hardware recheck is closed.
+- Format4 ASCII native extended access (`Jn\...`, `Un\G`, `Un\HG`) is verified
+  post-fix on both iQ-R and Q/L targets, including representative reads,
+  writes with readback/restore, random, multi-block, and monitor routes. The
+  Binary Format5 restriction for these routes is lifted.
+- Pre-fix Format4 ASCII observations remain maintainer evidence only. Always
+  confirm the CLI binary is post-fix before recording new evidence.
+- Public support tables can claim Format4 ASCII support for the native
+  extended routes on the validated Q/L and iQ-R families.
 - Plain-device Format4 behavior should be evaluated separately from this issue.
