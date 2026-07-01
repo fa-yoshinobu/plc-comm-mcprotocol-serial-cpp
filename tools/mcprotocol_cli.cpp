@@ -97,6 +97,7 @@ using mcprotocol::serial::parse_qualified_buffer_word_device;
 using mcprotocol::serial::parse_link_direct_device;
 using mcprotocol::serial::parse_plc_profile;
 using mcprotocol::serial::qualified_buffer_kind_name;
+using mcprotocol::serial::validate_qualified_buffer_helper_route;
 
 enum class CommandKind : std::uint8_t {
   None,
@@ -482,7 +483,7 @@ void print_usage() {
       "  --rts-toggle on|off        Toggle RTS during TX for RS-485 DE control\n"
       "  --dump-frames on|off       Print raw TX/RX frame bytes to stderr (default: off)\n"
       "  --frame MODE               Required. c4-binary | c4-ascii-f1 | c4-ascii-f2 | c4-ascii-f3 | c4-ascii-f4 | c3-ascii-f1 | c3-ascii-f2 | c3-ascii-f3 | c3-ascii-f4 | c2-ascii-f1 | c2-ascii-f2 | c2-ascii-f3 | c2-ascii-f4 | c1-ascii-f1 | c1-ascii-f3 | c1-ascii-f4 | e1-binary | e1-ascii\n"
-      "  --plc-profile PROFILE      Required. Canonical PLC profile: melsec:q-l | melsec:iq-l | melsec:iq-r | melsec:qna | melsec:ana-anu | melsec:a\n"
+      "  --plc-profile PROFILE      Required. Canonical PLC profile: melsec:iq-r | melsec:iq-l | melsec:iq-f | melsec:q | melsec:l | melsec:qna | melsec:ana-anu | melsec:a\n"
       "  --block-no N               ASCII Format2 block number 0..255 (default: 0)\n"
       "  --station N                Station number; non-zero implies multidrop\n"
       "  --self-station N           Self-station number for m:n connections\n"
@@ -493,16 +494,16 @@ void print_usage() {
       "Notes:\n"
       "  remote-run defaults to no-force + no-clear. Use force or all-clear only when you intend that effect.\n"
       "  remote-pause defaults to no-force. remote-stop and latch-clear change PLC state.\n"
-      "  unlock/lock send the configured remote password as ASCII bytes; non-iQ-R profiles use exactly 4 chars, melsec:iq-r uses 6..32.\n"
+      "  unlock/lock send the configured remote password as ASCII bytes; non-iQ-R-compatible profiles use exactly 4 chars, melsec:iq-r uses 6..32.\n"
       "  error-clear sends C24 clear-error-information (1617); it is not the E71 COM.ERR-only variant.\n"
       "  remote-reset may complete without a response; this CLI treats a pure response-timeout after TX as success.\n"
       "  global-signal maps to C24 command 1618 on 2C/3C/4C; STATION defaults to 0.\n"
       "  init-sequence maps to 1615 and is binary 4C format-5 only; some targets complete without replying.\n"
       "  recover-c24 sends ASCII EOT CRLF by default; pass cl to send CL CRLF.\n"
       "  Use recover-c24 after timeout or mixed-response states on C24 ASCII links; no reply is expected.\n"
-      "  read-qualified-words / write-qualified-words use the practical 0601/1601 helper path.\n"
-      "  read-native-qualified-words / write-native-qualified-words are unsupported diagnostic probes, not a supported workflow.\n"
-      "  link-direct commands use binary-only device extension specification for Jn\\\\X/Y/B/W/SB/SW.\n"
+      "  read-native-qualified-words / write-native-qualified-words use the native 0401/1401 Un\\G/Un\\HG route when the selected profile supports it.\n"
+      "  read-qualified-words / write-qualified-words expose the 0601/1601 helper route; profiles that require native-qualified access reject it.\n"
+      "  link-direct commands use the device extension specification for Jn\\\\X/Y/B/W/SB/SW in both binary and ASCII code modes.\n"
       "  c1-ascii-* targets --plc-profile melsec:a, melsec:ana-anu, or melsec:qna. File-register commands also map onto e1-* where chapter-18 supports them.\n"
       "  loopback maps to TT on c1-ascii-* and 0619 on 2C/3C/4C.\n"
       "  read/register/delete-user-frame map to 0610/1610 on 2C/3C/4C only; HEXBYTES is raw registration data in hexadecimal.\n"
@@ -5209,6 +5210,11 @@ int main(int argc, char** argv) {
         print_status_error("Invalid qualified buffer device", status);
         return 2;
       }
+      status = validate_qualified_buffer_helper_route(options.protocol.plc_profile, device);
+      if (!status.ok()) {
+        print_status_error("Unsupported qualified buffer helper route", status);
+        return 2;
+      }
 
       std::uint32_t points = 0;
       if (!parse_u32(points_arg, points) || points == 0U || points > 960U) {
@@ -5354,6 +5360,11 @@ int main(int argc, char** argv) {
       status = parse_qualified_buffer_word_device(device_arg, device);
       if (!status.ok()) {
         print_status_error("Invalid qualified buffer device", status);
+        return 2;
+      }
+      status = validate_qualified_buffer_helper_route(options.protocol.plc_profile, device);
+      if (!status.ok()) {
+        print_status_error("Unsupported qualified buffer helper route", status);
         return 2;
       }
 

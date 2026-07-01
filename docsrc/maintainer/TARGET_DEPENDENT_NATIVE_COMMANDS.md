@@ -46,9 +46,9 @@ configuration is known:
 The raw frame log includes password bytes in hexadecimal, so preserve it as validation evidence and
 avoid sharing it as a public user-facing artifact.
 
-For general contiguous/helper traffic on the same hardware, the practical setting was usually
-`--plc-profile melsec:q-l`. The `--plc-profile melsec:iq-r` setting was used for iQ-R-only spot devices such as `SM`, `SD`,
-`RD`, `LZ`, `J1\...`, and long current-value focused checks.
+For general contiguous/helper traffic on the same hardware, use the target-family profile for the
+connected PLC. The `--plc-profile melsec:iq-r` setting was used for iQ-R-only spot devices such as
+`SM`, `SD`, `RD`, `LZ`, `J1\...`, and long current-value focused checks.
 
 ## COM3 Sanity Check
 
@@ -72,6 +72,118 @@ password hold below.
 
 Read-only sanity checks such as `cpu-model` and `read-words D0 1` remained available after the
 remote password failures.
+
+## 4C ASCII Format4 Native Extended Recheck
+
+Date: 2026-07-01, resolved 2026-07-02
+
+Resolved 2026-07-02: this was a client encoder bug, now fixed and verified on
+both iQ-R and Q/L live targets. The section is kept as the recheck record; the
+full analysis and verification tables are in
+[FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md](FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md).
+
+The analysis handoff summary is maintained in
+[FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md](FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md).
+
+Update 2026-07-02: desk analysis against SH-080003-AF identified the root
+cause as a client encoder bug. The ASCII extended device specification omits
+the trailing device-modification field (`000` for Q/L subcommands, `0000` for
+iQ-R subcommands) required after the device number (SH-080003-AF p.430-431
+formats and worked example). `7F22H` is the C24's own command-parse rejection
+(SH-081249-L, PRO category), which is why Binary Format5 worked on the same
+targets. The fix (trailing `append_device_modification_ascii` in the two ASCII
+extended-reference builders in `src/codec.cpp`) has been applied.
+
+Post-fix iQ-R direct recheck settings:
+
+- MC Serial: `COM3`, `19200 / 8E1`, station `0`
+- MC Serial profile: `melsec:iq-r`
+- Frame: `c4-ascii-f4`, MC Protocol 4C ASCII Format4
+- Sum-check: off
+- Note: the serial module is configured for one MC protocol format at a time;
+  do not expect Format4 ASCII and Format5 Binary to respond simultaneously.
+
+Post-fix iQ-R direct recheck result (`R120PCPU`, `cpu-model` `0x4844`):
+
+| Access | Result |
+|---|---|
+| `read-words D0 1` | OK, `0x0000` |
+| `read-native-qualified-words U3E0\G10 1` | OK, `0x0000` |
+| `read-native-qualified-words U3E0\HG11 1` | OK, `0x0000` |
+| `read-link-direct-bits J1\X10 1` / `J1\SB10 1` | OK |
+| `read-link-direct-words J1\W10 1` / `J1\W40 1` | OK, `0x0000` |
+| `random-read-link-direct J1\W40 J1\SB10` (0403) | OK |
+| `multi-block-read-link-direct-words J1\W40:2` / `-bits J1\SB10:1` (0406) | OK |
+| `monitor-link-direct J1\W40` (0801/0802) | OK |
+| `write-link-direct-words J1\W40 0x1234` (1401) + readback + restore `0` | OK |
+| `random-write-link-direct-words J1\W40=0x5678` (1402) + readback + restore `0` | OK |
+| `write-native-qualified-words U3E0\G10 0x0042` (1401) + readback + restore `0` | OK |
+
+An interim recheck recorded `J1\X10` / `J1\W10` as "NG, partial response frame
+only". That run used the stale pre-fix `build/Release` binary (TX 55 chars, no
+trailing `0000`); deliberately re-running the stale binary in the same session
+reproduced the `Jn\` timeout and the `Un\G` `7F22H`. After rebuilding, the same
+accesses passed. All build dirs (`build/Release`, `build/Debug`, `build_win`)
+were rebuilt post-fix on 2026-07-02; verify the CLI binary timestamp before
+recording new NG evidence. After the stale-binary timeout, ASCII `EOT CRLF`
+recovery restored normal `D0` Format4 reads.
+
+### Q/L target
+
+Conditions:
+
+- PLC: `Q06UDVCPU`
+- SLMP: `192.168.250.100:1025`, Q/L-compatible profile
+- MC Serial: `COM3`, `19200 / 8E1`, station `0`
+- MC Serial profile: `melsec:q`
+- Frame: `c4-ascii`, MC Protocol 4C ASCII Format4
+- Sum-check: off
+
+Cross-verify summary:
+
+- Full run: `total: 91`, `ok: 84`, `ng: 7`
+- Plain devices passed on both SLMP and MC Serial.
+- NG items were only special/native routes: `J1\X0`, `J1\Y0`, `J1\B0`, `J1\W0`, `J1\SB10`,
+  `J1\SW10`, and `U2\G1000`.
+- Logs are in the cross-verify workspace:
+  `logs/format4_run_20260701_223923/`,
+  `logs/format4_j_readonly_20260701_224128/`,
+  `logs/format4_ug_readonly_20260701_224220/`.
+
+Additional direct MC Serial probes with the same Format4 settings:
+
+| Access | Result |
+|---|---|
+| `write-link-direct-bits J1\X0` | PLC error `0x7F22` |
+| `write-link-direct-bits J1\Y0` | PLC error `0x7F22` |
+| `write-link-direct-bits J1\B0` | PLC error `0x7F22` |
+| `write-link-direct-words J1\W0` | timeout |
+| `write-native-qualified-words U2\G1000` | PLC error `0x7F22` |
+| read-only `Jn\...` | PLC error `0x7F22` |
+| read-only `U2\G1000` | PLC error `0x7F22` |
+
+Interpretation: this Q/L run looks similar to the prior `melsec:iq-r` Format4 observation:
+regular/plain device access works, while native extended `Jn\...` and `Un\...` access does not.
+Do not treat this as proof of a PLC limitation yet. Preserve it as measurement evidence and recheck
+with raw `MC TX` / `MC RX` frame dumps before changing public support claims.
+
+Post-fix Q/L direct recheck (2026-07-02, `Q06UDVCPU` / `cpu-model` `0x0368`,
+same serial settings, `c4-ascii-f4`, `melsec:q`, post-fix binary):
+
+| Access | Result |
+|---|---|
+| `cpu-model`, `read-words D0 1` (controls) | OK |
+| reads: `J1\SB10`, `J1\SW10`, `J1\X0`, `J1\Y0`, `J1\B0`, `J1\W0`, `U2\G1000` | all OK |
+| `write-link-direct-bits J1\B0 1` + readback `1` + restore `0` | OK |
+| `write-link-direct-bits J1\Y0 1` / `J1\X0 1` + restore `0` | OK |
+| `write-link-direct-words J1\W0 0x1234` + readback + restore `0` | OK |
+| `write-native-qualified-words U2\G1000 0x0042` + readback + restore `0` | OK |
+| `random-read-link-direct J1\W0 J1\SB10` (0403) | OK |
+| `multi-block-read-link-direct-words J1\W0:2` (0406) | OK |
+| `monitor-link-direct J1\W0` (0801/0802) | OK |
+
+Every item in the pre-fix NG list passed. The Q/L side is closed; the earlier
+NG table above is historical pre-fix evidence.
 
 ## Remote Password 1630/1631 Recheck
 
@@ -122,6 +234,7 @@ These items are no longer active holds.
 
 | Area | Command | Result | Status |
 |---|---:|---|---|
+| 4C ASCII Format4 native extended access | `0401`/`1401`/`0403`/`1402`/`0406`/`0801` with `Jn\...`, `Un\G`, `Un\HG` | encoder omitted the trailing ASCII device-modification field (SH-080003-AF p.430-431); post-fix reads/writes passed on `R120PCPU` (iQ-R) and `Q06UDVCPU` (Q/L) on 2026-07-02 | resolved: client encoder bug, fixed in `src/codec.cpp` and covered by request-shape tests |
 | Remote latch clear | `1005` | `latch-clear` in RUN returned `0x4013` on both `R120PCPU` and `R08CPU`; on `R08CPU` (2026-06-12) `remote-stop` then `latch-clear` returned `ok` | resolved: `0x4013` means the CPU was not in STOP |
 | Long index register write | native `1402` to `LZ1` | on `R08CPU` (2026-06-12): full write/readback/restore passed | resolved: request shape is valid; prior `R120PCPU` unchanged-readback is historical target-side evidence only |
 

@@ -36,7 +36,7 @@ Smallest helper-based setup:
 
 mcprotocol::serial::ProtocolConfig config =
     mcprotocol::serial::highlevel::make_c4_binary_protocol(
-        mcprotocol::serial::PlcProfile::MelsecQL);
+        mcprotocol::serial::PlcProfile::MelsecQ);
 config.route.station_no = 0;
 
 mcprotocol::serial::BatchReadWordsRequest request {};
@@ -91,7 +91,7 @@ mcprotocol::serial::PosixSerialConfig serial {
 };
 
 auto protocol = mcprotocol::serial::highlevel::make_c4_binary_protocol(
-    mcprotocol::serial::PlcProfile::MelsecQL);
+    mcprotocol::serial::PlcProfile::MelsecQ);
 mcprotocol::serial::Status status = plc.open(serial, protocol);
 
 std::array<std::uint16_t, 2> words {};

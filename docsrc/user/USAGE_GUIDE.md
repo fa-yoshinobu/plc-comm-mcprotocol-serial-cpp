@@ -28,7 +28,7 @@ int main() {
   using mcprotocol::serial::highlevel::make_batch_read_words_request;
   using mcprotocol::serial::highlevel::make_c4_binary_protocol;
 
-  ProtocolConfig protocol = make_c4_binary_protocol(PlcProfile::MelsecQL);
+  ProtocolConfig protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
   protocol.route.station_no = 0;
 
   BatchReadWordsRequest request {};
@@ -71,7 +71,7 @@ int main() {
   serial.parity = 'E';
   serial.rts_cts = false;
 
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQL);
+  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
   PosixSyncClient plc;
   Status status = plc.open(serial, protocol);
   if (!status.ok()) {
@@ -110,7 +110,7 @@ int main() {
   serial.stop_bits = 2;
   serial.parity = 'E';
   PosixSyncClient plc;
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQL);
+  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
   if (!plc.open(serial, protocol).ok()) {
     return 1;
   }
@@ -149,7 +149,7 @@ int main() {
   serial.stop_bits = 2;
   serial.parity = 'E';
   PosixSyncClient plc;
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQL);
+  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
   if (!plc.open(serial, protocol).ok()) {
     return 1;
   }
@@ -194,7 +194,7 @@ int main() {
   serial.stop_bits = 2;
   serial.parity = 'E';
   PosixSyncClient plc;
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQL);
+  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
   if (!plc.open(serial, protocol).ok()) {
     return 1;
   }
@@ -254,7 +254,7 @@ int main() {
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   MelsecSerialClient client;
-  const auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQL);
+  const auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
   Status status = client.configure(protocol);
   if (!status.ok()) {
     return 1;
@@ -327,8 +327,8 @@ See [examples/mcu_async_batch_read.cpp](../../examples/mcu_async_batch_read.cpp)
 
 - Use `read_long_state_bits()` for `LTS/LTC/LSTS/LSTC/LCS/LCC` state reads. Timer and retentive timer state devices use the long-current status block internally; `LCS/LCC` use direct bit reads internally.
 - Use `read_link_direct_*()` / `write_link_direct_*()` for `Jn\X/Y/B/SB` bit devices and `Jn\W/SW` word devices. Binary mode is the confirmed route for the current R120/RJ71C24 setup; ASCII extension frames can be target-dependent.
-- Use `read_qualified_words()` / `write_qualified_words()` for practical `Un\Gn` / `Un\HGn` buffer-memory access through `0601/1601`.
-- Treat `read_native_qualified_words()` / `write_native_qualified_words()` as diagnostic probes only, not the supported workflow.
+- Use `read_native_qualified_words()` / `write_native_qualified_words()` for profiles whose supported `Un\G` / `Un\HG` route is native device access.
+- The `0601/1601` qualified helper route is profile/target-specific and is rejected by profiles that require native-qualified access.
 - Set `MCPROTOCOL_SERIAL_TRACE=1` when using the synchronous host client to log MC TX/RX frame bytes to stderr.
 
 ## Serial config reference

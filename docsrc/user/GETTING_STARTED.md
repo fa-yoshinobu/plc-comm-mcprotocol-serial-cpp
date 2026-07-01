@@ -35,19 +35,21 @@ target_link_libraries(your_app PRIVATE mcprotocol_serial)
 | --- | --- | --- |
 | `melsec:iq-r` | MELSEC iQ-R serial modules | `PlcProfile::MelsecIqR` |
 | `melsec:iq-l` | MELSEC iQ-L serial modules | `PlcProfile::MelsecIqL` |
-| `melsec:q-l` | MELSEC-Q / MELSEC-L serial modules | `PlcProfile::MelsecQL` |
+| `melsec:iq-f` | MELSEC iQ-F / FX5 serial paths | `PlcProfile::MelsecIqF` |
+| `melsec:q` | MELSEC-Q serial modules | `PlcProfile::MelsecQ` |
+| `melsec:l` | MELSEC-L serial modules | `PlcProfile::MelsecL` |
 | `melsec:qna` | MELSEC QnA-compatible targets | `PlcProfile::MelsecQnA` |
 | `melsec:ana-anu` | MELSEC AnA / AnU-compatible targets | `PlcProfile::MelsecAnAAnU` |
 | `melsec:a` | MELSEC-A-compatible targets | `PlcProfile::MelsecA` |
 
 ```cpp
 auto protocol = mcprotocol::serial::highlevel::make_c4_binary_protocol(
-    mcprotocol::serial::PlcProfile::MelsecQL);
+    mcprotocol::serial::PlcProfile::MelsecQ);
 ```
 
 ## First read on a host
 
-This example uses `PosixSyncClient`, `PosixSerialConfig`, `make_c4_binary_protocol(PlcProfile::MelsecQL)`, and `read_words("D100", words)`.
+This example uses `PosixSyncClient`, `PosixSerialConfig`, `make_c4_binary_protocol(PlcProfile::MelsecQ)`, and `read_words("D100", words)`.
 
 ```cpp
 #include <array>
@@ -75,7 +77,7 @@ int main() {
   serial.parity = 'E';
   serial.rts_cts = false;
 
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQL);
+  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
   protocol.route.station_no = 0;
 
   PosixSyncClient plc;

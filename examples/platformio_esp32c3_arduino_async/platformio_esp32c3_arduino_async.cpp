@@ -40,7 +40,7 @@ ProtocolConfig make_protocol() {
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Ascii;
   config.ascii_format = AsciiFormat::Format4;
-  config.plc_profile = PlcProfile::MelsecQL;
+  config.plc_profile = PlcProfile::MelsecQ;
   config.sum_check_enabled = false;
   config.route = RouteConfig {
       .kind = RouteKind::HostStation,

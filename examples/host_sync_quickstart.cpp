@@ -28,7 +28,7 @@ int main() {
   };
 
   // Keep the PLC profile explicit. See docsrc/user/GOTCHAS.md before changing it.
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQL);
+  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
   protocol.route.station_no = 0;
 
   // Open configures the blocking host facade and the underlying async client.

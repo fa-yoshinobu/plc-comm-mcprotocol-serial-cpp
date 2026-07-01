@@ -12,10 +12,10 @@ interpretation.
   swaps in a different command family.
 - Keep unresolved native commands in the public API, but describe them as native probes on the
   validated real-hardware setups instead of known-good workflows.
-- Treat `read-qualified-words` / `write-qualified-words` over `0601/1601` as the practical public
-  path for `U...\\G...` / `U...\\HG...` access on the current setup.
-- Treat native qualified commands as unsupported diagnostic probes, not as a supported `U...`
-  access path.
+- Treat `read-qualified-words` / `write-qualified-words` over `0601/1601` as the helper route
+  only. Profiles that require native-qualified access must reject this helper route.
+- Treat `read-native-qualified-words` / `write-native-qualified-words` over `0401/1401` as the
+  supported `Un\G` / `Un\HG` route only for profiles that explicitly include those devices.
 
 ## Active Items
 

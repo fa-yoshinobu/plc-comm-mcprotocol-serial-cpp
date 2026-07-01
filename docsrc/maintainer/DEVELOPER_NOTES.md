@@ -32,15 +32,20 @@ Use these terms consistently in validation reports.
 On the validated `RJ71C24-R2` setup, unsupported native commands should stay failed.
 Do not add fallback behavior that silently replaces them with other command families.
 
-## Qualified `G/HG` Policy
+## Qualified `Un\G` / `Un\HG` Policy
 
-On the current validated setup, `read-qualified-words` and `write-qualified-words` are the
-practical `U...\\G...` / `U...\\HG...` path because they reuse the validated `0601/1601`
-module-buffer path.
+Do not probe standalone `G...` or `HG...` as plain devices. Across MELSEC
+profiles, `G` and `HG` are only valid as qualified forms when the selected
+profile supports that route.
 
-Native qualified access is not a supported workflow in this repository. Keep
-`read-native-qualified-words` and `write-native-qualified-words` separate as diagnostic probes only,
-and do not describe them as a supported `U...` access path.
+Keep the `0601/1601` qualified-buffer helper route separate from the
+`0401/1401` native-qualified route. The selected profile decides which route is
+valid; do not silently replace one route with the other after a target rejects a
+request.
+
+For the current Q, L, iQ-L, and iQ-F serial profile decisions, supported
+`Un\G` access uses the native-qualified route. iQ-R supports `Un\G` and
+`Un\HG` through dedicated native-qualified access.
 
 ## C24 Recovery Discipline
 

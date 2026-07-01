@@ -1,29 +1,17 @@
 # TODO
 
-Current active follow-up items only. As of 2026-06-13, there are no known
-codec/client/CLI implementation gaps waiting for code changes.
+Current active follow-up items only.
 
 ## Current Status
 
 | Area | Status | Notes |
 |---|---|---|
-| Implementation gaps | none open | `1630` / `1631` encoder, client, sync wrapper, CLI, and tests already exist. |
+| Implementation gaps | none open | 2026-07-02: ASCII device extension specification encoder fix was applied and covered by request-shape tests. |
 | Command-family holds | none open | No whole native command family is blocked on the currently validated targets. |
-| Target-dependent validation | one open | `RJ71C24-R2` remote password unlock/lock still needs a focused hardware recheck. |
-| Specification-policy investigations | one open | `remote_reset` no-response timeout is currently treated as success; verify whether this is valid MC protocol behavior or should change. |
+| Target-dependent validation | one open | Format4 ASCII native extended access is verified post-fix on both iQ-R and Q/L (closed 2026-07-02). `RJ71C24-R2` remote password unlock/lock still needs a focused hardware recheck. |
+| Specification-policy investigations | none open | `remote_reset` no-response-as-success is closed 2026-07-02 as manual-derived behavior (SH-080003-AF p.173); rule recorded in [MANUAL_DERIVED_RULES.md](MANUAL_DERIVED_RULES.md). |
 
 ## Active Follow-Up
-
-- [ ] **Remote RESET no-response timeout policy**
-
-| Field | Detail |
-|---|---|
-| Type | Specification-policy investigation, not yet classified as an implementation bug. |
-| Current behavior | `remote_reset` treats a pure response timeout with no received bytes as success because some targets may reset before returning a response. |
-| Affected code | `src/client.cpp` maps the no-response timeout to `StatusCode::Ok` with `Remote RESET completed without a response`; headers and CLI help describe the same behavior. |
-| Risk | A true communication failure can look like a successful reset if the target did not actually receive or execute the command. |
-| Next action | Re-check Mitsubishi MC protocol documentation and hardware behavior for Remote RESET. Decide whether no-response success is a required specification, target-dependent behavior that needs an explicit option, or a behavior that should become timeout/error. |
-| Close when | The chosen policy is backed by manual evidence or repeatable hardware evidence, and the client, CLI, tests, and user documentation are updated consistently. |
 
 - [ ] **RJ71C24-R2 remote password (`1630` / `1631`)**
 
