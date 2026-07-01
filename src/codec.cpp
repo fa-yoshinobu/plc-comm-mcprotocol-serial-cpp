@@ -2099,7 +2099,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 // LTS/LTC/LSTS/LSTC/LCS/LCC are long timer/counter contact+coil devices.
 // They are excluded from 0403 random read and from 0406/1406 multi-block head-device access.
-// For 1402 random bit write, the serial manual allows LTS/LTC/LSTS/LSTC/LCC but not LCS.
+// 1402 random bit write uses the bit-device path when the selected profile exposes the device.
 [[nodiscard]] constexpr bool is_long_contact_coil_device(DeviceCode code) noexcept {
   switch (code) {
     case DeviceCode::LTS:
@@ -4814,9 +4814,6 @@ Status encode_random_write_bits(
         "Random write bits does not support S device writes for this PLC profile");
     if (!profile_write_status.ok()) {
       return profile_write_status;
-    }
-    if (item.device.code == DeviceCode::LCS) {
-      return invalid_argument("Random write bits does not support the long counter contact device LCS");
     }
   }
 

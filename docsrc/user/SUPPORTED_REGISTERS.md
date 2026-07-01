@@ -48,7 +48,7 @@ they are not range limits.
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB` |
 | Plain bit read-only | `S` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R` |
-| Long counter state read | `LCS`, `LCC` through the long-state helper |
+| Long counter state read/write | `LCS`, `LCC`; reads use the long-state helper |
 | Native random double-word read/write | `LCN`, `LZ` |
 | Native-qualified read/write | `Un\G` |
 | Not supported | `V`, `ZR`, `DX`, `DY`, `LTS`, `LTC`, `LTN`, `LSTS`, `LSTC`, `LSTN`, `Un\HG`, `Jn\...`, monitor, host-buffer, and module-buffer helper routes |
@@ -60,7 +60,8 @@ they are not range limits.
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
 | Plain bit read-only | `S` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `ZR` |
-| Link-direct read/write | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
+| Link-direct read/write | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W` |
+| Link-direct read-only | `Jn\SB`, `Jn\SW` |
 | Native-qualified read/write | `Un\G` |
 | Not supported | `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC`, `LTN`, `LSTN`, `LCN`, `LZ`, `RD`, `Un\HG` |
 

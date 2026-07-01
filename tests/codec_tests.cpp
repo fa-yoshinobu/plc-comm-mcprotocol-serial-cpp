@@ -5831,7 +5831,7 @@ void test_encode_random_write_words_rejects_long_contact_coil_devices() {
 }
 
 // Validate that 1402 random write bits supports the long timer/counter contact/coil devices
-// that the serial manual lists for random bit write and rejects only LCS.
+// exposed by the selected profile.
 void test_encode_random_write_bits_long_device_rules() {
   const auto config = make_binary_c4_iqr_config();
   std::array<std::uint8_t, 64> request_data {};
@@ -5842,6 +5842,7 @@ void test_encode_random_write_bits_long_device_rules() {
       mcprotocol::serial::DeviceCode::LTC,
       mcprotocol::serial::DeviceCode::LSTS,
       mcprotocol::serial::DeviceCode::LSTC,
+      mcprotocol::serial::DeviceCode::LCS,
       mcprotocol::serial::DeviceCode::LCC,
   };
   for (const auto code : allowed) {
@@ -5853,22 +5854,13 @@ void test_encode_random_write_bits_long_device_rules() {
         request_size);
     assert(status.ok());
   }
-
-  const RandomWriteBitItem rejected {.device = {.code = mcprotocol::serial::DeviceCode::LCS, .number = 0},
-                                     .value = BitValue::Off};
-  const Status rejected_status = CommandCodec::encode_random_write_bits(
-      config,
-      std::span<const RandomWriteBitItem>(&rejected, 1),
-      request_data,
-      request_size);
-  assert(!rejected_status.ok());
-  assert(rejected_status.code == StatusCode::InvalidArgument);
 }
 
-void test_encode_random_write_bits_binary_iqr_lcc_layout() {
+void test_encode_random_write_bits_binary_iqr_long_counter_layout() {
   const auto config = make_binary_c4_iqr_config();
-  const std::array<RandomWriteBitItem, 1> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::LCC, .number = 10}, .value = BitValue::On},
+  const std::array<RandomWriteBitItem, 2> items {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::LCS, .number = 10}, .value = BitValue::On},
+      {.device = {.code = mcprotocol::serial::DeviceCode::LCC, .number = 11}, .value = BitValue::Off},
   }};
 
   std::array<std::uint8_t, 32> request_data {};
@@ -5880,9 +5872,10 @@ void test_encode_random_write_bits_binary_iqr_lcc_layout() {
       request_size);
   assert(status.ok());
 
-  const std::array<std::uint8_t, 13> expected {
-      0x02, 0x14, 0x03, 0x00, 0x01,
-      0x0A, 0x00, 0x00, 0x00, 0x54, 0x00, 0x01, 0x00,
+  const std::array<std::uint8_t, 21> expected {
+      0x02, 0x14, 0x03, 0x00, 0x02,
+      0x0A, 0x00, 0x00, 0x00, 0x55, 0x00, 0x01, 0x00,
+      0x0B, 0x00, 0x00, 0x00, 0x54, 0x00, 0x00, 0x00,
   };
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
@@ -6633,7 +6626,7 @@ int main() {
   test_encode_random_write_words_rejects_long_contact_coil_devices();
   test_encode_random_write_words_rejects_standalone_qualified_only_devices();
   test_encode_random_write_bits_long_device_rules();
-  test_encode_random_write_bits_binary_iqr_lcc_layout();
+  test_encode_random_write_bits_binary_iqr_long_counter_layout();
   test_iq_l_rejects_unsupported_plain_device_families();
   test_melsec_l_rejects_s_writes();
   test_all_c4_profiles_reject_s_writes();

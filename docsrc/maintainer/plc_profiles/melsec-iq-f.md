@@ -54,7 +54,7 @@ These are confirmed for `melsec:iq-f` on the tested FX5 serial targets.
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB` |
 | Plain bit read-only | `S` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R` |
-| Long counter state read | `LCS`, `LCC` through the long-state read route. |
+| Long counter state read/write | `LCS`, `LCC`; reads use the long-state read route. |
 | Native random double-word read/write | `LCN`, `LZ` |
 | Native-qualified read/write | `Un\G` |
 

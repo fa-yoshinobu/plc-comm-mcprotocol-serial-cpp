@@ -57,7 +57,8 @@ These are confirmed for `melsec:q` on the tested Q target.
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `ZR` |
 | Plain bit read-only | `S` |
-| Link-direct read/write | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
+| Link-direct read/write | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W` |
+| Link-direct read-only | `Jn\SB`, `Jn\SW` |
 | Native-qualified read/write | `Un\G` |
 
 ## Special route details
@@ -67,8 +68,9 @@ device strings.
 
 | Route | Observed status |
 | --- | --- |
-| `Jn\X/Y/B/SB` link-direct bits | Supported through the link-direct route on C4 binary. Representative addresses were used only as validation points; do not infer device-number restrictions from them. |
-| `Jn\W/SW` link-direct words | Supported through the link-direct route on C4 binary. Representative addresses were used only as validation points; do not infer device-number restrictions from them. |
+| `Jn\X/Y/B` link-direct bits | Read/write supported through the link-direct route on C4 binary. Representative addresses were used only as validation points; do not infer device-number restrictions from them. |
+| `Jn\W` link-direct words | Read/write supported through the link-direct route on C4 binary. Representative addresses were used only as validation points; do not infer device-number restrictions from them. |
+| `Jn\SB/SW` link-direct special devices | Read supported. Write commands returned success on the tested Q target, but the readback value did not change; keep these as read-only support. |
 | `Un\G` native qualified | Supported through the native device-access route on C4 binary. The validated address was only a test point; do not infer a device-number restriction from it. |
 
 ASCII Format4 observations are intentionally excluded from the current
