@@ -17,7 +17,7 @@ modules.
 | --- | --- | --- |
 | Public profile string | Library policy | `melsec:q` is the explicit Q-series user-facing name. |
 | Manual family | Manual-derived family name | MC Protocol manuals distinguish Q/L and iQ-R request-shape tables. |
-| Current repository behavior | Existing Q/L branch | Earlier code and tools used the combined `melsec:q-l` profile; Q-target results are assigned to `melsec:q`. |
+| Current repository behavior | Q/L request-shape branch | `melsec:q` maps to the Q/L serial request-shape branch while remaining a separate public profile. |
 | Hardware observations | Confirmed for tested target | `Q06UDVCPU` with `QJ71C24N`, tested on 2026-07-01. |
 | Normal device support list | Confirmed for tested target | Normal plain devices below passed MC Serial and SLMP cross-checks. |
 | Special routes | Confirmed with dedicated routes | Link-direct and native-qualified routes are supported only through their dedicated API routes. |
@@ -34,9 +34,8 @@ modules.
 | Validation log | Local cross-verify run, stored outside this repository. |
 | Result summary | `total: 91`, `ok: 84`, `ng: 7`; all normal-device failures were excluded from the normal-device set because the NG cases were special routes. |
 
-The cross-verify tool still used the legacy serial profile string `melsec:q-l`
-at the time of the run. Because the target is Q-series hardware, this evidence
-is assigned to the new explicit `melsec:q` profile.
+Because the target is Q-series hardware, this evidence is assigned to the
+explicit `melsec:q` profile.
 
 ## Confirmed request shape
 

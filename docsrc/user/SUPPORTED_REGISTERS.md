@@ -1,71 +1,98 @@
 # Supported registers
 
-This page is a working inventory of device families used by the high-level API.
+This page lists the current device-family support surface by PLC profile.
 
-The per-profile read/write support contract is not final until the matching manual evidence,
-library policy, and hardware observations are separated in
-[MANUAL_DERIVED_RULES.md](../maintainer/MANUAL_DERIVED_RULES.md). Treat the profile tables below as
-candidate support surfaces, not as final PLC-wide guarantees.
+Profile-specific device-number ranges still depend on the PLC model, module
+parameters, and user program. The example addresses below show parser syntax;
+they are not range limits.
 
-The high-level string parser accepts plain device strings only. The examples below are address syntax examples, not guaranteed range limits for every PLC model.
+## Common rules
 
-## `melsec:iq-r` read/write candidate
-
-For `PlcProfile::MelsecIqR` / canonical profile `melsec:iq-r`, the following device families are
-currently listed as read/write candidates.
-
-| Route | Read/write device families |
+| Rule | Behavior |
 | --- | --- |
-| Plain bit devices | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `S`, `DX`, `DY`, `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC` |
-| Plain word devices | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `LTN`, `LSTN`, `LCN`, `LZ`, `Z`, `R`, `RD`, `ZR` |
-| Link-direct devices | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
-| Qualified buffer memory | `Un\G`, `Un\HG` |
+| Plain device strings | The high-level parser accepts plain device strings such as `D100`, `M100`, `X10`, `W100`, and `LZ0`. |
+| Standalone `G` / `HG` | Not plain devices for any profile. Use qualified forms such as `Un\G` or `Un\HG` only when the selected profile supports that route. |
+| `S` writes | Rejected for every profile. `S` is treated as read-only. |
+| Link-direct devices | Use the dedicated `Jn\...` link-direct APIs when the selected profile supports them. |
+| Qualified unit access | Use the native-qualified `Un\G` / `Un\HG` APIs when the selected profile supports them. The `0601/1601` helper route is profile/target-specific and must not be used as a fallback. |
 
-This table is a candidate iQ-R support surface for request encoding and command execution. Actual
-value changes can still be constrained by the target PLC program, module configuration, or
-special-device semantics.
+## Profile support summary
 
-## `melsec:iq-l` read/write candidate
+### `melsec:iq-r`
 
-For `PlcProfile::MelsecIqL` / canonical profile `melsec:iq-l`, the observed serial MC surface is
-Q/L-shaped. iQ-L is kept as a separate public profile because CPU-side SLMP behavior can still
-look iQ-R-like.
+| Support class | Device families |
+| --- | --- |
+| Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
+| Plain bit read-only | `S` |
+| Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `RD`, `ZR` |
+| Long-state helper | `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC` |
+| Native random double-word read/write | `LTN`, `LSTN`, `LCN`, `LZ` |
+| Link-direct read/write | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
+| Native-qualified read/write | `Un\G`, `Un\HG` |
 
-The iQ-L serial MC path uses Q/L-compatible request shapes. CPU-side SLMP behavior can still look
-iQ-R-like, so keep serial MC support and CPU/SLMP support separate when recording target evidence.
+### `melsec:iq-l`
 
-| Route | Observed iQ-L serial MC status |
+| Support class | Device families |
 | --- | --- |
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
 | Plain bit read-only | `S` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `ZR` |
 | Native-qualified read/write | `Un\G` |
 | Not supported | `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC`, `LTN`, `LSTN`, `LCN`, `LZ`, `RD`, `Un\HG` |
-| Not confirmed on observed setup | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` returned `0x4031` before write backup could be taken. |
+| Not confirmed | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
 
-Use `Un\G` when qualified buffer access is validated for the target. The current observed iQ-L
-route uses native-qualified access with the Q/L-compatible `0080` wire shape; the `0601/1601`
-helper route is not valid for this target observation.
+### `melsec:iq-f`
 
-Observed iQ-L native random-read coverage is narrower than batch-read coverage. Keep `TS`, `TC`,
-`STS`, `STC`, `CS`, `CC`, `DX`, and `DY` out of the native `random-read` route unless later manual
-evidence or target retest changes that rule.
-
-## `melsec:q-l` read/write candidate
-
-For `PlcProfile::MelsecQL` / canonical profile `melsec:q-l`, the following device families are
-currently listed as read/write candidates.
-
-| Route | Read/write device families |
+| Support class | Device families |
 | --- | --- |
-| Plain bit devices | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `S`, `DX`, `DY` |
-| Plain word devices | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `ZR` |
-| Link-direct devices | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
-| Qualified buffer memory | `Un\G` |
+| Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB` |
+| Plain bit read-only | `S` |
+| Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R` |
+| Long counter state read | `LCS`, `LCC` through the long-state helper |
+| Native random double-word read/write | `LCN`, `LZ` |
+| Native-qualified read/write | `Un\G` |
+| Not supported | `V`, `ZR`, `DX`, `DY`, `LTS`, `LTC`, `LTN`, `LSTS`, `LSTC`, `LSTN`, `Un\HG`, `Jn\...`, monitor, host-buffer, and module-buffer helper routes |
 
-This table is a candidate Q/L support surface for request encoding and command execution. Actual
-value changes can still be constrained by the target PLC program, module configuration, or
-special-device semantics.
+### `melsec:q`
+
+| Support class | Device families |
+| --- | --- |
+| Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
+| Plain bit read-only | `S` |
+| Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `ZR` |
+| Link-direct read/write | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
+| Native-qualified read/write | `Un\G` |
+| Not supported | `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC`, `LTN`, `LSTN`, `LCN`, `LZ`, `RD`, `Un\HG` |
+
+Native random read on the tested Q target is narrower than batch access for
+some timer/counter status families. Treat random-read rejection as a command
+route limitation, not as a batch-read exclusion.
+
+### `melsec:l`
+
+| Support class | Device families |
+| --- | --- |
+| Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
+| Plain bit read-only | `S` |
+| Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `ZR` |
+| Native-qualified read/write | `Un\G` |
+| Expected but not locally confirmed | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
+| Not supported | `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC`, `LTN`, `LSTN`, `LCN`, `LZ`, `RD`, `Un\HG` |
+
+Native random read on the tested L target is narrower than batch access for
+some timer/counter status families. Treat random-read rejection as a command
+route limitation, not as a batch-read exclusion.
+
+### `melsec:qna`, `melsec:ana-anu`, and `melsec:a`
+
+These profiles select older command families and are maintained by
+manual-derived inference and codec-level tests until matching hardware is
+available. Do not promote a device inventory for these profiles without target
+evidence.
+
+`melsec:a` is required for A-series extended file-register `ER/EW` paths.
+`melsec:qna` or `melsec:ana-anu` is required for QnA/AnA/AnU command-family
+paths such as direct extended file-register access.
 
 ## Bit device families
 
@@ -83,11 +110,11 @@ special-device semantics.
 | `STS`, `STC` | Retentive timer contact / coil | `STS0` | Decimal address. |
 | `CS`, `CC` | Counter contact / coil | `CS0` | Decimal address. |
 | `SB` | Link special relay | `SB100` | Hexadecimal address. |
-| `S` | Step relay | `S100` | Decimal address. |
+| `S` | Step relay | `S100` | Decimal address; read-only. |
 | `DX`, `DY` | Direct access input/output | `DX10` | Hexadecimal address. |
-| `LTS`, `LTC` | Long timer contact / coil | `LTS0` | Decimal address. |
-| `LSTS`, `LSTC` | Long retentive timer contact / coil | `LSTS0` | Decimal address. |
-| `LCS`, `LCC` | Long counter contact / coil | `LCS0` | Decimal address. |
+| `LTS`, `LTC` | Long timer contact / coil | `LTS0` | Decimal address; profile-specific helper route. |
+| `LSTS`, `LSTC` | Long retentive timer contact / coil | `LSTS0` | Decimal address; profile-specific helper route. |
+| `LCS`, `LCC` | Long counter contact / coil | `LCS0` | Decimal address; profile-specific helper route. |
 
 ## Word device families
 
@@ -100,10 +127,10 @@ special-device semantics.
 | `STN` | Retentive timer current value | `STN0` | Decimal address. |
 | `CN` | Counter current value | `CN0` | Decimal address. |
 | `SW` | Link special register | `SW100` | Hexadecimal address. |
-| `LTN` | Long timer current value | `LTN0` | Decimal address; treated as double-word in random helpers by default. |
-| `LSTN` | Long retentive timer current value | `LSTN0` | Decimal address; treated as double-word in random helpers by default. |
-| `LCN` | Long counter current value | `LCN0` | Decimal address; treated as double-word in random helpers by default. |
-| `LZ` | Long index register | `LZ0` | Decimal address; treated as double-word in random helpers by default. |
+| `LTN` | Long timer current value | `LTN0` | Decimal address; double-word in native random helpers. |
+| `LSTN` | Long retentive timer current value | `LSTN0` | Decimal address; double-word in native random helpers. |
+| `LCN` | Long counter current value | `LCN0` | Decimal address; double-word in native random helpers. |
+| `LZ` | Long index register | `LZ0` | Decimal address; double-word in native random helpers. |
 | `Z` | Index register | `Z0` | Decimal address. |
 | `R` | File register | `R0` | Decimal address. |
 | `RD` | Module access register | `RD0` | Decimal address. |
@@ -113,14 +140,11 @@ special-device semantics.
 
 | Topic | Current behavior |
 | --- | --- |
-| Plain device string | Supported. Use forms such as `D100`, `M100`, `X10`, `W100`, `LZ0`. |
+| Plain device string | Supported for profile-allowed plain devices. |
 | Hexadecimal address families | `X`, `Y`, `B`, `W`, `SB`, `SW`, `DX`, and `DY` parse their numeric part as hexadecimal. |
 | `:D` / `:F` suffix | Not supported by the current high-level parser. Use typed C++ fields such as `double_word` where available. |
 | `.n` bit-in-word suffix | Not supported by the current high-level parser. |
-| Long timer/counter state reads | Use `read_long_state_bits()` for `LTS/LTC/LSTS/LSTC/LCS/LCC`. `LTS/LTC/LSTS/LSTC` use status-block reads internally; `LCS/LCC` use direct bit reads internally. |
-| Long timer/counter restrictions | Random and multi-block operations reject some long contact/coil devices. Check `Status` and use the dedicated long-state helper for state reads. |
-| Link-direct access | Use the `read_link_direct_*()` / `write_link_direct_*()` helpers for `Jn\X/Y/B/SB` bit devices and `Jn\W/SW` word devices. Binary mode is the confirmed route on the current R120/RJ71C24 setup. |
-| Qualified buffer memory | Use `read_qualified_words()` / `write_qualified_words()` for practical `Un\Gn` / `Un\HGn` access. Native qualified helpers are diagnostic probes only. |
+| Long timer/counter state reads | Use `read_long_state_bits()` for supported long-state families. |
+| Link-direct access | Use the `read_link_direct_*()` / `write_link_direct_*()` helpers for supported `Jn\...` families. |
+| Qualified unit access | Use `read_native_qualified_words()` / `write_native_qualified_words()` for supported `Un\G` / `Un\HG` families. |
 | Trace logging | Set `MCPROTOCOL_SERIAL_TRACE=1` with the synchronous host client to log MC TX/RX frame bytes. |
-
-Profile-specific range limits depend on the PLC family and serial module. See [PROFILES.md](PROFILES.md) before choosing the final profile for a live system.

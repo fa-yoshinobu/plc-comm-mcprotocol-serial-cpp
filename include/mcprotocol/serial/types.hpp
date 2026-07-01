@@ -193,12 +193,11 @@ enum class PlcSeries : std::uint8_t {
 /// \brief Public PLC profile selector.
 ///
 /// Use `PlcProfile` as the public configuration surface. The lower-level `PlcSeries` enum is kept
-/// as an internal compatibility/layout family derived from this profile.
+/// as an internal command-layout family derived from this profile.
 enum class PlcProfile : std::uint8_t {
   Unspecified = 0,
   MelsecIqR = 1,
   MelsecIqL = 2,
-  MelsecQL = 3,
   MelsecQnA = 4,
   MelsecAnAAnU = 5,
   MelsecA = 6,
@@ -218,8 +217,6 @@ enum class PlcProfile : std::uint8_t {
       return "melsec:iq-l";
     case PlcProfile::MelsecIqF:
       return "melsec:iq-f";
-    case PlcProfile::MelsecQL:
-      return "melsec:q-l";
     case PlcProfile::MelsecQ:
       return "melsec:q";
     case PlcProfile::MelsecL:
@@ -255,7 +252,6 @@ enum class PlcProfile : std::uint8_t {
 ///
 /// Short labels such as `iqr`, `iq-r`, `ql`, or `qna` are intentionally rejected so saved
 /// configuration, CLI arguments, and documentation use one stable cross-library spelling.
-/// Legacy `melsec:q-l` is still accepted for existing saved configurations.
 [[nodiscard]] constexpr bool parse_plc_profile(
     const char* text,
     std::size_t text_size,
@@ -278,10 +274,6 @@ enum class PlcProfile : std::uint8_t {
   }
   if (plc_profile_text_equals(text, text_size, "melsec:l", sizeof("melsec:l") - 1U)) {
     out_profile = PlcProfile::MelsecL;
-    return true;
-  }
-  if (plc_profile_text_equals(text, text_size, "melsec:q-l", sizeof("melsec:q-l") - 1U)) {
-    out_profile = PlcProfile::MelsecQL;
     return true;
   }
   if (plc_profile_text_equals(text, text_size, "melsec:qna", sizeof("melsec:qna") - 1U)) {
@@ -314,7 +306,6 @@ enum class PlcProfile : std::uint8_t {
       return PlcSeries::IQ_L;
     case PlcProfile::MelsecIqF:
       return PlcSeries::IQ_F;
-    case PlcProfile::MelsecQL:
     case PlcProfile::MelsecQ:
     case PlcProfile::MelsecL:
       return PlcSeries::Q_L;

@@ -151,10 +151,10 @@ class PosixSyncClient {
       std::uint16_t points,
       std::span<BitValue> out_bits) noexcept;
 
-  /// \brief Reads native qualified `Un\\Gn` or `Un\\HGn` words as a diagnostic probe.
+  /// \brief Reads native-qualified `Un\\Gn` or `Un\\HGn` words.
   ///
-  /// Prefer read_qualified_words() for the supported helper path. Native qualified access is
-  /// target-dependent and remains outside the supported workflow.
+  /// Use this for profiles whose qualified access route is native device access (`0401`).
+  /// The `0601` helper route is profile/target-specific and may be rejected.
   [[nodiscard]] Status read_native_qualified_words(
       std::string_view head_device,
       std::uint16_t points,
@@ -199,10 +199,10 @@ class PosixSyncClient {
       std::string_view head_device,
       std::span<const BitValue> bits) noexcept;
 
-  /// \brief Writes native qualified `Un\\Gn` or `Un\\HGn` words as a diagnostic probe.
+  /// \brief Writes native-qualified `Un\\Gn` or `Un\\HGn` words.
   ///
-  /// Prefer write_qualified_words() for the supported helper path. Native qualified access is
-  /// target-dependent and remains outside the supported workflow.
+  /// Use this for profiles whose qualified access route is native device access (`1401`).
+  /// The `1601` helper route is profile/target-specific and may be rejected.
   [[nodiscard]] Status write_native_qualified_words(
       std::string_view head_device,
       std::span<const std::uint16_t> words) noexcept;

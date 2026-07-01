@@ -9,7 +9,7 @@ stop_bits="${MCPROTOCOL_STOP_BITS:-2}"
 parity="${MCPROTOCOL_PARITY:-E}"
 # Frame and profile are intentionally required. See docsrc/user/GOTCHAS.md.
 : "${MCPROTOCOL_FRAME:?set MCPROTOCOL_FRAME explicitly, e.g. c4-ascii-f4}"
-: "${MCPROTOCOL_PLC_PROFILE:?set MCPROTOCOL_PLC_PROFILE explicitly, e.g. melsec:q-l}"
+: "${MCPROTOCOL_PLC_PROFILE:?set MCPROTOCOL_PLC_PROFILE explicitly, e.g. melsec:q}"
 frame="${MCPROTOCOL_FRAME}"
 plc_profile="${MCPROTOCOL_PLC_PROFILE}"
 sum_check="${MCPROTOCOL_SUM_CHECK:-off}"

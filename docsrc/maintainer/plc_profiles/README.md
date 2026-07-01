@@ -41,8 +41,9 @@ Common device-form rule: `G` and `HG` are not standalone plain devices for any
 MELSEC profile. Record support only for qualified forms such as `Un\G` and
 `Un\HG`, and keep the accepted route profile-specific.
 
-`melsec:q-l` is a legacy combined spelling from earlier library work. It should
-not be used as the source of truth while deciding the new per-family profiles.
+Do not reintroduce a combined Q/L public profile. Keep Q and L as separate
+profile names, even when the current implementation maps both to the Q/L
+request-shape branch.
 
 ## Profiles without local test equipment
 

@@ -119,7 +119,7 @@ ProtocolConfig make_binary_c4_config() {
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Binary;
   config.ascii_format = AsciiFormat::Format3;
-  config.plc_profile = PlcProfile::MelsecQL;
+  config.plc_profile = PlcProfile::MelsecQ;
   config.sum_check_enabled = true;
   config.route = RouteConfig {
       .kind = RouteKind::HostStation,
@@ -163,7 +163,7 @@ ProtocolConfig make_ascii_c3_format3_config() {
   config.frame_kind = FrameKind::C3;
   config.code_mode = CodeMode::Ascii;
   config.ascii_format = AsciiFormat::Format3;
-  config.plc_profile = PlcProfile::MelsecQL;
+  config.plc_profile = PlcProfile::MelsecQ;
   config.sum_check_enabled = true;
   config.route = RouteConfig {
       .kind = RouteKind::HostStation,
@@ -190,7 +190,7 @@ ProtocolConfig make_ascii_c4_format2_config() {
   config.code_mode = CodeMode::Ascii;
   config.ascii_format = AsciiFormat::Format2;
   config.ascii_block_number = 0x00U;
-  config.plc_profile = PlcProfile::MelsecQL;
+  config.plc_profile = PlcProfile::MelsecQ;
   config.sum_check_enabled = true;
   config.route = RouteConfig {
       .kind = RouteKind::HostStation,
@@ -216,7 +216,7 @@ ProtocolConfig make_ascii_c4_format4_config() {
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Ascii;
   config.ascii_format = AsciiFormat::Format4;
-  config.plc_profile = PlcProfile::MelsecQL;
+  config.plc_profile = PlcProfile::MelsecQ;
   config.sum_check_enabled = false;
   config.route = RouteConfig {
       .kind = RouteKind::MultidropStation,
@@ -1223,7 +1223,7 @@ void test_decode_ascii_c1_error_uses_two_digit_code() {
 
 void test_encode_ascii_c1_rejects_unsupported_series() {
   ProtocolConfig config = make_ascii_c1_format4_qna_config();
-  config.plc_profile = PlcProfile::MelsecQL;
+  config.plc_profile = PlcProfile::MelsecQ;
   const BatchReadWordsRequest request {
       .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100},
       .points = 1,
@@ -2339,10 +2339,7 @@ void test_plc_profile_names_and_internal_grouping() {
   assert(plc_series_from_profile(profile) == PlcSeries::Q_L);
   assert(std::string_view(plc_profile_name(profile)) == "melsec:l");
 
-  assert(parse_plc_profile_text("melsec:q-l", profile));
-  assert(profile == PlcProfile::MelsecQL);
-  assert(plc_series_from_profile(profile) == PlcSeries::Q_L);
-  assert(std::string_view(plc_profile_name(profile)) == "melsec:q-l");
+  assert(!parse_plc_profile_text("melsec:q-l", profile));
 
   assert(parse_plc_profile_text("melsec:qna", profile));
   assert(profile == PlcProfile::MelsecQnA);

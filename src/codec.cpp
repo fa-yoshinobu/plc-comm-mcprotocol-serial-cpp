@@ -458,9 +458,9 @@ class ByteWriter {
   return is_iq_r_series(config);
 }
 
-// Hardware compatibility exception:
+// Hardware wire-shape exception:
 // some validated iQ-R serial targets reject Jn\ native 0403/1402/0801 requests unless the
-// request body falls back to the legacy extension-specification wire format. Keep this helper
+// request body uses the Q/L extension-specification wire format. Keep this helper
 // narrow to link-direct native traffic so the default device encoding path stays rule-based.
 [[nodiscard]] ProtocolConfig link_direct_native_wire_config(const ProtocolConfig& config) noexcept {
   if (!is_binary_mode(config) || !is_iq_r_series(config)) {
@@ -468,7 +468,7 @@ class ByteWriter {
   }
 
   ProtocolConfig wire_config = config;
-  wire_config.plc_profile = PlcProfile::MelsecQL;
+  wire_config.plc_profile = PlcProfile::MelsecQ;
   return wire_config;
 }
 
@@ -477,7 +477,7 @@ class ByteWriter {
     const QualifiedBufferWordDevice& device) noexcept {
   if (config.plc_profile == PlcProfile::MelsecIqL && device.kind == QualifiedBufferDeviceKind::G) {
     ProtocolConfig wire_config = config;
-    wire_config.plc_profile = PlcProfile::MelsecQL;
+    wire_config.plc_profile = PlcProfile::MelsecQ;
     return wire_config;
   }
   return config;

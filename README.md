@@ -23,7 +23,7 @@ lib_deps =
 
 ## Quick example
 
-This host-side example opens `/dev/ttyUSB0` on Linux or `COM3` on Windows, selects `PlcProfile::MelsecQL`, and reads `D100` with `19200 / 8E2`.
+This host-side example opens `/dev/ttyUSB0` on Linux or `COM3` on Windows, selects `PlcProfile::MelsecQ`, and reads `D100` with `19200 / 8E2`.
 
 ```cpp
 #include <array>
@@ -51,7 +51,7 @@ int main() {
   serial.parity = 'E';
   serial.rts_cts = false;
 
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQL);
+  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
   protocol.route.station_no = 0;
 
   PosixSyncClient plc;

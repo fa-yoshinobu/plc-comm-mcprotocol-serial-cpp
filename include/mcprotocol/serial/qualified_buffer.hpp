@@ -40,7 +40,7 @@ struct QualifiedBufferWordDevice {
 /// \brief Validates whether the helper `0601/1601` route may be used for a profile.
 ///
 /// This helper route maps `Un\\G`-style text onto module-buffer commands. Some profiles, such
-/// as MELSEC-Q, require the native device-access route instead.
+/// as MELSEC-Q, MELSEC-L, iQ-L, and iQ-F, require the native device-access route instead.
 [[nodiscard]] inline Status validate_qualified_buffer_helper_route(
     PlcProfile profile,
     const QualifiedBufferWordDevice& device) noexcept {

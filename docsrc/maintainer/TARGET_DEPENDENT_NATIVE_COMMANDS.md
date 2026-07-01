@@ -46,9 +46,9 @@ configuration is known:
 The raw frame log includes password bytes in hexadecimal, so preserve it as validation evidence and
 avoid sharing it as a public user-facing artifact.
 
-For general contiguous/helper traffic on the same hardware, the practical setting was usually
-`--plc-profile melsec:q-l`. The `--plc-profile melsec:iq-r` setting was used for iQ-R-only spot devices such as `SM`, `SD`,
-`RD`, `LZ`, `J1\...`, and long current-value focused checks.
+For general contiguous/helper traffic on the same hardware, use the target-family profile for the
+connected PLC. The `--plc-profile melsec:iq-r` setting was used for iQ-R-only spot devices such as
+`SM`, `SD`, `RD`, `LZ`, `J1\...`, and long current-value focused checks.
 
 ## COM3 Sanity Check
 
@@ -87,9 +87,9 @@ focused recheck item until raw frames and manual examples are reviewed again.
 Conditions:
 
 - PLC: `Q06UDVCPU`
-- SLMP: `192.168.250.100:1025`, profile `q-l`
+- SLMP: `192.168.250.100:1025`, Q/L-compatible profile
 - MC Serial: `COM3`, `19200 / 8E1`, station `0`
-- MC Serial profile: `melsec:q-l`
+- MC Serial profile: `melsec:q`
 - Frame: `c4-ascii`, MC Protocol 4C ASCII Format4
 - Sum-check: off
 

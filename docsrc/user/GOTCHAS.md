@@ -10,13 +10,13 @@
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| Encoding or `open()` fails with a PLC profile error. | `ProtocolConfig::plc_profile` was left as `PlcProfile::Unspecified`. | Select an explicit profile such as `PlcProfile::MelsecQL` before opening or encoding. |
+| Encoding or `open()` fails with a PLC profile error. | `ProtocolConfig::plc_profile` was left as `PlcProfile::Unspecified`. | Select an explicit profile such as `PlcProfile::MelsecQ` before opening or encoding. |
 
 ## Frame and PLC profile must be explicit
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| A Linux CLI wrapper exits before sending a request. | `MCPROTOCOL_FRAME` or `MCPROTOCOL_PLC_PROFILE` was not set. The wrapper does not infer either value. | Set both values explicitly, for example `MCPROTOCOL_FRAME=c4-binary` and `MCPROTOCOL_PLC_PROFILE=melsec:q-l`. |
+| A Linux CLI wrapper exits before sending a request. | `MCPROTOCOL_FRAME` or `MCPROTOCOL_PLC_PROFILE` was not set. The wrapper does not infer either value. | Set both values explicitly, for example `MCPROTOCOL_FRAME=c4-binary` and `MCPROTOCOL_PLC_PROFILE=melsec:q`. |
 | A program appears to use the wrong command family. | The serial frame/profile was copied from another target or left at a sample value. | Choose the frame and `PlcProfile` for the actual PLC serial module; CPU model text, serial settings, and device strings are not used for inference. |
 
 ## Zeros from MCU sample

@@ -41,12 +41,12 @@ The new real-UART MCU example is read-only. It repeatedly reads `D100-D103` and 
 Because support is target-dependent.
 
 - support depends on the target module and the selected `--plc-profile`
-- helper and contiguous paths are often the practical public workflow even when a direct native
-  probe is target-dependent
-- native qualified access is not a supported public workflow
+- support depends on the command route as well as the target module
+- qualified `Un\G` / `Un\HG` access is profile-specific
 
-For practical qualified-device access, use `read-qualified-words` / `write-qualified-words` where
-the helper path is validated. Treat native qualified commands as diagnostic probes only.
+For qualified-device access, use the route required by the selected profile.
+Most validated Q/L, iQ-L, and iQ-F serial paths use the native-qualified
+`0401/1401` route; the `0601/1601` helper route is not a fallback.
 
 ## Can I shrink memory usage for small firmware builds?
 
