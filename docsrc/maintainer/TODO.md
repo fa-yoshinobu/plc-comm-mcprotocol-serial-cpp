@@ -1,18 +1,29 @@
 # TODO
 
-Current active follow-up items only. As of 2026-06-13, there are no known
-codec/client/CLI implementation gaps waiting for code changes.
+Current active follow-up items only.
 
 ## Current Status
 
 | Area | Status | Notes |
 |---|---|---|
-| Implementation gaps | none open | `1630` / `1631` encoder, client, sync wrapper, CLI, and tests already exist. |
+| Implementation gaps | none open | 2026-07-02: ASCII device extension specification encoder fix was applied and covered by request-shape tests. |
 | Command-family holds | none open | No whole native command family is blocked on the currently validated targets. |
-| Target-dependent validation | one open | `RJ71C24-R2` remote password unlock/lock still needs a focused hardware recheck. |
+| Target-dependent validation | two open | Format4 ASCII native extended access needs a live hardware recheck after the encoder fix; `RJ71C24-R2` remote password unlock/lock still needs a focused hardware recheck. |
 | Specification-policy investigations | one open | `remote_reset` no-response timeout is currently treated as success; verify whether this is valid MC protocol behavior or should change. |
 
 ## Active Follow-Up
+
+- [ ] **ASCII device extension specification: hardware recheck after encoder fix**
+
+| Field | Detail |
+|---|---|
+| Type | Fixed encoder bug; hardware recheck pending. |
+| Root cause | `append_link_direct_device_reference_ascii` and `append_extended_device_reference_ascii` in `src/codec.cpp` end the extended device specification at the device number. SH-080003-AF p.430-431 requires a trailing device-modification field (`000` for Q/L subcommands, `0000` for iQ-R subcommands) before the points field. |
+| Evidence | Manual example `J1\W100` (`0080 00 J001 000 W* 000100 000`) vs observed `J1\SB10` frame (`0083 00 J001 0000 SB** 0000000010` + points, no trailing `0000`). `7F22H` is the C24's own command-parse rejection (SH-081249-L, PRO category). Binary Format5 encoders emit the full layout and passed on the same targets. |
+| Fix applied | `src/codec.cpp` now appends the trailing `append_device_modification_ascii` after the device number in both ASCII extended-reference builders. `tests/codec_tests.cpp` covers the Q/L manual example and iQ-R `Jn\...` / `Un\G` shapes. |
+| Next action | Re-run the Format4 ASCII recheck (`J1\SB10`, `U3E0\G10`, `U2\G1000`) on live targets. |
+| Evidence file | [FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md](FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md) |
+| Close when | The previously failing native extended reads pass on hardware in ASCII Format4, or any remaining target-side rejection is separately explained with new raw TX/RX evidence. |
 
 - [ ] **Remote RESET no-response timeout policy**
 

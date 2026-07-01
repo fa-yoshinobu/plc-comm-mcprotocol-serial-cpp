@@ -1362,7 +1362,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
              writer,
              device.word_address,
              ascii_extended_device_number_width(config),
-             spec->hexadecimal);
+             spec->hexadecimal) &&
+         append_device_modification_ascii(writer, config);
 }
 
 [[nodiscard]] bool append_extended_device_reference_binary(
@@ -1418,7 +1419,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
              writer,
              device.device.number,
              ascii_extended_device_number_width(config),
-             spec->hexadecimal);
+             spec->hexadecimal) &&
+         append_device_modification_ascii(writer, config);
 }
 
 [[nodiscard]] bool append_extended_device_reference(

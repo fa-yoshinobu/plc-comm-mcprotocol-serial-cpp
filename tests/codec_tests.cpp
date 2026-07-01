@@ -2869,7 +2869,7 @@ void test_encode_extended_batch_read_words_ascii_matches_manual_shape() {
       request_size);
   assert(status.ok());
 
-  constexpr std::string_view expected_prefix = "0401008200U3E00000G***0000000001";
+  constexpr std::string_view expected_prefix = "0401008200U3E00000G***00000000010000";
   assert(request_size == expected_prefix.size() + 4U);
   assert(std::memcmp(request_data.data(), expected_prefix.data(), expected_prefix.size()) == 0);
   assert(std::memcmp(request_data.data() + expected_prefix.size(), "0001", 4U) == 0);
@@ -3135,7 +3135,29 @@ void test_encode_link_direct_batch_read_words_ascii_iqr_shape() {
       request_size);
   assert(status.ok());
 
-  constexpr std::string_view expected = "0401008200J0010000SW**00000000110001";
+  constexpr std::string_view expected = "0401008200J0010000SW**000000001100000001";
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
+void test_encode_link_direct_batch_read_words_ascii_q_l_matches_manual_shape() {
+  const auto config = make_ascii_c4_format4_config();
+  const LinkDirectDevice device {
+      .network_number = 0x0001U,
+      .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U},
+  };
+  std::array<std::uint8_t, 96> request_data {};
+  std::size_t request_size = 0;
+
+  const Status status = CommandCodec::encode_link_direct_batch_read_words(
+      config,
+      device,
+      1U,
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  constexpr std::string_view expected = "0401008000J001000W*0001000000001";
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
@@ -3157,7 +3179,7 @@ void test_encode_link_direct_batch_read_bits_ascii_iqr_shape() {
       request_size);
   assert(status.ok());
 
-  constexpr std::string_view expected = "0401008300J0010000SB**00000000100004";
+  constexpr std::string_view expected = "0401008300J0010000SB**000000001000000004";
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
@@ -3271,7 +3293,7 @@ void test_encode_link_direct_batch_write_words_ascii_iqr_shape() {
       request_size);
   assert(status.ok());
 
-  constexpr std::string_view expected = "1401008200J0010000W***000000004000021234ABCD";
+  constexpr std::string_view expected = "1401008200J0010000W***0000000040000000021234ABCD";
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
@@ -3294,7 +3316,7 @@ void test_encode_link_direct_batch_write_bits_ascii_iqr_shape() {
       request_size);
   assert(status.ok());
 
-  constexpr std::string_view expected = "1401008300J0010000B***000000003000041010";
+  constexpr std::string_view expected = "1401008300J0010000B***0000000030000000041010";
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
@@ -6546,6 +6568,7 @@ int main() {
   test_encode_batch_read_bits_binary_single_uses_addressed_point();
   test_encode_link_direct_batch_read_bits_binary_single_uses_addressed_point();
   test_encode_link_direct_batch_read_words_ascii_iqr_shape();
+  test_encode_link_direct_batch_read_words_ascii_q_l_matches_manual_shape();
   test_encode_link_direct_batch_read_bits_ascii_iqr_shape();
   test_encode_link_direct_batch_write_words_binary_iqr_shape();
   test_encode_link_direct_batch_write_bits_binary_iqr_shape();

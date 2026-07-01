@@ -67,7 +67,7 @@ password hold below.
 
 | Area | Command | Observed result | Current status |
 |---|---:|---|---|
-| 4C ASCII Format4 native extended access | `Jn\...`, `Un\G`, `Un\HG` | iQ-R and Q/L live targets both showed plain-device success but native extended access rejection/timeouts in ASCII Format4 | unresolved: measurement only; encoder/client bug not ruled out |
+| 4C ASCII Format4 native extended access | `Jn\...`, `Un\G`, `Un\HG` | iQ-R and Q/L live targets both showed plain-device success but native extended access rejection/timeouts in ASCII Format4 | root cause identified 2026-07-02: encoder bug, missing trailing ASCII device-modification field (SH-080003-AF p.430-431); encoder fix applied, hardware recheck pending. See [FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md](FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md) |
 | Remote password unlock | `1630` | historical 6-character unlock returned `0x7FE7`; `123456melsec` on `R08CPU` returned `0x7F22`; `abcdef1` on `R08CPU` returned `0x7FE7` | unresolved |
 | Remote password lock | `1631` | historical lock returned `0x7F22`; `123456melsec` on `R08CPU` also returned `0x7F22` | unresolved |
 
@@ -81,6 +81,19 @@ Date: 2026-07-01
 This is a maintainer observation, not a user-facing support rule. The result may be target-side
 behavior, serial-module behavior, or a software bug in the encoder/client stack. Keep it as a
 focused recheck item until raw frames and manual examples are reviewed again.
+
+The analysis handoff summary is maintained in
+[FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md](FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md).
+
+Update 2026-07-02: desk analysis against SH-080003-AF identified the root
+cause as a client encoder bug. The ASCII extended device specification omits
+the trailing device-modification field (`000` for Q/L subcommands, `0000` for
+iQ-R subcommands) required after the device number (SH-080003-AF p.430-431
+formats and worked example). `7F22H` is the C24's own command-parse rejection
+(SH-081249-L, PRO category), which is why Binary Format5 worked on the same
+targets. The fix (trailing `append_device_modification_ascii` in the two ASCII
+extended-reference builders in `src/codec.cpp`) has been applied; a Format4
+ASCII hardware recheck is still pending.
 
 ### Q/L target
 

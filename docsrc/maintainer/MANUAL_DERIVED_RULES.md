@@ -28,7 +28,7 @@ separated into one of these buckets:
 | `melsec:q` and `melsec:l` device-family lists | Manual-derived request shape plus hardware observation | Keep Q and L as separate public profiles even though both map to the Q/L serial request-shape branch. |
 | `LZ` profile support | Manual-derived request shape plus hardware observation | Keep `LZ` supported only on profiles whose specifications include a native random double-word route. It is supported for iQ-R and iQ-F, and rejected for Q, L, and iQ-L. |
 | iQ-R binary link-direct Q/L wire body exception | Hardware observation | Keep the exception isolated to link-direct native traffic; it is not a public combined Q/L profile path. |
-| 4C ASCII Format4 native extended-access rejection for `Jn\...` and `Un\...` | Hardware observation | The Q/L and iQ-R observations are measurement evidence only; encoder/client bugs are not fully ruled out. |
+| 4C ASCII Format4 native extended-access rejection for `Jn\...` and `Un\...` | Confirmed encoder bug plus pending hardware recheck | Desk analysis found the ASCII extended-device encoder omitted the trailing device-modification field required by SH-080003-AF. The encoder fix is applied; keep pre-fix hardware observations separate from any post-fix target behavior. |
 | Separate public Q, L, iQ-L, and iQ-F profiles | Library policy plus target-family risk control | Do not reintroduce a combined Q/L saved profile. Keep profile names aligned with the selected target family. |
 
 ## Address and Device Parsing
