@@ -186,6 +186,7 @@ enum class PlcSeries : std::uint8_t {
   /// AnA/AnUCPU common-command family. Kept value-compatible with the legacy QnA selector.
   AnA_AnU = QnA,
   A,
+  IQ_F,
   Unspecified = 0xFFU
 };
 
@@ -200,7 +201,10 @@ enum class PlcProfile : std::uint8_t {
   MelsecQL = 3,
   MelsecQnA = 4,
   MelsecAnAAnU = 5,
-  MelsecA = 6
+  MelsecA = 6,
+  MelsecIqF = 7,
+  MelsecQ = 8,
+  MelsecL = 9
 };
 
 /// \brief Returns the canonical saved/displayed string for a PLC profile.
@@ -212,8 +216,14 @@ enum class PlcProfile : std::uint8_t {
       return "melsec:iq-r";
     case PlcProfile::MelsecIqL:
       return "melsec:iq-l";
+    case PlcProfile::MelsecIqF:
+      return "melsec:iq-f";
     case PlcProfile::MelsecQL:
       return "melsec:q-l";
+    case PlcProfile::MelsecQ:
+      return "melsec:q";
+    case PlcProfile::MelsecL:
+      return "melsec:l";
     case PlcProfile::MelsecQnA:
       return "melsec:qna";
     case PlcProfile::MelsecAnAAnU:
@@ -241,10 +251,11 @@ enum class PlcProfile : std::uint8_t {
   return true;
 }
 
-/// \brief Parses only canonical PLC profile strings.
+/// \brief Parses canonical PLC profile strings.
 ///
 /// Short labels such as `iqr`, `iq-r`, `ql`, or `qna` are intentionally rejected so saved
 /// configuration, CLI arguments, and documentation use one stable cross-library spelling.
+/// Legacy `melsec:q-l` is still accepted for existing saved configurations.
 [[nodiscard]] constexpr bool parse_plc_profile(
     const char* text,
     std::size_t text_size,
@@ -255,6 +266,18 @@ enum class PlcProfile : std::uint8_t {
   }
   if (plc_profile_text_equals(text, text_size, "melsec:iq-l", sizeof("melsec:iq-l") - 1U)) {
     out_profile = PlcProfile::MelsecIqL;
+    return true;
+  }
+  if (plc_profile_text_equals(text, text_size, "melsec:iq-f", sizeof("melsec:iq-f") - 1U)) {
+    out_profile = PlcProfile::MelsecIqF;
+    return true;
+  }
+  if (plc_profile_text_equals(text, text_size, "melsec:q", sizeof("melsec:q") - 1U)) {
+    out_profile = PlcProfile::MelsecQ;
+    return true;
+  }
+  if (plc_profile_text_equals(text, text_size, "melsec:l", sizeof("melsec:l") - 1U)) {
+    out_profile = PlcProfile::MelsecL;
     return true;
   }
   if (plc_profile_text_equals(text, text_size, "melsec:q-l", sizeof("melsec:q-l") - 1U)) {
@@ -289,7 +312,11 @@ enum class PlcProfile : std::uint8_t {
       return PlcSeries::IQ_R;
     case PlcProfile::MelsecIqL:
       return PlcSeries::IQ_L;
+    case PlcProfile::MelsecIqF:
+      return PlcSeries::IQ_F;
     case PlcProfile::MelsecQL:
+    case PlcProfile::MelsecQ:
+    case PlcProfile::MelsecL:
       return PlcSeries::Q_L;
     case PlcProfile::MelsecQnA:
       return PlcSeries::QnA;

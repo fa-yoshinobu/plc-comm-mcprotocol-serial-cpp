@@ -37,6 +37,36 @@ struct QualifiedBufferWordDevice {
   return word_address * 2U;
 }
 
+/// \brief Validates whether the helper `0601/1601` route may be used for a profile.
+///
+/// This helper route maps `Un\\G`-style text onto module-buffer commands. Some profiles, such
+/// as MELSEC-Q, require the native device-access route instead.
+[[nodiscard]] inline Status validate_qualified_buffer_helper_route(
+    PlcProfile profile,
+    const QualifiedBufferWordDevice& device) noexcept {
+  if (profile == PlcProfile::MelsecIqL && device.kind == QualifiedBufferDeviceKind::HG) {
+    return make_status(
+        StatusCode::UnsupportedConfiguration,
+        "melsec:iq-l does not support Un\\HG; use Un\\G only");
+  }
+  if (profile == PlcProfile::MelsecIqL) {
+    return make_status(
+        StatusCode::UnsupportedConfiguration,
+        "melsec:iq-l qualified buffer helper route is disabled; use native-qualified Un\\G access");
+  }
+  if (profile == PlcProfile::MelsecQ) {
+    return make_status(
+        StatusCode::UnsupportedConfiguration,
+        "melsec:q qualified buffer helper route is disabled; use native-qualified Un\\G access");
+  }
+  if (profile == PlcProfile::MelsecL) {
+    return make_status(
+        StatusCode::UnsupportedConfiguration,
+        "melsec:l qualified buffer helper route is disabled; use native-qualified Un\\G access");
+  }
+  return ok_status();
+}
+
 namespace detail {
 
 using mcprotocol::serial::detail::ascii_upper;

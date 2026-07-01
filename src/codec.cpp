@@ -472,6 +472,17 @@ class ByteWriter {
   return wire_config;
 }
 
+[[nodiscard]] ProtocolConfig qualified_native_wire_config(
+    const ProtocolConfig& config,
+    const QualifiedBufferWordDevice& device) noexcept {
+  if (config.plc_profile == PlcProfile::MelsecIqL && device.kind == QualifiedBufferDeviceKind::G) {
+    ProtocolConfig wire_config = config;
+    wire_config.plc_profile = PlcProfile::MelsecQL;
+    return wire_config;
+  }
+  return config;
+}
+
 // Device lookup and primitive ASCII/binary field encoders.
 
 [[nodiscard]] constexpr std::size_t ascii_device_modification_width(
@@ -1287,8 +1298,14 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_extended_word_device(
     const ProtocolConfig& config,
     const QualifiedBufferWordDevice& device) noexcept {
-  if (device.kind == QualifiedBufferDeviceKind::HG && !is_iq_r_series(config)) {
-    return invalid_argument("HG device extension access requires MELSEC iQ-R series");
+  if (device.kind == QualifiedBufferDeviceKind::HG) {
+    const PlcSeries series = plc_series_from_profile(config.plc_profile);
+    if (series == PlcSeries::IQ_L) {
+      return invalid_argument("HG device extension access is not available for MELSEC iQ-L");
+    }
+    if (series != PlcSeries::IQ_R) {
+      return invalid_argument("HG device extension access requires MELSEC iQ-R series");
+    }
   }
   if (is_ascii_mode(config) && device.module_number > 0x0FFFU) {
     return invalid_argument("ASCII device extension specification must be in range 0x000..0xFFF");
@@ -1977,6 +1994,48 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   }
 }
 
+[[nodiscard]] constexpr bool is_iq_l_unsupported_plain_device_code(DeviceCode code) noexcept {
+  switch (code) {
+    case DeviceCode::LTS:
+    case DeviceCode::LTC:
+    case DeviceCode::LTN:
+    case DeviceCode::LSTS:
+    case DeviceCode::LSTC:
+    case DeviceCode::LSTN:
+    case DeviceCode::LCS:
+    case DeviceCode::LCC:
+    case DeviceCode::LCN:
+    case DeviceCode::LZ:
+    case DeviceCode::RD:
+    case DeviceCode::HG:
+      return true;
+    default:
+      return false;
+  }
+}
+
+[[nodiscard]] Status validate_iq_l_plain_device_support(
+    const ProtocolConfig& config,
+    DeviceCode code,
+    const char* message) noexcept {
+  if (config.plc_profile == PlcProfile::MelsecIqL && is_iq_l_unsupported_plain_device_code(code)) {
+    return invalid_argument(message);
+  }
+  return ok_status();
+}
+
+[[nodiscard]] Status validate_profile_plain_write_support(
+    const ProtocolConfig& config,
+    DeviceCode code,
+    const char* message) noexcept {
+  if ((config.plc_profile == PlcProfile::MelsecIqL ||
+       config.plc_profile == PlcProfile::MelsecL) &&
+      code == DeviceCode::S) {
+    return invalid_argument(message);
+  }
+  return ok_status();
+}
+
 // LTS/LTC/LSTS/LSTC/LCS/LCC are long timer/counter contact+coil devices.
 // They are excluded from 0403 random read and from 0406/1406 multi-block head-device access.
 // For 1402 random bit write, the serial manual allows LTS/LTC/LSTS/LSTC/LCC but not LCS.
@@ -2040,6 +2099,10 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (spec == nullptr || device.code == DeviceCode::LZ || is_qualified_only_device(device.code)) {
     return invalid_argument(message);
   }
+  const Status iq_l_status = validate_iq_l_plain_device_support(config, device.code, message);
+  if (!iq_l_status.ok()) {
+    return iq_l_status;
+  }
   if (is_iq_r_only_device_code(device.code) && !is_iq_r_series(config)) {
     return invalid_argument(message);
   }
@@ -2057,6 +2120,13 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   }
   if (is_qualified_only_device(item.device.code)) {
     return invalid_argument(item.double_word ? dword_message : word_message);
+  }
+  const Status iq_l_status = validate_iq_l_plain_device_support(
+      config,
+      item.device.code,
+      item.double_word ? dword_message : word_message);
+  if (!iq_l_status.ok()) {
+    return iq_l_status;
   }
   if (requires_random_dword_access(item.device.code) != item.double_word &&
       requires_random_dword_access(item.device.code)) {
@@ -2082,6 +2152,13 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   }
   if (is_qualified_only_device(item.device.code)) {
     return invalid_argument(item.double_word ? dword_message : word_message);
+  }
+  const Status iq_l_status = validate_iq_l_plain_device_support(
+      config,
+      item.device.code,
+      item.double_word ? dword_message : word_message);
+  if (!iq_l_status.ok()) {
+    return iq_l_status;
   }
   if (requires_random_dword_access(item.device.code) != item.double_word &&
       requires_random_dword_access(item.device.code)) {
@@ -2150,10 +2227,10 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   const std::size_t length = remote_password.size();
   if (is_remote_password_iq_r(config)) {
     if (length < 6U || length > 32U) {
-      return invalid_argument("MELSEC iQ-R remote password length must be in range 6..32");
+      return invalid_argument("MELSEC iQ-R-compatible remote password length must be in range 6..32");
     }
   } else if (length != 4U) {
-    return invalid_argument("Non-iQ-R remote password length must be exactly 4");
+    return invalid_argument("Non-iQ-R-compatible remote password length must be exactly 4");
   }
 
   for (const char ch : remote_password) {
@@ -3374,10 +3451,11 @@ Status encode_extended_batch_read_words(
   if (!device_status.ok()) {
     return device_status;
   }
+  const ProtocolConfig wire_config = qualified_native_wire_config(config, device);
   ByteWriter writer(out_request_data);
-  if (!append_command_header(writer, config, 0x0401U, extended_word_subcommand(config)) ||
-      !append_extended_device_reference(writer, config, device) ||
-      !append_word_count(writer, config, points)) {
+  if (!append_command_header(writer, wire_config, 0x0401U, extended_word_subcommand(wire_config)) ||
+      !append_extended_device_reference(writer, wire_config, device) ||
+      !append_word_count(writer, wire_config, points)) {
     return buffer_too_small("Extended batch read words request buffer is too small");
   }
   out_size = writer.size();
@@ -3476,6 +3554,13 @@ Status encode_batch_read_bits(
   const Status bit_status = validate_bit_device(request.head_device, "Batch read bits requires a bit device");
   if (!bit_status.ok()) {
     return bit_status;
+  }
+  const Status iq_l_status = validate_iq_l_plain_device_support(
+      config,
+      request.head_device.code,
+      "Batch read bits does not support this device for melsec:iq-l");
+  if (!iq_l_status.ok()) {
+    return iq_l_status;
   }
   if (is_long_timer_status_block_device(request.head_device.code)) {
     return invalid_argument("Batch read bits does not support long timer contact/coil devices");
@@ -3894,11 +3979,12 @@ Status encode_extended_batch_write_words(
   if (!device_status.ok()) {
     return device_status;
   }
+  const ProtocolConfig wire_config = qualified_native_wire_config(config, device);
   ByteWriter writer(out_request_data);
-  if (!append_command_header(writer, config, 0x1401U, extended_word_subcommand(config)) ||
-      !append_extended_device_reference(writer, config, device) ||
-      !append_word_count(writer, config, static_cast<std::uint16_t>(words.size())) ||
-      !append_word_data(writer, config, words)) {
+  if (!append_command_header(writer, wire_config, 0x1401U, extended_word_subcommand(wire_config)) ||
+      !append_extended_device_reference(writer, wire_config, device) ||
+      !append_word_count(writer, wire_config, static_cast<std::uint16_t>(words.size())) ||
+      !append_word_data(writer, wire_config, words)) {
     return buffer_too_small("Extended batch write words request buffer is too small");
   }
   out_size = writer.size();
@@ -3921,6 +4007,20 @@ Status encode_batch_write_bits(
   const Status bit_status = validate_bit_device(request.head_device, "Batch write bits requires a bit device");
   if (!bit_status.ok()) {
     return bit_status;
+  }
+  const Status iq_l_status = validate_iq_l_plain_device_support(
+      config,
+      request.head_device.code,
+      "Batch write bits does not support this device for melsec:iq-l");
+  if (!iq_l_status.ok()) {
+    return iq_l_status;
+  }
+  const Status profile_write_status = validate_profile_plain_write_support(
+      config,
+      request.head_device.code,
+      "Batch write bits does not support S device writes for this PLC profile");
+  if (!profile_write_status.ok()) {
+    return profile_write_status;
   }
   if (is_c1_frame(config) && !is_c1_supported_device(request.head_device.code)) {
     return invalid_argument("1C batch write bits does not support this device");
@@ -4580,6 +4680,20 @@ Status encode_random_write_bits(
       if (!bit_status.ok()) {
         return bit_status;
       }
+      const Status iq_l_status = validate_iq_l_plain_device_support(
+          config,
+          item.device.code,
+          "1E random write bits does not support this device for melsec:iq-l");
+      if (!iq_l_status.ok()) {
+        return iq_l_status;
+      }
+      const Status profile_write_status = validate_profile_plain_write_support(
+          config,
+          item.device.code,
+          "1E random write bits does not support S device writes for this PLC profile");
+      if (!profile_write_status.ok()) {
+        return profile_write_status;
+      }
       if (!is_c1_supported_device(item.device.code)) {
         return invalid_argument("1E random write bits does not support this device");
       }
@@ -4625,6 +4739,20 @@ Status encode_random_write_bits(
     const Status bit_status = validate_bit_device(item.device, "Random write bits requires bit devices");
     if (!bit_status.ok()) {
       return bit_status;
+    }
+    const Status iq_l_status = validate_iq_l_plain_device_support(
+        config,
+        item.device.code,
+        "Random write bits does not support this device for melsec:iq-l");
+    if (!iq_l_status.ok()) {
+      return iq_l_status;
+    }
+    const Status profile_write_status = validate_profile_plain_write_support(
+        config,
+        item.device.code,
+        "Random write bits does not support S device writes for this PLC profile");
+    if (!profile_write_status.ok()) {
+      return profile_write_status;
     }
     if (item.device.code == DeviceCode::LCS) {
       return invalid_argument("Random write bits does not support the long counter contact device LCS");
@@ -4999,6 +5127,13 @@ Status encode_multi_block_write(
     }
     if (is_multi_block_excluded_device(block.head_device.code)) {
       return invalid_argument("Multi-block write does not support long timer/counter/index devices as head device");
+    }
+    const Status profile_write_status = validate_profile_plain_write_support(
+        config,
+        block.head_device.code,
+        "Multi-block write does not support S device writes for this PLC profile");
+    if (!profile_write_status.ok()) {
+      return profile_write_status;
     }
     if (block.bit_block) {
       if (block.bits.size() != static_cast<std::size_t>(block.points) * 16U) {

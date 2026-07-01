@@ -1,8 +1,71 @@
 # Supported registers
 
-This page lists device families supported by the high-level API.
+This page is a working inventory of device families used by the high-level API.
+
+The per-profile read/write support contract is not final until the matching manual evidence,
+library policy, and hardware observations are separated in
+[MANUAL_DERIVED_RULES.md](../maintainer/MANUAL_DERIVED_RULES.md). Treat the profile tables below as
+candidate support surfaces, not as final PLC-wide guarantees.
 
 The high-level string parser accepts plain device strings only. The examples below are address syntax examples, not guaranteed range limits for every PLC model.
+
+## `melsec:iq-r` read/write candidate
+
+For `PlcProfile::MelsecIqR` / canonical profile `melsec:iq-r`, the following device families are
+currently listed as read/write candidates.
+
+| Route | Read/write device families |
+| --- | --- |
+| Plain bit devices | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `S`, `DX`, `DY`, `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC` |
+| Plain word devices | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `LTN`, `LSTN`, `LCN`, `LZ`, `Z`, `R`, `RD`, `ZR` |
+| Link-direct devices | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
+| Qualified buffer memory | `Un\G`, `Un\HG` |
+
+This table is a candidate iQ-R support surface for request encoding and command execution. Actual
+value changes can still be constrained by the target PLC program, module configuration, or
+special-device semantics.
+
+## `melsec:iq-l` read/write candidate
+
+For `PlcProfile::MelsecIqL` / canonical profile `melsec:iq-l`, the observed serial MC surface is
+Q/L-shaped. iQ-L is kept as a separate public profile because CPU-side SLMP behavior can still
+look iQ-R-like.
+
+The iQ-L serial MC path uses Q/L-compatible request shapes. CPU-side SLMP behavior can still look
+iQ-R-like, so keep serial MC support and CPU/SLMP support separate when recording target evidence.
+
+| Route | Observed iQ-L serial MC status |
+| --- | --- |
+| Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
+| Plain bit read-only | `S` |
+| Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `ZR` |
+| Native-qualified read/write | `Un\G` |
+| Not supported | `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC`, `LTN`, `LSTN`, `LCN`, `LZ`, `RD`, `Un\HG` |
+| Not confirmed on observed setup | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` returned `0x4031` before write backup could be taken. |
+
+Use `Un\G` when qualified buffer access is validated for the target. The current observed iQ-L
+route uses native-qualified access with the Q/L-compatible `0080` wire shape; the `0601/1601`
+helper route is not valid for this target observation.
+
+Observed iQ-L native random-read coverage is narrower than batch-read coverage. Keep `TS`, `TC`,
+`STS`, `STC`, `CS`, `CC`, `DX`, and `DY` out of the native `random-read` route unless later manual
+evidence or target retest changes that rule.
+
+## `melsec:q-l` read/write candidate
+
+For `PlcProfile::MelsecQL` / canonical profile `melsec:q-l`, the following device families are
+currently listed as read/write candidates.
+
+| Route | Read/write device families |
+| --- | --- |
+| Plain bit devices | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `S`, `DX`, `DY` |
+| Plain word devices | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `ZR` |
+| Link-direct devices | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
+| Qualified buffer memory | `Un\G` |
+
+This table is a candidate Q/L support surface for request encoding and command execution. Actual
+value changes can still be constrained by the target PLC program, module configuration, or
+special-device semantics.
 
 ## Bit device families
 

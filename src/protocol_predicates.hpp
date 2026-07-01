@@ -6,7 +6,8 @@
 namespace mcprotocol::serial {
 
 [[nodiscard]] constexpr bool is_iq_r_series(const ProtocolConfig& config) noexcept {
-  return plc_series_from_profile(config.plc_profile) == PlcSeries::IQ_R;
+  const PlcSeries series = plc_series_from_profile(config.plc_profile);
+  return series == PlcSeries::IQ_R;
 }
 
 [[nodiscard]] constexpr bool is_ascii_mode(const ProtocolConfig& config) noexcept {

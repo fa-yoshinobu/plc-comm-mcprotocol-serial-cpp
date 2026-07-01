@@ -32,7 +32,11 @@ Use these terms consistently in validation reports.
 On the validated `RJ71C24-R2` setup, unsupported native commands should stay failed.
 Do not add fallback behavior that silently replaces them with other command families.
 
-## Qualified `G/HG` Policy
+## Qualified `Un\G` / `Un\HG` Policy
+
+Do not probe standalone `G...` or `HG...` as plain devices. Across MELSEC
+profiles, `G` and `HG` are only valid as qualified forms when the selected
+profile supports that route.
 
 On the current validated setup, `read-qualified-words` and `write-qualified-words` are the
 practical `U...\\G...` / `U...\\HG...` path because they reuse the validated `0601/1601`

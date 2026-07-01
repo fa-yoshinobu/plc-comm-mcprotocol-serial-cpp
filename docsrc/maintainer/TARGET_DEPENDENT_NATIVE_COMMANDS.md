@@ -67,11 +67,59 @@ password hold below.
 
 | Area | Command | Observed result | Current status |
 |---|---:|---|---|
+| 4C ASCII Format4 native extended access | `Jn\...`, `Un\G`, `Un\HG` | iQ-R and Q/L live targets both showed plain-device success but native extended access rejection/timeouts in ASCII Format4 | unresolved: measurement only; encoder/client bug not ruled out |
 | Remote password unlock | `1630` | historical 6-character unlock returned `0x7FE7`; `123456melsec` on `R08CPU` returned `0x7F22`; `abcdef1` on `R08CPU` returned `0x7FE7` | unresolved |
 | Remote password lock | `1631` | historical lock returned `0x7F22`; `123456melsec` on `R08CPU` also returned `0x7F22` | unresolved |
 
 Read-only sanity checks such as `cpu-model` and `read-words D0 1` remained available after the
 remote password failures.
+
+## 4C ASCII Format4 Native Extended Recheck
+
+Date: 2026-07-01
+
+This is a maintainer observation, not a user-facing support rule. The result may be target-side
+behavior, serial-module behavior, or a software bug in the encoder/client stack. Keep it as a
+focused recheck item until raw frames and manual examples are reviewed again.
+
+### Q/L target
+
+Conditions:
+
+- PLC: `Q06UDVCPU`
+- SLMP: `192.168.250.100:1025`, profile `q-l`
+- MC Serial: `COM3`, `19200 / 8E1`, station `0`
+- MC Serial profile: `melsec:q-l`
+- Frame: `c4-ascii`, MC Protocol 4C ASCII Format4
+- Sum-check: off
+
+Cross-verify summary:
+
+- Full run: `total: 91`, `ok: 84`, `ng: 7`
+- Plain devices passed on both SLMP and MC Serial.
+- NG items were only special/native routes: `J1\X0`, `J1\Y0`, `J1\B0`, `J1\W0`, `J1\SB10`,
+  `J1\SW10`, and `U2\G1000`.
+- Logs are in the cross-verify workspace:
+  `logs/format4_run_20260701_223923/`,
+  `logs/format4_j_readonly_20260701_224128/`,
+  `logs/format4_ug_readonly_20260701_224220/`.
+
+Additional direct MC Serial probes with the same Format4 settings:
+
+| Access | Result |
+|---|---|
+| `write-link-direct-bits J1\X0` | PLC error `0x7F22` |
+| `write-link-direct-bits J1\Y0` | PLC error `0x7F22` |
+| `write-link-direct-bits J1\B0` | PLC error `0x7F22` |
+| `write-link-direct-words J1\W0` | timeout |
+| `write-native-qualified-words U2\G1000` | PLC error `0x7F22` |
+| read-only `Jn\...` | PLC error `0x7F22` |
+| read-only `U2\G1000` | PLC error `0x7F22` |
+
+Interpretation: this Q/L run looks similar to the prior `melsec:iq-r` Format4 observation:
+regular/plain device access works, while native extended `Jn\...` and `Un\...` access does not.
+Do not treat this as proof of a PLC limitation yet. Preserve it as measurement evidence and recheck
+with raw `MC TX` / `MC RX` frame dumps before changing public support claims.
 
 ## Remote Password 1630/1631 Recheck
 

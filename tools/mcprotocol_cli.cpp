@@ -97,6 +97,7 @@ using mcprotocol::serial::parse_qualified_buffer_word_device;
 using mcprotocol::serial::parse_link_direct_device;
 using mcprotocol::serial::parse_plc_profile;
 using mcprotocol::serial::qualified_buffer_kind_name;
+using mcprotocol::serial::validate_qualified_buffer_helper_route;
 
 enum class CommandKind : std::uint8_t {
   None,
@@ -493,7 +494,7 @@ void print_usage() {
       "Notes:\n"
       "  remote-run defaults to no-force + no-clear. Use force or all-clear only when you intend that effect.\n"
       "  remote-pause defaults to no-force. remote-stop and latch-clear change PLC state.\n"
-      "  unlock/lock send the configured remote password as ASCII bytes; non-iQ-R profiles use exactly 4 chars, melsec:iq-r uses 6..32.\n"
+      "  unlock/lock send the configured remote password as ASCII bytes; non-iQ-R-compatible profiles use exactly 4 chars, melsec:iq-r uses 6..32.\n"
       "  error-clear sends C24 clear-error-information (1617); it is not the E71 COM.ERR-only variant.\n"
       "  remote-reset may complete without a response; this CLI treats a pure response-timeout after TX as success.\n"
       "  global-signal maps to C24 command 1618 on 2C/3C/4C; STATION defaults to 0.\n"
@@ -5209,6 +5210,11 @@ int main(int argc, char** argv) {
         print_status_error("Invalid qualified buffer device", status);
         return 2;
       }
+      status = validate_qualified_buffer_helper_route(options.protocol.plc_profile, device);
+      if (!status.ok()) {
+        print_status_error("Unsupported qualified buffer helper route", status);
+        return 2;
+      }
 
       std::uint32_t points = 0;
       if (!parse_u32(points_arg, points) || points == 0U || points > 960U) {
@@ -5354,6 +5360,11 @@ int main(int argc, char** argv) {
       status = parse_qualified_buffer_word_device(device_arg, device);
       if (!status.ok()) {
         print_status_error("Invalid qualified buffer device", status);
+        return 2;
+      }
+      status = validate_qualified_buffer_helper_route(options.protocol.plc_profile, device);
+      if (!status.ok()) {
+        print_status_error("Unsupported qualified buffer helper route", status);
         return 2;
       }
 
