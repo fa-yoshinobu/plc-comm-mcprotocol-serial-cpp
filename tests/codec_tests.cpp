@@ -36,6 +36,7 @@ using mcprotocol::serial::FrameKind;
 using mcprotocol::serial::GlobalSignalControlRequest;
 using mcprotocol::serial::GlobalSignalTarget;
 using mcprotocol::serial::HostBufferReadRequest;
+using mcprotocol::serial::HostBufferWriteRequest;
 using mcprotocol::serial::LinkDirectDevice;
 using mcprotocol::serial::LinkDirectMonitorRegistration;
 using mcprotocol::serial::LinkDirectMultiBlockReadBlock;
@@ -142,6 +143,12 @@ ProtocolConfig make_binary_c4_iqr_config() {
 ProtocolConfig make_binary_c4_iql_config() {
   ProtocolConfig config = make_binary_c4_config();
   config.plc_profile = PlcProfile::MelsecIqL;
+  return config;
+}
+
+ProtocolConfig make_binary_c4_iqf_config() {
+  ProtocolConfig config = make_binary_c4_config();
+  config.plc_profile = PlcProfile::MelsecIqF;
   return config;
 }
 
@@ -2639,6 +2646,14 @@ void test_encode_sm_sd_and_lz_device_codes() {
     status = CommandCodec::encode_random_read(config, request, request_data, request_data_size);
     assert(!status.ok());
     assert(status.code == StatusCode::InvalidArgument);
+
+    request_data_size = 0;
+    status = CommandCodec::encode_random_read(make_binary_c4_iqf_config(), request, request_data, request_data_size);
+    assert(status.ok());
+    const std::array<std::uint8_t, 10> expected_iqf {
+        0x03, 0x04, 0x00, 0x00, 0x00, 0x01, 0x0A, 0x00, 0x00, 0x62};
+    assert(request_data_size == expected_iqf.size());
+    assert(std::equal(expected_iqf.begin(), expected_iqf.end(), request_data.begin()));
   }
 
   {
@@ -2725,6 +2740,117 @@ void test_encode_batch_word_access_rejects_standalone_qualified_only_devices() {
         request_size);
     assert(!write_status.ok());
     assert(write_status.code == StatusCode::InvalidArgument);
+  }
+}
+
+void test_all_profiles_reject_standalone_g_hg_plain_access() {
+  const std::array<PlcProfile, 8> profiles {{
+      PlcProfile::MelsecIqR,
+      PlcProfile::MelsecIqL,
+      PlcProfile::MelsecIqF,
+      PlcProfile::MelsecQ,
+      PlcProfile::MelsecL,
+      PlcProfile::MelsecQnA,
+      PlcProfile::MelsecAnAAnU,
+      PlcProfile::MelsecA,
+  }};
+  const std::array<mcprotocol::serial::DeviceCode, 2> rejected {{
+      mcprotocol::serial::DeviceCode::G,
+      mcprotocol::serial::DeviceCode::HG,
+  }};
+  const std::array<std::uint16_t, 1> words {0x1234U};
+  const std::array<BitValue, 1> bits {BitValue::On};
+  std::array<std::uint8_t, 128> request_data {};
+  std::size_t request_size = 0;
+
+  for (const auto profile : profiles) {
+    auto config = make_binary_c4_config();
+    config.plc_profile = profile;
+    for (const auto code : rejected) {
+      Status status = CommandCodec::encode_batch_read_words(
+          config,
+          BatchReadWordsRequest {
+              .head_device = {.code = code, .number = 10},
+              .points = 1,
+          },
+          request_data,
+          request_size);
+      assert(!status.ok());
+      assert(status.code == StatusCode::InvalidArgument);
+
+      status = CommandCodec::encode_batch_write_words(
+          config,
+          BatchWriteWordsRequest {
+              .head_device = {.code = code, .number = 10},
+              .words = std::span<const std::uint16_t>(words.data(), words.size()),
+          },
+          request_data,
+          request_size);
+      assert(!status.ok());
+      assert(status.code == StatusCode::InvalidArgument);
+
+      status = CommandCodec::encode_batch_read_bits(
+          config,
+          BatchReadBitsRequest {
+              .head_device = {.code = code, .number = 10},
+              .points = 1,
+          },
+          request_data,
+          request_size);
+      assert(!status.ok());
+      assert(status.code == StatusCode::InvalidArgument);
+
+      status = CommandCodec::encode_batch_write_bits(
+          config,
+          BatchWriteBitsRequest {
+              .head_device = {.code = code, .number = 10},
+              .bits = std::span<const BitValue>(bits.data(), bits.size()),
+          },
+          request_data,
+          request_size);
+      assert(!status.ok());
+      assert(status.code == StatusCode::InvalidArgument);
+
+      const bool double_word_modes[] = {false, true};
+      for (const bool double_word : double_word_modes) {
+        const RandomReadItem read_item {
+            .device = {.code = code, .number = 10},
+            .double_word = double_word,
+        };
+        status = CommandCodec::encode_random_read(
+            config,
+            RandomReadRequest {.items = std::span<const RandomReadItem>(&read_item, 1)},
+            request_data,
+            request_size);
+        assert(!status.ok());
+        assert(status.code == StatusCode::InvalidArgument);
+
+        const RandomWriteWordItem write_item {
+            .device = {.code = code, .number = 10},
+            .value = 0x1234U,
+            .double_word = double_word,
+        };
+        status = CommandCodec::encode_random_write_words(
+            config,
+            std::span<const RandomWriteWordItem>(&write_item, 1),
+            request_data,
+            request_size);
+        assert(!status.ok());
+        assert(status.code == StatusCode::InvalidArgument);
+      }
+
+      const RandomWriteBitItem write_bit {
+          .device = {.code = code, .number = 10},
+          .value = BitValue::On,
+      };
+      status = CommandCodec::encode_random_write_bits(
+          config,
+          std::span<const RandomWriteBitItem>(&write_bit, 1),
+          request_data,
+          request_size);
+      assert(!status.ok());
+      assert(status.code == StatusCode::InvalidArgument);
+    }
   }
 }
 
@@ -4570,6 +4696,16 @@ void test_validate_qualified_buffer_helper_route_rejects_q_l_equivalent_profiles
   status = validate_qualified_buffer_helper_route(PlcProfile::MelsecIqL, hg_device);
   assert(status.code == StatusCode::UnsupportedConfiguration);
   assert(std::strcmp(status.message, "melsec:iq-l does not support Un\\HG; use Un\\G only") == 0);
+
+  status = validate_qualified_buffer_helper_route(PlcProfile::MelsecIqF, g_device);
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(std::strcmp(
+             status.message,
+             "melsec:iq-f qualified buffer helper route is disabled; use native-qualified Un\\G access") == 0);
+
+  status = validate_qualified_buffer_helper_route(PlcProfile::MelsecIqF, hg_device);
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(std::strcmp(status.message, "melsec:iq-f does not support Un\\HG; use Un\\G only") == 0);
 }
 
 void test_make_qualified_buffer_write_words_request_encodes_little_endian_bytes() {
@@ -5619,6 +5755,29 @@ void test_encode_random_write_words_allows_ltn_and_lstn() {
   }
 }
 
+void test_encode_random_write_words_allows_lz_on_iq_f() {
+  const auto config = make_binary_c4_iqf_config();
+  std::array<std::uint8_t, 32> request_data {};
+  std::size_t request_size = 0;
+
+  const RandomWriteWordItem item {
+      .device = {.code = mcprotocol::serial::DeviceCode::LZ, .number = 0},
+      .value = 0x12345678U,
+      .double_word = true,
+  };
+  const Status status = CommandCodec::encode_random_write_words(
+      config,
+      std::span<const RandomWriteWordItem>(&item, 1),
+      request_data,
+      request_size);
+  assert(status.ok());
+
+  const std::array<std::uint8_t, 14> expected {
+      0x02, 0x14, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x62, 0x78, 0x56, 0x34, 0x12};
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+}
+
 void test_encode_random_write_words_rejects_standalone_qualified_only_devices() {
   const auto config = make_binary_c4_iqr_config();
   std::array<std::uint8_t, 64> request_data {};
@@ -5923,6 +6082,297 @@ void test_melsec_l_rejects_s_writes() {
   assert(status.code == StatusCode::InvalidArgument);
 }
 
+void assert_s_writes_rejected_for_profile(const ProtocolConfig& config) {
+  std::array<std::uint8_t, 128> request_data {};
+  std::size_t request_size = 0;
+  const std::array<BitValue, 1> bits {BitValue::On};
+
+  const BatchReadBitsRequest read_request {
+      .head_device = {.code = mcprotocol::serial::DeviceCode::S, .number = 10},
+      .points = 1,
+  };
+  Status status = CommandCodec::encode_batch_read_bits(config, read_request, request_data, request_size);
+  assert(status.ok());
+
+  const BatchWriteBitsRequest batch_write_request {
+      .head_device = {.code = mcprotocol::serial::DeviceCode::S, .number = 10},
+      .bits = std::span<const BitValue>(bits.data(), bits.size()),
+  };
+  status = CommandCodec::encode_batch_write_bits(config, batch_write_request, request_data, request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  const RandomWriteBitItem random_write {
+      .device = {.code = mcprotocol::serial::DeviceCode::S, .number = 10},
+      .value = BitValue::On,
+  };
+  status = CommandCodec::encode_random_write_bits(
+      config,
+      std::span<const RandomWriteBitItem>(&random_write, 1),
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  const std::array<BitValue, 16> bit_block {};
+  const MultiBlockWriteBlock block {
+      .head_device = {.code = mcprotocol::serial::DeviceCode::S, .number = 0},
+      .points = 1,
+      .bit_block = true,
+      .bits = std::span<const BitValue>(bit_block.data(), bit_block.size()),
+  };
+  status = CommandCodec::encode_multi_block_write(
+      config,
+      mcprotocol::serial::MultiBlockWriteRequest {
+          .blocks = std::span<const MultiBlockWriteBlock>(&block, 1),
+      },
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+}
+
+void test_all_c4_profiles_reject_s_writes() {
+  auto q_config = make_binary_c4_config();
+  q_config.plc_profile = PlcProfile::MelsecQ;
+  assert_s_writes_rejected_for_profile(q_config);
+
+  assert_s_writes_rejected_for_profile(make_binary_c4_config());
+  assert_s_writes_rejected_for_profile(make_binary_c4_l_config());
+  assert_s_writes_rejected_for_profile(make_binary_c4_iqr_config());
+  assert_s_writes_rejected_for_profile(make_binary_c4_iql_config());
+  assert_s_writes_rejected_for_profile(make_binary_c4_iqf_config());
+}
+
+void test_iq_f_rejects_unsupported_plain_device_families() {
+  const auto config = make_binary_c4_iqf_config();
+  std::array<std::uint8_t, 256> request_data {};
+  std::size_t request_size = 0;
+  const std::array<std::uint16_t, 1> words {0x1234U};
+  const std::array<BitValue, 1> bits {BitValue::On};
+
+  const mcprotocol::serial::DeviceCode word_devices[] = {
+      mcprotocol::serial::DeviceCode::ZR,
+      mcprotocol::serial::DeviceCode::LTN,
+      mcprotocol::serial::DeviceCode::LSTN,
+  };
+  for (const auto code : word_devices) {
+    Status status = CommandCodec::encode_batch_read_words(
+        config,
+        BatchReadWordsRequest {.head_device = {.code = code, .number = 0}, .points = 1},
+        request_data,
+        request_size);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+
+    status = CommandCodec::encode_batch_write_words(
+        config,
+        BatchWriteWordsRequest {
+            .head_device = {.code = code, .number = 0},
+            .words = std::span<const std::uint16_t>(words.data(), words.size()),
+        },
+        request_data,
+        request_size);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+
+    const bool double_word = code == mcprotocol::serial::DeviceCode::LTN ||
+                             code == mcprotocol::serial::DeviceCode::LSTN;
+    const RandomReadItem read_item {.device = {.code = code, .number = 0}, .double_word = double_word};
+    status = CommandCodec::encode_random_read(
+        config,
+        RandomReadRequest {.items = std::span<const RandomReadItem>(&read_item, 1)},
+        request_data,
+        request_size);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+
+    const RandomWriteWordItem write_item {
+        .device = {.code = code, .number = 0},
+        .value = double_word ? 0x12345678U : 0x1234U,
+        .double_word = double_word,
+    };
+    status = CommandCodec::encode_random_write_words(
+        config,
+        std::span<const RandomWriteWordItem>(&write_item, 1),
+        request_data,
+        request_size);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+
+    const MultiBlockReadBlock read_block {.head_device = {.code = code, .number = 0}, .points = 1};
+    status = CommandCodec::encode_multi_block_read(
+        config,
+        MultiBlockReadRequest {.blocks = std::span<const MultiBlockReadBlock>(&read_block, 1)},
+        request_data,
+        request_size);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+  }
+
+  const mcprotocol::serial::DeviceCode bit_devices[] = {
+      mcprotocol::serial::DeviceCode::V,
+      mcprotocol::serial::DeviceCode::DX,
+      mcprotocol::serial::DeviceCode::DY,
+      mcprotocol::serial::DeviceCode::LTS,
+      mcprotocol::serial::DeviceCode::LTC,
+      mcprotocol::serial::DeviceCode::LSTS,
+      mcprotocol::serial::DeviceCode::LSTC,
+  };
+  for (const auto code : bit_devices) {
+    Status status = CommandCodec::encode_batch_read_bits(
+        config,
+        BatchReadBitsRequest {.head_device = {.code = code, .number = 0}, .points = 1},
+        request_data,
+        request_size);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+
+    status = CommandCodec::encode_batch_write_bits(
+        config,
+        BatchWriteBitsRequest {
+            .head_device = {.code = code, .number = 0},
+            .bits = std::span<const BitValue>(bits.data(), bits.size()),
+        },
+        request_data,
+        request_size);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+
+    const RandomWriteBitItem write_bit {.device = {.code = code, .number = 0}, .value = BitValue::On};
+    status = CommandCodec::encode_random_write_bits(
+        config,
+        std::span<const RandomWriteBitItem>(&write_bit, 1),
+        request_data,
+        request_size);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+
+    const MultiBlockReadBlock read_block {
+        .head_device = {.code = code, .number = 0},
+        .points = 1,
+        .bit_block = true,
+    };
+    status = CommandCodec::encode_multi_block_read(
+        config,
+        MultiBlockReadRequest {.blocks = std::span<const MultiBlockReadBlock>(&read_block, 1)},
+        request_data,
+        request_size);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+  }
+}
+
+void test_iq_f_rejects_unsupported_special_routes() {
+  const auto config = make_binary_c4_iqf_config();
+  std::array<std::uint8_t, 256> request_data {};
+  std::size_t request_size = 0;
+
+  const LinkDirectDevice link_word {
+      .network_number = 1,
+      .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0},
+  };
+  Status status = CommandCodec::encode_link_direct_batch_read_words(
+      config,
+      link_word,
+      1U,
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  const LinkDirectDevice link_bit {
+      .network_number = 1,
+      .device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0},
+  };
+  status = CommandCodec::encode_link_direct_batch_read_bits(
+      config,
+      link_bit,
+      1U,
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  const QualifiedBufferWordDevice hg_device {
+      .kind = QualifiedBufferDeviceKind::HG,
+      .module_number = 1,
+      .word_address = 0,
+  };
+  status = CommandCodec::encode_extended_batch_read_words(
+      config,
+      hg_device,
+      1U,
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  status = CommandCodec::encode_read_host_buffer(
+      config,
+      HostBufferReadRequest {.start_address = 0, .word_length = 1},
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+
+  const std::array<std::uint16_t, 1> words {0x1234U};
+  status = CommandCodec::encode_write_host_buffer(
+      config,
+      HostBufferWriteRequest {
+          .start_address = 0,
+          .words = std::span<const std::uint16_t>(words.data(), words.size()),
+      },
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+
+  status = CommandCodec::encode_read_module_buffer(
+      config,
+      ModuleBufferReadRequest {.start_address = 0, .bytes = 2, .module_number = 1},
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+
+  const std::array<std::byte, 2> bytes {std::byte {0x34}, std::byte {0x12}};
+  status = CommandCodec::encode_write_module_buffer(
+      config,
+      ModuleBufferWriteRequest {
+          .start_address = 0,
+          .module_number = 1,
+          .bytes = std::span<const std::byte>(bytes.data(), bytes.size()),
+      },
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+
+  const RandomReadItem monitor_item {
+      .device = {.code = mcprotocol::serial::DeviceCode::D, .number = 0},
+  };
+  status = CommandCodec::encode_register_monitor(
+      config,
+      MonitorRegistration {.items = std::span<const RandomReadItem>(&monitor_item, 1)},
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+
+  status = CommandCodec::encode_read_monitor(config, request_data, request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+
+  status = CommandCodec::encode_read_monitor(
+      config,
+      std::span<const RandomReadItem>(&monitor_item, 1),
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+}
+
 // Validate that 0406 multi-block read rejects long timer/counter/index devices
 // and qualified-only G/HG standalone heads.
 void test_encode_multi_block_read_rejects_long_devices_as_head() {
@@ -6094,6 +6544,7 @@ int main() {
   test_encode_sm_sd_and_lz_device_codes();
   test_encode_batch_write_words_ascii_order();
   test_encode_batch_word_access_rejects_standalone_qualified_only_devices();
+  test_all_profiles_reject_standalone_g_hg_plain_access();
   test_encode_extended_batch_read_words_ascii_matches_manual_shape();
   test_encode_extended_batch_read_words_binary_matches_capture_shape();
   test_encode_extended_batch_read_words_iq_l_g_uses_q_l_wire_shape();
@@ -6132,6 +6583,7 @@ int main() {
   test_encode_random_read_binary_ql_layout();
   test_encode_random_write_words_binary_iqr_layout();
   test_encode_random_write_words_binary_ql_layout();
+  test_encode_random_write_words_allows_lz_on_iq_f();
   test_encode_random_write_bits_ascii_matches_manual();
   test_encode_random_write_bits_ascii_iqr_shape();
   test_encode_random_write_bits_binary_iqr_layout();
@@ -6187,6 +6639,9 @@ int main() {
   test_encode_random_write_bits_binary_iqr_lcc_layout();
   test_iq_l_rejects_unsupported_plain_device_families();
   test_melsec_l_rejects_s_writes();
+  test_all_c4_profiles_reject_s_writes();
+  test_iq_f_rejects_unsupported_plain_device_families();
+  test_iq_f_rejects_unsupported_special_routes();
   test_encode_multi_block_read_rejects_long_devices_as_head();
   test_encode_multi_block_write_rejects_long_devices_as_head();
 

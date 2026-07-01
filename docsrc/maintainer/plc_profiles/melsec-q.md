@@ -31,7 +31,7 @@ modules.
 | MC Serial port | `COM3` |
 | MC Serial settings | `19200`, `8E1`, no RTS/CTS, station `0`, sum-check off |
 | SLMP peer | `192.168.250.100:1025` |
-| Main binary log | `D:\APP\plc-comm-slmp-mcprotocol-cross-verify\logs\full_q06udv_ql_spec_adjusted_20260701_2215\latest_results.json` |
+| Validation log | Local cross-verify run, stored outside this repository. |
 | Result summary | `total: 91`, `ok: 84`, `ng: 7`; all normal-device failures were excluded from the normal-device set because the NG cases were special routes. |
 
 The cross-verify tool still used the legacy serial profile string `melsec:q-l`

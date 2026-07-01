@@ -1,49 +1,106 @@
-# `melsec:iq-f` Profile Draft
+# `melsec:iq-f` Profile Specification
 
-Status: maintainer draft, not a user-facing support contract.
+Status: target-observed maintainer draft for the tested FX5 serial setups. This
+file is the current implementation basis, but it is not yet a user-facing
+support contract.
+
+This file records the current `melsec:iq-f` profile decision for MELSEC iQ-F /
+FX5 serial MC Protocol access. Validation addresses are test points only; do
+not infer device-number ranges from them.
 
 ## Target family
 
-MELSEC iQ-F / FX5 serial communication paths.
+MELSEC iQ-F / FX5 CPU modules accessed through FX5 serial communication paths.
 
-## Evidence status
+## Decision summary
 
-| Topic | Status | Notes |
-| --- | --- | --- |
-| Public profile string | Library policy | `melsec:iq-f` is a proposed explicit user-facing name for FX5/iQ-F targets. |
-| Manual source | Manual-derived source added | `SH-082624-J - MELSEC iQ-F FX5 User's Manual (Communication)` is available in the workspace. |
-| FX5 subcommand structure | Manual-derived, needs page-backed extraction | The FX5 manual describes subcommand bit fields for data size, device-reference width, and device-memory extension. |
-| Current repository behavior | Needs audit | Earlier FX5 tests used the older combined Q/L-style profile. Do not treat that as the final iQ-F profile. |
-| Device support list | Pending | FX5 device support must be separated from Q/L and iQ-R assumptions. |
-
-## Request-shape items to verify
-
-FX5/iQ-F must be checked from its own manual first.
-
-| Item | Verification note |
+| Area | Decision |
 | --- | --- |
-| Normal word/bit subcommands | Confirm which subcommand bit fields are required for each device-reference form. |
-| Extended device-memory bit | Confirm when the extension bit is required and which devices use it. |
-| Device code width | Confirm short and long forms separately. |
-| Device number width | Confirm short and long forms separately. |
-| 3C/4C frame behavior | Verify ASCII and binary separately. |
-| 1C/1E behavior | Do not assume supported unless the FX5 manual says so. |
+| Public profile string | Use `melsec:iq-f` for FX5/iQ-F serial targets. |
+| Internal series branch | Keep `PlcSeries::IQ_F` separate from Q/L, iQ-L, and iQ-R. |
+| Confirmed frame/code mode | C4 binary / Format5 is the current confirmed support basis. |
+| Normal devices | The plain device families listed below are supported through normal device access. |
+| Special devices | `Un\G` is supported only through the native-qualified route. `Un\HG` and `Jn\...` are not part of this profile. |
 
-## Device-support inventory to test
+## Evidence
 
-Do not inherit Q/L or iQ-R device lists automatically.
-
-| Route | Status |
+| Source | Finding |
 | --- | --- |
-| Plain bit/word devices | Pending. Start with ordinary safe devices, then special devices. |
-| `DX`, `DY`, `V`, `ZR` | Previous FX5 serial observations reported unsupported or outside the validated subset; retest under the explicit iQ-F profile before deciding. |
-| Random / multi-block / monitor | Pending. Previous observations must be reclassified by frame/profile. |
-| Host/module buffer | Pending. Previous FX5 serial observations reported unsupported or not applicable. |
-| Link direct `Jn\...` | Pending. Do not assume Q/L or iQ-R behavior. |
-| Qualified buffer `Un\G` / `Un\HG` | Pending. Do not assume supported. |
+| `SH-082624-J - MELSEC iQ-F FX5 User's Manual (Communication)`, physical PDF pages 695-696 / manual pages 693-694 | Lists 3C/4C device codes and FX5 device presence. |
+| `FX5UC-32MT/D`, CPU model code `0x4A91` | Initial read-only inventory through C4 binary Format5. |
+| `FX5U-32MR/DS`, CPU model code `0x4A41` | Representative reads, focused write/restore checks, native random checks, multi-block checks, and native-qualified `Un\G` read/write. |
 
-## Open questions
+Tested serial settings were `COM4`, `19200`, `8E1`, station `0`, sum-check
+off, C4 binary Format5. These settings describe the validation setup only.
 
-- Which FX5 manual tables define the exact serial MC Protocol device list?
-- Does FX5 require a profile-specific encoder rather than Q/L or iQ-R grouping?
-- Which previously observed FX5 failures are PLC limitations, module limitations, frame limitations, or local software bugs?
+## Confirmed request shape
+
+| Item | iQ-F serial MC behavior |
+| --- | --- |
+| Normal word subcommand | `0000` |
+| Normal bit subcommand | `0001` |
+| Extended word subcommand for `Un\G` | `0080` |
+| Device reference width | Q/L-compatible normal device form for C4 binary Format5. |
+| Native random double-word route | Required for `LCN` and `LZ`. |
+
+ASCII frames, 1C, and 1E are outside the current iQ-F support decision.
+
+## Confirmed support devices
+
+These are confirmed for `melsec:iq-f` on the tested FX5 serial targets.
+
+| Support class | Device families |
+| --- | --- |
+| Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB` |
+| Plain bit read-only | `S` |
+| Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R` |
+| Long counter state read | `LCS`, `LCC` through the long-state read route. |
+| Native random double-word read/write | `LCN`, `LZ` |
+| Native-qualified read/write | `Un\G` |
+
+## Dedicated route details
+
+The following families require route-specific handling. Do not silently fall
+back to ordinary plain-device access when one of these routes is requested.
+
+| Route | Confirmed behavior |
+| --- | --- |
+| `Un\G` native-qualified access | Use native device access (`0401/1401`) with extended subcommand `0080`. |
+| `Un\G` helper access | Reject the `0601/1601` helper route for iQ-F. The tested target returned `0x7E40` for module-buffer probes, and public access should remain native-qualified. |
+| `Un\HG` | Not available for FX5/iQ-F. |
+| `Jn\X/Y/B/W/SB/SW` link-direct access | Not available for this profile. |
+
+## Command-specific notes
+
+| Command family | Notes |
+| --- | --- |
+| Batch read/write | Confirmed for supported plain read/write families. `S` is read-only. |
+| Native random read | Confirmed for supported random-capable families, including `LCN` and `LZ` as double-word items. |
+| Native random write | Confirmed for supported read/write families except `S`. `LCN` and `LZ` require double-word items. |
+| Multi-block read/write | Confirmed for supported normal plain devices. Long-state and native-random-only families are not multi-block heads. |
+| Monitor `0801/0802` | Not supported for this profile; tested probes returned `0x7E40`. |
+| Host/module buffer | Not supported for this profile; tested `0613` host-buffer and `0601` module-buffer probes returned `0x7E40`. |
+
+## Excluded from iQ-F serial MC support
+
+| Category | Device families or routes |
+| --- | --- |
+| FX5 device not present in the checked manual table | `V`, `ZR`, `DX`, `DY` |
+| Long timer / long retentive timer families absent on FX5 | `LTS`, `LTC`, `LTN`, `LSTS`, `LSTC`, `LSTN` |
+| iQ-R CPU buffer memory | `Un\HG` |
+| Link-direct routes | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
+| Unsupported command routes | Monitor, host-buffer, and module-buffer helper paths |
+
+## Implementation guards
+
+| Guard | Current behavior |
+| --- | --- |
+| iQ-F unsupported plain devices | `V`, `ZR`, `DX`, `DY`, `LTS`, `LTC`, `LTN`, `LSTS`, `LSTC`, and `LSTN` are locally rejected under `melsec:iq-f`. |
+| iQ-F unsupported special routes | `Jn\...`, `Un\HG`, host/module buffer, and monitor paths are locally rejected under `melsec:iq-f`. |
+
+## Maintenance notes
+
+- Keep `melsec:iq-f` separate from Q/L and iQ-R even where the C4 binary request
+  shape is Q/L-compatible.
+- Keep serial MC support separate from any CPU-side Ethernet or SLMP capability.
+- Revisit ASCII, 1C, and 1E only if a dedicated FX5 validation pass is planned.

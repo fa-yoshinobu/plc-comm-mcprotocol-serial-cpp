@@ -49,6 +49,16 @@ struct QualifiedBufferWordDevice {
         StatusCode::UnsupportedConfiguration,
         "melsec:iq-l does not support Un\\HG; use Un\\G only");
   }
+  if (profile == PlcProfile::MelsecIqF && device.kind == QualifiedBufferDeviceKind::HG) {
+    return make_status(
+        StatusCode::UnsupportedConfiguration,
+        "melsec:iq-f does not support Un\\HG; use Un\\G only");
+  }
+  if (profile == PlcProfile::MelsecIqF) {
+    return make_status(
+        StatusCode::UnsupportedConfiguration,
+        "melsec:iq-f qualified buffer helper route is disabled; use native-qualified Un\\G access");
+  }
   if (profile == PlcProfile::MelsecIqL) {
     return make_status(
         StatusCode::UnsupportedConfiguration,

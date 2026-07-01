@@ -44,7 +44,7 @@ serial modules.
 | MC Serial port | `COM3` |
 | MC Serial settings | `19200`, `8E1`, no RTS/CTS, station `0`, sum-check off |
 | SLMP peer | `192.168.250.100:1025` |
-| Main binary log | `D:\APP\plc-comm-slmp-mcprotocol-cross-verify\logs\full_format5_lz_restored_20260701_103358\latest_results.json` |
+| Validation log | Local cross-verify run, stored outside this repository. |
 | Result summary | `total: 125`, `ok: 125`, `ng: 0` |
 
 ## Request-shape branch

@@ -201,7 +201,7 @@ struct LongStateReadSpec {
 /// \brief Parses a plain MC device string such as `D100`, `M100`, `X10`, or `B20`.
 ///
 /// This helper is intentionally limited to plain device syntax. It does not parse `Jn\\...` link-
-/// direct addresses or helper-qualified `U...\\G...` addresses.
+/// direct addresses, helper-qualified `U...\\G...` addresses, or standalone `G` / `HG`.
 [[nodiscard]] inline Status parse_device_address(
     std::string_view text,
     DeviceAddress& out_device) noexcept {

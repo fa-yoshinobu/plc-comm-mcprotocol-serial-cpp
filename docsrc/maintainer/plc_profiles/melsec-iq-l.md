@@ -64,7 +64,7 @@ back to ordinary plain-device access when one of these routes is requested.
 | --- | --- |
 | `Un\G` native-qualified access | Use native device access (`0401/1401`) with Q/L-compatible extended subcommand `0080`. |
 | `Un\G` helper access | Reject the `0601/1601` helper route for iQ-L; it can read a different target value from the native-qualified route. |
-| Standalone `G` | Not a plain device. Require the qualified `Un\G` form. |
+| Standalone `G` / `HG` | Not plain devices for any MELSEC profile. Use qualified `Un\G` / `Un\HG` forms only when the selected profile supports them. |
 | `Jn\X/Y/B/W/SB/SW` link-direct access | Not confirmed on the observed setup; read attempts returned `0x4031`, so write was not attempted. |
 
 ## Command-specific notes

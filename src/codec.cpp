@@ -1230,6 +1230,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_link_direct_word_device(
     const ProtocolConfig& config,
     const LinkDirectDevice& device) noexcept {
+  if (config.plc_profile == PlcProfile::MelsecIqF) {
+    return invalid_argument("melsec:iq-f does not support link-direct devices");
+  }
   if (is_ascii_mode(config) && device.network_number > 0x0FFFU) {
     return invalid_argument("ASCII link-direct network number must be in range 0x000..0xFFF");
   }
@@ -1242,6 +1245,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_link_direct_bit_device(
     const ProtocolConfig& config,
     const LinkDirectDevice& device) noexcept {
+  if (config.plc_profile == PlcProfile::MelsecIqF) {
+    return invalid_argument("melsec:iq-f does not support link-direct devices");
+  }
   if (is_ascii_mode(config) && device.network_number > 0x0FFFU) {
     return invalid_argument("ASCII link-direct network number must be in range 0x000..0xFFF");
   }
@@ -1300,6 +1306,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const QualifiedBufferWordDevice& device) noexcept {
   if (device.kind == QualifiedBufferDeviceKind::HG) {
     const PlcSeries series = plc_series_from_profile(config.plc_profile);
+    if (series == PlcSeries::IQ_F) {
+      return invalid_argument("HG device extension access is not available for MELSEC iQ-F");
+    }
     if (series == PlcSeries::IQ_L) {
       return invalid_argument("HG device extension access is not available for MELSEC iQ-L");
     }
@@ -1994,6 +2003,20 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   }
 }
 
+[[nodiscard]] constexpr bool supports_random_lz_device(const ProtocolConfig& config) noexcept {
+  const PlcSeries series = plc_series_from_profile(config.plc_profile);
+  return series == PlcSeries::IQ_R || series == PlcSeries::IQ_F;
+}
+
+[[nodiscard]] constexpr bool is_random_device_unsupported_by_profile(
+    const ProtocolConfig& config,
+    DeviceCode code) noexcept {
+  if (code == DeviceCode::LZ) {
+    return !supports_random_lz_device(config);
+  }
+  return is_iq_r_only_device_code(code) && !is_iq_r_series(config);
+}
+
 [[nodiscard]] constexpr bool is_iq_l_unsupported_plain_device_code(DeviceCode code) noexcept {
   switch (code) {
     case DeviceCode::LTS:
@@ -2014,6 +2037,24 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   }
 }
 
+[[nodiscard]] constexpr bool is_iq_f_unsupported_plain_device_code(DeviceCode code) noexcept {
+  switch (code) {
+    case DeviceCode::V:
+    case DeviceCode::DX:
+    case DeviceCode::DY:
+    case DeviceCode::LTS:
+    case DeviceCode::LTC:
+    case DeviceCode::LTN:
+    case DeviceCode::LSTS:
+    case DeviceCode::LSTC:
+    case DeviceCode::LSTN:
+    case DeviceCode::ZR:
+      return true;
+    default:
+      return false;
+  }
+}
+
 [[nodiscard]] Status validate_iq_l_plain_device_support(
     const ProtocolConfig& config,
     DeviceCode code,
@@ -2024,13 +2065,33 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
+[[nodiscard]] Status validate_iq_f_plain_device_support(
+    const ProtocolConfig& config,
+    DeviceCode code,
+    const char* message) noexcept {
+  if (config.plc_profile == PlcProfile::MelsecIqF && is_iq_f_unsupported_plain_device_code(code)) {
+    return invalid_argument(message);
+  }
+  return ok_status();
+}
+
+[[nodiscard]] Status validate_profile_plain_device_support(
+    const ProtocolConfig& config,
+    DeviceCode code,
+    const char* message) noexcept {
+  const Status iq_l_status = validate_iq_l_plain_device_support(config, code, message);
+  if (!iq_l_status.ok()) {
+    return iq_l_status;
+  }
+  return validate_iq_f_plain_device_support(config, code, message);
+}
+
 [[nodiscard]] Status validate_profile_plain_write_support(
     const ProtocolConfig& config,
     DeviceCode code,
     const char* message) noexcept {
-  if ((config.plc_profile == PlcProfile::MelsecIqL ||
-       config.plc_profile == PlcProfile::MelsecL) &&
-      code == DeviceCode::S) {
+  (void)config;
+  if (code == DeviceCode::S) {
     return invalid_argument(message);
   }
   return ok_status();
@@ -2099,9 +2160,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (spec == nullptr || device.code == DeviceCode::LZ || is_qualified_only_device(device.code)) {
     return invalid_argument(message);
   }
-  const Status iq_l_status = validate_iq_l_plain_device_support(config, device.code, message);
-  if (!iq_l_status.ok()) {
-    return iq_l_status;
+  const Status profile_status = validate_profile_plain_device_support(config, device.code, message);
+  if (!profile_status.ok()) {
+    return profile_status;
   }
   if (is_iq_r_only_device_code(device.code) && !is_iq_r_series(config)) {
     return invalid_argument(message);
@@ -2121,18 +2182,18 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (is_qualified_only_device(item.device.code)) {
     return invalid_argument(item.double_word ? dword_message : word_message);
   }
-  const Status iq_l_status = validate_iq_l_plain_device_support(
+  const Status profile_status = validate_profile_plain_device_support(
       config,
       item.device.code,
       item.double_word ? dword_message : word_message);
-  if (!iq_l_status.ok()) {
-    return iq_l_status;
+  if (!profile_status.ok()) {
+    return profile_status;
   }
   if (requires_random_dword_access(item.device.code) != item.double_word &&
       requires_random_dword_access(item.device.code)) {
     return invalid_argument(item.double_word ? dword_message : word_message);
   }
-  if (is_iq_r_only_device_code(item.device.code) && !is_iq_r_series(config)) {
+  if (is_random_device_unsupported_by_profile(config, item.device.code)) {
     return invalid_argument(item.double_word ? dword_message : word_message);
   }
   if (is_long_contact_coil_device(item.device.code)) {
@@ -2153,18 +2214,18 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (is_qualified_only_device(item.device.code)) {
     return invalid_argument(item.double_word ? dword_message : word_message);
   }
-  const Status iq_l_status = validate_iq_l_plain_device_support(
+  const Status profile_status = validate_profile_plain_device_support(
       config,
       item.device.code,
       item.double_word ? dword_message : word_message);
-  if (!iq_l_status.ok()) {
-    return iq_l_status;
+  if (!profile_status.ok()) {
+    return profile_status;
   }
   if (requires_random_dword_access(item.device.code) != item.double_word &&
       requires_random_dword_access(item.device.code)) {
     return invalid_argument(item.double_word ? dword_message : word_message);
   }
-  if (is_iq_r_only_device_code(item.device.code) && !is_iq_r_series(config)) {
+  if (is_random_device_unsupported_by_profile(config, item.device.code)) {
     return invalid_argument(item.double_word ? dword_message : word_message);
   }
   if (is_long_contact_coil_device(item.device.code)) {
@@ -3555,12 +3616,12 @@ Status encode_batch_read_bits(
   if (!bit_status.ok()) {
     return bit_status;
   }
-  const Status iq_l_status = validate_iq_l_plain_device_support(
+  const Status profile_status = validate_profile_plain_device_support(
       config,
       request.head_device.code,
-      "Batch read bits does not support this device for melsec:iq-l");
-  if (!iq_l_status.ok()) {
-    return iq_l_status;
+      "Batch read bits does not support this device for this PLC profile");
+  if (!profile_status.ok()) {
+    return profile_status;
   }
   if (is_long_timer_status_block_device(request.head_device.code)) {
     return invalid_argument("Batch read bits does not support long timer contact/coil devices");
@@ -4008,12 +4069,12 @@ Status encode_batch_write_bits(
   if (!bit_status.ok()) {
     return bit_status;
   }
-  const Status iq_l_status = validate_iq_l_plain_device_support(
+  const Status profile_status = validate_profile_plain_device_support(
       config,
       request.head_device.code,
-      "Batch write bits does not support this device for melsec:iq-l");
-  if (!iq_l_status.ok()) {
-    return iq_l_status;
+      "Batch write bits does not support this device for this PLC profile");
+  if (!profile_status.ok()) {
+    return profile_status;
   }
   const Status profile_write_status = validate_profile_plain_write_support(
       config,
@@ -4680,12 +4741,12 @@ Status encode_random_write_bits(
       if (!bit_status.ok()) {
         return bit_status;
       }
-      const Status iq_l_status = validate_iq_l_plain_device_support(
+      const Status profile_status = validate_profile_plain_device_support(
           config,
           item.device.code,
-          "1E random write bits does not support this device for melsec:iq-l");
-      if (!iq_l_status.ok()) {
-        return iq_l_status;
+          "1E random write bits does not support this device for this PLC profile");
+      if (!profile_status.ok()) {
+        return profile_status;
       }
       const Status profile_write_status = validate_profile_plain_write_support(
           config,
@@ -4740,12 +4801,12 @@ Status encode_random_write_bits(
     if (!bit_status.ok()) {
       return bit_status;
     }
-    const Status iq_l_status = validate_iq_l_plain_device_support(
+    const Status profile_status = validate_profile_plain_device_support(
         config,
         item.device.code,
-        "Random write bits does not support this device for melsec:iq-l");
-    if (!iq_l_status.ok()) {
-      return iq_l_status;
+        "Random write bits does not support this device for this PLC profile");
+    if (!profile_status.ok()) {
+      return profile_status;
     }
     const Status profile_write_status = validate_profile_plain_write_support(
         config,
@@ -4966,6 +5027,13 @@ Status encode_multi_block_read(
     if (is_multi_block_excluded_device(block.head_device.code)) {
       return invalid_argument("Multi-block read does not support long timer/counter/index devices as head device");
     }
+    const Status profile_status = validate_profile_plain_device_support(
+        config,
+        block.head_device.code,
+        "Multi-block read does not support this device for this PLC profile");
+    if (!profile_status.ok()) {
+      return profile_status;
+    }
     if (block.bit_block) {
       ++bit_blocks;
     } else {
@@ -5127,6 +5195,13 @@ Status encode_multi_block_write(
     }
     if (is_multi_block_excluded_device(block.head_device.code)) {
       return invalid_argument("Multi-block write does not support long timer/counter/index devices as head device");
+    }
+    const Status profile_status = validate_profile_plain_device_support(
+        config,
+        block.head_device.code,
+        "Multi-block write does not support this device for this PLC profile");
+    if (!profile_status.ok()) {
+      return profile_status;
     }
     const Status profile_write_status = validate_profile_plain_write_support(
         config,
@@ -5409,6 +5484,12 @@ Status encode_register_monitor(
   if (!c1_status.ok()) {
     return c1_status;
   }
+  if (config.plc_profile == PlcProfile::MelsecIqF) {
+    (void)request;
+    (void)out_request_data;
+    (void)out_size;
+    return unsupported("melsec:iq-f does not support monitor registration");
+  }
   if (request.items.empty()) {
     return invalid_argument("Monitor registration requires at least one item");
   }
@@ -5569,6 +5650,11 @@ Status encode_read_monitor(
   if (is_c1_frame(config)) {
     return invalid_argument("1C monitor read requires registered item metadata");
   }
+  if (config.plc_profile == PlcProfile::MelsecIqF) {
+    (void)out_request_data;
+    (void)out_size;
+    return unsupported("melsec:iq-f does not support monitor read");
+  }
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x0802U, 0x0000U)) {
     return buffer_too_small("Monitor read request buffer is too small");
@@ -5589,6 +5675,12 @@ Status encode_read_monitor(
   const Status c1_status = validate_c1_supported_config(config);
   if (!c1_status.ok()) {
     return c1_status;
+  }
+  if (config.plc_profile == PlcProfile::MelsecIqF) {
+    (void)items;
+    (void)out_request_data;
+    (void)out_size;
+    return unsupported("melsec:iq-f does not support monitor read");
   }
   if (!is_c1_frame(config)) {
     if (is_e1_frame(config)) {
@@ -6125,6 +6217,12 @@ Status encode_read_host_buffer(
     (void)out_size;
     return unsupported("1E frame does not define host-buffer access");
   }
+  if (config.plc_profile == PlcProfile::MelsecIqF) {
+    (void)request;
+    (void)out_request_data;
+    (void)out_size;
+    return unsupported("melsec:iq-f does not support host-buffer access");
+  }
   const Status route_status = validate_connected_station_only_command_config(
       config,
       "Host buffer read is available only for the connected station route");
@@ -6181,6 +6279,12 @@ Status encode_write_host_buffer(
     (void)out_request_data;
     (void)out_size;
     return unsupported("1E frame does not define host-buffer access");
+  }
+  if (config.plc_profile == PlcProfile::MelsecIqF) {
+    (void)request;
+    (void)out_request_data;
+    (void)out_size;
+    return unsupported("melsec:iq-f does not support host-buffer access");
   }
   const Status route_status = validate_connected_station_only_command_config(
       config,
@@ -6262,6 +6366,12 @@ Status encode_read_module_buffer(
   const Status c1_status = validate_c1_supported_config(config);
   if (!c1_status.ok()) {
     return c1_status;
+  }
+  if (config.plc_profile == PlcProfile::MelsecIqF) {
+    (void)request;
+    (void)out_request_data;
+    (void)out_size;
+    return unsupported("melsec:iq-f does not support module-buffer access");
   }
   if (is_e1_frame(config)) {
     if (request.bytes == 0U || request.bytes > 256U) {
@@ -6355,6 +6465,12 @@ Status encode_write_module_buffer(
   const Status c1_status = validate_c1_supported_config(config);
   if (!c1_status.ok()) {
     return c1_status;
+  }
+  if (config.plc_profile == PlcProfile::MelsecIqF) {
+    (void)request;
+    (void)out_request_data;
+    (void)out_size;
+    return unsupported("melsec:iq-f does not support module-buffer access");
   }
   if (is_e1_frame(config)) {
     if (request.bytes.empty() || request.bytes.size() > 256U) {
