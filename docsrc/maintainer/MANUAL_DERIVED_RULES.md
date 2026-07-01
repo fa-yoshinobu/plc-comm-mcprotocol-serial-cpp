@@ -25,7 +25,12 @@ Keep these rules aligned with the current MELSEC serial manuals and validated ha
   - the third word holds contact/coil bits
   - `0x0001 = coil`, `0x0002 = contact`
 - Treat `LCS/LCC` as long-state helper targets that use direct bit access internally.
-- Do not treat ordinary direct `read-bits` calls for `LTS/LTC/LSTS/LSTC/LCS/LCC` as part of the supported public interface; use the long-state helper.
+- Do not treat ordinary direct `read-bits` calls for `LTS/LTC/LSTS/LSTC` as part of the supported public interface; use the long-state helper.
+
+## Link-Direct Access
+
+- Link-direct `Jn\...` helpers intentionally accept only `X/Y/B/SB` bit devices and `W/SW` word devices.
+- Do not map `LCS/LCC` long-state names onto link-direct access; use the long-state helper for those devices.
 
 ## Qualified Access
 
