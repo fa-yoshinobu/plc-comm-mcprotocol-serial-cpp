@@ -103,3 +103,4 @@ therefore excluded from `melsec:q` support.
 | --- | --- |
 | Batch read/write | Confirmed for all supported plain read/write families. |
 | Native random read | Confirmed for `DX` and `DY`. Returned `0x4032` for `TS`, `TC`, `STS`, `STC`, `CS`, and `CC`. Treat this as a random-read limitation, not a batch-read exclusion. |
+| Native multi-block read/write (`0406`/`1406`) | Confirmed on the tested Q serial path for supported plain devices. Do not copy the SLMP built-in-Ethernet Q-series block-command guard into this serial profile without fresh serial-module evidence. |

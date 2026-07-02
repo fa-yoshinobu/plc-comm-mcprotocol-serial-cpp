@@ -85,6 +85,7 @@ ordinary plain-device access when one of these routes is requested.
 | Batch read/write | Confirmed for all supported plain read/write families. `S` write was observed to succeed on the tested setup, but the implementation rejects `S` write for `melsec:l` until the route and software behavior are rechecked. |
 | Native random read | Confirmed for `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `SB`, `S`, `DX`, `DY`, `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, and `ZR`. Returned `0x4032` for `TS`, `TC`, `STS`, `STC`, `CS`, and `CC`. Treat this as a random-read limitation, not a batch-read exclusion. |
 | Native random write | Confirmed for all supported plain read/write families. `S` write was observed to succeed, but the implementation rejects it because it is not part of the supported write surface. |
+| Native multi-block read/write (`0406`/`1406`) | Confirmed on the tested L serial path for supported plain devices. Treat this as serial-module evidence, separate from SLMP built-in-Ethernet Q-series block-command behavior. |
 | Native-qualified read/write | Confirmed for `Un\G` through the native-qualified route. |
 
 ## Excluded from current L support
