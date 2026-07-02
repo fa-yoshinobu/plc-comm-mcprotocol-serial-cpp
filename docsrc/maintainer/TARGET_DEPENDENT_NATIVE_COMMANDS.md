@@ -82,9 +82,6 @@ both iQ-R and Q/L live targets. The section is kept as the recheck record; the
 full analysis and verification tables are in
 [FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md](FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md).
 
-The analysis handoff summary is maintained in
-[FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md](FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md).
-
 Update 2026-07-02: desk analysis against SH-080003-AF identified the root
 cause as a client encoder bug. The ASCII extended device specification omits
 the trailing device-modification field (`000` for Q/L subcommands, `0000` for
@@ -102,6 +99,8 @@ Post-fix iQ-R direct recheck settings:
 - Sum-check: off
 - Note: the serial module is configured for one MC protocol format at a time;
   do not expect Format4 ASCII and Format5 Binary to respond simultaneously.
+  A Format4/Format5 setting mismatch is a configuration issue, not a password
+  symptom.
 
 Post-fix iQ-R direct recheck result (`R120PCPU`, `cpu-model` `0x4844`):
 
@@ -136,7 +135,7 @@ Conditions:
 - SLMP: `192.168.250.100:1025`, Q/L-compatible profile
 - MC Serial: `COM3`, `19200 / 8E1`, station `0`
 - MC Serial profile: `melsec:q`
-- Frame: `c4-ascii`, MC Protocol 4C ASCII Format4
+- Frame: `c4-ascii-f4`, MC Protocol 4C ASCII Format4
 - Sum-check: off
 
 Cross-verify summary:
@@ -184,6 +183,18 @@ same serial settings, `c4-ascii-f4`, `melsec:q`, post-fix binary):
 
 Every item in the pre-fix NG list passed. The Q/L side is closed; the earlier
 NG table above is historical pre-fix evidence.
+
+Additional Q/L control check after the target was intentionally set to Format4
+on 2026-07-02:
+
+| Access | Result |
+|---|---|
+| `read-words D0 1` | OK, `0x0000` |
+| `cpu-model` | OK, `Q06UDVCPU` / `0x0368` |
+
+This confirms that the active Q serial path currently responds to Format4 when
+the module setting and CLI frame mode match. It is independent of remote
+password handling.
 
 ## Remote Password 1630/1631 Recheck
 
@@ -293,6 +304,9 @@ The validated same-channel sequence is `remote-stop` -> `latch-clear` -> `remote
   into STOP from the same channel.
 - `LZ1` native `1402` is resolved on the connected `R08CPU`; the earlier `R120PCPU` unchanged
   readback remains historical target-dependent evidence, not an encoder bug.
+- 4C ASCII Format4 native extended access is resolved and verified on iQ-R and
+  Q/L. A Format4/Format5 mismatch must be diagnosed as serial-module
+  configuration, not as remote-password behavior.
 - The only remaining active hold here is remote password `1630` / `1631`.
 - The remaining remote-password result looks more like target-side remote-password
   applicability/configuration than a general serial-link failure.

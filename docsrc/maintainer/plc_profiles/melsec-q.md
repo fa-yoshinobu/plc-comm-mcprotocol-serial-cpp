@@ -18,7 +18,7 @@ modules.
 | Public profile string | Library policy | `melsec:q` is the explicit Q-series user-facing name. |
 | Manual family | Manual-derived family name | MC Protocol manuals distinguish Q/L and iQ-R request-shape tables. |
 | Current repository behavior | Q/L request-shape branch | `melsec:q` maps to the Q/L serial request-shape branch while remaining a separate public profile. |
-| Hardware observations | Confirmed for tested target | `Q06UDVCPU` with `QJ71C24N`, tested on 2026-07-01. |
+| Hardware observations | Confirmed for tested target | `Q06UDVCPU` with `QJ71C24N`, tested on 2026-07-01 and rechecked on 2026-07-02. |
 | Normal device support list | Confirmed for tested target | Normal plain devices below passed MC Serial and SLMP cross-checks. |
 | Special routes | Confirmed with dedicated routes | Link-direct and native-qualified routes are supported only through their dedicated API routes. |
 
@@ -32,7 +32,7 @@ modules.
 | MC Serial settings | `19200`, `8E1`, no RTS/CTS, station `0`, sum-check off |
 | SLMP peer | `192.168.250.100:1025` |
 | Validation log | Local cross-verify run, stored outside this repository. |
-| Result summary | `total: 91`, `ok: 84`, `ng: 7`; all normal-device failures were excluded from the normal-device set because the NG cases were special routes. |
+| Result summary | Initial pre-fix cross-verify was `total: 91`, `ok: 84`, `ng: 7`; the 7 NG cases were special/native routes. After the ASCII native-extension fix, the special routes passed direct recheck. |
 
 Because the target is Q-series hardware, this evidence is assigned to the
 explicit `melsec:q` profile.
@@ -46,7 +46,7 @@ explicit `melsec:q` profile.
 | Extended word subcommand | `0080` style. |
 | Extended bit subcommand | `0081` style. |
 | Device reference width | Shorter Q/L-style form for normal devices. |
-| Confirmed frame/code modes | C4 binary only for the current profile decision. C4 ASCII Format4 is not part of this support decision. |
+| Confirmed frame/code modes | C4 binary / Format5 and C4 ASCII / Format4 are confirmed for the tested Q target. The serial module must be configured for the same format selected by the client; Format4 and Format5 are not expected to respond simultaneously. |
 
 ## Confirmed support devices
 
@@ -68,13 +68,10 @@ device strings.
 
 | Route | Observed status |
 | --- | --- |
-| `Jn\X/Y/B` link-direct bits | Read/write supported through the link-direct route on C4 binary. Representative addresses were used only as validation points; do not infer device-number restrictions from them. |
-| `Jn\W` link-direct words | Read/write supported through the link-direct route on C4 binary. Representative addresses were used only as validation points; do not infer device-number restrictions from them. |
+| `Jn\X/Y/B` link-direct bits | Read/write supported through the link-direct route on C4 binary and post-fix C4 ASCII Format4. Representative addresses were used only as validation points; do not infer device-number restrictions from them. |
+| `Jn\W` link-direct words | Read/write supported through the link-direct route on C4 binary and post-fix C4 ASCII Format4. Representative addresses were used only as validation points; do not infer device-number restrictions from them. |
 | `Jn\SB/SW` link-direct special devices | Read supported. Write commands returned success on the tested Q target, but the readback value did not change; keep these as read-only support. |
-| `Un\G` native qualified | Supported through the native device-access route on C4 binary. The validated address was only a test point; do not infer a device-number restriction from it. |
-
-ASCII Format4 observations are intentionally excluded from the current
-`melsec:q` support decision.
+| `Un\G` native qualified | Supported through the native device-access route on C4 binary and post-fix C4 ASCII Format4. The validated address was only a test point; do not infer a device-number restriction from it. |
 
 For `Un\G`, use the native-qualified route (`0401/1401` with subcommand `0080`)
 as the correct `melsec:q` route. Add an implementation guard so `Un\G` cannot

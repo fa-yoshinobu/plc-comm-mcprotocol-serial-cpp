@@ -1,8 +1,9 @@
 # 4C ASCII Format4 Native Extension Analysis Packet
 
-Status: resolved 2026-07-02. The issue was a client encoder bug (missing
-trailing ASCII device-modification field); the fix is verified on live iQ-R
-and Q/L targets. This packet is kept as the analysis and verification record.
+Status: resolved 2026-07-02. The native-extended issue was a client encoder bug
+(missing trailing ASCII device-modification field); the fix is verified on live
+iQ-R and Q/L targets. This packet is kept as the analysis and verification
+record.
 
 ## Purpose
 
@@ -16,10 +17,14 @@ worked in the observed runs. The failing area is native extended access:
 - Link-direct devices: `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW`
 - Native-qualified unit/CPU-buffer devices: `Un\G`, `Un\HG`
 
+Password handling is a separate command-family topic. The Format4 symptoms in
+this record are explained by serial-module format selection and request-frame
+shape, not by PLC password state.
+
 ## Root cause identified (2026-07-02)
 
-Desk analysis against SH-080003-AF closed the open questions below. The failure
-is a client-side encoder bug, not a target or serial-module limitation.
+Desk analysis against SH-080003-AF answered the analysis questions below. The
+failure is a client-side encoder bug, not a target or serial-module limitation.
 
 ### Finding
 
@@ -61,7 +66,7 @@ targets.
 - Plain devices pass because they do not use the extension layout. iQ-R and
   Q/L targets fail identically because both go through the same encoder path.
 
-### Manual answers to the "Questions for analysis" below
+### Manual answers
 
 1. Yes. ASCII Format1-4 supports the extension specification; SH-080003-AF
    p.430/p.432 documents the ASCII message formats for `Jn\` and `Un\G`.
@@ -97,6 +102,10 @@ target (`R120PCPU`, subcommands `0082`/`0083`) and the live Q/L target
 lists was re-run and passed. No follow-up remains for this issue.
 
 Do not block ordinary plain-device Format4 traffic based only on this issue.
+On 2026-07-02, after the Q serial module was intentionally set to MC Protocol
+Format4, a fresh `melsec:q` control check read `D0` and `cpu-model`
+successfully on `Q06UDVCPU`. This confirms that current basic Q Format4
+communication works when the module setting and CLI frame mode match.
 
 ## Observed targets
 
@@ -109,7 +118,7 @@ Do not block ordinary plain-device Format4 traffic based only on this issue.
 
 | Source | What it contains |
 | --- | --- |
-| `plc-comm-slmp-mcprotocol-cross-verify/MC_PROTOCOL_SETTINGS.md` | Cross-verify results, Format4 NG breakdown, raw-frame interpretation, and `0x7F22` analysis. |
+| External cross-verify logs | Cross-verify results, Format4 NG breakdown, raw-frame interpretation, and `0x7F22` analysis. Keep exact workspace paths out of this document. |
 | `docsrc/maintainer/TARGET_DEPENDENT_NATIVE_COMMANDS.md` | Maintainer hold item and focused Q/L recheck summary. |
 | `docsrc/maintainer/MANUAL_DERIVED_RULES.md` | Provenance rule for separating manual-derived request shape, implementation policy, and hardware observation. |
 
@@ -123,6 +132,7 @@ Do not block ordinary plain-device Format4 traffic based only on this issue.
 | iQ-R post-fix direct recheck | Format4 ASCII normal `D0` read passed. `U3E0\G10` and `U3E0\HG11` read passed. An interim `J1\X10` / `J1\W10` partial-response NG was reproduced only with the stale pre-fix binary; the rebuilt post-fix binary passed all `Jn\...` reads, writes, random, multi-block, and monitor checks (see hardware recheck section). |
 | Q/L `Q06UDVCPU` Format4 recheck | `total: 91`, `ok: 84`, `ng: 7`. Plain devices all passed. NG items were `J1\X0`, `J1\Y0`, `J1\B0`, `J1\W0`, `J1\SB10`, `J1\SW10`, and `U2\G1000`. |
 | Q/L post-fix direct recheck | All 7 previous NG items passed as reads, and the previously failing write routes passed with readback/restore. Random (0403), multi-block (0406), and monitor (0801/0802) link-direct reads also passed. |
+| Q/L Format4 control check after module setting confirmation | `read-words D0 1` returned `0x0000`; `cpu-model` returned `Q06UDVCPU` / `0x0368`. |
 
 ## Post-fix iQ-R hardware recheck
 
@@ -225,6 +235,17 @@ Every access in the original Q/L NG list (`J1\X0`, `J1\Y0`, `J1\B0`, `J1\W0`,
 `J1\SB10`, `J1\SW10`, `U2\G1000`) passed, including the previously failing
 write routes. This closes the Q/L side of the issue.
 
+Additional same-day control check after confirming the target was set to
+Format4:
+
+| Access | Result |
+| --- | --- |
+| `read-words D0 1` | OK, `0x0000` |
+| `cpu-model` | OK, `Q06UDVCPU` / `0x0368` |
+
+This check confirms the active serial-module format setting, not password
+state.
+
 ## Failure details
 
 ### iQ-R observed failures
@@ -290,11 +311,13 @@ identified" above.
 
 ## Manual facts already checked
 
-- SH-081249-L lists `7F22H` as an MC protocol command error. The listed causes
-  are an invalid command/subcommand/device, or a remote-password length error.
-- The observed validation setup did not use a remote password, so the current
-  working interpretation is invalid command/subcommand/device from the serial
-  module's point of view.
+- SH-081249-L lists `7F22H` as an MC protocol command error. Although the error
+  table includes remote-password length among possible causes, these Format4
+  traces did not send remote-password commands. Treat password analysis as the
+  separate `1630` / `1631` hold, not as a cause of this Format4 issue.
+- The working interpretation is invalid command/subcommand/device from the
+  serial module's point of view when the pre-fix frame omitted the trailing
+  device-modification field.
 - SH-080003-AF examples and field layouts were used as the frame-shape check
   baseline. Re-review found the missing trailing device-modification field
   after the device number.
@@ -306,7 +329,7 @@ The known defect was the missing trailing ASCII device-modification field. Any
 remaining rejection after this fix must be treated as new hardware evidence and
 diagnosed from fresh raw TX/RX captures.
 
-## Questions for analysis
+## Answered analysis questions
 
 1. Does the relevant Mitsubishi manual explicitly say that 4C ASCII Format4
    supports native extended device specifications for `Jn\...`, `Un\G`, and
@@ -320,7 +343,7 @@ diagnosed from fresh raw TX/RX captures.
 5. Is there any documented difference between link-direct `Jn\...` and
    native-qualified `Un\...` handling in ASCII mode?
 
-## Suggested recheck plan
+## Closed recheck record
 
 Use one serial client at a time. Do not overlap probes on the same COM port.
 After a timeout or mixed response, reset the transmission sequence with ASCII
@@ -354,4 +377,6 @@ For each failed access, preserve:
   confirm the CLI binary is post-fix before recording new evidence.
 - Public support tables can claim Format4 ASCII support for the native
   extended routes on the validated Q/L and iQ-R families.
-- Plain-device Format4 behavior should be evaluated separately from this issue.
+- Plain-device Format4 behavior is not blocked by this issue. Continue treating
+  it as ordinary profile coverage rather than as part of native-extension
+  failure analysis.
