@@ -52,7 +52,6 @@ These are confirmed for `melsec:iq-f` on the tested FX5 serial targets.
 | Support class | Device families |
 | --- | --- |
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB` |
-| Plain bit read-only | `S` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R` |
 | Long counter state read/write | `LCS`, `LCC`; reads use the long-state read route. |
 | Native random double-word read/write | `LCN`, `LZ` |
@@ -74,9 +73,9 @@ back to ordinary plain-device access when one of these routes is requested.
 
 | Command family | Notes |
 | --- | --- |
-| Batch read/write | Confirmed for supported plain read/write families. `S` is read-only. |
+| Batch read/write | Confirmed for supported plain read/write families. `S` is locally rejected because it is not part of the supported serial MC surface. |
 | Native random read | Confirmed for supported random-capable families, including `LCN` and `LZ` as double-word items. |
-| Native random write | Confirmed for supported read/write families except `S`. `LCN` and `LZ` require double-word items. |
+| Native random write | Confirmed for supported read/write families. `LCN` and `LZ` require double-word items. |
 | Multi-block read/write | Confirmed for supported normal plain devices. Long-state and native-random-only families are not multi-block heads. |
 | Monitor `0801/0802` | Not supported for this profile; tested probes returned `0x7E40`. |
 | Host/module buffer | Not supported for this profile; tested `0613` host-buffer and `0601` module-buffer probes returned `0x7E40`. |
@@ -86,6 +85,7 @@ back to ordinary plain-device access when one of these routes is requested.
 | Category | Device families or routes |
 | --- | --- |
 | FX5 device not present in the checked manual table | `V`, `ZR`, `DX`, `DY` |
+| Unsupported serial MC step relay | `S` |
 | Long timer / long retentive timer families absent on FX5 | `LTS`, `LTC`, `LTN`, `LSTS`, `LSTC`, `LSTN` |
 | iQ-R CPU buffer memory | `Un\HG` |
 | Link-direct routes | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
@@ -95,7 +95,7 @@ back to ordinary plain-device access when one of these routes is requested.
 
 | Guard | Current behavior |
 | --- | --- |
-| iQ-F unsupported plain devices | `V`, `ZR`, `DX`, `DY`, `LTS`, `LTC`, `LTN`, `LSTS`, `LSTC`, and `LSTN` are locally rejected under `melsec:iq-f`. |
+| iQ-F unsupported plain devices | `S`, `V`, `ZR`, `DX`, `DY`, `LTS`, `LTC`, `LTN`, `LSTS`, `LSTC`, and `LSTN` are locally rejected under `melsec:iq-f`. |
 | iQ-F unsupported special routes | `Jn\...`, `Un\HG`, host/module buffer, and monitor paths are locally rejected under `melsec:iq-f`. |
 
 ## Maintenance notes

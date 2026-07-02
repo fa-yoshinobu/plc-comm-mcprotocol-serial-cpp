@@ -6,9 +6,9 @@ Current active follow-up items only.
 
 | Area | Status | Notes |
 |---|---|---|
-| Implementation gaps | none open | 2026-07-02: ASCII device extension specification encoder fix was applied and covered by request-shape tests. |
+| Implementation gaps | none open | The Format1/2 ASCII link-direct partial-response decoder crash is fixed and covered by regression tests; see [FORMAT1_ASCII_IQR_LINK_DIRECT_INVESTIGATION.md](FORMAT1_ASCII_IQR_LINK_DIRECT_INVESTIGATION.md) and [FORMAT2_ASCII_IQR_LINK_DIRECT_INVESTIGATION.md](FORMAT2_ASCII_IQR_LINK_DIRECT_INVESTIGATION.md). |
 | Command-family holds | none open | No whole native command family is blocked on the currently validated targets. |
-| Target-dependent validation | one open | Format4 ASCII native extended access is verified post-fix on both iQ-R and Q/L (closed 2026-07-02). `RJ71C24-R2` remote password unlock/lock still needs a focused hardware recheck. |
+| Target-dependent validation | one open | `RJ71C24-R2` remote password unlock/lock still needs a focused hardware recheck. |
 | Specification-policy investigations | none open | `remote_reset` no-response-as-success is closed 2026-07-02 as manual-derived behavior (SH-080003-AF p.173); rule recorded in [MANUAL_DERIVED_RULES.md](MANUAL_DERIVED_RULES.md). |
 
 ## Active Follow-Up
@@ -30,7 +30,7 @@ Current active follow-up items only.
 
 - Do not add unsupported access paths here.
 - Do not add TODOs for manual families that are explicitly not needed by this library. The current
-  omitted-family policy is documented in Manual command coverage.
+  omitted-family policy is documented in [MANUAL_DERIVED_RULES.md](MANUAL_DERIVED_RULES.md).
 - Do not mark a target-dependent PLC rejection as an implementation bug unless request-shape tests
   or new hardware evidence point to the encoder/client code.
 - For long timer / long retentive timer contact+coil devices, use the structured `LTN/LSTN`

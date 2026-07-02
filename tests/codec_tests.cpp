@@ -1005,6 +1005,102 @@ void test_encode_ascii_format2_request_inserts_block_number() {
   assert(std::memcmp(frame.data(), expected.data(), expected.size()) == 0);
 }
 
+void test_decode_ascii_format2_partial_header_returns_incomplete() {
+  auto config = make_ascii_c4_format2_config();
+  config.sum_check_enabled = false;
+
+  // Field-observed partial link-direct responses (FORMAT2 investigation packet):
+  // the first serial chunk can be shorter than the STX + block-no + header
+  // prefix. The decoder must report Incomplete instead of reading past the
+  // buffer.
+  constexpr std::string_view partials[] = {
+      "\x02",
+      "\x02""0",
+      "\x02""00F8000",
+      "\x02""00F80000",
+      "\x02""00F80000FF0",
+  };
+  for (const std::string_view partial : partials) {
+    const auto decode = FrameCodec::decode_response(
+        config,
+        std::span<const std::uint8_t>(
+            reinterpret_cast<const std::uint8_t*>(partial.data()),
+            partial.size()));
+    assert(decode.status == DecodeStatus::Incomplete);
+    assert(decode.bytes_consumed == 0U);
+  }
+}
+
+void test_decode_ascii_format1_partial_header_returns_incomplete() {
+  auto config = make_ascii_c4_format2_config();
+  config.ascii_format = AsciiFormat::Format1;
+  config.sum_check_enabled = false;
+
+  // Field-observed partial link-direct responses (FORMAT1 investigation packet).
+  constexpr std::string_view partials[] = {
+      "\x02""F80000FF0",
+      "\x02""F80000FF03",
+      "\x02""F80000FF03F",
+      "\x02""F80000FF03FF00",
+  };
+  for (const std::string_view partial : partials) {
+    const auto decode = FrameCodec::decode_response(
+        config,
+        std::span<const std::uint8_t>(
+            reinterpret_cast<const std::uint8_t*>(partial.data()),
+            partial.size()));
+    assert(decode.status == DecodeStatus::Incomplete);
+    assert(decode.bytes_consumed == 0U);
+  }
+}
+
+void test_decode_response_prefix_sweep_reports_incomplete() {
+  // Every strict prefix of a valid success or error response must decode as
+  // Incomplete for the C-frame families: never Complete, never Error, and no
+  // out-of-bounds access (regression net for the Format1/2 partial-header
+  // crash). 1E is excluded because its responses carry no length framing and
+  // completeness is decided by the stream layer instead.
+  ProtocolConfig configs[] = {
+      make_ascii_c4_format2_config(),
+      [] { auto c = make_ascii_c4_format2_config(); c.sum_check_enabled = false; return c; }(),
+      [] { auto c = make_ascii_c4_format2_config(); c.ascii_format = AsciiFormat::Format1; return c; }(),
+      make_ascii_c2_format2_config(),
+      make_ascii_c3_format3_config(),
+      make_ascii_c2_format3_config(),
+      make_ascii_c4_format4_config(),
+      make_ascii_c2_format4_config(),
+      make_ascii_c4_format4_iqr_config(),
+      make_ascii_c1_format4_qna_config(),
+      make_ascii_c1_format4_a_config(),
+      make_binary_c4_config(),
+      [] { auto c = make_binary_c4_config(); c.sum_check_enabled = false; return c; }(),
+  };
+
+  const std::array<std::uint8_t, 4> response_data {'1', '2', '3', '4'};
+  for (const ProtocolConfig& config : configs) {
+    std::array<std::uint8_t, 128> frame {};
+    std::size_t frame_size = 0;
+
+    Status status = FrameCodec::encode_success_response(config, response_data, frame, frame_size);
+    assert(status.ok());
+    for (std::size_t length = 1; length < frame_size; ++length) {
+      const auto decode = FrameCodec::decode_response(
+          config, std::span<const std::uint8_t>(frame.data(), length));
+      assert(decode.status == DecodeStatus::Incomplete);
+      assert(decode.bytes_consumed == 0U);
+    }
+
+    status = FrameCodec::encode_error_response(config, 0x7151U, frame, frame_size);
+    assert(status.ok());
+    for (std::size_t length = 1; length < frame_size; ++length) {
+      const auto decode = FrameCodec::decode_response(
+          config, std::span<const std::uint8_t>(frame.data(), length));
+      assert(decode.status == DecodeStatus::Incomplete);
+      assert(decode.bytes_consumed == 0U);
+    }
+  }
+}
+
 void test_encode_ascii_c2_format2_request_uses_fb_frame_id_and_short_command() {
   auto config = make_ascii_c2_format2_config();
   config.sum_check_enabled = false;
@@ -3854,7 +3950,7 @@ void test_c1_e1_word_unit_bit_device_limits_and_alignment() {
   assert(status.code == StatusCode::InvalidArgument);
 }
 
-void test_encode_ascii_e1_l_and_s_devices_use_internal_relay_code() {
+void test_encode_ascii_e1_l_device_uses_internal_relay_code_and_s_is_rejected() {
   const auto config = make_ascii_e1_a_config();
   std::array<std::uint8_t, 64> request_data {};
   std::size_t request_size = 0;
@@ -3880,10 +3976,8 @@ void test_encode_ascii_e1_l_and_s_devices_use_internal_relay_code() {
       },
       request_data,
       request_size);
-  assert(status.ok());
-  constexpr std::string_view expected_s = "014D20000000200100";
-  assert(request_size == expected_s.size());
-  assert(std::memcmp(request_data.data(), expected_s.data(), expected_s.size()) == 0);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
 }
 
 void test_encode_random_write_words_ascii_matches_manual() {
@@ -6008,7 +6102,8 @@ void test_iq_l_rejects_unsupported_plain_device_families() {
       .points = 1,
   };
   Status status = CommandCodec::encode_batch_read_bits(config, s_read_request, request_data, request_size);
-  assert(status.ok());
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
 
   const BatchWriteBitsRequest s_write_request {
       .head_device = {.code = mcprotocol::serial::DeviceCode::S, .number = 10},
@@ -6046,7 +6141,7 @@ void test_iq_l_rejects_unsupported_plain_device_families() {
   assert(status.code == StatusCode::InvalidArgument);
 }
 
-void test_melsec_l_rejects_s_writes() {
+void test_melsec_l_rejects_s_device_access() {
   const auto config = make_binary_c4_l_config();
   std::array<std::uint8_t, 128> request_data {};
   std::size_t request_size = 0;
@@ -6057,7 +6152,8 @@ void test_melsec_l_rejects_s_writes() {
       .points = 1,
   };
   Status status = CommandCodec::encode_batch_read_bits(config, s_read_request, request_data, request_size);
-  assert(status.ok());
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
 
   const BatchWriteBitsRequest s_write_request {
       .head_device = {.code = mcprotocol::serial::DeviceCode::S, .number = 10},
@@ -6097,23 +6193,37 @@ void test_melsec_l_rejects_s_writes() {
   assert(status.code == StatusCode::InvalidArgument);
 }
 
-void assert_s_writes_rejected_for_profile(const ProtocolConfig& config) {
+void assert_s_device_rejected_for_profile(const ProtocolConfig& config) {
   std::array<std::uint8_t, 128> request_data {};
   std::size_t request_size = 0;
   const std::array<BitValue, 1> bits {BitValue::On};
+  const std::array<BitValue, 16> bit_block {};
 
   const BatchReadBitsRequest read_request {
       .head_device = {.code = mcprotocol::serial::DeviceCode::S, .number = 10},
       .points = 1,
   };
   Status status = CommandCodec::encode_batch_read_bits(config, read_request, request_data, request_size);
-  assert(status.ok());
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
 
   const BatchWriteBitsRequest batch_write_request {
       .head_device = {.code = mcprotocol::serial::DeviceCode::S, .number = 10},
       .bits = std::span<const BitValue>(bits.data(), bits.size()),
   };
   status = CommandCodec::encode_batch_write_bits(config, batch_write_request, request_data, request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  const RandomReadItem random_read {
+      .device = {.code = mcprotocol::serial::DeviceCode::S, .number = 10},
+      .double_word = false,
+  };
+  status = CommandCodec::encode_random_read(
+      config,
+      RandomReadRequest {.items = std::span<const RandomReadItem>(&random_read, 1)},
+      request_data,
+      request_size);
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
 
@@ -6129,7 +6239,21 @@ void assert_s_writes_rejected_for_profile(const ProtocolConfig& config) {
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
 
-  const std::array<BitValue, 16> bit_block {};
+  const MultiBlockReadBlock read_block {
+      .head_device = {.code = mcprotocol::serial::DeviceCode::S, .number = 0},
+      .points = 1,
+      .bit_block = true,
+  };
+  status = CommandCodec::encode_multi_block_read(
+      config,
+      mcprotocol::serial::MultiBlockReadRequest {
+          .blocks = std::span<const MultiBlockReadBlock>(&read_block, 1),
+      },
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
   const MultiBlockWriteBlock block {
       .head_device = {.code = mcprotocol::serial::DeviceCode::S, .number = 0},
       .points = 1,
@@ -6145,18 +6269,27 @@ void assert_s_writes_rejected_for_profile(const ProtocolConfig& config) {
       request_size);
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
+
+  const MonitorRegistration monitor {
+      .items = std::span<const RandomReadItem>(&random_read, 1),
+  };
+  status = CommandCodec::encode_register_monitor(config, monitor, request_data, request_size);
+  assert(!status.ok());
+  if (config.plc_profile != PlcProfile::MelsecIqF) {
+    assert(status.code == StatusCode::InvalidArgument);
+  }
 }
 
-void test_all_c4_profiles_reject_s_writes() {
+void test_all_c4_profiles_reject_s_device_access() {
   auto q_config = make_binary_c4_config();
   q_config.plc_profile = PlcProfile::MelsecQ;
-  assert_s_writes_rejected_for_profile(q_config);
+  assert_s_device_rejected_for_profile(q_config);
 
-  assert_s_writes_rejected_for_profile(make_binary_c4_config());
-  assert_s_writes_rejected_for_profile(make_binary_c4_l_config());
-  assert_s_writes_rejected_for_profile(make_binary_c4_iqr_config());
-  assert_s_writes_rejected_for_profile(make_binary_c4_iql_config());
-  assert_s_writes_rejected_for_profile(make_binary_c4_iqf_config());
+  assert_s_device_rejected_for_profile(make_binary_c4_config());
+  assert_s_device_rejected_for_profile(make_binary_c4_l_config());
+  assert_s_device_rejected_for_profile(make_binary_c4_iqr_config());
+  assert_s_device_rejected_for_profile(make_binary_c4_iql_config());
+  assert_s_device_rejected_for_profile(make_binary_c4_iqf_config());
 }
 
 void test_iq_f_rejects_unsupported_plain_device_families() {
@@ -6497,6 +6630,9 @@ int main() {
   test_validate_ascii_c1_config_and_reject_binary();
   test_validate_c4_routed_access_and_connected_station_only_commands();
   test_encode_ascii_format2_request_inserts_block_number();
+  test_decode_ascii_format2_partial_header_returns_incomplete();
+  test_decode_ascii_format1_partial_header_returns_incomplete();
+  test_decode_response_prefix_sweep_reports_incomplete();
   test_encode_ascii_c2_format2_request_uses_fb_frame_id_and_short_command();
   test_decode_ascii_format2_ack_response();
   test_decode_ascii_c2_format2_four_digit_error_response();
@@ -6530,7 +6666,7 @@ int main() {
   test_validate_e1_config_and_route_constraints();
   test_encode_ascii_e1_batch_read_words_request_shape();
   test_encode_binary_e1_batch_read_bits_request_shape();
-  test_encode_ascii_e1_l_and_s_devices_use_internal_relay_code();
+  test_encode_ascii_e1_l_device_uses_internal_relay_code_and_s_is_rejected();
   test_decode_ascii_e1_success_response();
   test_decode_binary_e1_error_response_with_abnormal_code();
   test_encode_binary_e1_random_write_words_request_shape();
@@ -6654,8 +6790,8 @@ int main() {
   test_encode_random_write_bits_long_device_rules();
   test_encode_random_write_bits_binary_iqr_long_counter_layout();
   test_iq_l_rejects_unsupported_plain_device_families();
-  test_melsec_l_rejects_s_writes();
-  test_all_c4_profiles_reject_s_writes();
+  test_melsec_l_rejects_s_device_access();
+  test_all_c4_profiles_reject_s_device_access();
   test_iq_f_rejects_unsupported_plain_device_families();
   test_iq_f_rejects_unsupported_special_routes();
   test_encode_multi_block_read_rejects_long_devices_as_head();

@@ -56,7 +56,6 @@ These are confirmed for `melsec:qcpu` on the tested Q target.
 | --- | --- |
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `ZR` |
-| Plain bit read-only | `S` |
 | Link-direct read/write | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W` |
 | Link-direct read-only | `Jn\SB`, `Jn\SW` |
 | Native-qualified read/write | `Un\G` |
@@ -91,6 +90,7 @@ therefore excluded from `melsec:qcpu` support.
 | Long timer/counter word devices | `LTN`, `LSTN`, `LCN` |
 | iQ-R long/index/module families | `LZ`, `RD` |
 | iQ-R CPU buffer memory | `Un\HG` |
+| Step relay | `S` |
 
 ## Q target safety notes
 

@@ -1,22 +1,33 @@
 # Maintainer Docs
 
-This section is for implementation notes, command coverage, and current follow-up items.
+This section is for implementation notes, profile decisions, real-hardware
+validation records, and current follow-up items.
 
 If you are trying to use the library rather than maintain it, go back to:
 
 - [../../README.md](../../README.md)
 - [../../examples/README.md](../../examples/README.md)
-- [../../examples/README.md](../../examples/README.md)
 
-Current pages:
+## Start Here
 
-- [DEVELOPER_NOTES.md](DEVELOPER_NOTES.md)
-- Manual command coverage
-- [MANUAL_DERIVED_RULES.md](MANUAL_DERIVED_RULES.md)
-- [plc_profiles/README.md](plc_profiles/README.md)
-- [DOCS_AND_CI.md](DOCS_AND_CI.md)
-- [TODO.md](TODO.md)
-- [NATIVE_COMMAND_BACKLOG.md](NATIVE_COMMAND_BACKLOG.md)
-- [TARGET_DEPENDENT_NATIVE_COMMANDS.md](TARGET_DEPENDENT_NATIVE_COMMANDS.md)
-- [FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md](FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md)
-- [RELEASE_PROCESS.md](RELEASE_PROCESS.md)
+| Need | Read |
+| --- | --- |
+| Active unresolved work | [TODO.md](TODO.md) |
+| Rules derived from manuals and hardware observations | [MANUAL_DERIVED_RULES.md](MANUAL_DERIVED_RULES.md) |
+| PLC profile decisions and evidence status | [plc_profiles/README.md](plc_profiles/README.md) |
+| Implementation notes for maintainers | [DEVELOPER_NOTES.md](DEVELOPER_NOTES.md) |
+| Native command follow-up policy | [NATIVE_COMMAND_BACKLOG.md](NATIVE_COMMAND_BACKLOG.md) |
+| Target-dependent command evidence | [TARGET_DEPENDENT_NATIVE_COMMANDS.md](TARGET_DEPENDENT_NATIVE_COMMANDS.md) |
+| Documentation and CI maintenance | [DOCS_AND_CI.md](DOCS_AND_CI.md) |
+| Release steps | [RELEASE_PROCESS.md](RELEASE_PROCESS.md) |
+
+## Resolved Investigation Records
+
+These files are retained as evidence. Do not treat their pre-fix failure tables
+as current behavior without reading the status at the top of each file.
+
+| Topic | Record |
+| --- | --- |
+| ASCII Format1 partial-response decoder crash | [FORMAT1_ASCII_IQR_LINK_DIRECT_INVESTIGATION.md](FORMAT1_ASCII_IQR_LINK_DIRECT_INVESTIGATION.md) |
+| ASCII Format2 partial-response decoder crash | [FORMAT2_ASCII_IQR_LINK_DIRECT_INVESTIGATION.md](FORMAT2_ASCII_IQR_LINK_DIRECT_INVESTIGATION.md) |
+| ASCII Format4 native extended device encoder bug | [FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md](FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md) |

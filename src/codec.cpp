@@ -2081,6 +2081,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     DeviceCode code,
     const char* message) noexcept {
+  if (code == DeviceCode::S) {
+    return invalid_argument(message);
+  }
   const Status iq_l_status = validate_iq_l_plain_device_support(config, code, message);
   if (!iq_l_status.ok()) {
     return iq_l_status;
@@ -2093,9 +2096,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     DeviceCode code,
     const char* message) noexcept {
   (void)config;
-  if (code == DeviceCode::S) {
-    return invalid_argument(message);
-  }
+  (void)code;
+  (void)message;
   return ok_status();
 }
 
@@ -2955,6 +2957,10 @@ DecodeResult FrameCodec::decode_response(
             .error = framing_error("ASCII Format1/2/4 response must begin with ACK, NAK, or STX"),
             .bytes_consumed = 1,
         };
+      }
+
+      if (bytes.size() < prefix_size) {
+        return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
       }
 
       const auto etx_it = std::find(bytes.begin() + static_cast<std::ptrdiff_t>(prefix_size), bytes.end(), kAsciiEtx);
@@ -4081,7 +4087,7 @@ Status encode_batch_write_bits(
   const Status profile_write_status = validate_profile_plain_write_support(
       config,
       request.head_device.code,
-      "Batch write bits does not support S device writes for this PLC profile");
+      "Batch write bits does not support this device for this PLC profile");
   if (!profile_write_status.ok()) {
     return profile_write_status;
   }
@@ -4753,7 +4759,7 @@ Status encode_random_write_bits(
       const Status profile_write_status = validate_profile_plain_write_support(
           config,
           item.device.code,
-          "1E random write bits does not support S device writes for this PLC profile");
+          "1E random write bits does not support this device for this PLC profile");
       if (!profile_write_status.ok()) {
         return profile_write_status;
       }
@@ -4813,7 +4819,7 @@ Status encode_random_write_bits(
     const Status profile_write_status = validate_profile_plain_write_support(
         config,
         item.device.code,
-        "Random write bits does not support S device writes for this PLC profile");
+        "Random write bits does not support this device for this PLC profile");
     if (!profile_write_status.ok()) {
       return profile_write_status;
     }
@@ -5205,7 +5211,7 @@ Status encode_multi_block_write(
     const Status profile_write_status = validate_profile_plain_write_support(
         config,
         block.head_device.code,
-        "Multi-block write does not support S device writes for this PLC profile");
+        "Multi-block write does not support this device for this PLC profile");
     if (!profile_write_status.ok()) {
       return profile_write_status;
     }

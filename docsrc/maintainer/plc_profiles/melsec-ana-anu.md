@@ -51,7 +51,8 @@ Use the QnA-family current codec surface only as a starting point.
 
 | Route | Candidate families in current codec surface |
 | --- | --- |
-| 1C/1E common devices | `X`, `Y`, `M`, `L`, `S`, `F`, `B`, `D`, `W`, `R`, `TS`, `TC`, `TN`, `CS`, `CC`, `CN` |
+| 1C/1E common devices | `X`, `Y`, `M`, `L`, `F`, `B`, `D`, `W`, `R`, `TS`, `TC`, `TN`, `CS`, `CC`, `CN` |
+| Not supported | `S` |
 | Direct extended file register | Pending. Verify AnA/AnU manual applicability separately from QnA. |
 
 ## Open questions

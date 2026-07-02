@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: Added a long-state read helper for long timer, long retentive timer, and long counter contact/coil devices.
 - Library: Added synchronous special-route helpers for link-direct `Jn\...` access and diagnostic native qualified `Un\Gn` / `Un\HGn` probes.
 - Library: Added ASCII link-direct extension encoding for `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, and `Jn\SW` routes.
+- Tests: Added a decode truncation sweep that feeds every strict prefix of valid success and error responses (1C/2C/3C/4C, ASCII Format1–4 and binary, sum-check on/off) into `FrameCodec::decode_response` and asserts `Incomplete`.
 - Tooling: Added the `read-long-state-bits` command to the CLI.
 - Tooling: Added `MCPROTOCOL_SERIAL_TRACE=1` support for logging MC TX/RX frame bytes from the synchronous host client.
 
@@ -37,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Samples: Aligned user-facing quickstart, PlatformIO UART, and Linux CLI sample defaults with the verified C4 ASCII Format4 `19200 / 8E1` serial setup.
 
 ### Fixed
+- Library: Fixed an out-of-bounds read in the ASCII Format1/2/4 response decoder when the received buffer was shorter than the `STX` + block-number + header prefix; the decoder now reports `Incomplete` instead of crashing with an access violation. Observed on live iQ-R link-direct `Jn\...` reads whose responses arrived split into short serial chunks.
+- Library: Reject `S` step-relay device access for serial MC profiles instead of treating it as read-only; `S` is not part of the supported MC serial device surface.
 - Library: Reject standalone `G` and `HG` device access in normal, random, and multi-block device routes.
 - Library: Appended the trailing device-modification field required by SH-080003-AF p.430-431 to the ASCII device extension specification for `Jn\...` and `Un\G` / `Un\HG` routes; 4C ASCII Format4 native extended access now passes on live iQ-R and Q/L targets.
 - Tooling: Corrected the CLI help note that described link-direct device extension specification as binary-only; it is supported in both binary and ASCII code modes.

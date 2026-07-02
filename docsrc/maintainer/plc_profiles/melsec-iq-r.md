@@ -70,11 +70,11 @@ These are confirmed for `melsec:iq-r` on the tested iQ-R target.
 | --- | --- |
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `RD`, `ZR` |
-| Plain bit read-only | `S` |
 | Long-state read/write helper | `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC` |
 | Long/current-value read/write | `LTN`, `LSTN`, `LCN`, `LZ` |
 | Link-direct read/write | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
 | Native-qualified read/write | `Un\G`, `Un\HG` |
+| Not supported | `S` |
 
 ## Dedicated route details
 
@@ -91,6 +91,14 @@ For `Un\G` and `Un\HG`, the confirmed route is native device access
 (`0401/1401` with iQ-R extended subcommands). Keep this separate from any
 qualified-buffer helper path so the implementation cannot choose the wrong
 route silently.
+
+## Helper-route observations (2026-07-03, Format1/Format2 full suite)
+
+| Route | Observation |
+| --- | --- |
+| `S` device | Not supported for serial MC. ASCII formats are rejected by the C24 with `7F22H` before CPU forwarding; a historical binary Format5 read observation is not promoted to support because `S` is absent from the SH-080003-AF MC device-code list (p.68-69). |
+| Raw monitor read (`0802` without `0801`) | `7155H` monitor-not-registered per SH-081249-L p.518. Passes immediately after a registration in the same module state. |
+| `0601/1601` module-buffer helper | CPU error `0x4043` on this rack. SH-080003-AF p.155 scopes `0601/1601` to QnA-series special function modules; use the native-qualified `Un\G` route for iQ-R module access. |
 
 ## Excluded from this decision
 

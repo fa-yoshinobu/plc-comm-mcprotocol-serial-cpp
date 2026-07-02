@@ -31,7 +31,7 @@ modules.
 | Manual family | Manual-derived | Q/L serial manuals group MELSEC-Q and MELSEC-L request-shape behavior. |
 | Current implementation | Implemented grouping | `PlcProfile::MelsecL` maps to `PlcSeries::Q_L`. |
 | Current hardware observation | L target observed | `L26CPU-BT` with `LJ71C24`; C4 binary / Format5 / `19200`, `8E1`, station `0`, sum-check off. |
-| Normal-device read/write | Confirmed for tested target | Batch read/write/restore passed for the read/write families below. `S` write was observed to succeed, but is not promoted to supported write access. |
+| Normal-device read/write | Confirmed for tested target | Batch read/write/restore passed for the read/write families below. `S` is not part of the supported serial MC surface. |
 | Native random access | Partially command-limited | Random write passed for the support surface below. Random read rejected `TS`, `TC`, `STS`, `STC`, `CS`, and `CC` with `0x4032`; batch read/write still passed for those families. |
 | Q-equivalent policy | Partially rechecked | Native-qualified `Un\G` matched the prepared value on the L target; helper access read a different value, so it must not be silently used as a fallback. |
 
@@ -61,7 +61,6 @@ Q/L behavior.
 | Support class | Device families |
 | --- | --- |
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
-| Plain bit read-only | `S` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `ZR` |
 | Native-qualified read/write | `Un\G` |
 
@@ -82,9 +81,9 @@ ordinary plain-device access when one of these routes is requested.
 
 | Command family | Notes |
 | --- | --- |
-| Batch read/write | Confirmed for all supported plain read/write families. `S` write was observed to succeed on the tested setup, but the implementation rejects `S` write for `melsec:lcpu` until the route and software behavior are rechecked. |
-| Native random read | Confirmed for `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `SB`, `S`, `DX`, `DY`, `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, and `ZR`. Returned `0x4032` for `TS`, `TC`, `STS`, `STC`, `CS`, and `CC`. Treat this as a random-read limitation, not a batch-read exclusion. |
-| Native random write | Confirmed for all supported plain read/write families. `S` write was observed to succeed, but the implementation rejects it because it is not part of the supported write surface. |
+| Batch read/write | Confirmed for all supported plain read/write families. `S` is locally rejected because it is not part of the supported serial MC surface. |
+| Native random read | Confirmed for `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `SB`, `DX`, `DY`, `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, and `ZR`. Returned `0x4032` for `TS`, `TC`, `STS`, `STC`, `CS`, and `CC`. Treat this as a random-read limitation, not a batch-read exclusion. |
+| Native random write | Confirmed for all supported plain read/write families. `S` is locally rejected because it is not part of the supported write surface. |
 | Native multi-block read/write (`0406`/`1406`) | Confirmed on the tested L serial path for supported plain devices. Treat this as serial-module evidence, separate from SLMP built-in-Ethernet Q-series block-command behavior. |
 | Native-qualified read/write | Confirmed for `Un\G` through the native-qualified route. |
 
@@ -96,15 +95,14 @@ ordinary plain-device access when one of these routes is requested.
 | Long timer/counter word devices | `LTN`, `LSTN`, `LCN` |
 | iQ-R long/index/module families | `LZ`, `RD` |
 | iQ-R CPU buffer memory | `Un\HG` |
+| Step relay | `S` |
 
-## TODO
+## Future validation notes
 
-- Recheck `Jn\X/Y/B/W/SB/SW` on C4 binary when link-direct equipment is
-  available.
-- Compare the L result with a fresh Q run for `S` write support and native
-  random-read behavior.
-- Recheck `S` writes with raw frame review before deciding whether L should
-  support write access.
+- Recheck `Jn\X/Y/B/W/SB/SW` on C4 binary if matching link-direct equipment
+  becomes available.
+- Compare the L result with fresh Q runs only for native random-read behavior;
+  `S` is intentionally outside the supported serial MC surface.
 
 ## Maintenance notes
 

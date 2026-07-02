@@ -21,7 +21,10 @@ separated into one of these buckets:
 | 1C/1E A-series and QnA command-family selection, including `ER/EW` and `NR/NW` paths | Manual-derived | These are command-family branches, not read/write device-support policy. |
 | Link-direct `Jn\X/Y/B/W/SB/SW` request shape | Manual-derived request shape plus hardware observation | SH-080003-AF describes link-direct access in the extended-device appendix. Actual availability still depends on target/module/frame settings. |
 | Qualified `Un\G` / `Un\HG` request shape | Manual-derived request shape plus hardware observation | SH-080003-AF describes unit access and CPU buffer access devices. The practical helper path and native-command behavior must stay separated. |
-| `0x7F22` interpretation for serial module responses | Manual-derived error meaning plus local interpretation | SH-081249-L lists `7F22H` as a command error. The exact cause for a given trace is still a diagnostic conclusion. |
+| `0x7F22` interpretation for serial module responses | Manual-derived error meaning plus local interpretation | SH-081249-L p.530 lists `7F22H` as a command error ("nonexistent command/subcommand/device specified"). The exact cause for a given trace is still a diagnostic conclusion. |
+| `S` device over serial MC | Manual-derived plus hardware observation | `S` is absent from the SH-080003-AF MC device-code list (p.68), and p.69 says unlisted devices cannot be specified. The C24 NAKs ASCII `S***` reads with `7F22H` before CPU forwarding (verified live on iQ-R Format1/Format2, 2026-07-03). Historical binary Format5 `S` reads are treated as non-contract observations; the library rejects `S` for serial MC access. |
+| Monitor request before registration | Manual-derived | SH-081249-L p.518: `7155H` is the monitor-not-registered error for a `0802` request issued before `0801` registration. Raw `0802` passes right after a registration in the same module state (verified live, Format2, 2026-07-03). |
+| `0601/1601` module-buffer helper scope | Manual-derived plus hardware observation | SH-080003-AF p.155 scopes `0601/1601` to MELSEC-QnA-series special function modules. On the iQ-R rack the probe returns CPU error `0x4043`; use the native-qualified `Un\G` route for iQ-R module access. |
 | `melsec:iq-r` read/write device-family list | Manual-derived request shape plus hardware observation | Maintain the current support list in the iQ-R profile specification and keep page-backed notes with future additions. |
 | `melsec:iq-l` command/device layout | Manual evidence plus hardware observation and implementation policy | SH-082159CHN-F says iQ-L serial MC communication through MELSEC-L serial modules must use MELSEC-Q/L subcommands, not iQ-R subcommands. Keep the public profile separate. Current implementation uses Q/L-compatible serial MC request shapes and rejects the long timer/counter family, `LZ`, `RD`, and `Un\HG` for iQ-L serial MC. |
 | FX5 / MELSEC iQ-F MC protocol layout | Manual-derived request shape plus hardware observation | SH-082624-J describes FX5 MC protocol with subcommand bit fields for data size, device-reference width, and device-memory extension. Keep FX5/iQ-F separate from Q/L and iQ-R. |
@@ -38,7 +41,7 @@ separated into one of these buckets:
 - `ZR` is decimal on the validated serial targets in this repo.
 - `R` and `ZR` share the same internal register space on the validated `RJ71C24-R2` target.
 - `X`, `Y`, `B`, `W`, `SB`, `SW`, `DX`, and `DY` use hexadecimal address parsing.
-- `M`, `L`, `SM`, `F`, `V`, `D`, `SD`, `RD`, `S`, `Z`, `R`, `ZR`, `LTN`, `LSTN`, `LCN`, and `LZ`
+- `M`, `L`, `SM`, `F`, `V`, `D`, `SD`, `RD`, `Z`, `R`, `ZR`, `LTN`, `LSTN`, `LCN`, and `LZ`
   use decimal address parsing.
 
 ## Bit Packing
@@ -59,7 +62,7 @@ separated into one of these buckets:
 - Do not treat ordinary direct `read-bits` calls for `LTS/LTC/LSTS/LSTC` as part of the supported public interface; use the long-state helper.
 - For `melsec:iq-l`, do not expose `LTS/LTC/LSTS/LSTC/LCS/LCC/LTN/LSTN/LCN/LZ/RD` as serial MC supported devices.
 - For `melsec:iq-f`, do not expose `LTS/LTC/LTN/LSTS/LSTC/LSTN` as serial MC supported devices.
-- Treat `S` as read-only for every profile.
+- Treat `S` as unsupported for serial MC access in every profile.
 
 ## Link-Direct Access
 

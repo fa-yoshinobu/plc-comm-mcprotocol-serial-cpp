@@ -41,6 +41,10 @@ Common device-form rule: `G` and `HG` are not standalone plain devices for any
 MELSEC profile. Record support only for qualified forms such as `Un\G` and
 `Un\HG`, and keep the accepted route profile-specific.
 
+Common step-relay rule: `S` is not part of the supported serial MC device
+surface for this library. Keep it out of every profile unless a future manual
+and hardware pass deliberately reopens the decision.
+
 Do not reintroduce a combined Q/L public profile. Keep Q and L as separate
 profile names, even when the current implementation maps both to the Q/L
 request-shape branch.

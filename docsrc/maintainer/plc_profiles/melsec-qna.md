@@ -52,7 +52,8 @@ and targets before documenting it as support.
 
 | Route | Candidate families in current codec surface |
 | --- | --- |
-| 1C/1E common devices | `X`, `Y`, `M`, `L`, `S`, `F`, `B`, `D`, `W`, `R`, `TS`, `TC`, `TN`, `CS`, `CC`, `CN` |
+| 1C/1E common devices | `X`, `Y`, `M`, `L`, `F`, `B`, `D`, `W`, `R`, `TS`, `TC`, `TN`, `CS`, `CC`, `CN` |
+| Not supported | `S` |
 | Direct extended file register | QnA-family `NR` / `NW` paths are currently separate from A-series `ER` / `EW`. |
 
 ## Open questions

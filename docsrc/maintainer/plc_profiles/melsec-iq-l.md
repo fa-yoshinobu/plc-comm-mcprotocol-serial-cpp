@@ -51,8 +51,8 @@ These are confirmed for `melsec:iq-l` on the tested serial target.
 | Support class | Device families |
 | --- | --- |
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
-| Plain bit read-only | `S` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `ZR` |
+| Not supported | `S` |
 | Native-qualified read/write | `Un\G` |
 
 ## Dedicated route details
@@ -71,9 +71,9 @@ back to ordinary plain-device access when one of these routes is requested.
 
 | Command family | Notes |
 | --- | --- |
-| Batch read/write | Confirmed for all supported plain read/write families. `S` is read-only; write returned `0x4030`. |
-| Native random read | Confirmed for `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `SB`, `S`, `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, and `ZR`. Returned `0x4032` for `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `DX`, and `DY`. Treat this as a random-read limitation, not a batch-read exclusion. |
-| Native random write | Confirmed for the supported read/write plain device families except `S`. `S` returned `0x4030`. |
+| Batch read/write | Confirmed for all supported plain read/write families. `S` is locally rejected because it is not part of the supported serial MC surface. |
+| Native random read | Confirmed for `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `SB`, `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, and `ZR`. Returned `0x4032` for `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `DX`, and `DY`. Treat this as a random-read limitation, not a batch-read exclusion. |
+| Native random write | Confirmed for the supported read/write plain device families. `S` is locally rejected because it is not part of the supported write surface. |
 
 ## Excluded from iQ-L serial MC support
 

@@ -12,7 +12,7 @@ they are not range limits.
 | --- | --- |
 | Plain device strings | The high-level parser accepts plain device strings such as `D100`, `M100`, `X10`, `W100`, and `LZ0`. |
 | Standalone `G` / `HG` | Not plain devices for any profile. Use qualified forms such as `Un\G` or `Un\HG` only when the selected profile supports that route. |
-| `S` writes | Rejected for every profile. `S` is treated as read-only. |
+| `S` device | Not supported by this serial MC library. |
 | Link-direct devices | Use the dedicated `Jn\...` link-direct APIs when the selected profile supports them. |
 | Qualified unit access | Use the native-qualified `Un\G` / `Un\HG` APIs when the selected profile supports them. The `0601/1601` helper route is profile/target-specific and must not be used as a fallback. |
 
@@ -23,22 +23,21 @@ they are not range limits.
 | Support class | Device families |
 | --- | --- |
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
-| Plain bit read-only | `S` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `RD`, `ZR` |
 | Long-state helper | `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC` |
 | Native random double-word read/write | `LTN`, `LSTN`, `LCN`, `LZ` |
 | Link-direct read/write | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
 | Native-qualified read/write | `Un\G`, `Un\HG` |
+| Not supported | `S` |
 
 ### `melsec:iq-l`
 
 | Support class | Device families |
 | --- | --- |
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
-| Plain bit read-only | `S` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `ZR` |
 | Native-qualified read/write | `Un\G` |
-| Not supported | `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC`, `LTN`, `LSTN`, `LCN`, `LZ`, `RD`, `Un\HG` |
+| Not supported | `S`, `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC`, `LTN`, `LSTN`, `LCN`, `LZ`, `RD`, `Un\HG` |
 | Not confirmed | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
 
 ### `melsec:iq-f`
@@ -46,24 +45,22 @@ they are not range limits.
 | Support class | Device families |
 | --- | --- |
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB` |
-| Plain bit read-only | `S` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R` |
 | Long counter state read/write | `LCS`, `LCC`; reads use the long-state helper |
 | Native random double-word read/write | `LCN`, `LZ` |
 | Native-qualified read/write | `Un\G` |
-| Not supported | `V`, `ZR`, `DX`, `DY`, `LTS`, `LTC`, `LTN`, `LSTS`, `LSTC`, `LSTN`, `Un\HG`, `Jn\...`, monitor, host-buffer, and module-buffer helper routes |
+| Not supported | `S`, `V`, `ZR`, `DX`, `DY`, `LTS`, `LTC`, `LTN`, `LSTS`, `LSTC`, `LSTN`, `Un\HG`, `Jn\...`, monitor, host-buffer, and module-buffer helper routes |
 
 ### `melsec:qcpu`
 
 | Support class | Device families |
 | --- | --- |
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
-| Plain bit read-only | `S` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `ZR` |
 | Link-direct read/write | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W` |
 | Link-direct read-only | `Jn\SB`, `Jn\SW` |
 | Native-qualified read/write | `Un\G` |
-| Not supported | `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC`, `LTN`, `LSTN`, `LCN`, `LZ`, `RD`, `Un\HG` |
+| Not supported | `S`, `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC`, `LTN`, `LSTN`, `LCN`, `LZ`, `RD`, `Un\HG` |
 
 Native random read on the tested Q target is narrower than batch access for
 some timer/counter status families. Treat random-read rejection as a command
@@ -74,11 +71,10 @@ route limitation, not as a batch-read exclusion.
 | Support class | Device families |
 | --- | --- |
 | Plain bit read/write | `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `TS`, `TC`, `STS`, `STC`, `CS`, `CC`, `SB`, `DX`, `DY` |
-| Plain bit read-only | `S` |
 | Plain word read/write | `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, `ZR` |
 | Native-qualified read/write | `Un\G` |
 | Expected but not locally confirmed | `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, `Jn\SW` |
-| Not supported | `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC`, `LTN`, `LSTN`, `LCN`, `LZ`, `RD`, `Un\HG` |
+| Not supported | `S`, `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, `LCC`, `LTN`, `LSTN`, `LCN`, `LZ`, `RD`, `Un\HG` |
 
 Native random read on the tested L target is narrower than batch access for
 some timer/counter status families. Treat random-read rejection as a command
@@ -111,7 +107,7 @@ paths such as direct extended file-register access.
 | `STS`, `STC` | Retentive timer contact / coil | `STS0` | Decimal address. |
 | `CS`, `CC` | Counter contact / coil | `CS0` | Decimal address. |
 | `SB` | Link special relay | `SB100` | Hexadecimal address. |
-| `S` | Step relay | `S100` | Decimal address; read-only. |
+| `S` | Step relay | `S100` | Not supported by this serial MC library. |
 | `DX`, `DY` | Direct access input/output | `DX10` | Hexadecimal address. |
 | `LTS`, `LTC` | Long timer contact / coil | `LTS0` | Decimal address; profile-specific helper route. |
 | `LSTS`, `LSTC` | Long retentive timer contact / coil | `LSTS0` | Decimal address; profile-specific helper route. |

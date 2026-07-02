@@ -50,7 +50,8 @@ For 1C ASCII command paths, the ACPU common symbols are currently:
 
 | Route | Candidate families in current codec surface |
 | --- | --- |
-| 1C/1E common devices | `X`, `Y`, `M`, `L`, `S`, `F`, `B`, `D`, `W`, `R`, `TS`, `TC`, `TN`, `CS`, `CC`, `CN` |
+| 1C/1E common devices | `X`, `Y`, `M`, `L`, `F`, `B`, `D`, `W`, `R`, `TS`, `TC`, `TN`, `CS`, `CC`, `CN` |
+| Not supported | `S` |
 | Extended file register | A-series `ER`, `EW`, and `ET` paths are currently A-only. |
 | Direct extended file register | Verify separately; current direct `NR` / `NW` paths are QnA-family, not A-series. |
 
