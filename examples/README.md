@@ -57,7 +57,7 @@ Set `MCPROTOCOL_FRAME` and `MCPROTOCOL_PLC_PROFILE` before running the CLI wrapp
 
 | File or folder | Platform | What it demonstrates |
 | --- | --- | --- |
-| `host_sync_quickstart.cpp` | Host | `PosixSyncClient`, `make_c4_binary_protocol`, CPU model read, batch word read, and sparse random read. |
+| `host_sync_quickstart.cpp` | Host | `PosixSyncClient`, `make_c4_ascii_format4_protocol`, CPU model read, batch word read, and sparse random read. |
 | `mcu_async_batch_read.cpp` | Host | Low-level `MelsecSerialClient` flow with a simulated success response. |
 | `linux_cli/safe_bringup_readonly.sh` | Linux host | Safe read-only CLI bring-up with explicit serial, frame, and PLC profile settings. |
 | `platformio_rpipico_arduino_uart/` | RP2040 Arduino | Real `Serial1` UART read-only polling of `D100-D103`. |
@@ -74,9 +74,9 @@ settings must match the PLC serial module.
 
 | Board | UART | Pins | Serial | Protocol |
 | --- | --- | --- | --- | --- |
-| RP2040 / Raspberry Pi Pico | `Serial1` | TX `0`, RX `1` | `19200 / 8E2` | `4C ASCII Format4`, `CR/LF`, station `0`, sum check off |
-| ESP32-C3 DevKitM-1 | `Serial1` | TX `7`, RX `6` | `19200 / 8E2` | `4C ASCII Format4`, `CR/LF`, station `0`, sum check off |
-| Arduino Mega 2560 | `Serial1` | TX1 `18`, RX1 `19` | `19200 / 8E2` | `4C ASCII Format4`, `CR/LF`, station `0`, sum check off |
+| RP2040 / Raspberry Pi Pico | `Serial1` | TX `0`, RX `1` | `19200 / 8E1` | `4C ASCII Format4`, `CR/LF`, station `0`, sum check off |
+| ESP32-C3 DevKitM-1 | `Serial1` | TX `7`, RX `6` | `19200 / 8E1` | `4C ASCII Format4`, `CR/LF`, station `0`, sum check off |
+| Arduino Mega 2560 | `Serial1` | TX1 `18`, RX1 `19` | `19200 / 8E1` | `4C ASCII Format4`, `CR/LF`, station `0`, sum check off |
 
 Treat the pins and serial settings as sample defaults. Change them to match
 your board wiring, level shifter, and PLC serial module settings before live

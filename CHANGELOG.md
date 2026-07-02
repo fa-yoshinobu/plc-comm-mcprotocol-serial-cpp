@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: Routed long counter contact and coil reads through the long-state helper path.
 - Docs: Updated maintainer and user rules for long-state routing, special-route helpers, diagnostic native qualified probes, and trace logging.
 - Docs: Closed the `remote_reset` no-response timeout policy investigation as manual-derived behavior (SH-080003-AF p.173: the target is reset, so the response message may not be returned) and recorded the rule in the maintainer manual-derived rules.
+- Docs: Clarified that MC Protocol Format4/Format5 selection is a serial-module configuration match issue, not remote-password behavior, and updated Q/iQ-R maintainer profiles to include verified C4 ASCII Format4 support.
+- Samples: Aligned user-facing quickstart, PlatformIO UART, and Linux CLI sample defaults with the verified C4 ASCII Format4 `19200 / 8E1` serial setup.
 
 ### Fixed
 - Library: Reject standalone `G` and `HG` device access in normal, random, and multi-block device routes.

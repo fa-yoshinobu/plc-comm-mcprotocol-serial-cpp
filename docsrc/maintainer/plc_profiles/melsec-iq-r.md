@@ -20,10 +20,10 @@ serial modules.
 | --- | --- |
 | Public profile string | Use `melsec:iq-r` for iQ-R serial-module targets. |
 | Internal series branch | Map to `PlcSeries::IQ_R`; `is_iq_r_series()` must be true. |
-| Confirmed frame/code mode | C4 binary / Format5 is the current confirmed support basis. |
+| Confirmed frame/code modes | C4 binary / Format5 and C4 ASCII / Format4 are confirmed on the tested iQ-R target. The serial module must be configured for the same format selected by the client. |
 | Normal devices | The plain device families listed below are supported through normal device access. |
 | Special devices | `Jn\...`, `Un\G`, and `Un\HG` are supported only through their dedicated routes. |
-| ASCII Format1-4 | Excluded from this profile decision for now; keep observations as measurement evidence only. |
+| ASCII Format1-3 | Not covered by the current iQ-R profile confirmation. |
 
 ## Evidence status
 
@@ -58,7 +58,7 @@ These are the iQ-R branches that must stay separate from Q/L behavior.
 | Extended word subcommand | `0082` |
 | Extended bit subcommand | `0083` |
 | Binary device reference | 2-byte device code plus 4-byte device number |
-| ASCII device reference | iQ-R-width fields in the implementation, but not support-confirmed by this file |
+| ASCII device reference | iQ-R-width fields are confirmed for C4 ASCII Format4, including the trailing device-modification field in native extended references. |
 | Random/multi-block limits | Use the existing iQ-R branch limits; do not reuse Q/L limits. |
 | Link-direct native wire body | Keep the current binary compatibility exception isolated to link-direct native traffic. |
 
@@ -96,6 +96,6 @@ route silently.
 
 | Item | Reason |
 | --- | --- |
-| C4 ASCII Format1-4 | Observations exist, but they are measurement evidence only and are not part of the current support contract. |
+| C4 ASCII Format1-3 | Not covered by the current iQ-R profile confirmation. |
 | C1/C2/C3/E1 frames | Not covered by the current iQ-R profile confirmation. |
 | Standalone `G` / `HG` | Profile-common rule: these are not plain devices for any MELSEC profile. Use qualified `Un\G` / `Un\HG` forms only when that profile supports them. |

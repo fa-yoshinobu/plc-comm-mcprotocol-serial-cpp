@@ -30,6 +30,7 @@
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
 | The PLC returns framing errors or ignores the request. | `make_c4_binary_protocol()` selects 4C Binary. A PLC module configured for 4C ASCII, 3C, or another frame will not treat that as the same protocol. | Configure the PLC serial module for the same frame type and code mode, or choose a matching `ProtocolConfig` helper. |
+| Format4 works but Format5 does not, or the reverse. | The serial module is configured for one MC protocol format at a time. This is a frame-mode mismatch, not remote-password behavior. | Match the PLC serial-module MC protocol format to the client helper, such as `make_c4_ascii_format4_protocol()` for Format4 or `make_c4_binary_protocol()` for Format5. |
 
 ## RS-485 multi-drop: wrong station
 

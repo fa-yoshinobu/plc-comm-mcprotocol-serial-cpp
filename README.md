@@ -23,7 +23,7 @@ lib_deps =
 
 ## Quick example
 
-This host-side example opens `/dev/ttyUSB0` on Linux or `COM3` on Windows, selects `PlcProfile::MelsecQ`, and reads `D100` with `19200 / 8E2`.
+This host-side example opens `/dev/ttyUSB0` on Linux or `COM3` on Windows, selects `PlcProfile::MelsecQ`, and reads `D100` with `19200 / 8E1`.
 
 ```cpp
 #include <array>
@@ -37,7 +37,7 @@ int main() {
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
   using mcprotocol::serial::Status;
-  using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+  using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   PosixSerialConfig serial {};
 #if defined(_WIN32)
@@ -47,11 +47,11 @@ int main() {
 #endif
   serial.baud_rate = 19200;
   serial.data_bits = 8;
-  serial.stop_bits = 2;
+  serial.stop_bits = 1;
   serial.parity = 'E';
   serial.rts_cts = false;
 
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
   protocol.route.station_no = 0;
 
   PosixSyncClient plc;

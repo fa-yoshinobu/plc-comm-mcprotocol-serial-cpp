@@ -12,7 +12,7 @@ The library exposes three practical entry paths. Pick one based on how much tran
 
 ## Entry path 1: high-level helpers
 
-`make_c4_binary_protocol(PlcProfile::...)` creates a `ProtocolConfig` preset. Request builders such as `make_batch_read_words_request("D100", count, request)` convert plain device strings into typed request structs.
+`make_c4_ascii_format4_protocol(PlcProfile::...)` creates a `ProtocolConfig` preset. Request builders such as `make_batch_read_words_request("D100", count, request)` convert plain device strings into typed request structs.
 
 ```cpp
 #include <cstdint>
@@ -26,9 +26,9 @@ int main() {
   using mcprotocol::serial::ProtocolConfig;
   using mcprotocol::serial::Status;
   using mcprotocol::serial::highlevel::make_batch_read_words_request;
-  using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+  using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
-  ProtocolConfig protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
+  ProtocolConfig protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
   protocol.route.station_no = 0;
 
   BatchReadWordsRequest request {};
@@ -61,17 +61,17 @@ int main() {
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
   using mcprotocol::serial::Status;
-  using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+  using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   PosixSerialConfig serial {};
   serial.device_path = "/dev/ttyUSB0";
   serial.baud_rate = 19200;
   serial.data_bits = 8;
-  serial.stop_bits = 2;
+  serial.stop_bits = 1;
   serial.parity = 'E';
   serial.rts_cts = false;
 
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
   PosixSyncClient plc;
   Status status = plc.open(serial, protocol);
   if (!status.ok()) {
@@ -101,16 +101,16 @@ int main() {
   using mcprotocol::serial::PlcProfile;
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
-  using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+  using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   PosixSerialConfig serial {};
   serial.device_path = "/dev/ttyUSB0";
   serial.baud_rate = 19200;
   serial.data_bits = 8;
-  serial.stop_bits = 2;
+  serial.stop_bits = 1;
   serial.parity = 'E';
   PosixSyncClient plc;
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
   if (!plc.open(serial, protocol).ok()) {
     return 1;
   }
@@ -140,16 +140,16 @@ int main() {
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
   using mcprotocol::serial::highlevel::RandomWriteWordSpec;
-  using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+  using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   PosixSerialConfig serial {};
   serial.device_path = "/dev/ttyUSB0";
   serial.baud_rate = 19200;
   serial.data_bits = 8;
-  serial.stop_bits = 2;
+  serial.stop_bits = 1;
   serial.parity = 'E';
   PosixSyncClient plc;
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
   if (!plc.open(serial, protocol).ok()) {
     return 1;
   }
@@ -185,16 +185,16 @@ int main() {
   using mcprotocol::serial::PosixSyncClient;
   using mcprotocol::serial::RemoteOperationMode;
   using mcprotocol::serial::RemoteRunClearMode;
-  using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+  using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   PosixSerialConfig serial {};
   serial.device_path = "/dev/ttyUSB0";
   serial.baud_rate = 19200;
   serial.data_bits = 8;
-  serial.stop_bits = 2;
+  serial.stop_bits = 1;
   serial.parity = 'E';
   PosixSyncClient plc;
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
   if (!plc.open(serial, protocol).ok()) {
     return 1;
   }
@@ -326,7 +326,7 @@ See [examples/mcu_async_batch_read.cpp](../../examples/mcu_async_batch_read.cpp)
 ## Special helper notes
 
 - Use `read_long_state_bits()` for `LTS/LTC/LSTS/LSTC/LCS/LCC` state reads. Timer and retentive timer state devices use the long-current status block internally; `LCS/LCC` use direct bit reads internally.
-- Use `read_link_direct_*()` / `write_link_direct_*()` for `Jn\X/Y/B/SB` bit devices and `Jn\W/SW` word devices. Binary mode is the confirmed route for the current R120/RJ71C24 setup; ASCII extension frames can be target-dependent.
+- Use `read_link_direct_*()` / `write_link_direct_*()` for `Jn\X/Y/B/SB` bit devices and `Jn\W/SW` word devices. C4 Binary / Format5 and C4 ASCII / Format4 are both confirmed for the validated Q and iQ-R targets when the serial module is configured for the matching format.
 - Use `read_native_qualified_words()` / `write_native_qualified_words()` for profiles whose supported `Un\G` / `Un\HG` route is native device access.
 - The `0601/1601` qualified helper route is profile/target-specific and is rejected by profiles that require native-qualified access.
 - Set `MCPROTOCOL_SERIAL_TRACE=1` when using the synchronous host client to log MC TX/RX frame bytes to stderr.

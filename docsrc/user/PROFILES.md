@@ -29,7 +29,7 @@ Always select one concrete `PlcProfile` value before sending real PLC requests.
 ## How to select
 
 ```cpp
-auto protocol = mcprotocol::serial::highlevel::make_c4_binary_protocol(
+auto protocol = mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(
     mcprotocol::serial::PlcProfile::MelsecQ);
 ```
 
