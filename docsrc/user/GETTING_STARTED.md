@@ -43,13 +43,13 @@ target_link_libraries(your_app PRIVATE mcprotocol_serial)
 | `melsec:a` | MELSEC-A-compatible targets | `PlcProfile::MelsecA` |
 
 ```cpp
-auto protocol = mcprotocol::serial::highlevel::make_c4_binary_protocol(
+auto protocol = mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(
     mcprotocol::serial::PlcProfile::MelsecQ);
 ```
 
 ## First read on a host
 
-This example uses `PosixSyncClient`, `PosixSerialConfig`, `make_c4_binary_protocol(PlcProfile::MelsecQ)`, and `read_words("D100", words)`.
+This example uses `PosixSyncClient`, `PosixSerialConfig`, `make_c4_ascii_format4_protocol(PlcProfile::MelsecQ)`, and `read_words("D100", words)`.
 
 ```cpp
 #include <array>
@@ -63,7 +63,7 @@ int main() {
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
   using mcprotocol::serial::Status;
-  using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+  using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   PosixSerialConfig serial {};
 #if defined(_WIN32)
@@ -73,11 +73,11 @@ int main() {
 #endif
   serial.baud_rate = 19200;
   serial.data_bits = 8;
-  serial.stop_bits = 2;
+  serial.stop_bits = 1;
   serial.parity = 'E';
   serial.rts_cts = false;
 
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
   protocol.route.station_no = 0;
 
   PosixSyncClient plc;
@@ -113,9 +113,9 @@ Start from the real-UART PlatformIO examples:
 
 | Board | Example | Default PLC UART |
 | --- | --- | --- |
-| RP2040 / Raspberry Pi Pico | [platformio_rpipico_arduino_uart](../../examples/platformio_rpipico_arduino_uart/platformio_rpipico_arduino_uart.cpp) | `Serial1`, TX `0`, RX `1`, `19200 / 8E2` |
-| ESP32-C3 DevKitM-1 | [platformio_esp32c3_arduino_uart](../../examples/platformio_esp32c3_arduino_uart/platformio_esp32c3_arduino_uart.cpp) | `Serial1`, TX `7`, RX `6`, `19200 / 8E2` |
-| Arduino Mega 2560 | [platformio_arduino_mega2560_uart](../../examples/platformio_arduino_mega2560_uart/platformio_arduino_mega2560_uart.cpp) | `Serial1`, TX1 `18`, RX1 `19`, `19200 / 8E2` |
+| RP2040 / Raspberry Pi Pico | [platformio_rpipico_arduino_uart](../../examples/platformio_rpipico_arduino_uart/platformio_rpipico_arduino_uart.cpp) | `Serial1`, TX `0`, RX `1`, `19200 / 8E1` |
+| ESP32-C3 DevKitM-1 | [platformio_esp32c3_arduino_uart](../../examples/platformio_esp32c3_arduino_uart/platformio_esp32c3_arduino_uart.cpp) | `Serial1`, TX `7`, RX `6`, `19200 / 8E1` |
+| Arduino Mega 2560 | [platformio_arduino_mega2560_uart](../../examples/platformio_arduino_mega2560_uart/platformio_arduino_mega2560_uart.cpp) | `Serial1`, TX1 `18`, RX1 `19`, `19200 / 8E1` |
 
 The pin numbers are sample defaults. Change them to match your actual board wiring and level shifter.
 

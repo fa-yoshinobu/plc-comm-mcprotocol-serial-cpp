@@ -35,7 +35,7 @@ Smallest helper-based setup:
 #include <mcprotocol_serial.hpp>
 
 mcprotocol::serial::ProtocolConfig config =
-    mcprotocol::serial::highlevel::make_c4_binary_protocol(
+    mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(
         mcprotocol::serial::PlcProfile::MelsecQ);
 config.route.station_no = 0;
 
@@ -86,11 +86,11 @@ mcprotocol::serial::PosixSerialConfig serial {
 #endif
     .baud_rate = 19200,
     .data_bits = 8,
-    .stop_bits = 2,
+    .stop_bits = 1,
     .parity = 'E',
 };
 
-auto protocol = mcprotocol::serial::highlevel::make_c4_binary_protocol(
+auto protocol = mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(
     mcprotocol::serial::PlcProfile::MelsecQ);
 mcprotocol::serial::Status status = plc.open(serial, protocol);
 

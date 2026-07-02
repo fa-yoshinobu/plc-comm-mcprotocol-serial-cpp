@@ -12,7 +12,7 @@ The library exposes three practical entry paths. Pick one based on how much tran
 
 ## Entry path 1: high-level helpers
 
-`make_c4_binary_protocol(PlcProfile::...)` creates a `ProtocolConfig` preset. Request builders such as `make_batch_read_words_request("D100", count, request)` convert plain device strings into typed request structs.
+`make_c4_ascii_format4_protocol(PlcProfile::...)` creates a `ProtocolConfig` preset. Request builders such as `make_batch_read_words_request("D100", count, request)` convert plain device strings into typed request structs.
 
 ```cpp
 #include <cstdint>
@@ -26,9 +26,9 @@ int main() {
   using mcprotocol::serial::ProtocolConfig;
   using mcprotocol::serial::Status;
   using mcprotocol::serial::highlevel::make_batch_read_words_request;
-  using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+  using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
-  ProtocolConfig protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
+  ProtocolConfig protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
   protocol.route.station_no = 0;
 
   BatchReadWordsRequest request {};
@@ -61,17 +61,17 @@ int main() {
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
   using mcprotocol::serial::Status;
-  using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+  using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   PosixSerialConfig serial {};
   serial.device_path = "/dev/ttyUSB0";
   serial.baud_rate = 19200;
   serial.data_bits = 8;
-  serial.stop_bits = 2;
+  serial.stop_bits = 1;
   serial.parity = 'E';
   serial.rts_cts = false;
 
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
   PosixSyncClient plc;
   Status status = plc.open(serial, protocol);
   if (!status.ok()) {
@@ -101,16 +101,16 @@ int main() {
   using mcprotocol::serial::PlcProfile;
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
-  using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+  using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   PosixSerialConfig serial {};
   serial.device_path = "/dev/ttyUSB0";
   serial.baud_rate = 19200;
   serial.data_bits = 8;
-  serial.stop_bits = 2;
+  serial.stop_bits = 1;
   serial.parity = 'E';
   PosixSyncClient plc;
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
   if (!plc.open(serial, protocol).ok()) {
     return 1;
   }
@@ -140,16 +140,16 @@ int main() {
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
   using mcprotocol::serial::highlevel::RandomWriteWordSpec;
-  using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+  using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   PosixSerialConfig serial {};
   serial.device_path = "/dev/ttyUSB0";
   serial.baud_rate = 19200;
   serial.data_bits = 8;
-  serial.stop_bits = 2;
+  serial.stop_bits = 1;
   serial.parity = 'E';
   PosixSyncClient plc;
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
   if (!plc.open(serial, protocol).ok()) {
     return 1;
   }
@@ -185,16 +185,16 @@ int main() {
   using mcprotocol::serial::PosixSyncClient;
   using mcprotocol::serial::RemoteOperationMode;
   using mcprotocol::serial::RemoteRunClearMode;
-  using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+  using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   PosixSerialConfig serial {};
   serial.device_path = "/dev/ttyUSB0";
   serial.baud_rate = 19200;
   serial.data_bits = 8;
-  serial.stop_bits = 2;
+  serial.stop_bits = 1;
   serial.parity = 'E';
   PosixSyncClient plc;
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
   if (!plc.open(serial, protocol).ok()) {
     return 1;
   }

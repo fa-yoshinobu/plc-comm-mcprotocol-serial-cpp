@@ -9,7 +9,7 @@ int main() {
   using mcprotocol::serial::PlcProfile;
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
-  using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+  using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   PosixSyncClient plc;
 
@@ -22,13 +22,13 @@ int main() {
 #endif
       .baud_rate = 19200,
       .data_bits = 8,
-      .stop_bits = 2,
+      .stop_bits = 1,
       .parity = 'E',
       .rts_cts = false,
   };
 
   // Keep the PLC profile explicit. See docsrc/user/GOTCHAS.md before changing it.
-  auto protocol = make_c4_binary_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
   protocol.route.station_no = 0;
 
   // Open configures the blocking host facade and the underlying async client.
