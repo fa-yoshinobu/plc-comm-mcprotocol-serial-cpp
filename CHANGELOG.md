@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tooling: Added `MCPROTOCOL_SERIAL_TRACE=1` support for logging MC TX/RX frame bytes from the synchronous host client.
 
 ### Changed
+- Library: Renamed the canonical saved/displayed serial MC profile strings for
+  Q and L targets from `melsec:q` / `melsec:l` to `melsec:qcpu` /
+  `melsec:lcpu`. The C++ enum names remain `PlcProfile::MelsecQ` and
+  `PlcProfile::MelsecL`; the old textual profile names are no longer accepted.
 - Library: Routed long counter contact and coil reads through the long-state helper path.
 - Docs: Updated maintainer and user rules for long-state routing, special-route helpers, diagnostic native qualified probes, and trace logging.
 - Docs: Closed the `remote_reset` no-response timeout policy investigation as manual-derived behavior (SH-080003-AF p.173: the target is reset, so the response message may not be returned) and recorded the rule in the maintainer manual-derived rules.

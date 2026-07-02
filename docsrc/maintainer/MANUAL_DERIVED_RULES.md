@@ -15,7 +15,7 @@ separated into one of these buckets:
 
 | Branch or rule | Source status | Maintainer note |
 | --- | --- | --- |
-| Canonical strings such as `melsec:iq-r`, `melsec:q`, and `melsec:l` | Library policy | The manuals describe PLC families and modules, not these exact saved configuration strings. |
+| Canonical strings such as `melsec:iq-r`, `melsec:qcpu`, and `melsec:lcpu` | Library policy | The manuals describe PLC families and modules, not these exact saved configuration strings. |
 | `PlcProfile` to `PlcSeries` mapping | Library policy informed by manual family names | Treat it as an implementation grouping. Recheck the manuals before adding diverging behavior inside a grouped profile. |
 | iQ-R vs non-iQ-R device reference widths, device code widths, and normal/extended subcommands | Manual-derived | This covers request-shape branches such as `0000/0001` vs `0002/0003` and `0080/0081` vs `0082/0083`. Keep page citations with any new change. |
 | 1C/1E A-series and QnA command-family selection, including `ER/EW` and `NR/NW` paths | Manual-derived | These are command-family branches, not read/write device-support policy. |
@@ -25,7 +25,7 @@ separated into one of these buckets:
 | `melsec:iq-r` read/write device-family list | Manual-derived request shape plus hardware observation | Maintain the current support list in the iQ-R profile specification and keep page-backed notes with future additions. |
 | `melsec:iq-l` command/device layout | Manual evidence plus hardware observation and implementation policy | SH-082159CHN-F says iQ-L serial MC communication through MELSEC-L serial modules must use MELSEC-Q/L subcommands, not iQ-R subcommands. Keep the public profile separate. Current implementation uses Q/L-compatible serial MC request shapes and rejects the long timer/counter family, `LZ`, `RD`, and `Un\HG` for iQ-L serial MC. |
 | FX5 / MELSEC iQ-F MC protocol layout | Manual-derived request shape plus hardware observation | SH-082624-J describes FX5 MC protocol with subcommand bit fields for data size, device-reference width, and device-memory extension. Keep FX5/iQ-F separate from Q/L and iQ-R. |
-| `melsec:q` and `melsec:l` device-family lists | Manual-derived request shape plus hardware observation | Keep Q and L as separate public profiles even though both map to the Q/L serial request-shape branch. |
+| `melsec:qcpu` and `melsec:lcpu` device-family lists | Manual-derived request shape plus hardware observation | Keep Q and L as separate public profiles even though both map to the Q/L serial request-shape branch. |
 | `LZ` profile support | Manual-derived request shape plus hardware observation | Keep `LZ` supported only on profiles whose specifications include a native random double-word route. It is supported for iQ-R and iQ-F, and rejected for Q, L, and iQ-L. |
 | iQ-R binary link-direct Q/L wire body exception | Hardware observation | Keep the exception isolated to link-direct native traffic; it is not a public combined Q/L profile path. |
 | 4C ASCII Format4 native extended-access rejection for `Jn\...` and `Un\...` | Confirmed encoder bug, fixed and hardware-verified 2026-07-02 | The ASCII extended-device encoder omitted the trailing device-modification field required by SH-080003-AF p.430-431. Post-fix reads/writes passed on iQ-R (`R120PCPU`) and Q/L (`Q06UDVCPU`). Keep pre-fix hardware observations separate from post-fix target behavior. |

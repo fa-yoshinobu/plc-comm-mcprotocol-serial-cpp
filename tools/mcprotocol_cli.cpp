@@ -483,7 +483,7 @@ void print_usage() {
       "  --rts-toggle on|off        Toggle RTS during TX for RS-485 DE control\n"
       "  --dump-frames on|off       Print raw TX/RX frame bytes to stderr (default: off)\n"
       "  --frame MODE               Required. c4-binary | c4-ascii-f1 | c4-ascii-f2 | c4-ascii-f3 | c4-ascii-f4 | c3-ascii-f1 | c3-ascii-f2 | c3-ascii-f3 | c3-ascii-f4 | c2-ascii-f1 | c2-ascii-f2 | c2-ascii-f3 | c2-ascii-f4 | c1-ascii-f1 | c1-ascii-f3 | c1-ascii-f4 | e1-binary | e1-ascii\n"
-      "  --plc-profile PROFILE      Required. Canonical PLC profile: melsec:iq-r | melsec:iq-l | melsec:iq-f | melsec:q | melsec:l | melsec:qna | melsec:ana-anu | melsec:a\n"
+      "  --plc-profile PROFILE      Required. Canonical PLC profile: melsec:iq-r | melsec:iq-l | melsec:iq-f | melsec:qcpu | melsec:lcpu | melsec:qna | melsec:ana-anu | melsec:a\n"
       "  --block-no N               ASCII Format2 block number 0..255 (default: 0)\n"
       "  --station N                Station number; non-zero implies multidrop\n"
       "  --self-station N           Self-station number for m:n connections\n"

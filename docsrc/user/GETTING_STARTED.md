@@ -36,8 +36,8 @@ target_link_libraries(your_app PRIVATE mcprotocol_serial)
 | `melsec:iq-r` | MELSEC iQ-R serial modules | `PlcProfile::MelsecIqR` |
 | `melsec:iq-l` | MELSEC iQ-L serial modules | `PlcProfile::MelsecIqL` |
 | `melsec:iq-f` | MELSEC iQ-F / FX5 serial paths | `PlcProfile::MelsecIqF` |
-| `melsec:q` | MELSEC-Q serial modules | `PlcProfile::MelsecQ` |
-| `melsec:l` | MELSEC-L serial modules | `PlcProfile::MelsecL` |
+| `melsec:qcpu` | MELSEC-Q serial modules | `PlcProfile::MelsecQ` |
+| `melsec:lcpu` | MELSEC-L serial modules | `PlcProfile::MelsecL` |
 | `melsec:qna` | MELSEC QnA-compatible targets | `PlcProfile::MelsecQnA` |
 | `melsec:ana-anu` | MELSEC AnA / AnU-compatible targets | `PlcProfile::MelsecAnAAnU` |
 | `melsec:a` | MELSEC-A-compatible targets | `PlcProfile::MelsecA` |

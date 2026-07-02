@@ -218,9 +218,9 @@ enum class PlcProfile : std::uint8_t {
     case PlcProfile::MelsecIqF:
       return "melsec:iq-f";
     case PlcProfile::MelsecQ:
-      return "melsec:q";
+      return "melsec:qcpu";
     case PlcProfile::MelsecL:
-      return "melsec:l";
+      return "melsec:lcpu";
     case PlcProfile::MelsecQnA:
       return "melsec:qna";
     case PlcProfile::MelsecAnAAnU:
@@ -268,11 +268,11 @@ enum class PlcProfile : std::uint8_t {
     out_profile = PlcProfile::MelsecIqF;
     return true;
   }
-  if (plc_profile_text_equals(text, text_size, "melsec:q", sizeof("melsec:q") - 1U)) {
+  if (plc_profile_text_equals(text, text_size, "melsec:qcpu", sizeof("melsec:qcpu") - 1U)) {
     out_profile = PlcProfile::MelsecQ;
     return true;
   }
-  if (plc_profile_text_equals(text, text_size, "melsec:l", sizeof("melsec:l") - 1U)) {
+  if (plc_profile_text_equals(text, text_size, "melsec:lcpu", sizeof("melsec:lcpu") - 1U)) {
     out_profile = PlcProfile::MelsecL;
     return true;
   }

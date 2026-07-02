@@ -1,10 +1,10 @@
-# `melsec:l` Profile Specification
+# `melsec:lcpu` Profile Specification
 
 Status: target-validated maintainer specification for the tested MELSEC-L
 serial setup.
 
-This file records the current `melsec:l` basis. It uses manual-derived Q/L
-request shapes and treats MELSEC-L as equivalent to `melsec:q` unless fresh
+This file records the current `melsec:lcpu` basis. It uses manual-derived Q/L
+request shapes and treats MELSEC-L as equivalent to `melsec:qcpu` unless fresh
 target evidence proves a split. Keep exact validation addresses out of this
 file; they are test points only.
 
@@ -17,8 +17,8 @@ modules.
 
 | Area | Decision |
 | --- | --- |
-| Public profile string | Use `melsec:l` for MELSEC-L serial-module targets. |
-| Internal series branch | Use the Q/L-compatible `PlcSeries::Q_L` request-shape branch. Keep the public profile separate from `melsec:q`. |
+| Public profile string | Use `melsec:lcpu` for MELSEC-L serial-module targets. |
+| Internal series branch | Use the Q/L-compatible `PlcSeries::Q_L` request-shape branch. Keep the public profile separate from `melsec:qcpu`. |
 | Confirmed frame/code basis | C4 binary / Format5 is the current support basis. |
 | Normal devices | The plain device families listed below passed read/write/restore on the tested L target. |
 | Special devices | Treat native-qualified `Un\G` as the Q-equivalent dedicated route. `Jn\...` is expected to match Q, but this setup cannot confirm it. Do not treat standalone `G` or `HG` as plain devices. |
@@ -27,7 +27,7 @@ modules.
 
 | Topic | Status | Notes |
 | --- | --- | --- |
-| Public profile string | Library policy | The manual names the MELSEC-L family; `melsec:l` is the library's explicit user-facing selector. |
+| Public profile string | Library policy | The manual names the MELSEC-L family; `melsec:lcpu` is the library's explicit user-facing selector. |
 | Manual family | Manual-derived | Q/L serial manuals group MELSEC-Q and MELSEC-L request-shape behavior. |
 | Current implementation | Implemented grouping | `PlcProfile::MelsecL` maps to `PlcSeries::Q_L`. |
 | Current hardware observation | L target observed | `L26CPU-BT` with `LJ71C24`; C4 binary / Format5 / `19200`, `8E1`, station `0`, sum-check off. |
@@ -55,7 +55,7 @@ modules.
 
 ## Current support surface
 
-Keep this aligned with `melsec:q` until a fresh L target run proves a split from
+Keep this aligned with `melsec:qcpu` until a fresh L target run proves a split from
 Q/L behavior.
 
 | Support class | Device families |
@@ -72,17 +72,17 @@ ordinary plain-device access when one of these routes is requested.
 
 | Route | Current L policy |
 | --- | --- |
-| `Jn\X/Y/B/SB` link-direct bits | Expected to match `melsec:q`, but not confirmed on the available L setup because the required link-direct equipment is not present. |
-| `Jn\W/SW` link-direct words | Expected to match `melsec:q`, but not confirmed on the available L setup because the required link-direct equipment is not present. |
-| `Un\G` native-qualified access | Use native device access (`0401/1401`) with Q/L-compatible extended subcommand `0080`, same as `melsec:q`. A representative read matched the prepared value. |
-| `Un\G` helper access | Reject the `0601/1601` helper route for `melsec:l` `Un\G` access. On the L target it read a different value from the native-qualified route. |
+| `Jn\X/Y/B/SB` link-direct bits | Expected to match `melsec:qcpu`, but not confirmed on the available L setup because the required link-direct equipment is not present. |
+| `Jn\W/SW` link-direct words | Expected to match `melsec:qcpu`, but not confirmed on the available L setup because the required link-direct equipment is not present. |
+| `Un\G` native-qualified access | Use native device access (`0401/1401`) with Q/L-compatible extended subcommand `0080`, same as `melsec:qcpu`. A representative read matched the prepared value. |
+| `Un\G` helper access | Reject the `0601/1601` helper route for `melsec:lcpu` `Un\G` access. On the L target it read a different value from the native-qualified route. |
 | Standalone `G` / `HG` | Not plain devices. Require qualified forms, and only expose the forms supported by the selected profile. |
 
 ## Command-specific notes
 
 | Command family | Notes |
 | --- | --- |
-| Batch read/write | Confirmed for all supported plain read/write families. `S` write was observed to succeed on the tested setup, but the implementation rejects `S` write for `melsec:l` until the route and software behavior are rechecked. |
+| Batch read/write | Confirmed for all supported plain read/write families. `S` write was observed to succeed on the tested setup, but the implementation rejects `S` write for `melsec:lcpu` until the route and software behavior are rechecked. |
 | Native random read | Confirmed for `X`, `Y`, `M`, `L`, `SM`, `F`, `V`, `B`, `SB`, `S`, `DX`, `DY`, `D`, `SD`, `W`, `TN`, `STN`, `CN`, `SW`, `Z`, `R`, and `ZR`. Returned `0x4032` for `TS`, `TC`, `STS`, `STC`, `CS`, and `CC`. Treat this as a random-read limitation, not a batch-read exclusion. |
 | Native random write | Confirmed for all supported plain read/write families. `S` write was observed to succeed, but the implementation rejects it because it is not part of the supported write surface. |
 | Native multi-block read/write (`0406`/`1406`) | Confirmed on the tested L serial path for supported plain devices. Treat this as serial-module evidence, separate from SLMP built-in-Ethernet Q-series block-command behavior. |
@@ -108,7 +108,7 @@ ordinary plain-device access when one of these routes is requested.
 
 ## Maintenance notes
 
-- Do not collapse the public `melsec:l` selector into `melsec:q`; they may
+- Do not collapse the public `melsec:lcpu` selector into `melsec:qcpu`; they may
   share implementation today, but validation results must remain target-family
   specific.
 - Do not infer device-number restrictions from validation addresses.

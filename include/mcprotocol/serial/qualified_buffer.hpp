@@ -67,12 +67,12 @@ struct QualifiedBufferWordDevice {
   if (profile == PlcProfile::MelsecQ) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
-        "melsec:q qualified buffer helper route is disabled; use native-qualified Un\\G access");
+        "melsec:qcpu qualified buffer helper route is disabled; use native-qualified Un\\G access");
   }
   if (profile == PlcProfile::MelsecL) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
-        "melsec:l qualified buffer helper route is disabled; use native-qualified Un\\G access");
+        "melsec:lcpu qualified buffer helper route is disabled; use native-qualified Un\\G access");
   }
   return ok_status();
 }

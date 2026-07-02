@@ -53,7 +53,7 @@ they are not range limits.
 | Native-qualified read/write | `Un\G` |
 | Not supported | `V`, `ZR`, `DX`, `DY`, `LTS`, `LTC`, `LTN`, `LSTS`, `LSTC`, `LSTN`, `Un\HG`, `Jn\...`, monitor, host-buffer, and module-buffer helper routes |
 
-### `melsec:q`
+### `melsec:qcpu`
 
 | Support class | Device families |
 | --- | --- |
@@ -69,7 +69,7 @@ Native random read on the tested Q target is narrower than batch access for
 some timer/counter status families. Treat random-read rejection as a command
 route limitation, not as a batch-read exclusion.
 
-### `melsec:l`
+### `melsec:lcpu`
 
 | Support class | Device families |
 | --- | --- |

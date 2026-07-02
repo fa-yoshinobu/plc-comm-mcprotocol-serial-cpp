@@ -18,8 +18,8 @@ Before changing `PlcProfile`, `PlcSeries`, codec branching, or
 | `melsec:iq-r` | [melsec-iq-r.md](melsec-iq-r.md) |
 | `melsec:iq-l` | [melsec-iq-l.md](melsec-iq-l.md) |
 | `melsec:iq-f` | [melsec-iq-f.md](melsec-iq-f.md) |
-| `melsec:q` | [melsec-q.md](melsec-q.md) |
-| `melsec:l` | [melsec-l.md](melsec-l.md) |
+| `melsec:qcpu` | [melsec-qcpu.md](melsec-qcpu.md) |
+| `melsec:lcpu` | [melsec-lcpu.md](melsec-lcpu.md) |
 | `melsec:qna` | [melsec-qna.md](melsec-qna.md) |
 | `melsec:ana-anu` | [melsec-ana-anu.md](melsec-ana-anu.md) |
 | `melsec:a` | [melsec-a.md](melsec-a.md) |

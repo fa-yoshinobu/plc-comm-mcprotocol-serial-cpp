@@ -103,7 +103,7 @@ lists was re-run and passed. No follow-up remains for this issue.
 
 Do not block ordinary plain-device Format4 traffic based only on this issue.
 On 2026-07-02, after the Q serial module was intentionally set to MC Protocol
-Format4, a fresh `melsec:q` control check read `D0` and `cpu-model`
+Format4, a fresh `melsec:qcpu` control check read `D0` and `cpu-model`
 successfully on `Q06UDVCPU`. This confirms that current basic Q Format4
 communication works when the module setting and CLI frame mode match.
 
@@ -112,7 +112,7 @@ communication works when the module setting and CLI frame mode match.
 | Target class | Setup summary | Result summary |
 | --- | --- | --- |
 | iQ-R serial validation | `R120PCPU` (`cpu-model` `0x4844`) via C24 on `COM3`, 4C ASCII Format4, `19200 / 8E1`, station `0`, sum-check off. | Pre-fix runs showed native extended route failures. Post-fix, all native extended routes passed (see hardware recheck section). |
-| Q/L target | `Q06UDVCPU` (`cpu-model` `0x0368`), `melsec:q`, 4C ASCII Format4, station `0`, `19200 / 8E1`, sum-check off. | Pre-fix: plain devices passed, `Jn\...` and `U2\G1000` failed. Post-fix: all previously failing reads and writes passed (see hardware recheck section). |
+| Q/L target | `Q06UDVCPU` (`cpu-model` `0x0368`), `melsec:qcpu`, 4C ASCII Format4, station `0`, `19200 / 8E1`, sum-check off. | Pre-fix: plain devices passed, `Jn\...` and `U2\G1000` failed. Post-fix: all previously failing reads and writes passed (see hardware recheck section). |
 
 ## Source evidence
 
@@ -213,7 +213,7 @@ Date: 2026-07-02
 
 Communication settings: `Q06UDVCPU` (`cpu-model` `0x0368`) via C24 on `COM3`,
 `19200 / 8E1`, station `0`, sum-check off, `c4-ascii-f4`,
-`--plc-profile melsec:q` (subcommands `0080`/`0081`, trailing
+`--plc-profile melsec:qcpu` (subcommands `0080`/`0081`, trailing
 device-modification field `000`).
 
 | Access | Result |

@@ -134,7 +134,7 @@ Conditions:
 - PLC: `Q06UDVCPU`
 - SLMP: `192.168.250.100:1025`, Q/L-compatible profile
 - MC Serial: `COM3`, `19200 / 8E1`, station `0`
-- MC Serial profile: `melsec:q`
+- MC Serial profile: `melsec:qcpu`
 - Frame: `c4-ascii-f4`, MC Protocol 4C ASCII Format4
 - Sum-check: off
 
@@ -167,7 +167,7 @@ Do not treat this as proof of a PLC limitation yet. Preserve it as measurement e
 with raw `MC TX` / `MC RX` frame dumps before changing public support claims.
 
 Post-fix Q/L direct recheck (2026-07-02, `Q06UDVCPU` / `cpu-model` `0x0368`,
-same serial settings, `c4-ascii-f4`, `melsec:q`, post-fix binary):
+same serial settings, `c4-ascii-f4`, `melsec:qcpu`, post-fix binary):
 
 | Access | Result |
 |---|---|

@@ -2329,16 +2329,18 @@ void test_plc_profile_names_and_internal_grouping() {
   assert(plc_series_from_profile(profile) == PlcSeries::IQ_F);
   assert(std::string_view(plc_profile_name(profile)) == "melsec:iq-f");
 
-  assert(parse_plc_profile_text("melsec:q", profile));
+  assert(parse_plc_profile_text("melsec:qcpu", profile));
   assert(profile == PlcProfile::MelsecQ);
   assert(plc_series_from_profile(profile) == PlcSeries::Q_L);
-  assert(std::string_view(plc_profile_name(profile)) == "melsec:q");
+  assert(std::string_view(plc_profile_name(profile)) == "melsec:qcpu");
 
-  assert(parse_plc_profile_text("melsec:l", profile));
+  assert(!parse_plc_profile_text("melsec:q", profile));
+  assert(parse_plc_profile_text("melsec:lcpu", profile));
   assert(profile == PlcProfile::MelsecL);
   assert(plc_series_from_profile(profile) == PlcSeries::Q_L);
-  assert(std::string_view(plc_profile_name(profile)) == "melsec:l");
+  assert(std::string_view(plc_profile_name(profile)) == "melsec:lcpu");
 
+  assert(!parse_plc_profile_text("melsec:l", profile));
   assert(!parse_plc_profile_text("melsec:q-l", profile));
 
   assert(parse_plc_profile_text("melsec:qna", profile));
@@ -2361,6 +2363,7 @@ void test_plc_profile_names_and_internal_grouping() {
   assert(!parse_plc_profile_text("iq-f", profile));
   assert(!parse_plc_profile_text("q", profile));
   assert(!parse_plc_profile_text("l", profile));
+  assert(!parse_plc_profile_text("lcpu", profile));
   assert(!parse_plc_profile_text("ql", profile));
   assert(!parse_plc_profile_text("qna", profile));
 }
@@ -4690,13 +4693,13 @@ void test_validate_qualified_buffer_helper_route_rejects_q_l_equivalent_profiles
   assert(status.code == StatusCode::UnsupportedConfiguration);
   assert(std::strcmp(
              status.message,
-             "melsec:q qualified buffer helper route is disabled; use native-qualified Un\\G access") == 0);
+             "melsec:qcpu qualified buffer helper route is disabled; use native-qualified Un\\G access") == 0);
 
   status = validate_qualified_buffer_helper_route(PlcProfile::MelsecL, g_device);
   assert(status.code == StatusCode::UnsupportedConfiguration);
   assert(std::strcmp(
              status.message,
-             "melsec:l qualified buffer helper route is disabled; use native-qualified Un\\G access") == 0);
+             "melsec:lcpu qualified buffer helper route is disabled; use native-qualified Un\\G access") == 0);
 
   status = validate_qualified_buffer_helper_route(PlcProfile::MelsecIqR, g_device);
   assert(status.ok());

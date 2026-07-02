@@ -16,7 +16,7 @@
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| A Linux CLI wrapper exits before sending a request. | `MCPROTOCOL_FRAME` or `MCPROTOCOL_PLC_PROFILE` was not set. The wrapper does not infer either value. | Set both values explicitly, for example `MCPROTOCOL_FRAME=c4-binary` and `MCPROTOCOL_PLC_PROFILE=melsec:q`. |
+| A Linux CLI wrapper exits before sending a request. | `MCPROTOCOL_FRAME` or `MCPROTOCOL_PLC_PROFILE` was not set. The wrapper does not infer either value. | Set both values explicitly, for example `MCPROTOCOL_FRAME=c4-binary` and `MCPROTOCOL_PLC_PROFILE=melsec:qcpu`. |
 | A program appears to use the wrong command family. | The serial frame/profile was copied from another target or left at a sample value. | Choose the frame and `PlcProfile` for the actual PLC serial module; CPU model text, serial settings, and device strings are not used for inference. |
 
 ## Zeros from MCU sample
