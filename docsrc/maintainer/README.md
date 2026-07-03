@@ -3,10 +3,7 @@
 This section is for implementation notes, profile decisions, real-hardware
 validation records, and current follow-up items.
 
-If you are trying to use the library rather than maintain it, go back to:
-
-- [../../README.md](../../README.md)
-- [../../examples/README.md](../../examples/README.md)
+This section is not part of the user-facing manual.
 
 ## Start Here
 
