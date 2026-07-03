@@ -1,9 +1,9 @@
 # Native Command Backlog
 
-Audience: maintainers running real-hardware follow-up on target-dependent native command behavior.
+Audience: maintainers running focused real-hardware checks on target-dependent native command behavior.
 
 This page complements the repository-root TODO. Keep normal user docs focused on known-good
-workflows and keep this page for native-command follow-up policy and interpretation.
+workflows and keep this page for native-command check policy and interpretation.
 
 ## Public Policy
 
@@ -18,7 +18,7 @@ workflows and keep this page for native-command follow-up policy and interpretat
 
 ## Active Items
 
-Track current follow-up items in the repository-root [TODO.md](../../TODO.md).
+Track current active items in the repository-root [TODO.md](../../TODO.md).
 
 ## Implementation Gaps
 
@@ -26,7 +26,7 @@ There are no current implementation gaps. If a new codec/client/CLI gap is found
 the repository-root [TODO.md](../../TODO.md) with the affected command, request shape, validation evidence, and close
 criteria.
 
-## Follow-up Rules
+## Check Rules
 
 - Add every new hardware result to the maintainer archive.
 - Add or extend the consolidated report under the maintainer archive for that hardware

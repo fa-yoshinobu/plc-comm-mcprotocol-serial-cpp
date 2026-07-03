@@ -13,8 +13,8 @@ MELSEC QnA-compatible targets using the older 1C/1E-oriented command family.
 | Public profile string | Library policy | `melsec:qna` is the explicit QnA-compatible user-facing name. |
 | Command-family branch | Manual-derived | Manuals define QnA-style command names separately from ACPU common commands. |
 | Current repository behavior | Existing QnA-family branch | The current code groups QnA and AnA/AnU for shared command-family behavior. |
-| Hardware verification | Not available | No QnA test equipment is available for this work. Proceed by manual-derived inference and codec-level tests only. |
-| Device support list | Pending | Current codec support is command-shape support, not a final device support contract. |
+| Hardware evidence | Not in current support contract | Proceed by manual-derived inference and codec-level tests only. |
+| Device support list | Scope boundary | Current codec support is command-shape support, not a final device support contract. |
 
 ## Verification policy
 
@@ -56,8 +56,8 @@ and targets before documenting it as support.
 | Not supported | `S` |
 | Direct extended file register | QnA-family `NR` / `NW` paths are currently separate from A-series `ER` / `EW`. |
 
-## Open questions
+## Scope Boundary
 
-- Is `melsec:qna` truly identical to `melsec:ana-anu` for every implemented command?
-- Which QnA-compatible CPUs/modules support each C1/E1 path?
-- What are the exact manual limits for point counts and address ranges per device?
+- Do not claim `melsec:qna` is identical to `melsec:ana-anu` for every implemented command.
+- Do not publish CPU/module-specific C1/E1 support from this draft alone.
+- Do not publish point-count or address-range limits from codec acceptance alone.

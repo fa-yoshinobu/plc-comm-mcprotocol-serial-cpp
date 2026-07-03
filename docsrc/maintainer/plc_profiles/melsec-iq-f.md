@@ -1,7 +1,7 @@
 # `melsec:iq-f` Profile Specification
 
-Status: target-observed maintainer draft for the tested FX5 serial setups. This
-file is the current implementation basis, but it is not yet a user-facing
+Status: target-observed maintainer specification for the tested FX5 serial
+setups. This file is the current implementation basis, not a user-facing
 support contract.
 
 This file records the current `melsec:iq-f` profile decision for MELSEC iQ-F /
@@ -66,8 +66,8 @@ back to ordinary plain-device access when one of these routes is requested.
 | --- | --- |
 | `Un\G` native-qualified access | Use native device access (`0401/1401`) with extended subcommand `0080`. |
 | `Un\G` helper access | Reject the `0601/1601` helper route for iQ-F. The tested target returned `0x7E40` for module-buffer probes, and public access should remain native-qualified. |
-| `Un\HG` | Not available for FX5/iQ-F. |
-| `Jn\X/Y/B/W/SB/SW` link-direct access | Not available for this profile. |
+| `Un\HG` | Not part of FX5/iQ-F serial support. |
+| `Jn\X/Y/B/W/SB/SW` link-direct access | Not part of this profile. |
 
 ## Command-specific notes
 

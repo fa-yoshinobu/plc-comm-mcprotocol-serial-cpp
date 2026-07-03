@@ -11,7 +11,7 @@ separated into one of these buckets:
 - Manual-derived: the MELSEC manual describes the command shape, device form, or applicability.
 - Library policy: a local API/configuration decision, not a manual term.
 - Hardware observation: repeatable target evidence, but still target/module dependent.
-- Pending manual audit: do not treat it as a final support or reject contract yet.
+- Manual audit required: do not treat it as a final support or reject contract.
 
 | Branch or rule | Source status | Maintainer note |
 | --- | --- | --- |
@@ -33,7 +33,7 @@ separated into one of these buckets:
 | iQ-R binary link-direct Q/L wire body exception | Hardware observation | Keep the exception isolated to link-direct native traffic; it is not a public combined Q/L profile path. |
 | 4C ASCII Format4 native extended-access shape for `Jn\...` and `Un\...` | Manual-derived request shape plus hardware verification | SH-080003-AF p.430-431 requires the trailing device-modification field in ASCII extended-device references. Keep that field in the encoder; reads/writes are verified on iQ-R (`R120PCPU`) and Q/L (`Q06UDVCPU`). |
 | MC protocol format selection | Hardware observation plus serial-module configuration discipline | The serial module is configured for one MC protocol format at a time. Diagnose Format4/Format5 mismatches as frame-mode configuration first; do not treat ordinary Format4 read success/failure as remote-password evidence. |
-| Remote RESET (`1006`) no-response-timeout-as-success policy | Manual-derived | SH-080003-AF p.173 states that on remote RESET the access target is reset, so the response message may not be returned. Accept both a normal response and a pure no-response after TX as success; surface explicit error responses (non-STOP state, reset prohibited by parameter) as errors. A no-response is indistinguishable from a link failure at protocol level; confirm with a follow-up read-only check after the reset settles. |
+| Remote RESET (`1006`) no-response-timeout-as-success policy | Manual-derived | SH-080003-AF p.173 states that on remote RESET the access target is reset, so the response message may not be returned. Accept both a normal response and a pure no-response after TX as success; surface explicit error responses (non-STOP state, reset prohibited by parameter) as errors. A no-response is indistinguishable from a link failure at protocol level; confirm with a post-reset read-only check after the reset settles. |
 | Separate public Q, L, iQ-L, and iQ-F profiles | Library policy plus target-family risk control | Do not reintroduce a combined Q/L saved profile. Keep profile names aligned with the selected target family. |
 
 ## Address and Device Parsing

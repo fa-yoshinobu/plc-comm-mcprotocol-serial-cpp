@@ -1,6 +1,6 @@
-# Target-Dependent Native Command Follow-up
+# Target-Dependent Native Command Evidence
 
-Audience: maintainers preparing focused real-hardware rechecks for
+Audience: maintainers preparing focused real-hardware checks for
 target-dependent MC Protocol serial native-command results.
 
 ## Current Validation Hold
@@ -14,8 +14,8 @@ command result cannot currently be separated from target configuration.
 
 | Area | Command | Evidence | Current status |
 | --- | ---: | --- | --- |
-| Remote password unlock | `1630` | `123456melsec` returned `0x7F22`; `abcdef1` returned `0x7FE7`; link sanity still passed. | validation blocked until a known active PLC remote-password state is available |
-| Remote password lock | `1631` | `123456melsec` returned `0x7F22`; link sanity still passed. | validation blocked until a known active PLC remote-password state is available |
+| Remote password unlock | `1630` | `123456melsec` returned `0x7F22`; `abcdef1` returned `0x7FE7`; link sanity still passed. | waiting for a known active PLC remote-password state |
+| Remote password lock | `1631` | `123456melsec` returned `0x7F22`; link sanity still passed. | waiting for a known active PLC remote-password state |
 
 Focused setup for the recorded checks:
 
@@ -30,7 +30,7 @@ Use [scripts/recheck_remote_password.ps1](../../scripts/recheck_remote_password.
 for the next run. It performs read-only sanity checks by default and requires
 `-AllowRemotePasswordCommands` before sending `1630` / `1631`.
 
-Reopen this as an active follow-up only after the target-side remote password
+Reopen this as an active TODO only after the target-side remote password
 setting and CPU/module state are known. At that point, capture the resulting PLC
 end code and explain it against the known target settings.
 

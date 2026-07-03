@@ -9,7 +9,7 @@ Before changing `PlcProfile`, `PlcSeries`, codec branching, or
 - Manual-derived: the MELSEC manual describes the command shape, device form, or applicability.
 - Hardware observation: repeatable result from a named PLC/module/frame setup.
 - Library policy: a local API naming or grouping decision.
-- Pending: not decided yet.
+- Scope boundary: not promoted to user-facing support.
 
 ## Profile files
 
@@ -35,7 +35,7 @@ read/write support.
 4. Run write probes only on ranges reserved for testing.
 5. Compare MC Serial results against SLMP/MC only as diagnostic evidence, not as proof by itself.
 6. Record target model, module, firmware if known, frame type, code mode, serial settings, and station route.
-7. Mark each device family as manual-derived, observed, rejected by target, or not tested.
+7. Mark each device family as manual-derived, observed, rejected by target, or outside the current support surface.
 
 Common device-form rule: `G` and `HG` are not standalone plain devices for any
 MELSEC profile. Record support only for qualified forms such as `Un\G` and
@@ -49,17 +49,17 @@ Do not reintroduce a combined Q/L public profile. Keep Q and L as separate
 profile names, even when the current implementation maps both to the Q/L
 request-shape branch.
 
-## Profiles without local test equipment
+## Profiles Without Current Hardware Contract
 
-These profiles are maintained by manual-derived inference and codec-level tests
-until matching PLC hardware becomes available:
+These profiles are maintained by manual-derived inference and codec-level tests.
+They are not promoted to user-facing hardware-observed support:
 
 | Profile | Current verification basis |
 | --- | --- |
-| `melsec:qna` | Manual-derived command-family inference; no local QnA target. |
-| `melsec:ana-anu` | Manual-derived command-family inference; no local AnA/AnU target. |
-| `melsec:a` | Manual-derived ACPU command inference; no local A-series target. |
+| `melsec:qna` | Manual-derived command-family inference; no hardware-observed support contract. |
+| `melsec:ana-anu` | Manual-derived command-family inference; no hardware-observed support contract. |
+| `melsec:a` | Manual-derived ACPU command inference; no hardware-observed support contract. |
 
 Do not label results for these profiles as hardware-observed, and do not promote
-their device inventories to user-facing read/write support without later target
-evidence.
+their device inventories to user-facing read/write support without a deliberate
+support-contract update.

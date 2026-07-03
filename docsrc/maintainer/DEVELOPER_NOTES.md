@@ -11,12 +11,12 @@ Audience: maintainers of this repository.
 ## Documentation Boundary
 
 - Keep `docsrc/user/` and the top-level `README.md` focused on current user workflows.
-- Keep unresolved hardware evidence, command coverage detail, and backlog policy in
+- Keep hardware evidence, command coverage detail, and backlog policy in
   the maintainer archive or `docsrc/maintainer/`.
 - Keep manual-derived operational rules in [MANUAL_DERIVED_RULES.md](MANUAL_DERIVED_RULES.md).
 - Label sample defaults as sample defaults. Do not describe example-code defaults as the current
   validated target settings.
-- When the practical settings or follow-up state changes, re-check `README.md`, `docs/index.md`,
+- When the practical settings or TODO state changes, re-check `README.md`, `docs/index.md`,
   and `docsrc/user/` for stale current-looking text.
 
 ## Status Terms
@@ -25,7 +25,7 @@ Use these terms consistently in validation reports.
 
 - `native pass`: the intended MC command succeeds directly on hardware
 - `native ng`: the direct MC command is rejected by the module or PLC
-- `hold`: not resolved yet, or intentionally excluded from the active probe set
+- `hold`: intentionally excluded from the active probe set
 
 ## Current Native-only Policy
 
@@ -56,8 +56,8 @@ The validated `RJ71C24-R2` setup behaves like a strict half-duplex shared UART.
 - If ASCII Format4 communication times out or returns mixed fragments, send ASCII `EOT CRLF` or
   `CL CRLF` before the next probe. This matches the manual's transmission-sequence reset guidance
   for abnormal communication.
-- Do not treat successful recovery after `EOT CRLF` or `CL CRLF` as evidence that an unresolved
-  native command family is actually supported.
+- Do not treat successful recovery after `EOT CRLF` or `CL CRLF` as evidence that
+  the original request shape or target configuration was valid.
 
 ## Request-Shape Conformance
 
@@ -93,4 +93,4 @@ Do not patch first and justify later.
 
 ## Root TODO
 
-Track active unresolved items in the repository-root [TODO.md](../../TODO.md).
+Track active TODO items in the repository-root [TODO.md](../../TODO.md).

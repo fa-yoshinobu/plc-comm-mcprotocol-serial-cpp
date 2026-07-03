@@ -76,9 +76,9 @@ What can be compiled out:
   Each feature switch below removes one whole command family from the codec and client surface
 - codec-family unit
   You can remove whole code modes and whole frame families from the codec dispatch
-- not yet a trim unit
-  This repository does not yet cut individual commands inside one family, per-device paths, or
-  per-PLC-profile support as separate compile-time switches
+- outside the trim surface
+  This repository does not cut individual commands inside one family, per-device paths, or
+  per-PLC-profile support as separate compile-time switches.
 
 Capacity tuning:
 

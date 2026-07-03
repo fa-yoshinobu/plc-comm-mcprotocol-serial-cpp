@@ -11,10 +11,10 @@ MELSEC AnA / AnU-compatible targets.
 | Topic | Status | Notes |
 | --- | --- | --- |
 | Public profile string | Library policy | Keep a separate public name for AnA/AnU even if some command shapes match QnA. |
-| Command-family branch | Manual-derived, needs split audit | Manuals distinguish CPU families; current code may share behavior where command shapes match. |
+| Command-family branch | Manual-derived grouping | Manuals distinguish CPU families; current code may share behavior where command shapes match. |
 | Current repository behavior | Grouped with QnA-family branch | `AnA_AnU` is value-compatible with the QnA internal selector in the current code. |
-| Hardware verification | Not available | No AnA/AnU test equipment is available for this work. Proceed by manual-derived inference and codec-level tests only. |
-| Device support list | Pending | Do not copy QnA support without manual or target evidence. |
+| Hardware evidence | Not in current support contract | Proceed by manual-derived inference and codec-level tests only. |
+| Device support list | Scope boundary | Do not copy QnA support without manual or deliberate support-contract evidence. |
 
 ## Verification policy
 
@@ -53,10 +53,10 @@ Use the QnA-family current codec surface only as a starting point.
 | --- | --- |
 | 1C/1E common devices | `X`, `Y`, `M`, `L`, `F`, `B`, `D`, `W`, `R`, `TS`, `TC`, `TN`, `CS`, `CC`, `CN` |
 | Not supported | `S` |
-| Direct extended file register | Pending. Verify AnA/AnU manual applicability separately from QnA. |
+| Direct extended file register | Treat AnA/AnU manual applicability separately from QnA. |
 
-## Open questions
+## Scope Boundary
 
-- Which manual tables prove AnA/AnU uses the same command symbols as QnA for each operation?
-- Are address ranges or device families different even when command symbols match?
-- Should the internal selector remain grouped with QnA or split after manual review?
+- Do not claim AnA/AnU equals QnA for every operation from the current grouping alone.
+- Do not publish AnA/AnU address ranges or device families without profile-specific support evidence.
+- Keep the internal selector grouping as an implementation detail unless a deliberate support-contract update changes it.

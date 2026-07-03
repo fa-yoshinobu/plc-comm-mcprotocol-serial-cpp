@@ -13,8 +13,8 @@ MELSEC-A-compatible targets using ACPU common command paths.
 | Public profile string | Library policy | `melsec:a` is the explicit A-series-compatible user-facing name. |
 | Command-family branch | Manual-derived | ACPU common command symbols differ from QnA-family symbols. |
 | Current repository behavior | Existing A-series branch | The current codec has A-only checks for several extended file-register paths. |
-| Hardware verification | Not available | No A-series test equipment is available for this work. Proceed by manual-derived inference and codec-level tests only. |
-| Device support list | Pending | Current codec acceptance is not a final target support statement. |
+| Hardware evidence | Not in current support contract | Proceed by manual-derived inference and codec-level tests only. |
+| Device support list | Scope boundary | Current codec acceptance is not a final target support statement. |
 
 ## Verification policy
 
@@ -55,8 +55,8 @@ For 1C ASCII command paths, the ACPU common symbols are currently:
 | Extended file register | A-series `ER`, `EW`, and `ET` paths are currently A-only. |
 | Direct extended file register | Verify separately; current direct `NR` / `NW` paths are QnA-family, not A-series. |
 
-## Open questions
+## Scope Boundary
 
-- Which A-series CPUs/modules are in scope for this library?
-- Which 1E binary/ASCII combinations are valid per manual and target?
-- What are the exact manual limits for A-series extended file-register commands?
+- Do not widen A-series CPU/module scope from this draft alone.
+- Do not promote additional 1E binary/ASCII combinations without a deliberate support-contract update.
+- Do not publish A-series extended file-register limits as supported ranges from codec acceptance alone.
