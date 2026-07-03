@@ -35,7 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: Closed the `remote_reset` no-response timeout policy investigation as manual-derived behavior (SH-080003-AF p.173: the target is reset, so the response message may not be returned) and recorded the rule in the maintainer manual-derived rules.
 - Docs: Clarified that MC Protocol Format4/Format5 selection is a serial-module configuration match issue, not remote-password behavior, and updated Q/iQ-R maintainer profiles to include verified C4 ASCII Format4 support.
 - Docs: Recorded Q/L serial multi-block (`0406`/`1406`) validation in maintainer profile notes so it stays separate from SLMP built-in-Ethernet Q-series block-command guards.
+- Docs: Cleaned up maintainer notes and normalized the root TODO.
 - Samples: Aligned user-facing quickstart, PlatformIO UART, and Linux CLI sample defaults with the verified C4 ASCII Format4 `19200 / 8E1` serial setup.
+- Tooling: Removed local absolute fallback tool paths from `run_ci.bat`.
 
 ### Fixed
 - Library: Fixed an out-of-bounds read in the ASCII Format1/2/4 response decoder when the received buffer was shorter than the `STX` + block-number + header prefix; the decoder now reports `Incomplete` instead of crashing with an access violation. Observed on live iQ-R link-direct `Jn\...` reads whose responses arrived split into short serial chunks.
