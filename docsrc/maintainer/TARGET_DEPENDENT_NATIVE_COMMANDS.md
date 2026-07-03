@@ -3,14 +3,19 @@
 Audience: maintainers preparing focused real-hardware rechecks for
 target-dependent MC Protocol serial native-command results.
 
-## Current Open Hold
+## Current Validation Hold
 
-Only remote password control remains open.
+No active native-command hold is currently actionable.
+
+Remote password control is kept here as historical target-dependent evidence,
+but it is not treated as an implementation gap. On the available PLC setup, the
+remote-password state could not be made active/known from the PLC side, so the
+command result cannot currently be separated from target configuration.
 
 | Area | Command | Evidence | Current status |
 | --- | ---: | --- | --- |
-| Remote password unlock | `1630` | `123456melsec` returned `0x7F22`; `abcdef1` returned `0x7FE7`; link sanity still passed. | unresolved target/configuration question |
-| Remote password lock | `1631` | `123456melsec` returned `0x7F22`; link sanity still passed. | unresolved target/configuration question |
+| Remote password unlock | `1630` | `123456melsec` returned `0x7F22`; `abcdef1` returned `0x7FE7`; link sanity still passed. | validation blocked until a known active PLC remote-password state is available |
+| Remote password lock | `1631` | `123456melsec` returned `0x7F22`; link sanity still passed. | validation blocked until a known active PLC remote-password state is available |
 
 Focused setup for the recorded checks:
 
@@ -25,19 +30,9 @@ Use [scripts/recheck_remote_password.ps1](../../scripts/recheck_remote_password.
 for the next run. It performs read-only sanity checks by default and requires
 `-AllowRemotePasswordCommands` before sending `1630` / `1631`.
 
-Close this hold only after the target-side remote password setting and CPU/module
-state are known and the resulting PLC end code is explained.
-
-## Resolved Target-Dependent Items
-
-These are closed. Keep detailed evidence out of this page unless the issue is
-reopened with fresh hardware data.
-
-| Area | Result |
-| --- | --- |
-| 4C ASCII Format4 native extended access | Resolved as a client encoder bug. Post-fix `Jn\...`, `Un\G`, and `Un\HG` checks passed on iQ-R and Q/L targets. See [FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md](FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md). |
-| Remote latch clear `1005` | Resolved as CPU-state dependent. Run after putting the CPU into STOP from the same channel. |
-| Long index register `LZ1` native write | Resolved on the checked `R08CPU`; write/readback/restore passed. |
+Reopen this as an active follow-up only after the target-side remote password
+setting and CPU/module state are known. At that point, capture the resulting PLC
+end code and explain it against the known target settings.
 
 ## Recheck Rules
 

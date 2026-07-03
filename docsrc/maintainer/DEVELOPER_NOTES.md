@@ -91,6 +91,6 @@ When a test, build, or probe regresses:
 
 Do not patch first and justify later.
 
-## Open Items
+## Root TODO
 
-Track active unresolved items in [TODO.md](TODO.md).
+Track active unresolved items in the repository-root [TODO.md](../../TODO.md).

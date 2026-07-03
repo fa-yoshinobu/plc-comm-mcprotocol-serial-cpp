@@ -1,17 +1,16 @@
 # Native Command Backlog
 
-Audience: maintainers running real-hardware follow-up on unresolved native command families.
+Audience: maintainers running real-hardware follow-up on target-dependent native command behavior.
 
-This page replaces the old repository-level TODO list for native command follow-up. Keep normal user
-docs focused on known-good workflows and keep this page for native-command follow-up policy and
-interpretation.
+This page complements the repository-root TODO. Keep normal user docs focused on known-good
+workflows and keep this page for native-command follow-up policy and interpretation.
 
 ## Public Policy
 
-- Keep unresolved native command behavior visible. Do not add fallback behavior that silently
-  swaps in a different command family.
-- Keep unresolved native commands in the public API, but describe them as native probes on the
-  validated real-hardware setups instead of known-good workflows.
+- Keep target-dependent native command behavior visible. Do not add fallback behavior that
+  silently swaps in a different command family.
+- Keep target-dependent native commands in the public API, but describe them as native probes on
+  the validated real-hardware setups instead of known-good workflows.
 - Treat `read-qualified-words` / `write-qualified-words` over `0601/1601` as the helper route
   only. Profiles that require native-qualified access must reject this helper route.
 - Treat `read-native-qualified-words` / `write-native-qualified-words` over `0401/1401` as the
@@ -19,12 +18,12 @@ interpretation.
 
 ## Active Items
 
-Track current follow-up items in [TODO.md](TODO.md).
+Track current follow-up items in the repository-root [TODO.md](../../TODO.md).
 
 ## Implementation Gaps
 
 There are no current implementation gaps. If a new codec/client/CLI gap is found, track it in
-[TODO.md](TODO.md) with the affected command, request shape, validation evidence, and close
+the repository-root [TODO.md](../../TODO.md) with the affected command, request shape, validation evidence, and close
 criteria.
 
 ## Follow-up Rules

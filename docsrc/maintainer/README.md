@@ -12,7 +12,7 @@ If you are trying to use the library rather than maintain it, go back to:
 
 | Need | Read |
 | --- | --- |
-| Active unresolved work | [TODO.md](TODO.md) |
+| Active unresolved work | [TODO.md](../../TODO.md) |
 | Rules derived from manuals and hardware observations | [MANUAL_DERIVED_RULES.md](MANUAL_DERIVED_RULES.md) |
 | PLC profile decisions and evidence status | [plc_profiles/README.md](plc_profiles/README.md) |
 | Implementation notes for maintainers | [DEVELOPER_NOTES.md](DEVELOPER_NOTES.md) |
@@ -20,14 +20,3 @@ If you are trying to use the library rather than maintain it, go back to:
 | Target-dependent command evidence | [TARGET_DEPENDENT_NATIVE_COMMANDS.md](TARGET_DEPENDENT_NATIVE_COMMANDS.md) |
 | Documentation and CI maintenance | [DOCS_AND_CI.md](DOCS_AND_CI.md) |
 | Release steps | [RELEASE_PROCESS.md](RELEASE_PROCESS.md) |
-
-## Resolved Investigation Records
-
-These files are retained as evidence. Do not treat their pre-fix failure tables
-as current behavior without reading the status at the top of each file.
-
-| Topic | Record |
-| --- | --- |
-| ASCII Format1 partial-response decoder crash | [FORMAT1_ASCII_IQR_LINK_DIRECT_INVESTIGATION.md](FORMAT1_ASCII_IQR_LINK_DIRECT_INVESTIGATION.md) |
-| ASCII Format2 partial-response decoder crash | [FORMAT2_ASCII_IQR_LINK_DIRECT_INVESTIGATION.md](FORMAT2_ASCII_IQR_LINK_DIRECT_INVESTIGATION.md) |
-| ASCII Format4 native extended device encoder bug | [FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md](FORMAT4_ASCII_NATIVE_EXTENSION_ANALYSIS.md) |
