@@ -42,8 +42,8 @@ How to use the results:
 
 - Add only observed codes to the shared PLC Setup MC Protocol Serial error-code page,
   using project wording rather than copied manual text.
-- Add practical recovery guidance to `GOTCHAS.md` or `TROUBLESHOOTING.md` only for codes
-  that users can realistically encounter and fix.
+- Add practical recovery guidance to `GOTCHAS.md` only when the recovery is
+  library-specific. Put common protocol/setup guidance in the shared PLC Setup pages.
 - Add maintainer notes under `docsrc/maintainer/` with the bench model, serial settings,
   request shape, observed code, and whether the result is PLC/module-specific.
 - Add parser/client regression tests only for codes that the library can classify from a
