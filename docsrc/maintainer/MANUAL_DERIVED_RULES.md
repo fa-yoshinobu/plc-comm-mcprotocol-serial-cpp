@@ -78,7 +78,9 @@ separated into one of these buckets:
 ## FX5U Serial Scope
 
 - On iQ-F serial `3C/4C`, treat `0801/0802` as unsupported.
-- On iQ-F serial, keep `DX`, `DY`, `V`, and `ZR` out of the supported profile surface.
+- On iQ-F serial, keep `DX`, `DY`, `V`, and `ZR` out of the supported profile surface. The
+  2026-07-04 CLI `c4-ascii-f1` error-code probe returned `0x7F21` for raw `DX0`
+  read/write on the tested setup.
 
 ## Validation Discipline
 
