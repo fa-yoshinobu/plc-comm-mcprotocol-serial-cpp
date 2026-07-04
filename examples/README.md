@@ -2,11 +2,13 @@
 
 These examples show host-side bring-up, MCU UART integration, and the low-level async client. Any example that talks to a real PLC needs a matching serial connection, explicit PLC profile, and matching baud/parity/stop-bit settings.
 
+Use only test addresses that are safe for your PLC program before you run any write example.
+
 ## What is in this directory
 
 | Group | Files | Use it for |
 | --- | --- | --- |
-| Host sync | `host_sync_quickstart.cpp` | First read from a Windows, Linux, or POSIX host with the blocking facade. |
+| Host sync | `host_sync_quickstart.cpp`, `host_sync_polling_reconnect.cpp` | First read and reconnect polling from a Windows, Linux, or POSIX host with the blocking facade. |
 | Linux CLI wrapper | `linux_cli/safe_bringup_readonly.sh` | Read-only CLI bring-up with explicit frame and profile environment variables. |
 | MCU UART | `platformio_*_arduino_uart/*.cpp` | Real UART reads from `D100-D103` on RP2040, ESP32-C3, and Arduino Mega 2560. |
 | Async state machine | `mcu_async_batch_read.cpp`, `platformio_*_arduino_async/*.cpp` | The transport-owned async flow with simulated PLC responses. |
@@ -17,6 +19,12 @@ These examples show host-side bring-up, MCU UART integration, and the low-level 
 
 ```bash
 cmake -S . -B build -G Ninja && cmake --build build && ./build/mcprotocol_example_host_sync
+```
+
+```powershell
+cmake -S . -B build_win -G Ninja
+cmake --build build_win --target mcprotocol_example_host_polling_reconnect
+.\build_win\mcprotocol_example_host_polling_reconnect.exe COM3 melsec:qcpu D100 4 19200 format5 off
 ```
 
 ### PlatformIO
@@ -45,6 +53,10 @@ pio run -e rpipico-arduino-example
 pio run -e esp32-c3-devkitm-1-example
 ```
 
+```bash
+pio run -e esp32-c3-devkitm-1-polling-reconnect
+```
+
 ### Linux CLI
 
 ```bash
@@ -58,6 +70,7 @@ Set `MCPROTOCOL_FRAME` and `MCPROTOCOL_PLC_PROFILE` before running the CLI wrapp
 | File or folder | Platform | What it demonstrates |
 | --- | --- | --- |
 | `host_sync_quickstart.cpp` | Host | `PosixSyncClient`, `make_c4_ascii_format4_protocol`, CPU model read, batch word read, and sparse random read. |
+| `host_sync_polling_reconnect.cpp` | Host | Read-only serial polling of `D100-D103` with selectable Format4/Format5 reconnect/backoff state logs on Windows/POSIX host serial ports. |
 | `mcu_async_batch_read.cpp` | Host | Low-level `MelsecSerialClient` flow with a simulated success response. |
 | `linux_cli/safe_bringup_readonly.sh` | Linux host | Safe read-only CLI bring-up with explicit serial, frame, and PLC profile settings. |
 | `platformio_rpipico_arduino_uart/` | RP2040 Arduino | Real `Serial1` UART read-only polling of `D100-D103`. |
@@ -65,6 +78,7 @@ Set `MCPROTOCOL_FRAME` and `MCPROTOCOL_PLC_PROFILE` before running the CLI wrapp
 | `platformio_arduino_mega2560_uart/` | Arduino Mega 2560 | Real `Serial1` UART read-only polling of `D100-D103`. |
 | `platformio_rpipico_arduino_async/` | RP2040 Arduino | Async client lifecycle with simulated response bytes. |
 | `platformio_esp32c3_arduino_async/` | ESP32-C3 Arduino | Async client lifecycle with simulated response bytes. |
+| `platformio_esp32c3_arduino_async_polling_reconnect/` | ESP32-C3 Arduino | Read-only async UART polling of `D100-D103` with reconnect/backoff state logs. |
 
 ## Real UART sample defaults
 
