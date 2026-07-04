@@ -84,7 +84,7 @@ int main() {
 | [Gotchas](docsrc/user/GOTCHAS.md) | Troubleshoot common profile, frame, serial, and address mistakes. |
 | [MC Protocol Serial setup](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/serial/) | Check PLC-side serial settings, station number, wiring shape, and bring-up order. |
 | [MC Protocol Serial supported registers](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/supported-registers/) | Check device families, address examples, and current string syntax. |
-| [Error codes](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/error-codes/) | Interpret library status codes and observed PLC/module error families. |
+| [Troubleshooting & Codes](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/troubleshooting-codes/) | Interpret library status codes and observed PLC/module error families. |
 | [Examples](examples/README.md) | Run maintained host and MCU examples. |
 
 ## License and registry
