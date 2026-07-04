@@ -191,6 +191,12 @@ if(MCPROTOCOL_BUILD_EXAMPLES)
     )
 
     target_link_libraries(mcprotocol_example_host_sync PRIVATE mcprotocol_serial)
+
+    add_executable(mcprotocol_example_host_polling_reconnect
+      examples/host_sync_polling_reconnect.cpp
+    )
+
+    target_link_libraries(mcprotocol_example_host_polling_reconnect PRIVATE mcprotocol_serial)
   endif()
 endif()
 
