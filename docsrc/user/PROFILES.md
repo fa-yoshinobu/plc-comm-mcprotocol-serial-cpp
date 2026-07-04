@@ -4,6 +4,8 @@ Each profile selects the command family and device-layout assumptions used by th
 
 Choose one explicit profile in your application or configuration UI. The library intentionally does not infer it from `ReadTypeName`, CPU model text, or omitted configuration.
 
+The supported device inventory is maintained in the shared [MC Protocol Serial supported registers](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/supported-registers/) page.
+
 ## Explicit selection is required
 
 Always select one concrete `PlcProfile` value before sending real PLC requests.
@@ -66,7 +68,7 @@ protocol.plc_profile = mcprotocol::serial::PlcProfile::MelsecQ;
 
 | Canonical profile | Caution |
 | --- | --- |
-| `melsec:iq-r` | Use for iQ-R serial-module routes. The supported device inventory is maintained in [SUPPORTED_REGISTERS.md](SUPPORTED_REGISTERS.md). Some command behavior remains target/module dependent. |
+| `melsec:iq-r` | Use for iQ-R serial-module routes. Some command behavior remains target/module dependent. |
 | `melsec:iq-l` | Kept separate from iQ-R because iQ-L serial-module behavior is Q/L-subcommand based even when CPU-side SLMP looks iQ-R-like. Do not use the long timer/counter family, `LZ`, `RD`, or `Un\HG` with this profile. |
 | `melsec:iq-f` | Use for FX5/iQ-F serial paths. `V`, `ZR`, `DX`, `DY`, long timer/retentive-timer families, `Un\HG`, `Jn\...`, monitor, host-buffer, and module-buffer helper routes are not part of this profile. |
 | `melsec:qcpu` | Use for MELSEC-Q serial paths. The current implementation shares the Q/L request-shape branch but keeps Q as a separate public profile. |

@@ -4,7 +4,7 @@ Keep these rules aligned with the current MELSEC serial manuals and validated ha
 
 ## PLC Profile Branch Provenance
 
-Use this table before changing `SUPPORTED_REGISTERS.md` or adding profile-specific rejection
+Use this table before changing the shared supported-registers table or adding profile-specific rejection
 logic. A profile branch should not become a public read/write support rule until its source is
 separated into one of these buckets:
 

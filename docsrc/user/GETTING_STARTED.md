@@ -27,6 +27,19 @@ add_subdirectory(external/plc-comm-mcprotocol-serial-cpp)
 target_link_libraries(your_app PRIVATE mcprotocol_serial)
 ```
 
+## PlatformIO examples
+
+Run the maintained PlatformIO environments with `pio run -e <env>`.
+
+| Purpose | Environments |
+| --- | --- |
+| Host / simulated examples | `native-example`, `native-example-ultra-minimal` |
+| RP2040 / Raspberry Pi Pico | `rpipico-arduino-example`, `rpipico-arduino-uart-example`, `rpipico-arduino-example-ultra-minimal` |
+| ESP32-C3 DevKitM-1 | `esp32-c3-devkitm-1-example`, `esp32-c3-devkitm-1-uart-example`, `esp32-c3-devkitm-1-example-ultra-minimal` |
+| Arduino Mega 2560 real UART | `mega2560-arduino-uart-example`, `mega2560-arduino-uart-example-ultra-minimal` |
+
+The normal MCU examples use a reduced footprint profile. The ultra-minimal examples keep only the smallest batch read/write path and reduce fixed buffers for small firmware builds.
+
 ## Choose your PLC profile
 
 `PlcProfile` is required. There is no default profile for live communication.
@@ -118,6 +131,7 @@ Start from the real-UART PlatformIO examples:
 | Arduino Mega 2560 | [platformio_arduino_mega2560_uart](../../examples/platformio_arduino_mega2560_uart/platformio_arduino_mega2560_uart.cpp) | `Serial1`, TX1 `18`, RX1 `19`, `19200 / 8E1` |
 
 The pin numbers are sample defaults. Change them to match your actual board wiring and level shifter.
+The serial values in examples are also sample defaults. Match the actual PLC serial-module frame, baud rate, parity, stop bits, and station number before using them as validation settings.
 
 ## Confirm success
 
@@ -135,12 +149,4 @@ The pin numbers are sample defaults. Change them to match your actual board wiri
 | PLC error or framing error | Check that the PLC module is configured for the same frame type and code mode. |
 | RS-485 multi-drop does not answer | `protocol.route.station_no` must match the station number of the target serial module. |
 | MCU sample prints zeros or no values | Verify the UART TX/RX pins and the TTL-to-RS-232C or RS-485 interface. |
-| Wiring uncertainty | See [WIRING_GUIDE.md](WIRING_GUIDE.md) before changing software settings. |
-
-## Next pages
-
-| Page | Use it for |
-| --- | --- |
-| [USAGE_GUIDE.md](USAGE_GUIDE.md) | Choose the right API entry path. |
-| [WIRING_GUIDE.md](WIRING_GUIDE.md) | Check physical serial wiring. |
-| [SUPPORTED_REGISTERS.md](SUPPORTED_REGISTERS.md) | Confirm accepted device families and address strings. |
+| Wiring uncertainty | See the shared [MC Protocol Serial setup guide](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/serial/) before changing software settings. |

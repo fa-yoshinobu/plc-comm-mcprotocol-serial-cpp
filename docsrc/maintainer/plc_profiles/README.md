@@ -3,8 +3,8 @@
 These files are maintainer working notes for profile design and verification.
 They are not user-facing support contracts.
 
-Before changing `PlcProfile`, `PlcSeries`, codec branching, or
-`SUPPORTED_REGISTERS.md`, separate each claim into one of these buckets:
+Before changing `PlcProfile`, `PlcSeries`, codec branching, or the shared
+supported-registers table, separate each claim into one of these buckets:
 
 - Manual-derived: the MELSEC manual describes the command shape, device form, or applicability.
 - Hardware observation: repeatable result from a named PLC/module/frame setup.

@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PlcProfile::MelsecL`; the old textual profile names are no longer accepted.
 - Library: Routed long counter contact and coil reads through the long-state helper path.
 - Docs: Updated maintainer and user rules for long-state routing, special-route helpers, diagnostic native qualified probes, and trace logging.
+- Docs: Removed the manual page-navigation block from Getting Started and rely on site navigation instead.
+- Docs: Consolidated user documentation to Getting Started, Usage Guide, PLC Profiles, and Gotchas; moved supported-register and wiring guidance to the shared PLC Setup Guide.
 - Docs: Closed the `remote_reset` no-response timeout policy investigation as manual-derived behavior (SH-080003-AF p.173: the target is reset, so the response message may not be returned) and recorded the rule in the maintainer manual-derived rules.
 - Docs: Clarified that MC Protocol Format4/Format5 selection is a serial-module configuration match issue, not remote-password behavior, and updated Q/iQ-R maintainer profiles to include verified C4 ASCII Format4 support.
 - Docs: Recorded Q/L serial multi-block (`0406`/`1406`) validation in maintainer profile notes so it stays separate from SLMP built-in-Ethernet Q-series block-command guards.

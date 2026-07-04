@@ -2,6 +2,16 @@
 
 The library exposes three practical entry paths. Pick one based on how much transport control your application needs.
 
+## Design summary
+
+The public API is designed for host tools and MCU firmware:
+
+- no exceptions
+- no RTTI
+- no dynamic allocation in the library
+- caller-owned buffers via `std::span`
+- transport-agnostic client state machine
+
 ## Entry paths
 
 | Entry path | Header | Use it when |
@@ -330,6 +340,26 @@ See [examples/mcu_async_batch_read.cpp](../../examples/mcu_async_batch_read.cpp)
 - Use `read_native_qualified_words()` / `write_native_qualified_words()` for profiles whose supported `Un\G` / `Un\HG` route is native device access.
 - The `0601/1601` qualified helper route is profile/target-specific and is rejected by profiles that require native-qualified access.
 - Set `MCPROTOCOL_SERIAL_TRACE=1` when using the synchronous host client to log MC TX/RX frame bytes to stderr.
+
+## Build-time tuning
+
+For small firmware builds, use the PlatformIO environments or define the same macros in your own build.
+
+| Tuning area | Macros |
+| --- | --- |
+| Buffer capacity | `MCPROTOCOL_SERIAL_MAX_REQUEST_FRAME_BYTES`, `MCPROTOCOL_SERIAL_MAX_RESPONSE_FRAME_BYTES`, `MCPROTOCOL_SERIAL_MAX_REQUEST_DATA_BYTES`, `MCPROTOCOL_SERIAL_MAX_RANDOM_ACCESS_ITEMS`, `MCPROTOCOL_SERIAL_MAX_MULTI_BLOCK_COUNT`, `MCPROTOCOL_SERIAL_MAX_MONITOR_ITEMS`, `MCPROTOCOL_SERIAL_MAX_LOOPBACK_BYTES` |
+| Command families | `MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS`, `MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS`, `MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS`, `MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS`, `MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS`, `MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS`, `MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS` |
+| Codec families | `MCPROTOCOL_SERIAL_ENABLE_ASCII_MODE`, `MCPROTOCOL_SERIAL_ENABLE_BINARY_MODE`, `MCPROTOCOL_SERIAL_ENABLE_FRAME_C4`, `MCPROTOCOL_SERIAL_ENABLE_FRAME_C3`, `MCPROTOCOL_SERIAL_ENABLE_FRAME_C2`, `MCPROTOCOL_SERIAL_ENABLE_FRAME_C1`, `MCPROTOCOL_SERIAL_ENABLE_FRAME_E1` |
+
+CMake exposes the same footprint presets through `MCPROTOCOL_FEATURE_PROFILE`:
+
+| Profile | Behavior |
+| --- | --- |
+| `full` | Complete host-oriented build, including host sync and CLI. |
+| `reduced` | Core-only build with smaller buffers, random/multi-block/monitor/host-buffer/module-buffer disabled, and codec limited to `4C + ASCII`. |
+| `ultra` | Reduced profile plus no CPU-model or loopback helpers. |
+
+Non-`full` CMake profiles are core-only. Host sync, CLI, and tests are disabled automatically unless you override the build.
 
 ## Serial config reference
 
