@@ -51,7 +51,7 @@ class Compound:
 
 
 def normalize_space(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip()
+    return re.sub(r"\s+", " ", text).replace("``", "`").strip()
 
 
 def table_cell(text: str) -> str:
@@ -68,9 +68,7 @@ def inline_text(node: ET.Element | None) -> str:
 
     for child in list(node):
         child_text = inline_text(child)
-        if child.tag in {"computeroutput", "parametername", "ref"} and child_text:
-            pieces.append(f"`{child_text}`")
-        elif child.tag == "linebreak":
+        if child.tag == "linebreak":
             pieces.append("\n")
         elif child.tag == "itemizedlist":
             items: list[str] = []
@@ -141,10 +139,17 @@ def member_signature(member: ET.Element, kind: str, name: str) -> str:
     if kind == "define":
         return normalize_space(f"#define {name}{args} {initializer}".strip())
     if kind == "function":
-        return normalize_space(f"{definition}{args}".strip())
+        return normalize_signature(f"{definition}{args}".strip())
     if kind in {"enum", "typedef", "variable", "friend"}:
-        return normalize_space(f"{definition} {initializer}".strip())
-    return normalize_space(f"{definition}{args}".strip())
+        return normalize_signature(f"{definition} {initializer}".strip())
+    return normalize_signature(f"{definition}{args}".strip())
+
+
+def normalize_signature(text: str) -> str:
+    signature = normalize_space(text)
+    signature = re.sub(r"\bconstexpr\s+", "", signature)
+    signature = re.sub(r"^(using\s+[^=]+=\s*)typedef\s+", r"\1", signature)
+    return signature
 
 
 def member_line(member: ET.Element) -> int:
