@@ -40,8 +40,8 @@ Measurements to collect:
 
 How to use the results:
 
-- Add only observed codes to user-facing `ERROR_CODES.md`, using project wording rather
-  than copied manual text.
+- Add only observed codes to the shared PLC Setup MC Protocol Serial error-code page,
+  using project wording rather than copied manual text.
 - Add practical recovery guidance to `GOTCHAS.md` or `TROUBLESHOOTING.md` only for codes
   that users can realistically encounter and fix.
 - Add maintainer notes under `docsrc/maintainer/` with the bench model, serial settings,

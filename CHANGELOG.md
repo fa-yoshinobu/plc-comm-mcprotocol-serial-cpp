@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Docs: Added a user-facing `ERROR_CODES.md` page for library status codes, serial MC error-family handling, and observed PLC/module codes.
+- Docs: Added shared PLC Setup error-code guidance for library status codes, serial MC error-family handling, and observed PLC/module codes.
 - Library: Added a long-state read helper for long timer, long retentive timer, and long counter contact/coil devices.
 - Library: Added synchronous special-route helpers for link-direct `Jn\...` access and diagnostic native qualified `Un\Gn` / `Un\HGn` probes.
 - Library: Added ASCII link-direct extension encoding for `Jn\X`, `Jn\Y`, `Jn\B`, `Jn\W`, `Jn\SB`, and `Jn\SW` routes.

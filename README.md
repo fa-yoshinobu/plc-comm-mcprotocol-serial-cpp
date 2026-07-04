@@ -84,7 +84,7 @@ int main() {
 | [Supported registers](docsrc/user/SUPPORTED_REGISTERS.md) | Check device families, address examples, and current string syntax. |
 | [PLC profiles](docsrc/user/PROFILES.md) | Choose the exact canonical profile for your target PLC. |
 | [Gotchas](docsrc/user/GOTCHAS.md) | Troubleshoot common profile, frame, serial, and address mistakes. |
-| [Error codes](docsrc/user/ERROR_CODES.md) | Interpret library status codes and observed PLC/module error families. |
+| [Error codes](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/error-codes/) | Interpret library status codes and observed PLC/module error families. |
 | [Examples](examples/README.md) | Run maintained host and MCU examples. |
 
 ## Hardware verified
