@@ -6,6 +6,11 @@ Current active TODOs only.
 
 ### Live-measure MC serial error codes
 
+Pending scope:
+
+- `1C` NAK code meanings.
+- Unclassified `7Fxx` serial-module error responses.
+
 Record live-device evidence for MC Protocol Serial error codes that should be
 documented but are not yet reliable enough to publish from manuals alone.
 
