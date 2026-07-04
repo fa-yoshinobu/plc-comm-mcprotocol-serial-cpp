@@ -29,9 +29,16 @@ MELSEC iQ-F / FX5 CPU modules accessed through FX5 serial communication paths.
 | `SH-082624-J - MELSEC iQ-F FX5 User's Manual (Communication)`, physical PDF pages 695-696 / manual pages 693-694 | Lists 3C/4C device codes and FX5 device presence. |
 | `FX5UC-32MT/D`, CPU model code `0x4A91` | Initial read-only inventory through C4 binary Format5. |
 | `FX5U-32MR/DS`, CPU model code `0x4A41` | Representative reads, focused write/restore checks, native random checks, multi-block checks, and native-qualified `Un\G` read/write. |
+| `FX5` target, CLI `c4-ascii-f1`, `COM4`, `19200bps`, `8E1`, sum-check off | Error-code investigation only: `D100` write/read sanity passed, raw invalid command/subcommand and `0802` returned `0x7E40`, and raw `DX0` read/write returned `0x7F21`. See [MC serial error-code evidence](../MC_SERIAL_ERROR_CODE_EVIDENCE.md). |
+| Same FX5 target, protocol format 1, sum-check enabled | Correct sum-check reads passed on both `c1-ascii-f1` and `c4-ascii-f1`; deliberately bad sum-check returned `c1` NAK `0x02` and `c4` `0x7F24`; sum-check-enabled writes also passed on both `c1` and `c4` with cross-readbacks matching. See [MC serial error-code evidence](../MC_SERIAL_ERROR_CODE_EVIDENCE.md). |
+| `FX5` target, CLI `c1-ascii-f1` with `melsec:a` compatibility profile, `COM4`, `19200bps`, `8E1`, sum-check off | Error-code investigation only: `D100` read succeeded and representative 1C NAK codes `0x03`, `0x06`, and `0x07` were observed. See [MC serial error-code evidence](../MC_SERIAL_ERROR_CODE_EVIDENCE.md). |
+| `FX5` target switched to protocol format 4, `COM4`, `19200bps`, `8E1`, sum-check off | `c1-ascii-f4` / `melsec:a` and `c4-ascii-f4` / `melsec:iq-f` both read `D100` successfully; `c1-ascii-f4` wrote `D100=0x3C5A` and `c4-ascii-f4` wrote `D100=0xA53C`, with cross-readbacks matching. Representative Format4 abnormal probes matched the Format1 observations: 1C NAK `0x03`/`0x06`/`0x07`, C4 `0x7E40`/`0x7F21`. Station/PC mismatch probes produced `c1` NAK `0x10` for PC mismatch and no-response cases for the other tested mismatches. See [MC serial error-code evidence](../MC_SERIAL_ERROR_CODE_EVIDENCE.md). |
+| Same FX5 target, protocol format 4, sum-check enabled | Correct sum-check reads passed on both `c1-ascii-f4` and `c4-ascii-f4`; deliberately bad sum-check returned `c1` NAK `0x02` and `c4` `0x7F24`. See [MC serial error-code evidence](../MC_SERIAL_ERROR_CODE_EVIDENCE.md). |
 
-Tested serial settings were `COM4`, `19200`, `8E1`, station `0`, sum-check
-off, C4 binary Format5. These settings describe the validation setup only.
+The primary support-validation settings were `COM4`, `19200`, `8E1`, station
+`0`, sum-check off, C4 binary Format5. These settings describe the validation
+setup only; the `c4-ascii-f1` row above is error-code investigation evidence,
+not a support-basis change.
 
 ## Confirmed request shape
 
@@ -79,6 +86,7 @@ back to ordinary plain-device access when one of these routes is requested.
 | Multi-block read/write | Confirmed for supported normal plain devices. Long-state and native-random-only families are not multi-block heads. |
 | Monitor `0801/0802` | Not supported for this profile; tested probes returned `0x7E40`. |
 | Host/module buffer | Not supported for this profile; tested `0613` host-buffer and `0601` module-buffer probes returned `0x7E40`. |
+| `DX`/`DY` | Not supported for this profile. A CLI `c4-ascii-f1` error-code probe returned `0x7F21` for raw `DX0` read/write on the tested iQ-F setup. |
 
 ## Excluded from iQ-F serial MC support
 

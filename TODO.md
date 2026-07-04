@@ -8,8 +8,39 @@ Current active TODOs only.
 
 Pending scope:
 
-- `1C` NAK code meanings.
-- Unclassified `7Fxx` serial-module error responses.
+- Optional additional `1C` NAK cases only if a new diagnostic need appears.
+  The current iQ-F bench has already produced representative `c1-ascii-f1`
+  NAK codes for invalid command, invalid device, and invalid count requests,
+  plus Format4 station/PC mismatch and sum-check mismatch behavior.
+- Additional unclassified `7Fxx` serial-module responses only when a new
+  code appears. The initial iQ-F Format1 probe is recorded in
+  [MC_SERIAL_ERROR_CODE_EVIDENCE.md](docsrc/maintainer/MC_SERIAL_ERROR_CODE_EVIDENCE.md).
+
+Collected evidence:
+
+- 2026-07-04, `melsec:iq-f`, `COM4`, `19200bps`, `8E1`, sum-check off,
+  CLI `--frame c4-ascii-f1`: invalid command/subcommand and raw `0802`
+  returned `0x7E40`; raw `DX0` read/write returned `0x7F21`; `D100`
+  write/read sanity passed. A raw `S0` read returned success, but this is not a
+  public support change.
+- 2026-07-04, same iQ-F bench, CLI `--frame c1-ascii-f1`,
+  `--plc-profile melsec:a`: `D100` read returned `0x5A3C`, matching the prior
+  `D100` write/read sanity value. This confirms the bench can accept the
+  library `C1` Format1 read path; it is not yet 1C error-code evidence.
+- 2026-07-04, same `c1-ascii-f1` bench: invalid command `ZZ0` returned NAK
+  code `0x03`, invalid device `@` returned NAK code `0x07`, and zero point
+  count returned NAK code `0x06`.
+- 2026-07-04, same iQ-F bench switched to protocol format 4: `c1-ascii-f4`
+  station mismatch timed out, `c1-ascii-f4` PC mismatch returned NAK `0x10`,
+  and tested `c4-ascii-f4` header mismatch probes timed out.
+- 2026-07-04, same iQ-F bench with protocol format 4 and sum-check enabled:
+  correct sum-check reads passed on both `c1-ascii-f4` and `c4-ascii-f4`;
+  deliberately bad sum-check returned `c1` NAK `0x02` and `c4` `0x7F24`.
+- 2026-07-04, same iQ-F bench with protocol format 1 and sum-check enabled:
+  correct sum-check reads passed on both `c1-ascii-f1` and `c4-ascii-f1`;
+  deliberately bad sum-check again returned `c1` NAK `0x02` and `c4`
+  `0x7F24`; sum-check-enabled writes also passed on both `c1-ascii-f1`
+  and `c4-ascii-f1` with cross-readbacks matching.
 
 Record live-device evidence for MC Protocol Serial response codes that should be
 documented but are not yet reliable enough to publish from manuals alone.
@@ -22,14 +53,15 @@ Required bench:
   termination settings when RS-422/485 is used.
 - Known-good normal communication settings: baud rate, data bits, parity, stop bits,
   station/PC number, and checksum/sum-check setting.
-- Ability to switch or configure the target for both A-compatible `1C` frames and QnA
-  extended `3C/4C` frames, or two equivalent benches if one target cannot cover both.
+- Ability to switch or configure the target for both A-compatible `1C` frames
+  (`c1-ascii-f1` / `c1-ascii-f4` in this library) and QnA extended `3C/4C`
+  frames, or two equivalent benches if one target cannot cover both.
 
 Measurements to collect:
 
-- `1C` NAK codes returned by deliberately malformed but transmitted requests:
-  checksum/sum-check mismatch, protocol/command error, station or PC number mismatch,
-  and invalid address/count where applicable.
+- Additional `1C` NAK codes returned by deliberately malformed but transmitted
+  requests only if the project later needs broader coverage beyond the
+  2026-07-04 probes.
 - QnA extended `3C/4C` serial-link `7Fxx` codes returned by deliberately malformed
   serial requests: checksum/sum-check mismatch, frame format mismatch, station mismatch,
   data length mismatch, and response-unavailable cases where the PLC/module returns a
