@@ -80,6 +80,7 @@ int main() {
 | [Full documentation site](https://fa-yoshinobu.github.io/plc-comm-docs-site/) | Unified docs for all PLC communication libraries. |
 | [Getting started](docsrc/user/GETTING_STARTED.md) | Install the library, choose a profile, and perform your first read. |
 | [Usage guide](docsrc/user/USAGE_GUIDE.md) | Choose the high-level, host sync, or low-level async entry path. |
+| [API reference](docsrc/user/API_REFERENCE.md) | Generated reference for the public C++ headers. |
 | [PLC profiles](docsrc/user/PROFILES.md) | Choose the exact canonical profile for your target PLC. |
 | [Gotchas](docsrc/user/GOTCHAS.md) | Troubleshoot common profile, frame, serial, and address mistakes. |
 | [MC Protocol Serial setup](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/serial/) | Check PLC-side serial settings, station number, wiring shape, and bring-up order. |
