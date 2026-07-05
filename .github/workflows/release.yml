@@ -4,18 +4,76 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version without the leading v"
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
-  github-release:
+  release:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Resolve release version
+        id: version
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v6.0.2
-
-      - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          ref: ${{ steps.version.outputs.tag }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake doxygen ninja-build zip
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Check API reference
+        run: python3 scripts/generate_api_reference.py --title "MC Protocol Serial C++ API Reference" --output docsrc/user/API_REFERENCE.md --input include/mcprotocol_serial.hpp --input include/mcprotocol/serial/types.hpp --input include/mcprotocol/serial/status.hpp --input include/mcprotocol/serial/codec.hpp --input include/mcprotocol/serial/client.hpp --input include/mcprotocol/serial/high_level.hpp --input include/mcprotocol/serial/host_sync.hpp --input include/mcprotocol/serial/posix_serial.hpp --input include/mcprotocol/serial/link_direct.hpp --input include/mcprotocol/serial/qualified_buffer.hpp --input include/mcprotocol/serial/version.hpp --predefine MCPROTOCOL_SERIAL_ENABLE_HOST_API=1 --check
+
+      - name: Build release archive
+        run: |
+          mkdir -p release-artifacts
+          archive="release-artifacts/mcprotocol-serial-cpp-v${{ steps.version.outputs.version }}.zip"
+          git archive --format=zip --output "${archive}" HEAD
+          unzip -l "${archive}" README.md LICENSE library.json include/* examples/* > /dev/null
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.version.outputs.tag }}"
+          asset="release-artifacts/mcprotocol-serial-cpp-v${{ steps.version.outputs.version }}.zip"
+          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" > /dev/null 2>&1; then
+            gh release upload "${tag}" "${asset}" --clobber --repo "${GITHUB_REPOSITORY}"
+          else
+            gh release create "${tag}" "${asset}" --repo "${GITHUB_REPOSITORY}" --title "Release ${tag}" --generate-notes --target main
+          fi

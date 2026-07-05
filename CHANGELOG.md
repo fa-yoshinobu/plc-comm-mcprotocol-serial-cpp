@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Tooling`: Developer/operator command-line tools and helper utilities.
 - `CI`: Release checks, workflow scripts, or automation-only changes.
 
+## [Unreleased]
+
+### Changed
+- CI: Aligned the release workflow with the SLMP C++ repository: re-run build/tests and API reference checks, then attach a source archive to the GitHub release.
+
 ## [1.1.0] - 2026-07-05
 
 ### Added
