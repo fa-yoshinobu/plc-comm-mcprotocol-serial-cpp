@@ -15,9 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Tooling`: Developer/operator command-line tools and helper utilities.
 - `CI`: Release checks, workflow scripts, or automation-only changes.
 
-## [Unreleased]
+## [1.1.0] - 2026-07-05
 
 ### Added
+- Tests: Added profile-rule and unsupported-device validation coverage for serial cross-verification rules.
 - Docs: Added generated Doxygen-based API reference for the public C++ headers, with CI freshness validation.
 - Docs: Added shared PLC Setup troubleshooting/code guidance for library status codes, serial MC error-family handling, and observed PLC/module codes.
 - Library: Added a long-state read helper for long timer, long retentive timer, and long counter contact/coil devices.
@@ -28,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tooling: Added `MCPROTOCOL_SERIAL_TRACE=1` support for logging MC TX/RX frame bytes from the synchronous host client.
 
 ### Changed
+- Release: Bumped package metadata to `1.1.0`.
 - Library: Renamed the canonical saved/displayed serial MC profile strings for
   Q and L targets from `melsec:q` / `melsec:l` to `melsec:qcpu` /
   `melsec:lcpu`. The C++ enum names remain `PlcProfile::MelsecQ` and
