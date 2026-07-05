@@ -1,6 +1,6 @@
 {
   "name": "mcprotocol-serial-cpp",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "MC protocol serial C++ library for MCU-oriented environments with fixed caller-owned buffers and async request flow.",
   "keywords": [
     "mcprotocol",
@@ -49,10 +49,12 @@
   "export": {
     "exclude": [
       ".gitignore",
+      ".gitattributes",
       ".github",
       ".pio",
       ".platformio",
       ".tools",
+      "AGENTS.md",
       "build",
       "build_win",
       "CMakeLists.txt",
@@ -64,7 +66,11 @@
       "scripts",
       "tests",
       "tools",
-      "*.bat"
+      "TODO.md",
+      "*.bat",
+      "*.dll",
+      "*.exe",
+      "*.pdb"
     ]
   }
 }

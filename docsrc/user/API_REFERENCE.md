@@ -184,13 +184,13 @@ Do not edit it manually; run `scripts/generate_api_reference.py` instead.
 #### `MCPROTOCOL_SERIAL_VERSION_PATCH`
 
 ```cpp
-#define MCPROTOCOL_SERIAL_VERSION_PATCH 0
+#define MCPROTOCOL_SERIAL_VERSION_PATCH 1
 ```
 
 #### `MCPROTOCOL_SERIAL_VERSION_STRING`
 
 ```cpp
-#define MCPROTOCOL_SERIAL_VERSION_STRING "1.1.0"
+#define MCPROTOCOL_SERIAL_VERSION_STRING "1.1.1"
 ```
 
 ## Namespaces

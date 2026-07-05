@@ -17,7 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-07-05
+
 ### Changed
+- Release: Bumped package metadata to `1.1.1`.
+- Tooling: Added release metadata synchronization from `library.json` so mirrored Arduino, CMake, and public version-header metadata stay aligned before release checks.
+- CI: Added PlatformIO package packing and content checks to prevent development files or build outputs from entering published packages.
+- CI: Added an optional PlatformIO registry publish path for release workflow dispatches using `PLATFORMIO_AUTH_TOKEN`.
 - CI: Aligned the release workflow with the SLMP C++ repository: re-run build/tests and API reference checks, then attach a source archive to the GitHub release.
 
 ## [1.1.0] - 2026-07-05

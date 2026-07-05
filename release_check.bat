@@ -35,13 +35,41 @@ echo ===================================================
 echo [RELEASE] MC Protocol Serial C++ release check
 echo ===================================================
 
-echo [1/3] Checking manifest versions...
+echo [1/5] Syncing mirrored release metadata...
+python scripts\sync_release_metadata.py
+if %errorlevel% neq 0 (
+  echo [ERROR] Release metadata synchronization failed.
+  exit /b %errorlevel%
+)
+set "VERSION="
+set "JSON_VERSION="
+for /f "tokens=1,2 delims==" %%A in (library.properties) do (
+  if /I "%%A"=="version" set "VERSION=%%B"
+)
+if not defined VERSION (
+  echo [ERROR] Failed to read version from library.properties.
+  exit /b 1
+)
+for /f "usebackq delims=" %%V in (`powershell -NoProfile -Command "(Get-Content library.json -Raw | ConvertFrom-Json).version"`) do set "JSON_VERSION=%%V"
+if not defined JSON_VERSION (
+  echo [ERROR] Failed to read version from library.json.
+  exit /b 1
+)
+
+echo [2/5] Refreshing generated API reference...
+python scripts\generate_api_reference.py --title "MC Protocol Serial C++ API Reference" --output docsrc\user\API_REFERENCE.md --input include\mcprotocol_serial.hpp --input include\mcprotocol\serial\types.hpp --input include\mcprotocol\serial\status.hpp --input include\mcprotocol\serial\codec.hpp --input include\mcprotocol\serial\client.hpp --input include\mcprotocol\serial\high_level.hpp --input include\mcprotocol\serial\host_sync.hpp --input include\mcprotocol\serial\posix_serial.hpp --input include\mcprotocol\serial\link_direct.hpp --input include\mcprotocol\serial\qualified_buffer.hpp --input include\mcprotocol\serial\version.hpp --predefine MCPROTOCOL_SERIAL_ENABLE_HOST_API=1
+if %errorlevel% neq 0 (
+  echo [ERROR] API reference generation failed.
+  exit /b %errorlevel%
+)
+
+echo [3/5] Checking manifest versions...
 if not "%VERSION%"=="%JSON_VERSION%" (
   echo [ERROR] library.properties version %VERSION% does not match library.json version %JSON_VERSION%.
   exit /b 1
 )
 
-echo [2/3] Running host CI gate...
+echo [4/5] Running host CI gate...
 call run_ci.bat --build-dir build_win
 if %errorlevel% neq 0 (
   echo [ERROR] CI failed.
@@ -72,7 +100,7 @@ if "%RUN_PLATFORMIO%"=="1" (
   )
 )
 
-echo [3/3] Checking tracked archive contents...
+echo [5/5] Checking tracked archive contents...
 if not exist release-artifacts mkdir release-artifacts
 git archive --format=zip --output "release-artifacts\mcprotocol-serial-cpp-v%VERSION%.zip" HEAD
 if %errorlevel% neq 0 (
