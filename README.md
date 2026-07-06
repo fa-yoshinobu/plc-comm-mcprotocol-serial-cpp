@@ -6,6 +6,10 @@
 
 MELSEC MC Protocol over RS-232C/RS-485 in transport-agnostic C++ for MCU firmware and host-side bring-up tools.
 
+## PLC Comm Family
+
+This library is part of the plc-comm family. See the [package matrix](https://fa-yoshinobu.github.io/plc-comm-docs-site/package-matrix/) for protocol, language, registry, and install-command mapping.
+
 ## Supported PLC profiles
 
 The maintained profile table is in [PLC profiles](docsrc/user/PROFILES.md). Choose one exact canonical PLC profile from that table.
@@ -18,7 +22,7 @@ The maintained device and range table is in the shared [MC Protocol Serial suppo
 
 ```ini
 lib_deps =
-    fa-yoshinobu/mcprotocol-serial-cpp
+    fa-yoshinobu/mcprotocol-serial-cpp@^2.0.0
 ```
 
 ## Quick example

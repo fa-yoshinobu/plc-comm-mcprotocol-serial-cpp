@@ -1,10 +1,12 @@
 {
   "name": "mcprotocol-serial-cpp",
-  "version": "1.1.1",
+  "version": "2.0.0",
   "description": "MC protocol serial C++ library for MCU-oriented environments with fixed caller-owned buffers and async request flow.",
   "keywords": [
+    "plc-comm",
     "mcprotocol",
     "melsec",
+    "mitsubishi",
     "plc",
     "serial",
     "uart",
@@ -61,6 +63,7 @@
       "docsrc",
       "docs",
       "examples/linux_cli",
+      "internal_docs",
       "platformio.ini",
       "release-artifacts",
       "scripts",
