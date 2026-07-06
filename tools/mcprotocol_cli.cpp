@@ -1074,7 +1074,7 @@ void print_usage() {
   options.protocol.route.station_no = 0x00;
   options.protocol.route.network_no = 0x00;
   options.protocol.route.pc_no = 0xFF;
-  options.protocol.route.request_destination_module_io_no = 0x03FF;
+  options.protocol.route.request_destination_module_io_no = mcprotocol::serial::module_io::OwnStation;
   options.protocol.route.request_destination_module_station_no = 0x00;
   options.protocol.route.self_station_enabled = false;
   options.protocol.timeout.response_timeout_ms = 5000;
