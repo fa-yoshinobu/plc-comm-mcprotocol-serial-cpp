@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Library: Added `mcprotocol::serial::module_io` named constants for `3C` / `4C` request-destination module I/O routing and made `RouteConfig` default to `module_io::OwnStation`.
+- Tests: Added coverage for the 13 canonical module I/O constant names and aliases.
+- Docs: Documented the module I/O constants through the generated C++ API reference source comments.
+
 ## [1.1.1] - 2026-07-05
 
 ### Changed

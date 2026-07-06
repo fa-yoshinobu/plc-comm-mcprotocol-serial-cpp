@@ -1205,14 +1205,6 @@ Status mcprotocol::serial::encode_qualified_buffer_word_values(std::span< const 
 
 Encodes helper qualified word values into little-endian module-buffer bytes.
 
-#### `plc_profile_name`
-
-```cpp
-const char * mcprotocol::serial::plc_profile_name(PlcProfile profile) noexcept
-```
-
-Returns the canonical saved/displayed string for a PLC profile.
-
 #### `make_qualified_buffer_write_words_request`
 
 ```cpp
@@ -1221,13 +1213,13 @@ Status mcprotocol::serial::make_qualified_buffer_write_words_request(const Quali
 
 Builds a module-buffer write request for helper qualified word access.
 
-#### `plc_profile_text_equals`
+#### `plc_profile_name`
 
 ```cpp
-bool mcprotocol::serial::plc_profile_text_equals(const char *text, std::size_t text_size, const char *expected, std::size_t expected_size) noexcept
+const char * mcprotocol::serial::plc_profile_name(PlcProfile profile) noexcept
 ```
 
-Compares a bounded text buffer with a canonical PLC profile string.
+Returns the canonical saved/displayed string for a PLC profile.
 
 #### `decode_qualified_buffer_word_values`
 
@@ -1236,6 +1228,14 @@ Status mcprotocol::serial::decode_qualified_buffer_word_values(std::span< const 
 ```
 
 Decodes little-endian module-buffer bytes into helper qualified word values.
+
+#### `plc_profile_text_equals`
+
+```cpp
+bool mcprotocol::serial::plc_profile_text_equals(const char *text, std::size_t text_size, const char *expected, std::size_t expected_size) noexcept
+```
+
+Compares a bounded text buffer with a canonical PLC profile string.
 
 #### `parse_plc_profile`
 
@@ -1260,6 +1260,118 @@ Derives the internal device-layout / command-family selector from a public profi
 ```cpp
 bool mcprotocol::serial::is_plc_profile_specified(PlcProfile profile) noexcept
 ```
+
+### Namespace `mcprotocol::serial::module_io`
+
+Named request-destination module I/O numbers used by 3C / 4C serial routing.
+
+RouteConfig::request_destination_module_io_no defaults to OwnStation. The CPU constants are useful when a 3C / 4C request is intentionally routed to a multi-CPU or redundant-CPU target. The serial request header accepts the documented request-destination module I/O number field; common CPU values are 0x03D0..0x03D3, 0x03E0..0x03E3, and own station 0x03FF. Remote-head names are provided as vocabulary aliases for parity with the other plc-comm implementations; do not assume a remote-head route is valid on serial hardware unless the selected module, PLC family, and configuration define it.
+
+#### Variables And Constants
+
+#### `ControlSystemCpu`
+
+```cpp
+std::uint16_t mcprotocol::serial::module_io::ControlSystemCpu = 0x03D0
+```
+
+Control system CPU in a redundant CPU system.
+
+#### `StandbySystemCpu`
+
+```cpp
+std::uint16_t mcprotocol::serial::module_io::StandbySystemCpu = 0x03D1
+```
+
+Standby system CPU in a redundant CPU system.
+
+#### `SystemACpu`
+
+```cpp
+std::uint16_t mcprotocol::serial::module_io::SystemACpu = 0x03D2
+```
+
+System A CPU in a redundant CPU system.
+
+#### `SystemBCpu`
+
+```cpp
+std::uint16_t mcprotocol::serial::module_io::SystemBCpu = 0x03D3
+```
+
+System B CPU in a redundant CPU system.
+
+#### `MultipleCpu1`
+
+```cpp
+std::uint16_t mcprotocol::serial::module_io::MultipleCpu1 = 0x03E0
+```
+
+CPU No. 1 in a multi-CPU system.
+
+#### `MultipleCpu2`
+
+```cpp
+std::uint16_t mcprotocol::serial::module_io::MultipleCpu2 = 0x03E1
+```
+
+CPU No. 2 in a multi-CPU system.
+
+#### `MultipleCpu3`
+
+```cpp
+std::uint16_t mcprotocol::serial::module_io::MultipleCpu3 = 0x03E2
+```
+
+CPU No. 3 in a multi-CPU system.
+
+#### `MultipleCpu4`
+
+```cpp
+std::uint16_t mcprotocol::serial::module_io::MultipleCpu4 = 0x03E3
+```
+
+CPU No. 4 in a multi-CPU system.
+
+#### `RemoteHead1`
+
+```cpp
+std::uint16_t mcprotocol::serial::module_io::RemoteHead1 = MultipleCpu1
+```
+
+Remote head No. 1 route name.
+
+#### `RemoteHead2`
+
+```cpp
+std::uint16_t mcprotocol::serial::module_io::RemoteHead2 = MultipleCpu2
+```
+
+Remote head No. 2 route name.
+
+#### `ControlSystemRemoteHead`
+
+```cpp
+std::uint16_t mcprotocol::serial::module_io::ControlSystemRemoteHead = ControlSystemCpu
+```
+
+Control system remote-head route name.
+
+#### `StandbySystemRemoteHead`
+
+```cpp
+std::uint16_t mcprotocol::serial::module_io::StandbySystemRemoteHead = StandbySystemCpu
+```
+
+Standby system remote-head route name.
+
+#### `OwnStation`
+
+```cpp
+std::uint16_t mcprotocol::serial::module_io::OwnStation = 0x03FF
+```
+
+Connected own-station route.
 
 ## Classes
 
@@ -2886,7 +2998,7 @@ PLC number field used by 3C/4C and legacy frame families.
 #### `request_destination_module_io_no`
 
 ```cpp
-std::uint16_t mcprotocol::serial::RouteConfig::request_destination_module_io_no = 0x03FF
+std::uint16_t mcprotocol::serial::RouteConfig::request_destination_module_io_no = module_io::OwnStation
 ```
 
 Destination I/O number for the target CPU/module in 3C/4C routing.

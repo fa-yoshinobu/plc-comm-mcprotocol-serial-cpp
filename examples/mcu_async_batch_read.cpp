@@ -46,7 +46,7 @@ ProtocolConfig make_protocol() {
       .station_no = 0x00,
       .network_no = 0x00,
       .pc_no = 0xFF,
-      .request_destination_module_io_no = 0x03FF,
+      .request_destination_module_io_no = mcprotocol::serial::module_io::OwnStation,
       .request_destination_module_station_no = 0x00,
       .self_station_enabled = false,
       .self_station_no = 0x00,

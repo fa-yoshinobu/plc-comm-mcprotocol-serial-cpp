@@ -113,6 +113,24 @@ using mcprotocol::serial::validate_qualified_buffer_helper_route;
 }
 
 namespace CommandCodec = mcprotocol::serial::CommandCodec;
+namespace module_io = mcprotocol::serial::module_io;
+
+void test_module_io_constants() {
+  assert(module_io::ControlSystemCpu == 0x03D0U);
+  assert(module_io::StandbySystemCpu == 0x03D1U);
+  assert(module_io::SystemACpu == 0x03D2U);
+  assert(module_io::SystemBCpu == 0x03D3U);
+  assert(module_io::MultipleCpu1 == 0x03E0U);
+  assert(module_io::MultipleCpu2 == 0x03E1U);
+  assert(module_io::MultipleCpu3 == 0x03E2U);
+  assert(module_io::MultipleCpu4 == 0x03E3U);
+  assert(module_io::RemoteHead1 == module_io::MultipleCpu1);
+  assert(module_io::RemoteHead2 == module_io::MultipleCpu2);
+  assert(module_io::ControlSystemRemoteHead == module_io::ControlSystemCpu);
+  assert(module_io::StandbySystemRemoteHead == module_io::StandbySystemCpu);
+  assert(module_io::OwnStation == 0x03FFU);
+  assert(RouteConfig {}.request_destination_module_io_no == module_io::OwnStation);
+}
 
 ProtocolConfig make_binary_c4_config() {
   ProtocolConfig config;
@@ -126,7 +144,7 @@ ProtocolConfig make_binary_c4_config() {
       .station_no = 0x00,
       .network_no = 0x00,
       .pc_no = 0xFF,
-      .request_destination_module_io_no = 0x03FF,
+      .request_destination_module_io_no = module_io::OwnStation,
       .request_destination_module_station_no = 0x00,
       .self_station_enabled = false,
       .self_station_no = 0x00,
@@ -170,7 +188,7 @@ ProtocolConfig make_ascii_c3_format3_config() {
       .station_no = 0x00,
       .network_no = 0x00,
       .pc_no = 0xFF,
-      .request_destination_module_io_no = 0x03FF,
+      .request_destination_module_io_no = module_io::OwnStation,
       .request_destination_module_station_no = 0x00,
       .self_station_enabled = false,
       .self_station_no = 0x00,
@@ -197,7 +215,7 @@ ProtocolConfig make_ascii_c4_format2_config() {
       .station_no = 0x00,
       .network_no = 0x00,
       .pc_no = 0xFF,
-      .request_destination_module_io_no = 0x03FF,
+      .request_destination_module_io_no = module_io::OwnStation,
       .request_destination_module_station_no = 0x00,
       .self_station_enabled = false,
       .self_station_no = 0x00,
@@ -223,7 +241,7 @@ ProtocolConfig make_ascii_c4_format4_config() {
       .station_no = 0x01,
       .network_no = 0x00,
       .pc_no = 0xFF,
-      .request_destination_module_io_no = 0x03FF,
+      .request_destination_module_io_no = module_io::OwnStation,
       .request_destination_module_station_no = 0x00,
       .self_station_enabled = false,
       .self_station_no = 0x00,
@@ -246,7 +264,7 @@ ProtocolConfig make_ascii_c1_format4_qna_config() {
       .station_no = 0x00,
       .network_no = 0x00,
       .pc_no = 0xFF,
-      .request_destination_module_io_no = 0x03FF,
+      .request_destination_module_io_no = module_io::OwnStation,
       .request_destination_module_station_no = 0x00,
       .self_station_enabled = false,
       .self_station_no = 0x00,
@@ -269,7 +287,7 @@ ProtocolConfig make_ascii_e1_a_config() {
       .station_no = 0x00,
       .network_no = 0x00,
       .pc_no = 0xFF,
-      .request_destination_module_io_no = 0x03FF,
+      .request_destination_module_io_no = module_io::OwnStation,
       .request_destination_module_station_no = 0x00,
       .self_station_enabled = false,
       .self_station_no = 0x00,
@@ -6600,6 +6618,7 @@ void test_encode_multi_block_write_rejects_long_devices_as_head() {
 }  // namespace
 
 int main() {
+  test_module_io_constants();
   test_format5_batch_read_request_matches_manual();
   test_iq_l_uses_q_l_binary_request_shape();
   test_decode_binary_cpu_model_response();

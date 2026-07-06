@@ -143,6 +143,34 @@ constexpr std::size_t kMaxLoopbackBytes =
 constexpr std::size_t kMaxUserFrameRegistrationBytes = 80U;
 constexpr std::size_t kCpuModelNameLength = 16;
 
+/// \namespace mcprotocol::serial::module_io
+/// \brief Named request-destination module I/O numbers used by `3C` / `4C` serial routing.
+///
+/// `RouteConfig::request_destination_module_io_no` defaults to `OwnStation`. The CPU constants
+/// are useful when a `3C` / `4C` request is intentionally routed to a multi-CPU or redundant-CPU
+/// target. The serial request header accepts the documented request-destination module I/O number
+/// field; common CPU values are `0x03D0..0x03D3`, `0x03E0..0x03E3`, and own station `0x03FF`.
+/// Remote-head names are provided as vocabulary aliases for parity with the other plc-comm
+/// implementations; do not assume a remote-head route is valid on serial hardware unless the
+/// selected module, PLC family, and configuration define it.
+namespace module_io {
+
+constexpr std::uint16_t ControlSystemCpu = 0x03D0; ///< Control system CPU in a redundant CPU system.
+constexpr std::uint16_t StandbySystemCpu = 0x03D1; ///< Standby system CPU in a redundant CPU system.
+constexpr std::uint16_t SystemACpu = 0x03D2;       ///< System A CPU in a redundant CPU system.
+constexpr std::uint16_t SystemBCpu = 0x03D3;       ///< System B CPU in a redundant CPU system.
+constexpr std::uint16_t MultipleCpu1 = 0x03E0;     ///< CPU No. 1 in a multi-CPU system.
+constexpr std::uint16_t MultipleCpu2 = 0x03E1;     ///< CPU No. 2 in a multi-CPU system.
+constexpr std::uint16_t MultipleCpu3 = 0x03E2;     ///< CPU No. 3 in a multi-CPU system.
+constexpr std::uint16_t MultipleCpu4 = 0x03E3;     ///< CPU No. 4 in a multi-CPU system.
+constexpr std::uint16_t RemoteHead1 = MultipleCpu1; ///< Remote head No. 1 route name.
+constexpr std::uint16_t RemoteHead2 = MultipleCpu2; ///< Remote head No. 2 route name.
+constexpr std::uint16_t ControlSystemRemoteHead = ControlSystemCpu; ///< Control system remote-head route name.
+constexpr std::uint16_t StandbySystemRemoteHead = StandbySystemCpu; ///< Standby system remote-head route name.
+constexpr std::uint16_t OwnStation = 0x03FF;       ///< Connected own-station route.
+
+}  // namespace module_io
+
 /// \brief MC protocol frame family used on the serial link.
 enum class FrameKind : std::uint8_t {
   /// Chapter-8/10/11/13 oriented serial frame with the fullest feature coverage in this repository.
@@ -479,7 +507,7 @@ struct RouteConfig {
   /// PLC number field used by `3C/4C` and legacy frame families.
   std::uint8_t pc_no = 0xFF;
   /// Destination I/O number for the target CPU/module in `3C/4C` routing.
-  std::uint16_t request_destination_module_io_no = 0x03FF;
+  std::uint16_t request_destination_module_io_no = module_io::OwnStation;
   /// Destination station number for the target CPU/module in `3C/4C` routing.
   std::uint8_t request_destination_module_station_no = 0x00;
   /// Enables self-station routing on frame families that support it.

@@ -1580,7 +1580,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] constexpr bool is_connected_station_route(const ProtocolConfig& config) noexcept {
   return config.route.network_no == 0x00U &&
          config.route.pc_no == 0xFFU &&
-         config.route.request_destination_module_io_no == 0x03FFU &&
+         config.route.request_destination_module_io_no == module_io::OwnStation &&
          config.route.request_destination_module_station_no == 0x00U;
 }
 
@@ -2390,7 +2390,7 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     }
     if (config.route.station_no != 0x00U ||
         config.route.network_no != 0x00U ||
-        config.route.request_destination_module_io_no != 0x03FFU ||
+        config.route.request_destination_module_io_no != module_io::OwnStation ||
         config.route.request_destination_module_station_no != 0x00U) {
       return invalid_argument("1E frame uses only route.pc_no; keep the other route fields at defaults");
     }
@@ -2408,7 +2408,7 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     if (config.route.station_no != 0x00U ||
         config.route.network_no != 0x00U ||
         config.route.pc_no != 0xFFU ||
-        config.route.request_destination_module_io_no != 0x03FFU ||
+        config.route.request_destination_module_io_no != module_io::OwnStation ||
         config.route.request_destination_module_station_no != 0x00U) {
       return invalid_argument("Host station route must use station=0, network=0, pc=FF, module_io=03FF, module_station=0");
     }
@@ -2419,7 +2419,7 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     if (!uses_routed_header(config)) {
       if (config.route.network_no != 0x00U ||
           config.route.pc_no != 0xFFU ||
-          config.route.request_destination_module_io_no != 0x03FFU ||
+          config.route.request_destination_module_io_no != module_io::OwnStation ||
           config.route.request_destination_module_station_no != 0x00U) {
         return invalid_argument("1C/2C multidrop route uses only station and self-station fields");
       }
