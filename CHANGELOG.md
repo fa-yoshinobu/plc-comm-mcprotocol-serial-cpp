@@ -17,10 +17,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-07-06
+
+### BREAKING
+- Library: Added the canonical `mcprotocol::serial::module_io` vocabulary for request-destination module I/O routing. Existing code that used raw literals should switch to named constants.
+
+| Raw value | Named constant |
+| --- | --- |
+| `0x03D0` | `module_io::ControlSystemCpu` |
+| `0x03D1` | `module_io::StandbySystemCpu` |
+| `0x03D2` | `module_io::SystemACpu` |
+| `0x03D3` | `module_io::SystemBCpu` |
+| `0x03E0` to `0x03E3` | `module_io::MultipleCpu1` to `module_io::MultipleCpu4` |
+| `0x03FF` | `module_io::OwnStation` |
+
 ### Added
 - Library: Added `mcprotocol::serial::module_io` named constants for `3C` / `4C` request-destination module I/O routing and made `RouteConfig` default to `module_io::OwnStation`.
 - Tests: Added coverage for the 13 canonical module I/O constant names and aliases.
 - Docs: Documented the module I/O constants through the generated C++ API reference source comments.
+
+### Changed
+- Release: Bumped CMake, PlatformIO, Arduino, and public version-header metadata to `2.0.0`.
+- Docs: Added the plc-comm family package matrix link to the README and updated PlatformIO install examples to `@^2.0.0`.
 
 ## [1.1.1] - 2026-07-05
 
