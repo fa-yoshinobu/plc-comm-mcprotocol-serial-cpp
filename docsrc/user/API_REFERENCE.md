@@ -1219,7 +1219,7 @@ Builds a module-buffer write request for helper qualified word access.
 const char * mcprotocol::serial::plc_profile_name(PlcProfile profile) noexcept
 ```
 
-Returns the canonical saved/displayed string for a PLC profile.
+Returns the canonical saved string for a PLC profile.
 
 #### `decode_qualified_buffer_word_values`
 
@@ -1228,6 +1228,16 @@ Status mcprotocol::serial::decode_qualified_buffer_word_values(std::span< const 
 ```
 
 Decodes little-endian module-buffer bytes into helper qualified word values.
+
+#### `plc_profile_display_name`
+
+```cpp
+const char * mcprotocol::serial::plc_profile_display_name(PlcProfile profile) noexcept
+```
+
+Returns the human-readable display name for a PLC profile.
+
+Use this for UI labels. Store and parse the canonical value from plc_profile_name(), not this display text.
 
 #### `plc_profile_text_equals`
 

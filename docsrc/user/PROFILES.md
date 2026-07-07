@@ -15,18 +15,21 @@ Always select one concrete `PlcProfile` value before sending real PLC requests.
 - Short names and case variants are rejected by text parsing.
 - Linux CLI wrappers require both `MCPROTOCOL_FRAME` and `MCPROTOCOL_PLC_PROFILE`; neither value is auto-filled.
 
+Use `plc_profile_display_name(profile)` for UI labels. Store and parse the
+canonical value from `plc_profile_name(profile)`, not the display text.
+
 ## Profiles
 
-| Canonical profile | Hardware | API selector | Current internal grouping / status |
-| --- | --- | --- | --- |
-| `melsec:iq-r` | MELSEC iQ-R serial modules | `PlcProfile::MelsecIqR` | iQ-R command/device-layout branch. Manual-derived request-shape differences include iQ-R subcommands and wider device references. |
-| `melsec:iq-l` | MELSEC iQ-L serial modules | `PlcProfile::MelsecIqL` | Separate public profile using Q/L-compatible serial MC request shapes. Long timer/counter devices, `LZ`, `RD`, and `Un\HG` are rejected for serial MC. |
-| `melsec:iq-f` | MELSEC iQ-F / FX5 serial paths | `PlcProfile::MelsecIqF` | Separate public profile using the confirmed FX5 C4 binary support surface. Unsupported FX5 devices and routes are rejected locally. |
-| `melsec:qcpu` | MELSEC-Q serial modules | `PlcProfile::MelsecQ` | Public Q profile. Currently grouped with the Q/L command-device layout used by the existing Q/L encoder path. |
-| `melsec:lcpu` | MELSEC-L serial modules | `PlcProfile::MelsecL` | Public L profile using the Q/L-compatible serial MC request shape. Keep it separate from `melsec:qcpu` for target-family evidence. |
-| `melsec:qna` | MELSEC QnA-compatible targets | `PlcProfile::MelsecQnA` | QnA command-family branch. Current implementation groups the shared QnA/AnA/AnU command-family behavior where the codec has no separate rule. |
-| `melsec:ana-anu` | MELSEC AnA / AnU-compatible targets | `PlcProfile::MelsecAnAAnU` | Public AnA/AnU profile. Currently shares the QnA-family internal branch until a manual-backed or measured difference is added. |
-| `melsec:a` | MELSEC-A-compatible targets | `PlcProfile::MelsecA` | A-series command-family branch. A-only paths such as ER/EW extended file-register commands require this profile. |
+| Canonical profile | Display name | Hardware | API selector | Current internal grouping / status |
+| --- | --- | --- | --- | --- |
+| `melsec:iq-r` | MELSEC iQ-R | MELSEC iQ-R serial modules | `PlcProfile::MelsecIqR` | iQ-R command/device-layout branch. Manual-derived request-shape differences include iQ-R subcommands and wider device references. |
+| `melsec:iq-l` | MELSEC iQ-L | MELSEC iQ-L serial modules | `PlcProfile::MelsecIqL` | Separate public profile using Q/L-compatible serial MC request shapes. Long timer/counter devices, `LZ`, `RD`, and `Un\HG` are rejected for serial MC. |
+| `melsec:iq-f` | MELSEC iQ-F | MELSEC iQ-F / FX5 serial paths | `PlcProfile::MelsecIqF` | Separate public profile using the confirmed FX5 C4 binary support surface. Unsupported FX5 devices and routes are rejected locally. |
+| `melsec:qcpu` | MELSEC-Q | MELSEC-Q serial modules | `PlcProfile::MelsecQ` | Public Q profile. Currently grouped with the Q/L command-device layout used by the existing Q/L encoder path. |
+| `melsec:lcpu` | MELSEC-L | MELSEC-L serial modules | `PlcProfile::MelsecL` | Public L profile using the Q/L-compatible serial MC request shape. Keep it separate from `melsec:qcpu` for target-family evidence. |
+| `melsec:qna` | MELSEC QnA | MELSEC QnA-compatible targets | `PlcProfile::MelsecQnA` | QnA command-family branch. Current implementation groups the shared QnA/AnA/AnU command-family behavior where the codec has no separate rule. |
+| `melsec:ana-anu` | MELSEC AnA/AnU | MELSEC AnA / AnU-compatible targets | `PlcProfile::MelsecAnAAnU` | Public AnA/AnU profile. Currently shares the QnA-family internal branch until a manual-backed or measured difference is added. |
+| `melsec:a` | MELSEC-A | MELSEC-A-compatible targets | `PlcProfile::MelsecA` | A-series command-family branch. A-only paths such as ER/EW extended file-register commands require this profile. |
 
 ## SLMP name alignment
 
@@ -60,6 +63,14 @@ Or assign the field directly when you build a custom `ProtocolConfig`:
 ```cpp
 mcprotocol::serial::ProtocolConfig protocol {};
 protocol.plc_profile = mcprotocol::serial::PlcProfile::MelsecQ;
+```
+
+Use the display-name helper only for UI labels:
+
+```cpp
+const auto profile = mcprotocol::serial::PlcProfile::MelsecQ;
+const char* saved_name = mcprotocol::serial::plc_profile_name(profile); // "melsec:qcpu"
+const char* label = mcprotocol::serial::plc_profile_display_name(profile); // "MELSEC-Q"
 ```
 
 `PlcProfile::Unspecified` is a configuration error. It is useful only as the default internal value before your application selects a real profile.

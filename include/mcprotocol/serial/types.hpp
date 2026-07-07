@@ -234,7 +234,7 @@ enum class PlcProfile : std::uint8_t {
   MelsecL = 9
 };
 
-/// \brief Returns the canonical saved/displayed string for a PLC profile.
+/// \brief Returns the canonical saved string for a PLC profile.
 [[nodiscard]] constexpr const char* plc_profile_name(PlcProfile profile) noexcept {
   switch (profile) {
     case PlcProfile::Unspecified:
@@ -255,6 +255,34 @@ enum class PlcProfile : std::uint8_t {
       return "melsec:ana-anu";
     case PlcProfile::MelsecA:
       return "melsec:a";
+  }
+  return "";
+}
+
+/// \brief Returns the human-readable display name for a PLC profile.
+///
+/// Use this for UI labels. Store and parse the canonical value from `plc_profile_name()`,
+/// not this display text.
+[[nodiscard]] constexpr const char* plc_profile_display_name(PlcProfile profile) noexcept {
+  switch (profile) {
+    case PlcProfile::Unspecified:
+      return "";
+    case PlcProfile::MelsecIqR:
+      return "MELSEC iQ-R";
+    case PlcProfile::MelsecIqL:
+      return "MELSEC iQ-L";
+    case PlcProfile::MelsecIqF:
+      return "MELSEC iQ-F";
+    case PlcProfile::MelsecQ:
+      return "MELSEC-Q";
+    case PlcProfile::MelsecL:
+      return "MELSEC-L";
+    case PlcProfile::MelsecQnA:
+      return "MELSEC QnA";
+    case PlcProfile::MelsecAnAAnU:
+      return "MELSEC AnA/AnU";
+    case PlcProfile::MelsecA:
+      return "MELSEC-A";
   }
   return "";
 }

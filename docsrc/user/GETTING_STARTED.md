@@ -43,17 +43,18 @@ The normal MCU examples use a reduced footprint profile. The ultra-minimal examp
 ## Choose your PLC profile
 
 `PlcProfile` is required. There is no default profile for live communication.
+Use `plc_profile_display_name(profile)` when you need a UI label.
 
-| Canonical profile | Hardware | API selector |
-| --- | --- | --- |
-| `melsec:iq-r` | MELSEC iQ-R serial modules | `PlcProfile::MelsecIqR` |
-| `melsec:iq-l` | MELSEC iQ-L serial modules | `PlcProfile::MelsecIqL` |
-| `melsec:iq-f` | MELSEC iQ-F / FX5 serial paths | `PlcProfile::MelsecIqF` |
-| `melsec:qcpu` | MELSEC-Q serial modules | `PlcProfile::MelsecQ` |
-| `melsec:lcpu` | MELSEC-L serial modules | `PlcProfile::MelsecL` |
-| `melsec:qna` | MELSEC QnA-compatible targets | `PlcProfile::MelsecQnA` |
-| `melsec:ana-anu` | MELSEC AnA / AnU-compatible targets | `PlcProfile::MelsecAnAAnU` |
-| `melsec:a` | MELSEC-A-compatible targets | `PlcProfile::MelsecA` |
+| Canonical profile | Display name | Hardware | API selector |
+| --- | --- | --- | --- |
+| `melsec:iq-r` | MELSEC iQ-R | MELSEC iQ-R serial modules | `PlcProfile::MelsecIqR` |
+| `melsec:iq-l` | MELSEC iQ-L | MELSEC iQ-L serial modules | `PlcProfile::MelsecIqL` |
+| `melsec:iq-f` | MELSEC iQ-F | MELSEC iQ-F / FX5 serial paths | `PlcProfile::MelsecIqF` |
+| `melsec:qcpu` | MELSEC-Q | MELSEC-Q serial modules | `PlcProfile::MelsecQ` |
+| `melsec:lcpu` | MELSEC-L | MELSEC-L serial modules | `PlcProfile::MelsecL` |
+| `melsec:qna` | MELSEC QnA | MELSEC QnA-compatible targets | `PlcProfile::MelsecQnA` |
+| `melsec:ana-anu` | MELSEC AnA/AnU | MELSEC AnA / AnU-compatible targets | `PlcProfile::MelsecAnAAnU` |
+| `melsec:a` | MELSEC-A | MELSEC-A-compatible targets | `PlcProfile::MelsecA` |
 
 ```cpp
 auto protocol = mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(

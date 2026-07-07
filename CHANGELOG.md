@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Library: Added `mcprotocol::serial::plc_profile_display_name(profile)` as the public UI-label helper while keeping `plc_profile_name(profile)` as the canonical saved profile string.
+- Tests: Added PLC profile display-name coverage.
+- Docs: Documented the profile display-name helper and canonical-ID storage guidance.
+
 ## [2.0.0] - 2026-07-06
 
 ### BREAKING
@@ -64,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Release: Bumped package metadata to `1.1.0`.
-- Library: Renamed the canonical saved/displayed serial MC profile strings for
+- Library: Renamed the canonical saved serial MC profile strings for
   Q and L targets from `melsec:q` / `melsec:l` to `melsec:qcpu` /
   `melsec:lcpu`. The C++ enum names remain `PlcProfile::MelsecQ` and
   `PlcProfile::MelsecL`; the old textual profile names are no longer accepted.

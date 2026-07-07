@@ -72,6 +72,7 @@ using mcprotocol::serial::SerialModuleModeNo;
 using mcprotocol::serial::SerialModuleModeSwitchRequest;
 using mcprotocol::serial::parse_plc_profile;
 using mcprotocol::serial::is_plc_profile_specified;
+using mcprotocol::serial::plc_profile_display_name;
 using mcprotocol::serial::plc_profile_name;
 using mcprotocol::serial::plc_series_from_profile;
 using mcprotocol::serial::sparse_native_mask_word;
@@ -2423,6 +2424,7 @@ void test_high_level_protocol_presets() {
 void test_plc_profile_names_and_internal_grouping() {
   PlcProfile profile = PlcProfile::MelsecQ;
   assert(std::string_view(plc_profile_name(PlcProfile::Unspecified)).empty());
+  assert(std::string_view(plc_profile_display_name(PlcProfile::Unspecified)).empty());
   assert(!is_plc_profile_specified(PlcProfile::Unspecified));
   assert(plc_series_from_profile(PlcProfile::Unspecified) == PlcSeries::Unspecified);
   assert(is_plc_profile_specified(PlcProfile::MelsecQ));
@@ -2431,28 +2433,33 @@ void test_plc_profile_names_and_internal_grouping() {
   assert(profile == PlcProfile::MelsecIqR);
   assert(plc_series_from_profile(profile) == PlcSeries::IQ_R);
   assert(std::string_view(plc_profile_name(profile)) == "melsec:iq-r");
+  assert(std::string_view(plc_profile_display_name(profile)) == "MELSEC iQ-R");
   assert(!parse_plc_profile_text("MELSEC:IQ-R", profile));
 
   assert(parse_plc_profile_text("melsec:iq-l", profile));
   assert(profile == PlcProfile::MelsecIqL);
   assert(plc_series_from_profile(profile) == PlcSeries::IQ_L);
   assert(std::string_view(plc_profile_name(profile)) == "melsec:iq-l");
+  assert(std::string_view(plc_profile_display_name(profile)) == "MELSEC iQ-L");
 
   assert(parse_plc_profile_text("melsec:iq-f", profile));
   assert(profile == PlcProfile::MelsecIqF);
   assert(plc_series_from_profile(profile) == PlcSeries::IQ_F);
   assert(std::string_view(plc_profile_name(profile)) == "melsec:iq-f");
+  assert(std::string_view(plc_profile_display_name(profile)) == "MELSEC iQ-F");
 
   assert(parse_plc_profile_text("melsec:qcpu", profile));
   assert(profile == PlcProfile::MelsecQ);
   assert(plc_series_from_profile(profile) == PlcSeries::Q_L);
   assert(std::string_view(plc_profile_name(profile)) == "melsec:qcpu");
+  assert(std::string_view(plc_profile_display_name(profile)) == "MELSEC-Q");
 
   assert(!parse_plc_profile_text("melsec:q", profile));
   assert(parse_plc_profile_text("melsec:lcpu", profile));
   assert(profile == PlcProfile::MelsecL);
   assert(plc_series_from_profile(profile) == PlcSeries::Q_L);
   assert(std::string_view(plc_profile_name(profile)) == "melsec:lcpu");
+  assert(std::string_view(plc_profile_display_name(profile)) == "MELSEC-L");
 
   assert(!parse_plc_profile_text("melsec:l", profile));
   assert(!parse_plc_profile_text("melsec:q-l", profile));
@@ -2461,16 +2468,19 @@ void test_plc_profile_names_and_internal_grouping() {
   assert(profile == PlcProfile::MelsecQnA);
   assert(plc_series_from_profile(profile) == PlcSeries::QnA);
   assert(std::string_view(plc_profile_name(profile)) == "melsec:qna");
+  assert(std::string_view(plc_profile_display_name(profile)) == "MELSEC QnA");
 
   assert(parse_plc_profile_text("melsec:ana-anu", profile));
   assert(profile == PlcProfile::MelsecAnAAnU);
   assert(plc_series_from_profile(profile) == PlcSeries::QnA);
   assert(std::string_view(plc_profile_name(profile)) == "melsec:ana-anu");
+  assert(std::string_view(plc_profile_display_name(profile)) == "MELSEC AnA/AnU");
 
   assert(parse_plc_profile_text("melsec:a", profile));
   assert(profile == PlcProfile::MelsecA);
   assert(plc_series_from_profile(profile) == PlcSeries::A);
   assert(std::string_view(plc_profile_name(profile)) == "melsec:a");
+  assert(std::string_view(plc_profile_display_name(profile)) == "MELSEC-A");
 
   assert(!parse_plc_profile_text("iqr", profile));
   assert(!parse_plc_profile_text("iq-r", profile));
