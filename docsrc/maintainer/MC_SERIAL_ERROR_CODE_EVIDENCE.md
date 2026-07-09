@@ -83,15 +83,15 @@ Raw logs:
 - `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_c1_ascii_f1_d100_read.log`
 - `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_c1_ascii_f1_abnormal_error_codes.log`
 
-## Remaining Optional 1C Error-Code Scope
+## Additional 1C Error-Code Evidence Policy
 
 The `c1-ascii-f1` probes confirm this bench can accept the library `C1`
 Format1 read path and can return representative 1C NAK codes.
 
 The Mitsubishi manuals also describe 1C frames as supporting protocol formats 1
-and 4. If broader 1C coverage is needed, investigate additional abnormal
-responses with `c1-ascii-f1` or `c1-ascii-f4`, not by reusing the
-`c4-ascii-f1` evidence above.
+and 4. If a future diagnostic case needs broader 1C coverage, investigate the
+specific abnormal response with `c1-ascii-f1` or `c1-ascii-f4`, not by reusing
+the `c4-ascii-f1` evidence above. This is an evidence policy, not an open TODO.
 
 ## 2026-07-04: iQ-F / FX5, Format4 Sanity Reads
 
