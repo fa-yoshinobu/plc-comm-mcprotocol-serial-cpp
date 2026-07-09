@@ -419,8 +419,12 @@ void MelsecSerialClient::poll(std::uint32_t now_ms) noexcept {
     return;
   }
 
+  const auto deadline_reached = [](std::uint32_t now, std::uint32_t deadline) noexcept {
+    return static_cast<std::int32_t>(now - deadline) >= 0;
+  };
+
   if (rx_frame_size_ == 0U) {
-    if (now_ms >= response_deadline_ms_) {
+    if (deadline_reached(now_ms, response_deadline_ms_)) {
       if (operation_ == OperationKind::RemoteReset) {
         complete(remote_reset_no_response_status());
       } else if (operation_ == OperationKind::InitializeTransmissionSequence) {
@@ -434,12 +438,12 @@ void MelsecSerialClient::poll(std::uint32_t now_ms) noexcept {
     return;
   }
 
-  if (now_ms >= inter_byte_deadline_ms_) {
+  if (deadline_reached(now_ms, inter_byte_deadline_ms_)) {
     complete(make_status(StatusCode::Timeout, "Timed out while waiting for the rest of the response"));
     return;
   }
 
-  if (now_ms >= response_deadline_ms_) {
+  if (deadline_reached(now_ms, response_deadline_ms_)) {
     complete(timeout_status());
   }
 }
