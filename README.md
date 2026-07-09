@@ -22,7 +22,7 @@ The maintained device and range table is in the shared [MC Protocol Serial suppo
 
 ```ini
 lib_deps =
-    fa-yoshinobu/mcprotocol-serial-cpp@^2.0.0
+    fa-yoshinobu/mcprotocol-serial-cpp@^2.0.1
 ```
 
 ## Quick example

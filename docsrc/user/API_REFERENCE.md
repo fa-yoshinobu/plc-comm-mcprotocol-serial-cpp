@@ -190,7 +190,7 @@ Do not edit it manually; run `scripts/generate_api_reference.py` instead.
 #### `MCPROTOCOL_SERIAL_VERSION_STRING`
 
 ```cpp
-#define MCPROTOCOL_SERIAL_VERSION_STRING "2.0.0"
+#define MCPROTOCOL_SERIAL_VERSION_STRING "2.0.1"
 ```
 
 ## Namespaces
