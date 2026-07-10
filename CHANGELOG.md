@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -17,10 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.0.1] - 2026-07-10
+## [3.0.0] - 2026-07-10
 
 ### Changed
-- Release: Bumped library, CMake, PlatformIO, and public version-header metadata to `2.0.1`.
+- Release: Bumped library, CMake, PlatformIO, and public version-header metadata to `3.0.0`.
 
 ### Added
 - Library: Added `mcprotocol::serial::plc_profile_display_name(profile)` as the public UI-label helper while keeping `plc_profile_name(profile)` as the canonical saved profile string.
