@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Release: The release workflow now checks the PlatformIO registry before publishing so an existing version cannot be republished.
+
 ## [3.0.0] - 2026-07-10
 
 ### Changed
