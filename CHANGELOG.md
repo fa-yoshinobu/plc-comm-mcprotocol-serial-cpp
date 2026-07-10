@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.0.1] - 2026-07-10
+## [3.1.0] - 2026-07-10
 
 ### Fixed
 - Library: Corrected PlatformIO `srcFilter` paths to be relative to the manifest `srcDir`, so packed-package consumers compile and link `client.cpp` and `codec.cpp`.
@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Release: The release workflow now checks the PlatformIO registry before publishing so an existing version cannot be republished.
-- Release: Bumped library, CMake, PlatformIO, Arduino, public version-header, and install-documentation metadata to `3.0.1`.
+- Release: Bumped library, CMake, PlatformIO, Arduino, public version-header, and install-documentation metadata to `3.1.0`.
 - Library: Defined the PlatformIO package as core-only; host serial backends and `PosixSyncClient` remain source-tree CMake features.
 - Docs: Replaced README links to package-excluded `docsrc` files with stable public documentation-site links and separated the PlatformIO and host installation paths.
 

@@ -18,7 +18,7 @@ For PlatformIO, add the library package:
 ```ini
 [env:your-board]
 lib_deps =
-    fa-yoshinobu/mcprotocol-serial-cpp@^3.0.1
+    fa-yoshinobu/mcprotocol-serial-cpp@^3.1.0
 build_unflags =
     -std=gnu++11
     -std=gnu++14
