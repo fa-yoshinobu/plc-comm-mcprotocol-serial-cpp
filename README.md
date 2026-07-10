@@ -12,7 +12,7 @@ This library is part of the plc-comm family. See the [package matrix](https://fa
 
 ## Supported PLC profiles
 
-The maintained profile table is in [PLC profiles](docsrc/user/PROFILES.md). Choose one exact canonical PLC profile from that table.
+The maintained profile table is in the [MC Protocol Serial PLC profiles](https://fa-yoshinobu.github.io/plc-comm-docs-site/mcprotocol/cpp/PROFILES/) page. Choose one exact canonical PLC profile from that table.
 
 ## Supported device types
 
@@ -21,76 +21,49 @@ The maintained device and range table is in the shared [MC Protocol Serial suppo
 ## Installation
 
 ```ini
+[env:your-board]
 lib_deps =
-    fa-yoshinobu/mcprotocol-serial-cpp@^3.0.0
+    fa-yoshinobu/mcprotocol-serial-cpp@^3.0.1
+build_unflags =
+    -std=gnu++11
+    -std=gnu++14
+build_flags =
+    -std=gnu++17
 ```
 
-## Quick example
+The PlatformIO package contains the transport-agnostic `MelsecSerialClient`, codecs, high-level request builders, and MCU compatibility headers. It intentionally does not compile the Windows/POSIX serial backend or `PosixSyncClient`. Use a source checkout with CMake for those host-only components.
 
-This host-side example opens `/dev/ttyUSB0` on Linux or `COM3` on Windows, selects `PlcProfile::MelsecQ`, and reads `D100` with `19200 / 8E1`.
+## Core client start
+
+Select the PLC profile explicitly, configure the core client, then connect its async TX/RX lifecycle to your UART or simulated transport:
 
 ```cpp
-#include <array>
-#include <cstdint>
-#include <cstdio>
-
 #include "mcprotocol_serial.hpp"
 
-int main() {
-  using mcprotocol::serial::PlcProfile;
-  using mcprotocol::serial::PosixSerialConfig;
-  using mcprotocol::serial::PosixSyncClient;
-  using mcprotocol::serial::Status;
-  using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
+auto protocol = mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(
+    mcprotocol::serial::PlcProfile::MelsecQ);
+protocol.route.station_no = 0;
 
-  PosixSerialConfig serial {};
-#if defined(_WIN32)
-  serial.device_path = "COM3";
-#else
-  serial.device_path = "/dev/ttyUSB0";
-#endif
-  serial.baud_rate = 19200;
-  serial.data_bits = 8;
-  serial.stop_bits = 1;
-  serial.parity = 'E';
-  serial.rts_cts = false;
-
-  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
-  protocol.route.station_no = 0;
-
-  PosixSyncClient plc;
-  Status status = plc.open(serial, protocol);
-  if (!status.ok()) {
-    std::fprintf(stderr, "open failed: %s\n", status.message);
-    return 1;
-  }
-
-  std::array<std::uint16_t, 1> words {};
-  status = plc.read_words("D100", words);
-  if (!status.ok()) {
-    std::fprintf(stderr, "read_words failed: %s\n", status.message);
-    return 1;
-  }
-
-  std::printf("D100=0x%04X\n", words[0]);
-  return 0;
-}
+mcprotocol::serial::MelsecSerialClient plc;
+mcprotocol::serial::Status status = plc.configure(protocol);
 ```
+
+See the maintained [PlatformIO and CMake examples](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/tree/main/examples) for complete UART, simulated async, and host workflows. No example communicates with a PLC merely by being built.
 
 ## Documentation
 
 | Page | Use it for |
 | --- | --- |
 | [Full documentation site](https://fa-yoshinobu.github.io/plc-comm-docs-site/) | Unified docs for all PLC communication libraries. |
-| [Getting started](docsrc/user/GETTING_STARTED.md) | Install the library, choose a profile, and perform your first read. |
-| [Usage guide](docsrc/user/USAGE_GUIDE.md) | Choose the high-level, host sync, or low-level async entry path. |
-| [API reference](docsrc/user/API_REFERENCE.md) | Generated reference for the public C++ headers. |
-| [PLC profiles](docsrc/user/PROFILES.md) | Choose the exact canonical profile for your target PLC. |
-| [Gotchas](docsrc/user/GOTCHAS.md) | Troubleshoot common profile, frame, serial, and address mistakes. |
+| [Getting started](https://fa-yoshinobu.github.io/plc-comm-docs-site/mcprotocol/cpp/GETTING_STARTED/) | Install the library, choose a profile, and perform your first read. |
+| [Usage guide](https://fa-yoshinobu.github.io/plc-comm-docs-site/mcprotocol/cpp/USAGE_GUIDE/) | Choose the high-level, host sync, or low-level async entry path. |
+| [API reference](https://fa-yoshinobu.github.io/plc-comm-docs-site/mcprotocol/cpp/API_REFERENCE/) | Generated reference for the public C++ headers. |
+| [PLC profiles](https://fa-yoshinobu.github.io/plc-comm-docs-site/mcprotocol/cpp/PROFILES/) | Choose the exact canonical profile for your target PLC. |
+| [Gotchas](https://fa-yoshinobu.github.io/plc-comm-docs-site/mcprotocol/cpp/GOTCHAS/) | Troubleshoot common profile, frame, serial, and address mistakes. |
 | [MC Protocol Serial setup](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/serial/) | Check PLC-side serial settings, station number, wiring shape, and bring-up order. |
 | [MC Protocol Serial supported registers](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/supported-registers/) | Check device families, address examples, and current string syntax. |
 | [Troubleshooting & Codes](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/troubleshooting-codes/) | Interpret library status codes and observed PLC/module error families. |
-| [Examples](examples/README.md) | Run maintained host and MCU examples. |
+| [Examples](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/tree/main/examples) | Run maintained host and MCU examples. |
 
 ## License and registry
 

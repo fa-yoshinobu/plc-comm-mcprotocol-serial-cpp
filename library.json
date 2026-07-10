@@ -1,6 +1,6 @@
 {
   "name": "mcprotocol-serial-cpp",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "MC protocol serial C++ library for MCU-oriented environments with fixed caller-owned buffers and async request flow.",
   "keywords": [
     "plc-comm",
@@ -38,9 +38,9 @@
   "build": {
     "includeDir": "include",
     "srcFilter": [
-      "+<src/client.cpp>",
-      "+<src/codec.cpp>",
-      "-<src/posix_serial.cpp>"
+      "+<client.cpp>",
+      "+<codec.cpp>",
+      "-<posix_serial.cpp>"
     ],
     "flags": [
       "-std=gnu++17",

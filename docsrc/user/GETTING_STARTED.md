@@ -16,11 +16,22 @@ This library speaks MELSEC serial MC Protocol from host tools and MCU firmware. 
 For PlatformIO, add the library package:
 
 ```ini
+[env:your-board]
 lib_deps =
-    fa-yoshinobu/mcprotocol-serial-cpp@^3.0.0
+    fa-yoshinobu/mcprotocol-serial-cpp@^3.0.1
+build_unflags =
+    -std=gnu++11
+    -std=gnu++14
+build_flags =
+    -std=gnu++17
 ```
 
-For a CMake project that vendors this repository, add the library directory and link the target:
+This package is the MCU-oriented, transport-agnostic core. It compiles `client.cpp` and
+`codec.cpp`; it does not compile `host_sync.cpp` or a Windows/POSIX serial backend. Use
+`MelsecSerialClient` with your UART or simulated transport in PlatformIO.
+
+For the host-only `PosixSyncClient`, vendor the source repository in a CMake project and link the
+host-enabled target:
 
 ```cmake
 add_subdirectory(external/plc-comm-mcprotocol-serial-cpp)
@@ -63,7 +74,7 @@ auto protocol = mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(
 
 ## First read on a host
 
-This example uses `PosixSyncClient`, `PosixSerialConfig`, `make_c4_ascii_format4_protocol(PlcProfile::MelsecQ)`, and `read_words("D100", words)`.
+This CMake/source-tree example uses `PosixSyncClient`, `PosixSerialConfig`, `make_c4_ascii_format4_protocol(PlcProfile::MelsecQ)`, and `read_words("D100", words)`. The PlatformIO package does not contain the host facade implementation.
 
 ```cpp
 #include <array>
@@ -151,8 +162,3 @@ The serial values in examples are also sample defaults. Match the actual PLC ser
 | RS-485 multi-drop does not answer | `protocol.route.station_no` must match the station number of the target serial module. |
 | MCU sample prints zeros or no values | Verify the UART TX/RX pins and the TTL-to-RS-232C or RS-485 interface. |
 | Wiring uncertainty | See the shared [MC Protocol Serial setup guide](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/serial/) before changing software settings. |
-
-## Next steps
-
-- Open the runnable samples: [examples README](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/tree/main/examples).
-- Continue with the [Usage guide](USAGE_GUIDE.md) and [Gotchas](GOTCHAS.md).

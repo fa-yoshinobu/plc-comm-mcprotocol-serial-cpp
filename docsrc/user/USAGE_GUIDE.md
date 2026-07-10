@@ -361,6 +361,10 @@ CMake exposes the same footprint presets through `MCPROTOCOL_FEATURE_PROFILE`:
 
 Non-`full` CMake profiles are core-only. Host sync, CLI, and tests are disabled automatically unless you override the build.
 
+CMake preserves exception and RTTI support by default. A size-constrained build can set
+`MCPROTOCOL_DISABLE_EXCEPTIONS_RTTI=ON`; those flags apply only while compiling the library target
+and are not propagated to applications that link it.
+
 ## Serial config reference
 
 | Field | Type | Example | Notes |

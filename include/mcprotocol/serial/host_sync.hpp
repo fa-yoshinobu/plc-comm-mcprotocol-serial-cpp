@@ -1,8 +1,8 @@
 #pragma once
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
+#include "mcprotocol/serial/compat/array.hpp"
+#include "mcprotocol/serial/compat/cstddef.hpp"
+#include "mcprotocol/serial/compat/cstdint.hpp"
 
 #include "mcprotocol/serial/client.hpp"
 #include "mcprotocol/serial/high_level.hpp"

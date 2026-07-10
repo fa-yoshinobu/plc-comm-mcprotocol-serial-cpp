@@ -42,7 +42,13 @@
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| `PosixSyncClient` or `PosixSerialConfig` is not found. | The host sync API is host-only and is not exposed on Arduino builds. It may also be unavailable if `MCPROTOCOL_SERIAL_ENABLE_HOST_API` is disabled or you included only narrow headers. | Build on a host with host support enabled and include `#include <mcprotocol/serial/host_sync.hpp>` explicitly. |
+| `PosixSyncClient` or `PosixSerialConfig` is not found in a PlatformIO project. | The PlatformIO package intentionally compiles only the transport-agnostic core. Defining `MCPROTOCOL_SERIAL_ENABLE_HOST_API=1` would expose declarations whose implementations are not in that package. | Vendor the source repository in a CMake host project, link the host-enabled `mcprotocol_serial` target, and include `#include <mcprotocol/serial/host_sync.hpp>` explicitly. |
+
+## Constrained standard library
+
+| Symptom | Root cause | Fix |
+| --- | --- | --- |
+| A constrained MCU toolchain has no `<array>`, `<algorithm>`, or related C++ standard header. | The library auto-detects missing headers and uses fallbacks from `mcprotocol/serial/compat/`. The compatibility files no longer use standard header names in the public include root. | If the toolchain's header probe is inaccurate, add `-DMCPROTOCOL_SERIAL_USE_BUNDLED_STDLIB_COMPAT=1` to that environment. Do not copy compatibility files into the include root under names such as `array` or `algorithm`. |
 
 ## PlatformIO UART pins wrong
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstdint>
+#include "mcprotocol/serial/compat/cstdint.hpp"
 
 #include "mcprotocol/serial/string_view_compat.hpp"
 

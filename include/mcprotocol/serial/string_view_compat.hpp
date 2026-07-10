@@ -1,15 +1,17 @@
 #pragma once
 
-#include <cstddef>
-#include <cstring>
+#include "mcprotocol/serial/compat/cstddef.hpp"
+#include "mcprotocol/serial/compat/cstring.hpp"
 
-#if defined(__has_include) && !defined(_MSC_VER)
+#if (!defined(MCPROTOCOL_SERIAL_USE_BUNDLED_STDLIB_COMPAT) || \
+     !MCPROTOCOL_SERIAL_USE_BUNDLED_STDLIB_COMPAT) && \
+    defined(__has_include)
 #if __has_include(<string_view>)
 #include <string_view>
 #endif
 #endif
 
-#if defined(_MSC_VER) || !defined(__cpp_lib_string_view) || (__cpp_lib_string_view < 201606L)
+#if !defined(__cpp_lib_string_view) || (__cpp_lib_string_view < 201606L)
 namespace std {
 
 class string_view {

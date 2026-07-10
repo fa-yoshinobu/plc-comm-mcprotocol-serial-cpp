@@ -17,8 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-07-10
+
+### Fixed
+- Library: Corrected PlatformIO `srcFilter` paths to be relative to the manifest `srcDir`, so packed-package consumers compile and link `client.cpp` and `codec.cpp`.
+- Library: Moved bundled standard-library compatibility headers out of the public include root so they no longer shadow headers such as `<array>` on MSVC and other host toolchains.
+- Build: Made the library's no-exception/no-RTTI size flags opt-in and private so normal CMake consumers retain their exception and RTTI settings.
+
 ### Changed
 - Release: The release workflow now checks the PlatformIO registry before publishing so an existing version cannot be republished.
+- Release: Bumped library, CMake, PlatformIO, Arduino, public version-header, and install-documentation metadata to `3.0.1`.
+- Library: Defined the PlatformIO package as core-only; host serial backends and `PosixSyncClient` remain source-tree CMake features.
+- Docs: Replaced README links to package-excluded `docsrc` files with stable public documentation-site links and separated the PlatformIO and host installation paths.
+
+### Added
+- Tests: Added native and Arduino Mega consumers that build the packed tarball through `lib_deps` and require both core implementation objects to be linked.
 
 ## [3.0.0] - 2026-07-10
 

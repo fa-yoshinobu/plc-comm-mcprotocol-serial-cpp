@@ -134,6 +134,10 @@ for %%E in (
   if errorlevel 1 exit /b 1
 )
 
+echo [ci] Packed PlatformIO package consumers
+call "%PYTHON_EXE%" %PYTHON_ARGS% "%REPO_ROOT%\scripts\check_platformio_package_consumers.py" --pio "%PIO_EXE%"
+if errorlevel 1 exit /b 1
+
 exit /b 0
 
 :fail

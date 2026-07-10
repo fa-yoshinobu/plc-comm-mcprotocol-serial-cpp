@@ -40,7 +40,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.2
         with:
-          ref: ${{ steps.version.outputs.tag }}
+          ref: refs/tags/${{ steps.version.outputs.tag }}
+
+      - name: Verify exact release tag
+        run: |
+          actual_tag="$(git describe --tags --exact-match HEAD)"
+          test "${actual_tag}" = "${{ steps.version.outputs.tag }}"
 
       - name: Set up Python
         uses: actions/setup-python@v6.2.0
@@ -90,6 +95,9 @@ jobs:
           grep -x 'library.properties' /tmp/platformio-package-files.txt
           grep -x 'include/mcprotocol_serial.hpp' /tmp/platformio-package-files.txt
 
+      - name: Build packed-package consumers
+        run: python3 scripts/check_platformio_package_consumers.py --package "release-artifacts/mcprotocol-serial-cpp-${{ steps.version.outputs.version }}.tar.gz"
+
       - name: Check PlatformIO registry for an existing version
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_platformio }}
         shell: pwsh
@@ -123,5 +131,5 @@ jobs:
           if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" > /dev/null 2>&1; then
             gh release upload "${tag}" "${asset}" "${pio_asset}" --clobber --repo "${GITHUB_REPOSITORY}"
           else
-            gh release create "${tag}" "${asset}" "${pio_asset}" --repo "${GITHUB_REPOSITORY}" --title "Release ${tag}" --generate-notes --target main
+            gh release create "${tag}" "${asset}" "${pio_asset}" --repo "${GITHUB_REPOSITORY}" --title "Release ${tag}" --generate-notes --verify-tag
           fi

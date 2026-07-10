@@ -1,20 +1,22 @@
 #pragma once
 
-#include <array>
-#include <cstddef>
+#include "mcprotocol/serial/compat/array.hpp"
+#include "mcprotocol/serial/compat/cstddef.hpp"
 
-#if defined(__has_include) && !defined(_MSC_VER)
+#if (!defined(MCPROTOCOL_SERIAL_USE_BUNDLED_STDLIB_COMPAT) || \
+     !MCPROTOCOL_SERIAL_USE_BUNDLED_STDLIB_COMPAT) && \
+    defined(__has_include)
 #if __has_include(<span>)
 #include <span>
 #endif
 #endif
 
-#if defined(_MSC_VER) || !defined(__cpp_lib_span) || (__cpp_lib_span < 202002L)
+#if !defined(__cpp_lib_span) || (__cpp_lib_span < 202002L)
 namespace std {
 
 constexpr size_t dynamic_extent = static_cast<size_t>(-1);
 
-#if defined(_MSC_VER) || !defined(__cpp_lib_byte) || (__cpp_lib_byte < 201603L)
+#if !defined(__cpp_lib_byte) || (__cpp_lib_byte < 201603L)
 enum class byte : unsigned char {};
 
 template <typename IntegerType>
