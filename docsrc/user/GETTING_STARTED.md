@@ -17,7 +17,7 @@ For PlatformIO, add the library package:
 
 ```ini
 lib_deps =
-    fa-yoshinobu/mcprotocol-serial-cpp@^2.0.1
+    fa-yoshinobu/mcprotocol-serial-cpp@^3.0.0
 ```
 
 For a CMake project that vendors this repository, add the library directory and link the target:
