@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstdint>
+#include "mcprotocol/serial/compat/cstdint.hpp"
 
 namespace mcprotocol::serial {
 

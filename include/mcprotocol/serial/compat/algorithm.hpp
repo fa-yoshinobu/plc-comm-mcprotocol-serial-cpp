@@ -1,14 +1,25 @@
 #pragma once
 
-#if defined(__has_include_next)
-#if __has_include_next(<algorithm>)
-#include_next <algorithm>
-#define MCPROTOCOL_HAVE_STD_ALGORITHM 1
+// Keep bundled standard-library fallbacks behind a library-specific include path. Define
+// MCPROTOCOL_SERIAL_USE_BUNDLED_STDLIB_COMPAT=1 to force the fallback on a constrained toolchain,
+// or =0 to require the toolchain's standard header. The default probes header availability.
+#if defined(MCPROTOCOL_SERIAL_USE_BUNDLED_STDLIB_COMPAT)
+#if MCPROTOCOL_SERIAL_USE_BUNDLED_STDLIB_COMPAT
+#define MCPROTOCOL_SERIAL_BUNDLED_ALGORITHM 1
+#else
+#include <algorithm>
 #endif
+#elif defined(__has_include)
+#if __has_include(<algorithm>)
+#include <algorithm>
+#else
+#define MCPROTOCOL_SERIAL_BUNDLED_ALGORITHM 1
 #endif
-
-#if !defined(MCPROTOCOL_HAVE_STD_ALGORITHM)
-#include <cstddef>
+#else
+#include <algorithm>
+#endif
+#if defined(MCPROTOCOL_SERIAL_BUNDLED_ALGORITHM)
+#include "mcprotocol/serial/compat/cstddef.hpp"
 
 namespace std {
 

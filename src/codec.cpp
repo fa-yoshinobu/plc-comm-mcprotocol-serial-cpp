@@ -2,12 +2,12 @@
 
 #include "protocol_predicates.hpp"
 
-#include <algorithm>
-#include <array>
-#include <cctype>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
+#include "mcprotocol/serial/compat/algorithm.hpp"
+#include "mcprotocol/serial/compat/array.hpp"
+#include "mcprotocol/serial/compat/cctype.hpp"
+#include "mcprotocol/serial/compat/cstddef.hpp"
+#include "mcprotocol/serial/compat/cstdint.hpp"
+#include "mcprotocol/serial/compat/cstring.hpp"
 
 namespace mcprotocol::serial {
 namespace {

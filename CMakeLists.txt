@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(mcprotocol_serial_cpp VERSION 3.0.0 LANGUAGES CXX)
+project(mcprotocol_serial_cpp VERSION 3.0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,6 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(MCPROTOCOL_BUILD_EXAMPLES "Build compile-checked example programs" ON)
 option(MCPROTOCOL_BUILD_HOST_SUPPORT "Build host-side serial backends and synchronous helpers" ON)
 option(MCPROTOCOL_BUILD_CLI "Build the mcprotocol_cli host tool" ON)
+option(MCPROTOCOL_DISABLE_EXCEPTIONS_RTTI "Disable exceptions and RTTI inside the library target" OFF)
 set(MCPROTOCOL_FEATURE_PROFILE "full" CACHE STRING
     "Feature/footprint profile for mcprotocol_serial (full, reduced, ultra)")
 set_property(CACHE MCPROTOCOL_FEATURE_PROFILE PROPERTY STRINGS full reduced ultra)
@@ -112,6 +113,18 @@ endif()
 
 add_library(mcprotocol_serial ${MCPROTOCOL_SERIAL_SOURCES})
 
+if(MCPROTOCOL_EFFECTIVE_BUILD_HOST_SUPPORT)
+  target_compile_definitions(mcprotocol_serial
+    PUBLIC
+      MCPROTOCOL_SERIAL_ENABLE_HOST_API=1
+  )
+else()
+  target_compile_definitions(mcprotocol_serial
+    PUBLIC
+      MCPROTOCOL_SERIAL_ENABLE_HOST_API=0
+  )
+endif()
+
 target_include_directories(mcprotocol_serial
   PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -126,22 +139,22 @@ endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
   target_compile_options(mcprotocol_serial
-    PUBLIC
-      -fno-exceptions
-      -fno-rtti
     PRIVATE
       -Wall
       -Wextra
       -Wpedantic
   )
+  if(MCPROTOCOL_DISABLE_EXCEPTIONS_RTTI)
+    target_compile_options(mcprotocol_serial PRIVATE -fno-exceptions -fno-rtti)
+  endif()
 elseif(MSVC)
   target_compile_options(mcprotocol_serial
-    PUBLIC
-      /EHs-c-
-      /GR-
     PRIVATE
       /W4
   )
+  if(MCPROTOCOL_DISABLE_EXCEPTIONS_RTTI)
+    target_compile_options(mcprotocol_serial PRIVATE /EHs-c- /GR-)
+  endif()
 endif()
 
 include(CTest)
@@ -168,6 +181,14 @@ if(BUILD_TESTING)
   target_link_libraries(codec_tests PRIVATE mcprotocol_serial)
 
   add_test(NAME codec_tests COMMAND codec_tests)
+
+  add_executable(standard_header_consumer
+    tests/standard_header_consumer.cpp
+  )
+
+  target_link_libraries(standard_header_consumer PRIVATE mcprotocol_serial)
+
+  add_test(NAME standard_header_consumer COMMAND standard_header_consumer)
 endif()
 
 if(MCPROTOCOL_EFFECTIVE_BUILD_CLI)

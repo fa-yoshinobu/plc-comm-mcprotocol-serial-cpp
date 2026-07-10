@@ -1,8 +1,8 @@
 #include <Arduino.h>
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
+#include "mcprotocol/serial/compat/array.hpp"
+#include "mcprotocol/serial/compat/cstddef.hpp"
+#include "mcprotocol/serial/compat/cstdint.hpp"
 
 #include "mcprotocol_serial.hpp"
 #include "mcprotocol/serial/span_compat.hpp"

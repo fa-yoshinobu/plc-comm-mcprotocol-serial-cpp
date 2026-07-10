@@ -1,14 +1,22 @@
 #pragma once
 
-#if defined(__has_include_next)
-#if __has_include_next(<array>)
-#include_next <array>
-#define MCPROTOCOL_HAVE_STD_ARRAY 1
+#if defined(MCPROTOCOL_SERIAL_USE_BUNDLED_STDLIB_COMPAT)
+#if MCPROTOCOL_SERIAL_USE_BUNDLED_STDLIB_COMPAT
+#define MCPROTOCOL_SERIAL_BUNDLED_ARRAY 1
+#else
+#include <array>
 #endif
+#elif defined(__has_include)
+#if __has_include(<array>)
+#include <array>
+#else
+#define MCPROTOCOL_SERIAL_BUNDLED_ARRAY 1
 #endif
-
-#if !defined(MCPROTOCOL_HAVE_STD_ARRAY)
-#include <cstddef>
+#else
+#include <array>
+#endif
+#if defined(MCPROTOCOL_SERIAL_BUNDLED_ARRAY)
+#include "mcprotocol/serial/compat/cstddef.hpp"
 
 namespace std {
 
@@ -42,6 +50,12 @@ struct array {
   [[nodiscard]] constexpr const_reference front() const noexcept { return elems[0]; }
   [[nodiscard]] constexpr reference back() noexcept { return elems[N - 1]; }
   [[nodiscard]] constexpr const_reference back() const noexcept { return elems[N - 1]; }
+
+  constexpr void fill(const value_type& value) {
+    for (size_type index = 0; index < N; ++index) {
+      elems[index] = value;
+    }
+  }
 };
 
 template <typename T, size_t N>

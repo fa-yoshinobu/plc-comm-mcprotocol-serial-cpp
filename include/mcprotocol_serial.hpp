@@ -10,9 +10,13 @@
 /// - the asynchronous serial client
 /// - link-direct `Jn\\...` parser helpers
 /// - qualified-buffer helper utilities
+///
+/// The PlatformIO package contains only the transport-agnostic core. Host serial backends and the
+/// synchronous host facade are built by CMake from the source repository. Define
+/// `MCPROTOCOL_SERIAL_ENABLE_HOST_API=1` only when linking that host-enabled CMake target.
 
 #ifndef MCPROTOCOL_SERIAL_ENABLE_HOST_API
-#if defined(ARDUINO)
+#if defined(ARDUINO) || defined(PLATFORMIO)
 #define MCPROTOCOL_SERIAL_ENABLE_HOST_API 0
 #else
 #define MCPROTOCOL_SERIAL_ENABLE_HOST_API 1

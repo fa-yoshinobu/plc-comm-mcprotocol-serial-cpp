@@ -42,6 +42,29 @@ jobs:
       - name: Check API reference
         run: python3 scripts/generate_api_reference.py --title "MC Protocol Serial C++ API Reference" --output docsrc/user/API_REFERENCE.md --input include/mcprotocol_serial.hpp --input include/mcprotocol/serial/types.hpp --input include/mcprotocol/serial/status.hpp --input include/mcprotocol/serial/codec.hpp --input include/mcprotocol/serial/client.hpp --input include/mcprotocol/serial/high_level.hpp --input include/mcprotocol/serial/host_sync.hpp --input include/mcprotocol/serial/posix_serial.hpp --input include/mcprotocol/serial/link_direct.hpp --input include/mcprotocol/serial/qualified_buffer.hpp --input include/mcprotocol/serial/version.hpp --predefine MCPROTOCOL_SERIAL_ENABLE_HOST_API=1 --check
 
+  windows-host-build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Check mirrored release metadata
+        run: python scripts/sync_release_metadata.py --check
+
+      - name: Configure
+        run: cmake -S . -B build -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
   platformio-package:
     runs-on: ubuntu-latest
     steps:
@@ -78,10 +101,14 @@ jobs:
           grep -x 'library.properties' /tmp/platformio-package/files.txt
           grep -x 'include/mcprotocol_serial.hpp' /tmp/platformio-package/files.txt
 
+      - name: Build packed-package consumers
+        run: python3 scripts/check_platformio_package_consumers.py --package /tmp/platformio-package/mcprotocol-serial-cpp-*.tar.gz
+
   trigger-docs-rebuild:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       - host-build-and-checks
+      - windows-host-build
       - platformio-package
     runs-on: ubuntu-latest
     steps:

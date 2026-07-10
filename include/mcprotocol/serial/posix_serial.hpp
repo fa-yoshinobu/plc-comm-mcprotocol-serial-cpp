@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
+#include "mcprotocol/serial/compat/cstddef.hpp"
+#include "mcprotocol/serial/compat/cstdint.hpp"
 
 #include "mcprotocol/serial/status.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
