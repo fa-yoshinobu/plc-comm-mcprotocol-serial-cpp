@@ -56,9 +56,18 @@ void PosixSyncClient::on_request_complete(void* user, Status status) noexcept {
 Status PosixSyncClient::open(
     const PosixSerialConfig& serial_config,
     const ProtocolConfig& protocol_config) noexcept {
-  close();
+  Status status = validate_mc_serial_config(serial_config, protocol_config);
+  if (!status.ok()) {
+    return status;
+  }
 
-  Status status = client_.configure(protocol_config);
+  status = FrameCodec::validate_config(protocol_config);
+  if (!status.ok()) {
+    return status;
+  }
+
+  close();
+  status = client_.configure(protocol_config);
   if (!status.ok()) {
     return status;
   }

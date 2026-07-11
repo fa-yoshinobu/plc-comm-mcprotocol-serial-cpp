@@ -1,17 +1,31 @@
 [CmdletBinding()]
 param(
     [string]$CliPath = ".\build\manual\mcprotocol_cli.exe",
-    [string]$Device = "COM3",
-    [int]$Baud = 28800,
-    [int]$DataBits = 8,
+    [Parameter(Mandatory = $true)]
+    [string]$Device,
+    [Parameter(Mandatory = $true)]
+    [int]$Baud,
+    [Parameter(Mandatory = $true)]
+    [int]$DataBits,
+    [Parameter(Mandatory = $true)]
     [ValidateSet("N", "E", "O")]
-    [string]$Parity = "E",
-    [int]$StopBits = 2,
+    [string]$Parity,
+    [Parameter(Mandatory = $true)]
+    [int]$StopBits,
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("none", "rts-cts")]
+    [string]$HardwareFlow,
     [string]$Frame = "c4-binary",
     [string]$PlcProfile = "melsec:iq-r",
-    [int]$Station = 0,
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("host", "multidrop")]
+    [string]$Route,
+    [Nullable[int]]$Station,
+    [Nullable[int]]$Network,
+    [string]$PcTarget,
+    [Parameter(Mandatory = $true)]
     [ValidateSet("on", "off")]
-    [string]$SumCheck = "on",
+    [string]$SumCheck,
     [int]$ResponseTimeoutMs = 5000,
     [int]$InterByteTimeoutMs = 250,
     [string]$Password = "",
@@ -30,6 +44,34 @@ if ($AllowRemotePasswordCommands -and [string]::IsNullOrEmpty($Password)) {
     throw "Password is required when -AllowRemotePasswordCommands is set."
 }
 
+if ($Route -eq "multidrop" -and $Frame -notmatch '^e1-' -and $null -eq $Station) {
+    throw "Station is required when -Route multidrop is selected."
+}
+if ($Route -eq "multidrop" -and $Frame -match '^e1-' -and $null -ne $Station) {
+    throw "Station must not be specified for a 1E route."
+}
+if ($Route -eq "host" -and $null -ne $Station) {
+    throw "Station must not be specified when -Route host is selected."
+}
+if ($Route -eq "host" -and $null -ne $Network) {
+    throw "Network must not be specified when -Route host is selected."
+}
+if ($Route -eq "host" -and -not [string]::IsNullOrEmpty($PcTarget)) {
+    throw "PcTarget must not be specified when -Route host is selected."
+}
+if ($Route -eq "multidrop" -and $Frame -match '^c[34]-' -and $null -eq $Network) {
+    throw "Network is required for 3C/4C multidrop routes."
+}
+if ($Route -eq "multidrop" -and $Frame -match '^c[12]-' -and $null -ne $Network) {
+    throw "Network must not be specified for 1C/2C multidrop routes."
+}
+if ($Route -eq "multidrop" -and $Frame -match '^(c[34]|e1)-' -and [string]::IsNullOrEmpty($PcTarget)) {
+    throw "PcTarget is required for 3C/4C/1E non-host routes."
+}
+if ($Route -eq "multidrop" -and $Frame -match '^c[12]-' -and -not [string]::IsNullOrEmpty($PcTarget)) {
+    throw "PcTarget must not be specified for 1C/2C routes."
+}
+
 if (-not (Test-Path -LiteralPath $LogDirectory)) {
     New-Item -ItemType Directory -Path $LogDirectory | Out-Null
 }
@@ -44,14 +86,24 @@ $script:CommonArgs = @(
     "--data-bits", "$DataBits",
     "--parity", $Parity,
     "--stop-bits", "$StopBits",
+    "--hardware-flow", $HardwareFlow,
     "--frame", $Frame,
     "--plc-profile", $PlcProfile,
-    "--station", "$Station",
+    "--route", $Route,
     "--sum-check", $SumCheck,
     "--response-timeout-ms", "$ResponseTimeoutMs",
     "--inter-byte-timeout-ms", "$InterByteTimeoutMs",
     "--dump-frames", "on"
 )
+if ($null -ne $Station) {
+    $script:CommonArgs += @("--station", "$Station")
+}
+if ($null -ne $Network) {
+    $script:CommonArgs += @("--network", "$Network")
+}
+if (-not [string]::IsNullOrEmpty($PcTarget)) {
+    $script:CommonArgs += @("--pc-target", $PcTarget)
+}
 
 function Write-LogLine {
     param([string]$Line)
@@ -109,7 +161,7 @@ Write-LogLine "device=$Device"
 Write-LogLine "serial=$Baud/${DataBits}${Parity}${StopBits}"
 Write-LogLine "frame=$Frame"
 Write-LogLine "plc-profile=$PlcProfile"
-Write-LogLine "station=$Station"
+Write-LogLine "route=$Route station=$Station network=$Network pc_target=$PcTarget"
 Write-LogLine "sum-check=$SumCheck"
 Write-LogLine "response-timeout-ms=$ResponseTimeoutMs"
 Write-LogLine "inter-byte-timeout-ms=$InterByteTimeoutMs"

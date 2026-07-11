@@ -43,6 +43,18 @@ constexpr unsigned long kLinuxTcsets2 = _IOW('T', 0x2B, LinuxTermios2);
   return make_status(StatusCode::Transport, message);
 }
 
+[[nodiscard]] Status make_device_path(
+    char* output,
+    std::size_t output_size,
+    std::string_view device_path) noexcept {
+  if (output == nullptr || output_size == 0U || device_path.size() >= output_size) {
+    return make_status(StatusCode::InvalidArgument, "Device path is too long");
+  }
+  std::memcpy(output, device_path.data(), device_path.size());
+  output[device_path.size()] = '\0';
+  return ok_status();
+}
+
 [[nodiscard]] Status transport_errno(const char* action) noexcept {
   switch (errno) {
     case EACCES:
@@ -122,12 +134,6 @@ constexpr unsigned long kLinuxTcsets2 = _IOW('T', 0x2B, LinuxTermios2);
   tty.c_cflag &= ~CSIZE;
 
   switch (config.data_bits) {
-    case 5:
-      tty.c_cflag |= CS5;
-      break;
-    case 6:
-      tty.c_cflag |= CS6;
-      break;
     case 7:
       tty.c_cflag |= CS7;
       break;
@@ -148,15 +154,12 @@ constexpr unsigned long kLinuxTcsets2 = _IOW('T', 0x2B, LinuxTermios2);
 
   tty.c_cflag &= ~(PARENB | PARODD);
   switch (config.parity) {
-    case 'N':
-    case 'n':
+    case SerialParity::None:
       break;
-    case 'E':
-    case 'e':
+    case SerialParity::Even:
       tty.c_cflag |= PARENB;
       break;
-    case 'O':
-    case 'o':
+    case SerialParity::Odd:
       tty.c_cflag |= PARENB;
       tty.c_cflag |= PARODD;
       break;
@@ -164,7 +167,7 @@ constexpr unsigned long kLinuxTcsets2 = _IOW('T', 0x2B, LinuxTermios2);
       return make_status(StatusCode::InvalidArgument, "Unsupported parity");
   }
 
-  if (config.rts_cts) {
+  if (config.hardware_flow_control == HardwareFlowControl::RtsCts) {
     tty.c_cflag |= CRTSCTS;
   } else {
     tty.c_cflag &= ~CRTSCTS;
@@ -220,14 +223,21 @@ PosixSerialPort::~PosixSerialPort() {
 }
 
 Status PosixSerialPort::open(const PosixSerialConfig& config) noexcept {
-  if (config.device_path.empty()) {
-    return make_status(StatusCode::InvalidArgument, "Device path must not be empty");
+  const Status config_status = validate_serial_config(config);
+  if (!config_status.ok()) {
+    return config_status;
   }
   if (fd_ >= 0) {
     close();
   }
 
-  fd_ = static_cast<std::intptr_t>(::open(config.device_path.data(), O_RDWR | O_NOCTTY | O_SYNC));
+  char path_buf[4096];
+  const Status path_status = make_device_path(path_buf, sizeof(path_buf), config.device_path);
+  if (!path_status.ok()) {
+    return path_status;
+  }
+
+  fd_ = static_cast<std::intptr_t>(::open(path_buf, O_RDWR | O_NOCTTY | O_SYNC));
   if (fd_ < 0) {
     return transport_errno("open failed");
   }

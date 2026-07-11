@@ -620,7 +620,7 @@ Logical state selected from a long timer/counter status block.
 #### `make_c4_binary_protocol`
 
 ```cpp
-ProtocolConfig mcprotocol::serial::highlevel::make_c4_binary_protocol(PlcProfile profile) noexcept
+ProtocolConfig mcprotocol::serial::highlevel::make_c4_binary_protocol(PlcProfile profile, SumCheckMode sum_check_mode, RouteConfig route) noexcept
 ```
 
 Returns a practical Format5 / Binary / C4 configuration for an explicit PLC profile.
@@ -628,7 +628,7 @@ Returns a practical Format5 / Binary / C4 configuration for an explicit PLC prof
 #### `make_c4_ascii_format4_protocol`
 
 ```cpp
-ProtocolConfig mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(PlcProfile profile) noexcept
+ProtocolConfig mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(PlcProfile profile, SumCheckMode sum_check_mode, RouteConfig route) noexcept
 ```
 
 Returns a practical Format4 / ASCII / C4 configuration for an explicit PLC profile.
@@ -636,12 +636,12 @@ Returns a practical Format4 / ASCII / C4 configuration for an explicit PLC profi
 #### `make_c4_ascii_format2_protocol`
 
 ```cpp
-ProtocolConfig mcprotocol::serial::highlevel::make_c4_ascii_format2_protocol(PlcProfile profile) noexcept
+ProtocolConfig mcprotocol::serial::highlevel::make_c4_ascii_format2_protocol(PlcProfile profile, SumCheckMode sum_check_mode, RouteConfig route) noexcept
 ```
 
-Returns a practical default for Format2 / ASCII / C4.
+Returns a Format2 / ASCII / C4 configuration with explicit profile and sum-check mode.
 
-Format2 is the Format1 style ENQ/ACK/NAK/STX/ETX link with an extra 1-byte block number inserted before the frame ID. The default block number is 0x00; change ProtocolConfig::ascii_block_number if the host side needs a different value.
+Format2 is the Format1 style ENQ/ACK/NAK/STX/ETX link with an extra 1-byte block number inserted before the frame ID. Block-number lifecycle is addressed separately by D-096.
 
 #### `parse_device_address`
 
@@ -798,6 +798,16 @@ Library-level status code returned by encode, decode, transport, and client oper
 | `BufferTooSmall` |  |
 | `Cancelled` |  |
 
+#### `SerialParity`
+
+Explicit parity selection for a host serial port.
+
+| Value | Description |
+| --- | --- |
+| `None` |  |
+| `Even` |  |
+| `Odd` |  |
+
 #### `QualifiedBufferDeviceKind`
 
 Qualified buffer-memory family used by helper U... accessors.
@@ -806,6 +816,15 @@ Qualified buffer-memory family used by helper U... accessors.
 | --- | --- |
 | `G` |  |
 | `HG` |  |
+
+#### `HardwareFlowControl`
+
+Explicit hardware flow-control selection for a host serial port.
+
+| Value | Description |
+| --- | --- |
+| `None` |  |
+| `RtsCts` |  |
 
 #### `DecodeStatus`
 
@@ -849,6 +868,15 @@ ASCII formatting variant for C4 / C3 / C2 serial frames.
 | `Format3` | STX-only layout commonly used on serial MC links. |
 | `Format4` | CR/LF terminated layout often used by host-facing bring-up tools. |
 
+#### `SumCheckMode`
+
+Explicit sum-check policy for frame families that support configuration.
+
+| Value | Description |
+| --- | --- |
+| `Disabled` |  |
+| `Enabled` |  |
+
 #### `PlcSeries`
 
 PLC family selection used for subcommand and device-layout differences.
@@ -888,6 +916,7 @@ Route layout inside the request header.
 
 | Value | Description |
 | --- | --- |
+| `Unspecified` | No route was selected. This value is observable but cannot encode a request. |
 | `HostStation` | Host-station route with fixed station=0, network=0, pc=FF, and local module fields. |
 | `MultidropStation` | Multidrop/routed route. 1C/2C use the station fields; 3C/4C also carry network/PC fields. |
 
@@ -1035,6 +1064,27 @@ Decoded PLC response class before command-specific parsing.
 | `SuccessNoData` | Successful response carrying no payload bytes. |
 | `PlcError` | PLC-side error response with an end code / error code. |
 
+#### `C34PcTargetKind`
+
+Meaning of a 3C/4C routed PC target.
+
+| Value | Description |
+| --- | --- |
+| `Number` |  |
+| `ControlSystem` |  |
+| `StandbySystem` |  |
+| `SpecialFe` |  |
+| `ConnectedStation` |  |
+
+#### `E1PcTargetKind`
+
+Meaning of a 1E PC target.
+
+| Value | Description |
+| --- | --- |
+| `Number` |  |
+| `ConnectedStation` |  |
+
 #### Variables And Constants
 
 #### `kMaxRequestFrameBytes`
@@ -1153,6 +1203,18 @@ Validates whether the helper 0601/1601 route may be used for a profile.
 
 This helper route maps Un\\G-style text onto module-buffer commands. Some profiles, such as MELSEC-Q, MELSEC-L, iQ-L, and iQ-F, require the native device-access route instead.
 
+#### `validate_serial_config`
+
+```cpp
+Status mcprotocol::serial::validate_serial_config(const PosixSerialConfig &config) noexcept
+```
+
+#### `validate_mc_serial_config`
+
+```cpp
+Status mcprotocol::serial::validate_mc_serial_config(const PosixSerialConfig &serial_config, const ProtocolConfig &protocol_config) noexcept
+```
+
 #### `sparse_native_requested_bit_value`
 
 ```cpp
@@ -1163,6 +1225,14 @@ Returns the requested-point value from a sparse native bit result word.
 
 On 2C/3C/4C, native sparse bit reads (0403) and monitor reads (0802) return the addressed point inside a 16-point mask word. The requested head device is represented by bit 0 of that returned word.
 
+#### `parse_qualified_buffer_word_device`
+
+```cpp
+Status mcprotocol::serial::parse_qualified_buffer_word_device(std::string_view text, QualifiedBufferWordDevice &out_device) noexcept
+```
+
+Parses a helper qualified device string such as U3E0\\G10 or U3E0\\HG20.
+
 #### `sparse_native_mask_word`
 
 ```cpp
@@ -1172,14 +1242,6 @@ std::uint16_t mcprotocol::serial::sparse_native_mask_word(std::uint32_t raw_valu
 Returns the raw 16-point mask word from a sparse native bit result.
 
 Keep this raw word visible for diagnostics when the target-specific offset pattern matters.
-
-#### `parse_qualified_buffer_word_device`
-
-```cpp
-Status mcprotocol::serial::parse_qualified_buffer_word_device(std::string_view text, QualifiedBufferWordDevice &out_device) noexcept
-```
-
-Parses a helper qualified device string such as U3E0\\G10 or U3E0\\HG20.
 
 #### `parse_link_direct_device`
 
@@ -1197,6 +1259,14 @@ Status mcprotocol::serial::make_qualified_buffer_read_words_request(const Qualif
 
 Builds a module-buffer read request for a helper qualified word range.
 
+#### `is_valid_frame_kind`
+
+```cpp
+bool mcprotocol::serial::is_valid_frame_kind(FrameKind frame_kind) noexcept
+```
+
+Returns whether frame_kind is a defined public frame-family value.
+
 #### `encode_qualified_buffer_word_values`
 
 ```cpp
@@ -1204,6 +1274,14 @@ Status mcprotocol::serial::encode_qualified_buffer_word_values(std::span< const 
 ```
 
 Encodes helper qualified word values into little-endian module-buffer bytes.
+
+#### `is_valid_code_mode`
+
+```cpp
+bool mcprotocol::serial::is_valid_code_mode(CodeMode code_mode) noexcept
+```
+
+Returns whether code_mode is a defined public payload-encoding value.
 
 #### `make_qualified_buffer_write_words_request`
 
@@ -1213,13 +1291,21 @@ Status mcprotocol::serial::make_qualified_buffer_write_words_request(const Quali
 
 Builds a module-buffer write request for helper qualified word access.
 
-#### `plc_profile_name`
+#### `is_valid_sum_check_mode`
 
 ```cpp
-const char * mcprotocol::serial::plc_profile_name(PlcProfile profile) noexcept
+bool mcprotocol::serial::is_valid_sum_check_mode(SumCheckMode mode) noexcept
 ```
 
-Returns the canonical saved string for a PLC profile.
+Returns whether mode is a defined public sum-check value.
+
+#### `is_valid_ascii_format`
+
+```cpp
+bool mcprotocol::serial::is_valid_ascii_format(AsciiFormat format) noexcept
+```
+
+Returns whether format is a defined public ASCII framing value.
 
 #### `decode_qualified_buffer_word_values`
 
@@ -1228,6 +1314,14 @@ Status mcprotocol::serial::decode_qualified_buffer_word_values(std::span< const 
 ```
 
 Decodes little-endian module-buffer bytes into helper qualified word values.
+
+#### `plc_profile_name`
+
+```cpp
+const char * mcprotocol::serial::plc_profile_name(PlcProfile profile) noexcept
+```
+
+Returns the canonical saved string for a PLC profile.
 
 #### `plc_profile_display_name`
 
@@ -1869,6 +1963,38 @@ Status mcprotocol::serial::MelsecSerialClient::async_loopback(std::uint32_t now_
 
 Starts loopback using hexadecimal ASCII payload bytes.
 
+### Class `mcprotocol::serial::FrameCodecContext`
+
+Per-wire-frame identity context kept outside static protocol configuration.
+
+Normal clients allocate Format2 block numbers automatically. format2() exists for raw codec, test, and investigation callers that intentionally construct or decode one explicit wire frame.
+
+#### Member Functions
+
+#### `none`
+
+```cpp
+static FrameCodecContext mcprotocol::serial::FrameCodecContext::none() noexcept
+```
+
+#### `format2`
+
+```cpp
+static FrameCodecContext mcprotocol::serial::FrameCodecContext::format2(std::uint8_t block_number) noexcept
+```
+
+#### `has_format2_block_number`
+
+```cpp
+bool mcprotocol::serial::FrameCodecContext::has_format2_block_number() const noexcept
+```
+
+#### `format2_block_number`
+
+```cpp
+std::uint8_t mcprotocol::serial::FrameCodecContext::format2_block_number() const noexcept
+```
+
 ### Class `mcprotocol::serial::FrameCodec`
 
 Frame-level encode/decode helper for complete serial MC frames.
@@ -1897,6 +2023,14 @@ Wraps command data in the configured serial frame format.
 
 request_data must already contain the command payload generated by CommandCodec.
 
+#### `encode_request`
+
+```cpp
+static Status mcprotocol::serial::FrameCodec::encode_request(const ProtocolConfig &config, FrameCodecContext context, std::span< const std::uint8_t > request_data, std::span< std::uint8_t > out_frame, std::size_t &out_size) noexcept
+```
+
+Wraps command data using an explicit per-wire-frame identity context.
+
 #### `encode_success_response`
 
 ```cpp
@@ -1907,6 +2041,12 @@ Builds a success response frame for tests and local tools.
 
 This is mainly used by tests and local validation helpers. Library users typically decode real target responses instead of constructing synthetic ones.
 
+#### `encode_success_response`
+
+```cpp
+static Status mcprotocol::serial::FrameCodec::encode_success_response(const ProtocolConfig &config, FrameCodecContext context, std::span< const std::uint8_t > response_data, std::span< std::uint8_t > out_frame, std::size_t &out_size) noexcept
+```
+
 #### `encode_error_response`
 
 ```cpp
@@ -1914,6 +2054,12 @@ static Status mcprotocol::serial::FrameCodec::encode_error_response(const Protoc
 ```
 
 Builds a PLC-error response frame for tests and local tools.
+
+#### `encode_error_response`
+
+```cpp
+static Status mcprotocol::serial::FrameCodec::encode_error_response(const ProtocolConfig &config, FrameCodecContext context, std::uint16_t error_code, std::span< std::uint8_t > out_frame, std::size_t &out_size) noexcept
+```
 
 #### `decode_response`
 
@@ -1924,6 +2070,14 @@ static DecodeResult mcprotocol::serial::FrameCodec::decode_response(const Protoc
 Decodes one response frame from the front of bytes.
 
 The caller can use bytes_consumed to drop the decoded prefix and continue stream processing.
+
+#### `decode_response`
+
+```cpp
+static DecodeResult mcprotocol::serial::FrameCodec::decode_response(const ProtocolConfig &config, FrameCodecContext context, std::span< const std::uint8_t > bytes) noexcept
+```
+
+Decodes one response using an explicit per-wire-frame identity context.
 
 ### Class `mcprotocol::serial::PosixSyncClient`
 
@@ -2465,6 +2619,388 @@ Status mcprotocol::serial::PosixSerialPort::set_rts(bool enabled) noexcept
 
 Sets the RTS line when the underlying driver supports it.
 
+### Class `mcprotocol::serial::C34PcTarget`
+
+Mandatory typed PC target for 3C/4C multidrop routes.
+
+#### Member Functions
+
+#### `number`
+
+```cpp
+static C34PcTarget mcprotocol::serial::C34PcTarget::number(std::uint32_t value) noexcept
+```
+
+#### `control_system`
+
+```cpp
+static C34PcTarget mcprotocol::serial::C34PcTarget::control_system() noexcept
+```
+
+#### `standby_system`
+
+```cpp
+static C34PcTarget mcprotocol::serial::C34PcTarget::standby_system() noexcept
+```
+
+#### `special_fe`
+
+```cpp
+static C34PcTarget mcprotocol::serial::C34PcTarget::special_fe() noexcept
+```
+
+#### `connected_station`
+
+```cpp
+static C34PcTarget mcprotocol::serial::C34PcTarget::connected_station() noexcept
+```
+
+#### `kind`
+
+```cpp
+C34PcTargetKind mcprotocol::serial::C34PcTarget::kind() const noexcept
+```
+
+#### `value`
+
+```cpp
+std::uint32_t mcprotocol::serial::C34PcTarget::value() const noexcept
+```
+
+#### `is_valid`
+
+```cpp
+bool mcprotocol::serial::C34PcTarget::is_valid() const noexcept
+```
+
+### Class `mcprotocol::serial::E1PcTarget`
+
+Mandatory typed PC target for an explicit 1E route.
+
+#### Member Functions
+
+#### `number`
+
+```cpp
+static E1PcTarget mcprotocol::serial::E1PcTarget::number(std::uint32_t value) noexcept
+```
+
+#### `connected_station`
+
+```cpp
+static E1PcTarget mcprotocol::serial::E1PcTarget::connected_station() noexcept
+```
+
+#### `kind`
+
+```cpp
+E1PcTargetKind mcprotocol::serial::E1PcTarget::kind() const noexcept
+```
+
+#### `value`
+
+```cpp
+std::uint32_t mcprotocol::serial::E1PcTarget::value() const noexcept
+```
+
+#### `is_valid`
+
+```cpp
+bool mcprotocol::serial::E1PcTarget::is_valid() const noexcept
+```
+
+### Class `mcprotocol::serial::C1MultidropRoute`
+
+Explicit 1C multidrop route. Network and self-station fields do not exist on this type.
+
+#### Member Functions
+
+#### `C1MultidropRoute`
+
+```cpp
+mcprotocol::serial::C1MultidropRoute::C1MultidropRoute(std::uint32_t station_no) noexcept
+```
+
+#### `station_no`
+
+```cpp
+std::uint32_t mcprotocol::serial::C1MultidropRoute::station_no() const noexcept
+```
+
+### Class `mcprotocol::serial::C2MultidropRoute`
+
+Explicit 2C multidrop route with a mandatory station number.
+
+The temporary enabled/number pair remains until D-103 replaces it with topology-specific types.
+
+#### Member Functions
+
+#### `C2MultidropRoute`
+
+```cpp
+mcprotocol::serial::C2MultidropRoute::C2MultidropRoute(std::uint32_t station_no, bool self_station_enabled=false, std::uint8_t self_station_no=0x00U) noexcept
+```
+
+#### `station_no`
+
+```cpp
+std::uint32_t mcprotocol::serial::C2MultidropRoute::station_no() const noexcept
+```
+
+#### `self_station_enabled`
+
+```cpp
+bool mcprotocol::serial::C2MultidropRoute::self_station_enabled() const noexcept
+```
+
+#### `self_station_no`
+
+```cpp
+std::uint8_t mcprotocol::serial::C2MultidropRoute::self_station_no() const noexcept
+```
+
+### Class `mcprotocol::serial::C3MultidropRoute`
+
+Explicit 3C routed multidrop route with mandatory station and network numbers.
+
+#### Member Functions
+
+#### `C3MultidropRoute`
+
+```cpp
+mcprotocol::serial::C3MultidropRoute::C3MultidropRoute(std::uint32_t station_no, std::uint32_t network_no, C34PcTarget pc_target, bool self_station_enabled=false, std::uint8_t self_station_no=0x00U) noexcept
+```
+
+#### `station_no`
+
+```cpp
+std::uint32_t mcprotocol::serial::C3MultidropRoute::station_no() const noexcept
+```
+
+#### `network_no`
+
+```cpp
+std::uint32_t mcprotocol::serial::C3MultidropRoute::network_no() const noexcept
+```
+
+#### `pc_target`
+
+```cpp
+C34PcTarget mcprotocol::serial::C3MultidropRoute::pc_target() const noexcept
+```
+
+#### `self_station_enabled`
+
+```cpp
+bool mcprotocol::serial::C3MultidropRoute::self_station_enabled() const noexcept
+```
+
+#### `self_station_no`
+
+```cpp
+std::uint8_t mcprotocol::serial::C3MultidropRoute::self_station_no() const noexcept
+```
+
+### Class `mcprotocol::serial::C4MultidropRoute`
+
+Explicit 4C routed multidrop route with mandatory station and network numbers.
+
+#### Member Functions
+
+#### `C4MultidropRoute`
+
+```cpp
+mcprotocol::serial::C4MultidropRoute::C4MultidropRoute(std::uint32_t station_no, std::uint32_t network_no, C34PcTarget pc_target, std::uint16_t module_io_no=module_io::OwnStation, std::uint8_t module_station_no=0x00U, bool self_station_enabled=false, std::uint8_t self_station_no=0x00U) noexcept
+```
+
+#### `station_no`
+
+```cpp
+std::uint32_t mcprotocol::serial::C4MultidropRoute::station_no() const noexcept
+```
+
+#### `network_no`
+
+```cpp
+std::uint32_t mcprotocol::serial::C4MultidropRoute::network_no() const noexcept
+```
+
+#### `pc_target`
+
+```cpp
+C34PcTarget mcprotocol::serial::C4MultidropRoute::pc_target() const noexcept
+```
+
+#### `module_io_no`
+
+```cpp
+std::uint16_t mcprotocol::serial::C4MultidropRoute::module_io_no() const noexcept
+```
+
+#### `module_station_no`
+
+```cpp
+std::uint8_t mcprotocol::serial::C4MultidropRoute::module_station_no() const noexcept
+```
+
+#### `self_station_enabled`
+
+```cpp
+bool mcprotocol::serial::C4MultidropRoute::self_station_enabled() const noexcept
+```
+
+#### `self_station_no`
+
+```cpp
+std::uint8_t mcprotocol::serial::C4MultidropRoute::self_station_no() const noexcept
+```
+
+### Class `mcprotocol::serial::E1Route`
+
+Explicit non-default 1E route with a mandatory typed PC target.
+
+#### Member Functions
+
+#### `E1Route`
+
+```cpp
+mcprotocol::serial::E1Route::E1Route(E1PcTarget pc_target) noexcept
+```
+
+#### `pc_target`
+
+```cpp
+E1PcTarget mcprotocol::serial::E1Route::pc_target() const noexcept
+```
+
+### Class `mcprotocol::serial::RouteConfig`
+
+Explicit route selection for a protocol session.
+
+Default construction represents an omitted route and is rejected before request encoding. Use RouteConfig {HostStationRoute {}} or a frame-specific route type explicitly.
+
+#### Member Functions
+
+#### `RouteConfig`
+
+```cpp
+mcprotocol::serial::RouteConfig::RouteConfig() noexcept=default
+```
+
+#### `RouteConfig`
+
+```cpp
+mcprotocol::serial::RouteConfig::RouteConfig(HostStationRoute) noexcept
+```
+
+#### `RouteConfig`
+
+```cpp
+mcprotocol::serial::RouteConfig::RouteConfig(C1MultidropRoute route) noexcept
+```
+
+#### `RouteConfig`
+
+```cpp
+mcprotocol::serial::RouteConfig::RouteConfig(C2MultidropRoute route) noexcept
+```
+
+#### `RouteConfig`
+
+```cpp
+mcprotocol::serial::RouteConfig::RouteConfig(C3MultidropRoute route) noexcept
+```
+
+#### `RouteConfig`
+
+```cpp
+mcprotocol::serial::RouteConfig::RouteConfig(C4MultidropRoute route) noexcept
+```
+
+#### `RouteConfig`
+
+```cpp
+mcprotocol::serial::RouteConfig::RouteConfig(E1Route route) noexcept
+```
+
+#### `kind`
+
+```cpp
+RouteKind mcprotocol::serial::RouteConfig::kind() const noexcept
+```
+
+#### `is_specified`
+
+```cpp
+bool mcprotocol::serial::RouteConfig::is_specified() const noexcept
+```
+
+#### `is_host_station`
+
+```cpp
+bool mcprotocol::serial::RouteConfig::is_host_station() const noexcept
+```
+
+#### `is_multidrop`
+
+```cpp
+bool mcprotocol::serial::RouteConfig::is_multidrop() const noexcept
+```
+
+#### `supports_frame`
+
+```cpp
+bool mcprotocol::serial::RouteConfig::supports_frame(FrameKind frame_kind) const noexcept
+```
+
+#### `station_no`
+
+```cpp
+std::uint32_t mcprotocol::serial::RouteConfig::station_no() const noexcept
+```
+
+#### `network_no`
+
+```cpp
+std::uint32_t mcprotocol::serial::RouteConfig::network_no() const noexcept
+```
+
+#### `pc_no`
+
+```cpp
+std::uint32_t mcprotocol::serial::RouteConfig::pc_no() const noexcept
+```
+
+#### `pc_target_valid`
+
+```cpp
+bool mcprotocol::serial::RouteConfig::pc_target_valid() const noexcept
+```
+
+#### `request_destination_module_io_no`
+
+```cpp
+std::uint16_t mcprotocol::serial::RouteConfig::request_destination_module_io_no() const noexcept
+```
+
+#### `request_destination_module_station_no`
+
+```cpp
+std::uint8_t mcprotocol::serial::RouteConfig::request_destination_module_station_no() const noexcept
+```
+
+#### `self_station_enabled`
+
+```cpp
+bool mcprotocol::serial::RouteConfig::self_station_enabled() const noexcept
+```
+
+#### `self_station_no`
+
+```cpp
+std::uint8_t mcprotocol::serial::RouteConfig::self_station_no() const noexcept
+```
+
 ## Structs
 
 ### Struct `mcprotocol::serial::RawResponseFrame`
@@ -2542,6 +3078,14 @@ std::size_t mcprotocol::serial::DecodeResult::bytes_consumed = 0
 ```
 
 Number of bytes consumed from the input span.
+
+#### `response_identity_mismatch`
+
+```cpp
+bool mcprotocol::serial::DecodeResult::response_identity_mismatch = false
+```
+
+True when a complete response belongs to a different Format2 or route identity.
 
 ### Struct `mcprotocol::serial::highlevel::RandomReadSpec`
 
@@ -2841,44 +3385,58 @@ std::span<const LinkDirectRandomReadItem> mcprotocol::serial::LinkDirectMonitorR
 
 Host-side serial-port configuration used by PosixSerialPort.
 
-device_path accepts /dev/... style paths on POSIX systems and COM3 or \\.\COM10 style names on Windows.
+Every constructor argument is required. device_path accepts /dev/... style paths on POSIX systems and COM3 or \\.\COM10 style names on Windows. The referenced device-path text must remain alive while the configuration is used.
 
 #### Fields
 
 #### `device_path`
 
 ```cpp
-std::string_view mcprotocol::serial::PosixSerialConfig::device_path {}
+std::string_view mcprotocol::serial::PosixSerialConfig::device_path
 ```
 
 #### `baud_rate`
 
 ```cpp
-std::uint32_t mcprotocol::serial::PosixSerialConfig::baud_rate = 9600
+std::uint32_t mcprotocol::serial::PosixSerialConfig::baud_rate
 ```
 
 #### `data_bits`
 
 ```cpp
-std::uint8_t mcprotocol::serial::PosixSerialConfig::data_bits = 8
+std::uint32_t mcprotocol::serial::PosixSerialConfig::data_bits
 ```
 
 #### `stop_bits`
 
 ```cpp
-std::uint8_t mcprotocol::serial::PosixSerialConfig::stop_bits = 1
+std::uint32_t mcprotocol::serial::PosixSerialConfig::stop_bits
 ```
 
 #### `parity`
 
 ```cpp
-char mcprotocol::serial::PosixSerialConfig::parity = 'N'
+SerialParity mcprotocol::serial::PosixSerialConfig::parity
 ```
 
-#### `rts_cts`
+#### `hardware_flow_control`
 
 ```cpp
-bool mcprotocol::serial::PosixSerialConfig::rts_cts = false
+HardwareFlowControl mcprotocol::serial::PosixSerialConfig::hardware_flow_control
+```
+
+#### Member Functions
+
+#### `PosixSerialConfig`
+
+```cpp
+mcprotocol::serial::PosixSerialConfig::PosixSerialConfig(std::string_view device_path_value, std::uint32_t baud_rate_value, std::uint32_t data_bits_value, std::uint32_t stop_bits_value, SerialParity parity_value, HardwareFlowControl hardware_flow_control_value) noexcept
+```
+
+#### `PosixSerialConfig`
+
+```cpp
+mcprotocol::serial::PosixSerialConfig::PosixSerialConfig()=delete
 ```
 
 ### Struct `mcprotocol::serial::QualifiedBufferWordDevice`
@@ -2965,77 +3523,11 @@ std::uint32_t mcprotocol::serial::TimeoutConfig::inter_byte_timeout_ms = 250
 
 Maximum allowed idle gap between RX bytes once a response has started.
 
-### Struct `mcprotocol::serial::RouteConfig`
+### Struct `mcprotocol::serial::HostStationRoute`
 
-Route header fields for serial MC requests.
+Connected host-station route.
 
-The same struct is shared across 2C/3C/4C, 1C, and 1E, but not every field is active on every frame family. FrameCodec::validate_config() checks the combinations that are legal for the selected frame.
-
-#### Fields
-
-#### `kind`
-
-```cpp
-RouteKind mcprotocol::serial::RouteConfig::kind = RouteKind::HostStation
-```
-
-Route interpretation used by the selected frame family.
-
-#### `station_no`
-
-```cpp
-std::uint8_t mcprotocol::serial::RouteConfig::station_no = 0x00
-```
-
-Target station number on multidrop serial links.
-
-#### `network_no`
-
-```cpp
-std::uint8_t mcprotocol::serial::RouteConfig::network_no = 0x00
-```
-
-Network number used by routed 3C/4C requests.
-
-#### `pc_no`
-
-```cpp
-std::uint8_t mcprotocol::serial::RouteConfig::pc_no = 0xFF
-```
-
-PLC number field used by 3C/4C and legacy frame families.
-
-#### `request_destination_module_io_no`
-
-```cpp
-std::uint16_t mcprotocol::serial::RouteConfig::request_destination_module_io_no = module_io::OwnStation
-```
-
-Destination I/O number for the target CPU/module in 3C/4C routing.
-
-#### `request_destination_module_station_no`
-
-```cpp
-std::uint8_t mcprotocol::serial::RouteConfig::request_destination_module_station_no = 0x00
-```
-
-Destination station number for the target CPU/module in 3C/4C routing.
-
-#### `self_station_enabled`
-
-```cpp
-bool mcprotocol::serial::RouteConfig::self_station_enabled = false
-```
-
-Enables self-station routing on frame families that support it.
-
-#### `self_station_no`
-
-```cpp
-std::uint8_t mcprotocol::serial::RouteConfig::self_station_no = 0x00
-```
-
-Self-station number used when self_station_enabled is true.
+The connected-station header values are protocol constants and therefore are intentionally not exposed as mutable inputs.
 
 ### Struct `mcprotocol::serial::ProtocolConfig`
 
@@ -3050,36 +3542,26 @@ Treat this as the immutable session configuration for one serial link. The same 
 #### `frame_kind`
 
 ```cpp
-FrameKind mcprotocol::serial::ProtocolConfig::frame_kind = FrameKind::C4
+FrameKind mcprotocol::serial::ProtocolConfig::frame_kind = static_cast<FrameKind>(0xFF)
 ```
 
-Selected serial frame family.
+Selected serial frame family. A named preset or caller must assign a defined value.
 
 #### `code_mode`
 
 ```cpp
-CodeMode mcprotocol::serial::ProtocolConfig::code_mode = CodeMode::Binary
+CodeMode mcprotocol::serial::ProtocolConfig::code_mode = static_cast<CodeMode>(0xFF)
 ```
 
-Selected payload encoding inside the frame.
+Selected payload encoding. A named preset or caller must assign a defined value.
 
 #### `ascii_format`
 
 ```cpp
-AsciiFormat mcprotocol::serial::ProtocolConfig::ascii_format = AsciiFormat::Format3
+AsciiFormat mcprotocol::serial::ProtocolConfig::ascii_format = static_cast<AsciiFormat>(0xFF)
 ```
 
-Selected ASCII framing flavor when code_mode == CodeMode::Ascii.
-
-#### `ascii_block_number`
-
-```cpp
-std::uint8_t mcprotocol::serial::ProtocolConfig::ascii_block_number = 0x00
-```
-
-Block number used only by ASCII Format2 on 2C/3C/4C.
-
-The external device chooses this value in the range 0x00..0xFF. It is ignored by Format1, Format3, Format4, binary Format5, 1C, and 1E.
+Selected ASCII framing flavor. ASCII callers must assign a defined value.
 
 #### `plc_profile`
 
@@ -3091,13 +3573,15 @@ Public PLC profile used to derive frame-family compatibility and device/subcomma
 
 Applications must set this explicitly before encoding requests or running a client.
 
-#### `sum_check_enabled`
+#### `sum_check_mode`
 
 ```cpp
-bool mcprotocol::serial::ProtocolConfig::sum_check_enabled = true
+SumCheckMode mcprotocol::serial::ProtocolConfig::sum_check_mode = static_cast<SumCheckMode>(0xFF)
 ```
 
-Enables or disables the ASCII/binary sum-check where that frame family supports it.
+Explicit ASCII/binary sum-check policy where the selected frame family supports it.
+
+The invalid initial value ensures generic aggregate construction cannot silently enable a checksum. Use a named protocol preset or assign Enabled/Disabled explicitly.
 
 #### `route`
 

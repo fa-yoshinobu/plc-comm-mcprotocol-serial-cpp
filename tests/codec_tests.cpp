@@ -4,15 +4,27 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <type_traits>
 
 #include "mcprotocol/serial/client.hpp"
 #include "mcprotocol/serial/high_level.hpp"
 #include "mcprotocol/serial/link_direct.hpp"
+#include "mcprotocol/serial/posix_serial.hpp"
 #include "mcprotocol/serial/qualified_buffer.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
 
 namespace {
+
+template <typename T>
+concept HasAsciiBlockNumberMember = requires(T value) {
+  value.ascii_block_number;
+};
+
+template <typename T>
+concept HasStationNumberMember = requires(T value) {
+  value.station_no;
+};
 
 using mcprotocol::serial::AsciiFormat;
 using mcprotocol::serial::BatchReadBitsRequest;
@@ -21,6 +33,11 @@ using mcprotocol::serial::BatchWriteBitsRequest;
 using mcprotocol::serial::BatchWriteWordsRequest;
 using mcprotocol::serial::BitValue;
 using mcprotocol::serial::CodeMode;
+using mcprotocol::serial::C1MultidropRoute;
+using mcprotocol::serial::C2MultidropRoute;
+using mcprotocol::serial::C3MultidropRoute;
+using mcprotocol::serial::C4MultidropRoute;
+using mcprotocol::serial::C34PcTarget;
 using mcprotocol::serial::CompletionHandler;
 using mcprotocol::serial::CpuModelInfo;
 using mcprotocol::serial::DecodeStatus;
@@ -32,11 +49,14 @@ using mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest;
 using mcprotocol::serial::ExtendedFileRegisterMonitorRegistration;
 using mcprotocol::serial::ExtendedFileRegisterRandomWriteWordItem;
 using mcprotocol::serial::FrameCodec;
+using mcprotocol::serial::FrameCodecContext;
 using mcprotocol::serial::FrameKind;
 using mcprotocol::serial::GlobalSignalControlRequest;
 using mcprotocol::serial::GlobalSignalTarget;
+using mcprotocol::serial::HardwareFlowControl;
 using mcprotocol::serial::HostBufferReadRequest;
 using mcprotocol::serial::HostBufferWriteRequest;
+using mcprotocol::serial::HostStationRoute;
 using mcprotocol::serial::LinkDirectDevice;
 using mcprotocol::serial::LinkDirectMonitorRegistration;
 using mcprotocol::serial::LinkDirectMultiBlockReadBlock;
@@ -55,9 +75,12 @@ using mcprotocol::serial::MultiBlockReadBlockResult;
 using mcprotocol::serial::MultiBlockReadRequest;
 using mcprotocol::serial::MultiBlockWriteBlock;
 using mcprotocol::serial::MultiBlockWriteRequest;
+using mcprotocol::serial::E1Route;
+using mcprotocol::serial::E1PcTarget;
 using mcprotocol::serial::PlcProfile;
 using mcprotocol::serial::PlcSeries;
 using mcprotocol::serial::ProtocolConfig;
+using mcprotocol::serial::PosixSerialConfig;
 using mcprotocol::serial::QualifiedBufferDeviceKind;
 using mcprotocol::serial::QualifiedBufferWordDevice;
 using mcprotocol::serial::RandomReadItem;
@@ -65,11 +88,11 @@ using mcprotocol::serial::RandomReadRequest;
 using mcprotocol::serial::RandomWriteBitItem;
 using mcprotocol::serial::RandomWriteWordItem;
 using mcprotocol::serial::RouteConfig;
-using mcprotocol::serial::RouteKind;
 using mcprotocol::serial::SerialModuleChannel;
 using mcprotocol::serial::SerialModuleCommunicationSpeed;
 using mcprotocol::serial::SerialModuleModeNo;
 using mcprotocol::serial::SerialModuleModeSwitchRequest;
+using mcprotocol::serial::SerialParity;
 using mcprotocol::serial::parse_plc_profile;
 using mcprotocol::serial::is_plc_profile_specified;
 using mcprotocol::serial::plc_profile_display_name;
@@ -79,6 +102,7 @@ using mcprotocol::serial::sparse_native_mask_word;
 using mcprotocol::serial::sparse_native_requested_bit_value;
 using mcprotocol::serial::Status;
 using mcprotocol::serial::StatusCode;
+using mcprotocol::serial::SumCheckMode;
 using mcprotocol::serial::UserFrameDeleteRequest;
 using mcprotocol::serial::UserFrameReadRequest;
 using mcprotocol::serial::UserFrameRegistrationData;
@@ -116,7 +140,67 @@ using mcprotocol::serial::validate_qualified_buffer_helper_route;
 namespace CommandCodec = mcprotocol::serial::CommandCodec;
 namespace module_io = mcprotocol::serial::module_io;
 
+[[nodiscard]] constexpr RouteConfig host_station_route() noexcept {
+  return RouteConfig {HostStationRoute {}};
+}
+
+[[nodiscard]] constexpr C34PcTarget c34_pc_target(std::uint32_t value) noexcept {
+  switch (value) {
+    case 0x7DU:
+      return C34PcTarget::control_system();
+    case 0x7EU:
+      return C34PcTarget::standby_system();
+    case 0xFEU:
+      return C34PcTarget::special_fe();
+    case 0xFFU:
+      return C34PcTarget::connected_station();
+    default:
+      return C34PcTarget::number(value);
+  }
+}
+
+[[nodiscard]] constexpr RouteConfig multidrop_route(
+    FrameKind frame_kind,
+    std::uint8_t station_no,
+    std::uint8_t network_no = 0x00U,
+    std::uint8_t pc_no = 0xFFU,
+    std::uint16_t module_io_no = module_io::OwnStation,
+    std::uint8_t module_station_no = 0x00U,
+    bool self_station_enabled = false,
+    std::uint8_t self_station_no = 0x00U) noexcept {
+  switch (frame_kind) {
+    case FrameKind::C1:
+      return RouteConfig {C1MultidropRoute {station_no}};
+    case FrameKind::C2:
+      return RouteConfig {C2MultidropRoute {station_no, self_station_enabled, self_station_no}};
+    case FrameKind::C3:
+      return RouteConfig {C3MultidropRoute {
+          station_no, network_no, c34_pc_target(pc_no), self_station_enabled, self_station_no}};
+    case FrameKind::C4:
+      return RouteConfig {C4MultidropRoute {
+          station_no,
+          network_no,
+          c34_pc_target(pc_no),
+          module_io_no,
+          module_station_no,
+          self_station_enabled,
+          self_station_no}};
+    case FrameKind::E1:
+      return RouteConfig {E1Route {
+          pc_no == 0xFFU ? E1PcTarget::connected_station() : E1PcTarget::number(pc_no)}};
+  }
+  return RouteConfig {};
+}
+
 void test_module_io_constants() {
+  static_assert(std::is_empty_v<HostStationRoute>);
+  static_assert(!HasStationNumberMember<HostStationRoute>);
+  static_assert(std::is_constructible_v<RouteConfig, HostStationRoute>);
+  static_assert(std::is_constructible_v<RouteConfig, C1MultidropRoute>);
+  static_assert(std::is_constructible_v<RouteConfig, C2MultidropRoute>);
+  static_assert(std::is_constructible_v<RouteConfig, C3MultidropRoute>);
+  static_assert(std::is_constructible_v<RouteConfig, C4MultidropRoute>);
+  static_assert(!std::is_constructible_v<RouteConfig, mcprotocol::serial::RouteKind>);
   assert(module_io::ControlSystemCpu == 0x03D0U);
   assert(module_io::StandbySystemCpu == 0x03D1U);
   assert(module_io::SystemACpu == 0x03D2U);
@@ -130,7 +214,16 @@ void test_module_io_constants() {
   assert(module_io::ControlSystemRemoteHead == module_io::ControlSystemCpu);
   assert(module_io::StandbySystemRemoteHead == module_io::StandbySystemCpu);
   assert(module_io::OwnStation == 0x03FFU);
-  assert(RouteConfig {}.request_destination_module_io_no == module_io::OwnStation);
+  assert(!RouteConfig {}.is_specified());
+  const RouteConfig host_route = host_station_route();
+  assert(host_route.is_host_station());
+  assert(host_route.station_no() == 0x00U);
+  assert(host_route.network_no() == 0x00U);
+  assert(host_route.pc_no() == 0xFFU);
+  assert(host_route.request_destination_module_io_no() == module_io::OwnStation);
+  assert(host_route.request_destination_module_station_no() == 0x00U);
+  assert(!host_route.self_station_enabled());
+  assert(host_route.self_station_no() == 0x00U);
 }
 
 ProtocolConfig make_binary_c4_config() {
@@ -139,17 +232,8 @@ ProtocolConfig make_binary_c4_config() {
   config.code_mode = CodeMode::Binary;
   config.ascii_format = AsciiFormat::Format3;
   config.plc_profile = PlcProfile::MelsecQ;
-  config.sum_check_enabled = true;
-  config.route = RouteConfig {
-      .kind = RouteKind::HostStation,
-      .station_no = 0x00,
-      .network_no = 0x00,
-      .pc_no = 0xFF,
-      .request_destination_module_io_no = module_io::OwnStation,
-      .request_destination_module_station_no = 0x00,
-      .self_station_enabled = false,
-      .self_station_no = 0x00,
-  };
+  config.sum_check_mode = SumCheckMode::Enabled;
+  config.route = host_station_route();
   return config;
 }
 
@@ -183,17 +267,8 @@ ProtocolConfig make_ascii_c3_format3_config() {
   config.code_mode = CodeMode::Ascii;
   config.ascii_format = AsciiFormat::Format3;
   config.plc_profile = PlcProfile::MelsecQ;
-  config.sum_check_enabled = true;
-  config.route = RouteConfig {
-      .kind = RouteKind::HostStation,
-      .station_no = 0x00,
-      .network_no = 0x00,
-      .pc_no = 0xFF,
-      .request_destination_module_io_no = module_io::OwnStation,
-      .request_destination_module_station_no = 0x00,
-      .self_station_enabled = false,
-      .self_station_no = 0x00,
-  };
+  config.sum_check_mode = SumCheckMode::Enabled;
+  config.route = host_station_route();
   return config;
 }
 
@@ -208,19 +283,9 @@ ProtocolConfig make_ascii_c4_format2_config() {
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Ascii;
   config.ascii_format = AsciiFormat::Format2;
-  config.ascii_block_number = 0x00U;
   config.plc_profile = PlcProfile::MelsecQ;
-  config.sum_check_enabled = true;
-  config.route = RouteConfig {
-      .kind = RouteKind::HostStation,
-      .station_no = 0x00,
-      .network_no = 0x00,
-      .pc_no = 0xFF,
-      .request_destination_module_io_no = module_io::OwnStation,
-      .request_destination_module_station_no = 0x00,
-      .self_station_enabled = false,
-      .self_station_no = 0x00,
-  };
+  config.sum_check_mode = SumCheckMode::Enabled;
+  config.route = host_station_route();
   return config;
 }
 
@@ -236,23 +301,15 @@ ProtocolConfig make_ascii_c4_format4_config() {
   config.code_mode = CodeMode::Ascii;
   config.ascii_format = AsciiFormat::Format4;
   config.plc_profile = PlcProfile::MelsecQ;
-  config.sum_check_enabled = false;
-  config.route = RouteConfig {
-      .kind = RouteKind::MultidropStation,
-      .station_no = 0x01,
-      .network_no = 0x00,
-      .pc_no = 0xFF,
-      .request_destination_module_io_no = module_io::OwnStation,
-      .request_destination_module_station_no = 0x00,
-      .self_station_enabled = false,
-      .self_station_no = 0x00,
-  };
+  config.sum_check_mode = SumCheckMode::Disabled;
+  config.route = multidrop_route(FrameKind::C4, 0x01U);
   return config;
 }
 
 ProtocolConfig make_ascii_c2_format4_config() {
   ProtocolConfig config = make_ascii_c4_format4_config();
   config.frame_kind = FrameKind::C2;
+  config.route = RouteConfig {C2MultidropRoute {0x01U}};
   return config;
 }
 
@@ -260,16 +317,7 @@ ProtocolConfig make_ascii_c1_format4_qna_config() {
   ProtocolConfig config = make_ascii_c4_format4_config();
   config.frame_kind = FrameKind::C1;
   config.plc_profile = PlcProfile::MelsecQnA;
-  config.route = RouteConfig {
-      .kind = RouteKind::HostStation,
-      .station_no = 0x00,
-      .network_no = 0x00,
-      .pc_no = 0xFF,
-      .request_destination_module_io_no = module_io::OwnStation,
-      .request_destination_module_station_no = 0x00,
-      .self_station_enabled = false,
-      .self_station_no = 0x00,
-  };
+  config.route = host_station_route();
   return config;
 }
 
@@ -283,16 +331,7 @@ ProtocolConfig make_ascii_e1_a_config() {
   ProtocolConfig config = make_ascii_c4_format4_config();
   config.frame_kind = FrameKind::E1;
   config.plc_profile = PlcProfile::MelsecA;
-  config.route = RouteConfig {
-      .kind = RouteKind::HostStation,
-      .station_no = 0x00,
-      .network_no = 0x00,
-      .pc_no = 0xFF,
-      .request_destination_module_io_no = module_io::OwnStation,
-      .request_destination_module_station_no = 0x00,
-      .self_station_enabled = false,
-      .self_station_no = 0x00,
-  };
+  config.route = host_station_route();
   config.timeout.response_timeout_ms = 4000;
   return config;
 }
@@ -584,8 +623,7 @@ void test_encode_control_global_signal_binary_request() {
 
 void test_encode_control_global_signal_uses_route_station_not_specification_word() {
   auto config = make_binary_c4_config();
-  config.route.kind = RouteKind::MultidropStation;
-  config.route.station_no = 0xFFU;
+  config.route = multidrop_route(FrameKind::C4, 0x1FU);
 
   std::array<std::uint8_t, 16> request_data {};
   std::size_t request_size = 0;
@@ -612,7 +650,7 @@ void test_encode_control_global_signal_uses_route_station_not_specification_word
       frame_size);
   assert(status.ok());
   assert(frame_size >= 6U);
-  assert(frame[5] == 0xFFU);
+  assert(frame[5] == 0x1FU);
 }
 
 void test_encode_switch_serial_module_mode_binary_request_matches_manual() {
@@ -860,12 +898,7 @@ void test_validate_ascii_c1_config_and_reject_binary() {
 
 void test_validate_c4_routed_access_and_connected_station_only_commands() {
   auto config = make_binary_c4_config();
-  config.route.kind = RouteKind::MultidropStation;
-  config.route.station_no = 0x02U;
-  config.route.network_no = 0x01U;
-  config.route.pc_no = 0x7DU;
-  config.route.request_destination_module_io_no = 0x0100U;
-  config.route.request_destination_module_station_no = 0x03U;
+  config.route = multidrop_route(FrameKind::C4, 0x02U, 0x01U, 0x7DU, 0x0100U, 0x03U);
 
   Status status = FrameCodec::validate_config(config);
   assert(status.ok());
@@ -891,12 +924,239 @@ void test_validate_c4_routed_access_and_connected_station_only_commands() {
   assert(status.code == StatusCode::InvalidArgument);
 }
 
+void test_route_types_require_frame_specific_station_and_network() {
+  static_assert(!std::is_default_constructible_v<C1MultidropRoute>);
+  static_assert(!std::is_default_constructible_v<C2MultidropRoute>);
+  static_assert(!std::is_default_constructible_v<C3MultidropRoute>);
+  static_assert(!std::is_default_constructible_v<C4MultidropRoute>);
+  static_assert(std::is_constructible_v<C1MultidropRoute, std::uint8_t>);
+  static_assert(std::is_constructible_v<C2MultidropRoute, std::uint8_t>);
+  static_assert(!std::is_constructible_v<C3MultidropRoute, std::uint8_t>);
+  static_assert(!std::is_constructible_v<C3MultidropRoute, std::uint8_t, std::uint8_t>);
+  static_assert(std::is_constructible_v<
+                C3MultidropRoute,
+                std::uint8_t,
+                std::uint8_t,
+                C34PcTarget>);
+  static_assert(!std::is_constructible_v<C4MultidropRoute, std::uint8_t>);
+  static_assert(!std::is_constructible_v<C4MultidropRoute, std::uint8_t, std::uint8_t>);
+  static_assert(std::is_constructible_v<
+                C4MultidropRoute,
+                std::uint8_t,
+                std::uint8_t,
+                C34PcTarget>);
+
+  ProtocolConfig config = make_binary_c4_config();
+  config.route = RouteConfig {C2MultidropRoute {0x00U}};
+  Status status = FrameCodec::validate_config(config);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  config.route = RouteConfig {C4MultidropRoute {
+      0x00U, 0x00U, C34PcTarget::connected_station()}};
+  status = FrameCodec::validate_config(config);
+  assert(status.ok());
+
+  config.route = RouteConfig {C4MultidropRoute {
+      0x1FU, 0xEFU, C34PcTarget::connected_station()}};
+  assert(FrameCodec::validate_config(config).ok());
+  for (const std::uint32_t invalid_station : {0x20U, 0xFFU, 0x100U}) {
+    config.route = RouteConfig {C4MultidropRoute {
+        invalid_station, 0x00U, C34PcTarget::connected_station()}};
+    status = FrameCodec::validate_config(config);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+  }
+  for (const std::uint32_t invalid_network : {0xF0U, 0xFEU, 0x100U}) {
+    config.route = RouteConfig {C4MultidropRoute {
+        0x00U, invalid_network, C34PcTarget::connected_station()}};
+    status = FrameCodec::validate_config(config);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+  }
+}
+
+void test_response_route_identity_is_strict() {
+  const std::array<std::uint8_t, 4> response_data {'1', '2', '3', '4'};
+
+  auto expected_ascii = make_ascii_c4_format4_config();
+  auto foreign_ascii = expected_ascii;
+  foreign_ascii.route = RouteConfig {C4MultidropRoute {
+      0x02U, 0x01U, C34PcTarget::connected_station()}};
+  std::array<std::uint8_t, 128> frame {};
+  std::size_t frame_size = 0U;
+  Status status = FrameCodec::encode_success_response(
+      foreign_ascii,
+      response_data,
+      frame,
+      frame_size);
+  assert(status.ok());
+
+  auto decode = FrameCodec::decode_response(
+      expected_ascii,
+      std::span<const std::uint8_t>(frame.data(), frame_size));
+  assert(decode.status == DecodeStatus::Complete);
+  assert(decode.response_identity_mismatch);
+  assert(decode.bytes_consumed == frame_size);
+
+  auto foreign_pc_ascii = expected_ascii;
+  foreign_pc_ascii.route = RouteConfig {C4MultidropRoute {
+      expected_ascii.route.station_no(),
+      expected_ascii.route.network_no(),
+      C34PcTarget::control_system()}};
+  frame_size = 0U;
+  status = FrameCodec::encode_success_response(
+      foreign_pc_ascii,
+      response_data,
+      frame,
+      frame_size);
+  assert(status.ok());
+  decode = FrameCodec::decode_response(
+      expected_ascii,
+      std::span<const std::uint8_t>(frame.data(), frame_size));
+  assert(decode.status == DecodeStatus::Complete);
+  assert(decode.response_identity_mismatch);
+  assert(decode.bytes_consumed == frame_size);
+
+  frame[3] = static_cast<std::uint8_t>('Z');
+  decode = FrameCodec::decode_response(
+      foreign_ascii,
+      std::span<const std::uint8_t>(frame.data(), frame_size));
+  assert(decode.status == DecodeStatus::Error);
+  assert(decode.error.code == StatusCode::Parse);
+  assert(!decode.response_identity_mismatch);
+
+  const auto expected_binary = make_binary_c4_config();
+  auto foreign_binary = expected_binary;
+  foreign_binary.route = RouteConfig {C4MultidropRoute {
+      0x02U, 0x01U, C34PcTarget::connected_station()}};
+  frame_size = 0U;
+  status = FrameCodec::encode_success_response(
+      foreign_binary,
+      std::span<const std::uint8_t> {},
+      frame,
+      frame_size);
+  assert(status.ok());
+  decode = FrameCodec::decode_response(
+      expected_binary,
+      std::span<const std::uint8_t>(frame.data(), frame_size));
+  assert(decode.status == DecodeStatus::Complete);
+  assert(decode.response_identity_mismatch);
+  assert(decode.bytes_consumed == frame_size);
+
+  auto foreign_pc_binary = expected_binary;
+  foreign_pc_binary.route = RouteConfig {C4MultidropRoute {
+      expected_binary.route.station_no(),
+      expected_binary.route.network_no(),
+      C34PcTarget::control_system()}};
+  frame_size = 0U;
+  status = FrameCodec::encode_success_response(
+      foreign_pc_binary,
+      std::span<const std::uint8_t> {},
+      frame,
+      frame_size);
+  assert(status.ok());
+  decode = FrameCodec::decode_response(
+      expected_binary,
+      std::span<const std::uint8_t>(frame.data(), frame_size));
+  assert(decode.status == DecodeStatus::Complete);
+  assert(decode.response_identity_mismatch);
+  assert(decode.bytes_consumed == frame_size);
+}
+
+void test_pc_targets_are_required_typed_and_frame_specific() {
+  static_assert(!std::is_default_constructible_v<C34PcTarget>);
+  static_assert(!std::is_default_constructible_v<E1PcTarget>);
+  static_assert(!std::is_constructible_v<
+                C3MultidropRoute,
+                std::uint32_t,
+                std::uint32_t>);
+  static_assert(!std::is_constructible_v<
+                C4MultidropRoute,
+                std::uint32_t,
+                std::uint32_t>);
+  static_assert(!std::is_constructible_v<E1Route, std::uint32_t>);
+
+  assert(C34PcTarget::number(0x01U).is_valid());
+  assert(C34PcTarget::number(0x78U).is_valid());
+  assert(C34PcTarget::control_system().is_valid());
+  assert(C34PcTarget::standby_system().is_valid());
+  assert(C34PcTarget::special_fe().is_valid());
+  assert(C34PcTarget::connected_station().is_valid());
+  for (const std::uint32_t invalid : {0x00U, 0x79U, 0x7DU, 0x7EU, 0xFEU, 0xFFU, 0x100U}) {
+    assert(!C34PcTarget::number(invalid).is_valid());
+  }
+
+  assert(E1PcTarget::number(0x01U).is_valid());
+  assert(E1PcTarget::number(0x40U).is_valid());
+  assert(E1PcTarget::connected_station().is_valid());
+  for (const std::uint32_t invalid : {0x00U, 0x41U, 0xFFU, 0x100U}) {
+    assert(!E1PcTarget::number(invalid).is_valid());
+  }
+
+  ProtocolConfig config = make_binary_c4_config();
+  config.route = RouteConfig {C4MultidropRoute {
+      0x00U, 0x00U, C34PcTarget::number(0x00U)}};
+  Status status = FrameCodec::validate_config(config);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  std::array<std::uint8_t, 32> frame {};
+  std::size_t frame_size = 99U;
+  const std::array<std::uint8_t, 1> request_data {0x00U};
+  status = FrameCodec::encode_request(config, request_data, frame, frame_size);
+  assert(!status.ok());
+  assert(frame_size == 0U);
+
+  config.route = RouteConfig {C4MultidropRoute {
+      0x00U, 0x00U, C34PcTarget::control_system()}};
+  assert(FrameCodec::validate_config(config).ok());
+  assert(config.route.pc_no() == 0x7DU);
+
+  std::array<std::uint8_t, 16> state_change_data {};
+  std::size_t state_change_size = 99U;
+  status = CommandCodec::encode_remote_stop(config, state_change_data, state_change_size);
+  assert(status.ok());
+  assert(state_change_size != 0U);
+
+  ProtocolConfig invalid_state_change_config = config;
+  invalid_state_change_config.route = RouteConfig {C4MultidropRoute {
+      0x00U, 0x00U, C34PcTarget::number(0x00U)}};
+  frame_size = 99U;
+  status = FrameCodec::encode_request(
+      invalid_state_change_config,
+      std::span<const std::uint8_t>(state_change_data.data(), state_change_size),
+      frame,
+      frame_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(frame_size == 0U);
+
+  ProtocolConfig e1_config = make_binary_e1_a_config();
+  e1_config.route = RouteConfig {E1Route {E1PcTarget::number(0x41U)}};
+  status = FrameCodec::validate_config(e1_config);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+  e1_config.route = RouteConfig {E1Route {E1PcTarget::connected_station()}};
+  assert(FrameCodec::validate_config(e1_config).ok());
+
+  ProtocolConfig invalid_client_config = make_binary_c4_config();
+  invalid_client_config.route = RouteConfig {C4MultidropRoute {
+      0x00U, 0x00U, C34PcTarget::number(0x100U)}};
+  MelsecSerialClient client;
+  status = client.configure(invalid_client_config);
+  assert(!status.ok());
+  assert(client.pending_tx_frame().empty());
+
+  const RouteConfig c1_route {C1MultidropRoute {0x00U}};
+  const RouteConfig c2_route {C2MultidropRoute {0x00U}};
+  assert(c1_route.pc_no() == 0xFFU);
+  assert(c2_route.pc_no() == 0xFFU);
+}
+
 void test_encode_ascii_c2_format3_request_uses_fb_frame_id_and_short_command() {
   auto config = make_ascii_c2_format3_config();
-  config.route.kind = RouteKind::MultidropStation;
-  config.route.station_no = 0x11;
-  config.route.self_station_enabled = true;
-  config.route.self_station_no = 0x05;
+  config.route = multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, true, 0x05U);
 
   const BatchReadWordsRequest request {
       .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100},
@@ -926,10 +1186,7 @@ void test_encode_ascii_c2_format3_request_uses_fb_frame_id_and_short_command() {
 
 void test_decode_ascii_c2_format3_data_response() {
   auto config = make_ascii_c2_format3_config();
-  config.route.kind = RouteKind::MultidropStation;
-  config.route.station_no = 0x11;
-  config.route.self_station_enabled = true;
-  config.route.self_station_no = 0x05;
+  config.route = multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, true, 0x05U);
   const std::array<std::uint8_t, 4> response_data {'1', '2', '3', '4'};
 
   std::array<std::uint8_t, 64> frame {};
@@ -952,11 +1209,8 @@ void test_decode_ascii_c2_format3_data_response() {
 
 void test_decode_ascii_c2_format3_four_digit_error_response() {
   auto config = make_ascii_c2_format3_config();
-  config.route.kind = RouteKind::MultidropStation;
-  config.route.station_no = 0x11;
-  config.route.self_station_enabled = true;
-  config.route.self_station_no = 0x05;
-  config.sum_check_enabled = false;
+  config.route = multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, true, 0x05U);
+  config.sum_check_mode = SumCheckMode::Disabled;
 
   constexpr std::string_view frame = "\x02""FB1105QNAK0006\x03";
   const auto decode = FrameCodec::decode_response(
@@ -972,11 +1226,8 @@ void test_decode_ascii_c2_format3_four_digit_error_response() {
 
 void test_encode_ascii_c2_format3_error_preserves_four_digit_code() {
   auto config = make_ascii_c2_format3_config();
-  config.route.kind = RouteKind::MultidropStation;
-  config.route.station_no = 0x11;
-  config.route.self_station_enabled = true;
-  config.route.self_station_no = 0x05;
-  config.sum_check_enabled = false;
+  config.route = multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, true, 0x05U);
+  config.sum_check_mode = SumCheckMode::Disabled;
 
   std::array<std::uint8_t, 32> frame {};
   std::size_t frame_size = 0;
@@ -997,8 +1248,7 @@ void test_encode_ascii_c2_format3_error_preserves_four_digit_code() {
 
 void test_encode_ascii_format2_request_inserts_block_number() {
   auto config = make_ascii_c4_format2_config();
-  config.sum_check_enabled = false;
-  config.ascii_block_number = 0x7AU;
+  config.sum_check_mode = SumCheckMode::Disabled;
 
   const BatchReadWordsRequest request {
       .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100},
@@ -1014,6 +1264,7 @@ void test_encode_ascii_format2_request_inserts_block_number() {
   std::size_t frame_size = 0;
   status = FrameCodec::encode_request(
       config,
+      FrameCodecContext::format2(0x7AU),
       std::span<const std::uint8_t>(request_data.data(), request_data_size),
       frame,
       frame_size);
@@ -1026,7 +1277,7 @@ void test_encode_ascii_format2_request_inserts_block_number() {
 
 void test_decode_ascii_format2_partial_header_returns_incomplete() {
   auto config = make_ascii_c4_format2_config();
-  config.sum_check_enabled = false;
+  config.sum_check_mode = SumCheckMode::Disabled;
 
   // Field-observed partial link-direct responses (FORMAT2 investigation packet):
   // the first serial chunk can be shorter than the STX + block-no + header
@@ -1042,6 +1293,7 @@ void test_decode_ascii_format2_partial_header_returns_incomplete() {
   for (const std::string_view partial : partials) {
     const auto decode = FrameCodec::decode_response(
         config,
+        FrameCodecContext::format2(0x00U),
         std::span<const std::uint8_t>(
             reinterpret_cast<const std::uint8_t*>(partial.data()),
             partial.size()));
@@ -1053,7 +1305,7 @@ void test_decode_ascii_format2_partial_header_returns_incomplete() {
 void test_decode_ascii_format1_partial_header_returns_incomplete() {
   auto config = make_ascii_c4_format2_config();
   config.ascii_format = AsciiFormat::Format1;
-  config.sum_check_enabled = false;
+  config.sum_check_mode = SumCheckMode::Disabled;
 
   // Field-observed partial link-direct responses (FORMAT1 investigation packet).
   constexpr std::string_view partials[] = {
@@ -1081,7 +1333,7 @@ void test_decode_response_prefix_sweep_reports_incomplete() {
   // completeness is decided by the stream layer instead.
   ProtocolConfig configs[] = {
       make_ascii_c4_format2_config(),
-      [] { auto c = make_ascii_c4_format2_config(); c.sum_check_enabled = false; return c; }(),
+      [] { auto c = make_ascii_c4_format2_config(); c.sum_check_mode = SumCheckMode::Disabled; return c; }(),
       [] { auto c = make_ascii_c4_format2_config(); c.ascii_format = AsciiFormat::Format1; return c; }(),
       make_ascii_c2_format2_config(),
       make_ascii_c3_format3_config(),
@@ -1092,28 +1344,49 @@ void test_decode_response_prefix_sweep_reports_incomplete() {
       make_ascii_c1_format4_qna_config(),
       make_ascii_c1_format4_a_config(),
       make_binary_c4_config(),
-      [] { auto c = make_binary_c4_config(); c.sum_check_enabled = false; return c; }(),
+      [] { auto c = make_binary_c4_config(); c.sum_check_mode = SumCheckMode::Disabled; return c; }(),
   };
 
   const std::array<std::uint8_t, 4> response_data {'1', '2', '3', '4'};
   for (const ProtocolConfig& config : configs) {
+    const FrameCodecContext frame_context =
+        config.code_mode == CodeMode::Ascii &&
+                config.ascii_format == AsciiFormat::Format2 &&
+                config.frame_kind != FrameKind::C1 &&
+                config.frame_kind != FrameKind::E1
+            ? FrameCodecContext::format2(0x00U)
+            : FrameCodecContext::none();
     std::array<std::uint8_t, 128> frame {};
     std::size_t frame_size = 0;
 
-    Status status = FrameCodec::encode_success_response(config, response_data, frame, frame_size);
+    Status status = FrameCodec::encode_success_response(
+        config,
+        frame_context,
+        response_data,
+        frame,
+        frame_size);
     assert(status.ok());
     for (std::size_t length = 1; length < frame_size; ++length) {
       const auto decode = FrameCodec::decode_response(
-          config, std::span<const std::uint8_t>(frame.data(), length));
+          config,
+          frame_context,
+          std::span<const std::uint8_t>(frame.data(), length));
       assert(decode.status == DecodeStatus::Incomplete);
       assert(decode.bytes_consumed == 0U);
     }
 
-    status = FrameCodec::encode_error_response(config, 0x7151U, frame, frame_size);
+    status = FrameCodec::encode_error_response(
+        config,
+        frame_context,
+        0x7151U,
+        frame,
+        frame_size);
     assert(status.ok());
     for (std::size_t length = 1; length < frame_size; ++length) {
       const auto decode = FrameCodec::decode_response(
-          config, std::span<const std::uint8_t>(frame.data(), length));
+          config,
+          frame_context,
+          std::span<const std::uint8_t>(frame.data(), length));
       assert(decode.status == DecodeStatus::Incomplete);
       assert(decode.bytes_consumed == 0U);
     }
@@ -1122,12 +1395,8 @@ void test_decode_response_prefix_sweep_reports_incomplete() {
 
 void test_encode_ascii_c2_format2_request_uses_fb_frame_id_and_short_command() {
   auto config = make_ascii_c2_format2_config();
-  config.sum_check_enabled = false;
-  config.ascii_block_number = 0x7AU;
-  config.route.kind = RouteKind::MultidropStation;
-  config.route.station_no = 0x11;
-  config.route.self_station_enabled = true;
-  config.route.self_station_no = 0x05;
+  config.sum_check_mode = SumCheckMode::Disabled;
+  config.route = multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, true, 0x05U);
 
   const BatchReadWordsRequest request {
       .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100},
@@ -1143,6 +1412,7 @@ void test_encode_ascii_c2_format2_request_uses_fb_frame_id_and_short_command() {
   std::size_t frame_size = 0;
   status = FrameCodec::encode_request(
       config,
+      FrameCodecContext::format2(0x7AU),
       std::span<const std::uint8_t>(request_data.data(), request_data_size),
       frame,
       frame_size);
@@ -1155,11 +1425,15 @@ void test_encode_ascii_c2_format2_request_uses_fb_frame_id_and_short_command() {
 
 void test_decode_ascii_format2_ack_response() {
   auto config = make_ascii_c4_format2_config();
-  config.sum_check_enabled = false;
-  config.ascii_block_number = 0x7AU;
+  config.sum_check_mode = SumCheckMode::Disabled;
   std::array<std::uint8_t, 32> frame {};
   std::size_t frame_size = 0;
-  Status status = FrameCodec::encode_success_response(config, {}, frame, frame_size);
+  Status status = FrameCodec::encode_success_response(
+      config,
+      FrameCodecContext::format2(0x7AU),
+      {},
+      frame,
+      frame_size);
   assert(status.ok());
 
   constexpr std::string_view expected = "\x06""7AF80000FF03FF0000";
@@ -1168,6 +1442,7 @@ void test_decode_ascii_format2_ack_response() {
 
   const auto decode = FrameCodec::decode_response(
       config,
+      FrameCodecContext::format2(0x7AU),
       std::span<const std::uint8_t>(frame.data(), frame_size));
   assert(decode.status == DecodeStatus::Complete);
   assert(decode.frame.type == mcprotocol::serial::ResponseType::SuccessNoData);
@@ -1176,12 +1451,12 @@ void test_decode_ascii_format2_ack_response() {
 
 void test_decode_ascii_c2_format2_four_digit_error_response() {
   auto config = make_ascii_c2_format2_config();
-  config.sum_check_enabled = false;
-  config.ascii_block_number = 0x7AU;
+  config.sum_check_mode = SumCheckMode::Disabled;
 
   constexpr std::string_view frame = "\x15""7AFB0000QNAK0006";
   const auto decode = FrameCodec::decode_response(
       config,
+      FrameCodecContext::format2(0x7AU),
       std::span<const std::uint8_t>(
           reinterpret_cast<const std::uint8_t*>(frame.data()),
           frame.size()));
@@ -1193,12 +1468,16 @@ void test_decode_ascii_c2_format2_four_digit_error_response() {
 
 void test_encode_ascii_c2_format2_error_preserves_four_digit_code() {
   auto config = make_ascii_c2_format2_config();
-  config.sum_check_enabled = false;
-  config.ascii_block_number = 0x7AU;
+  config.sum_check_mode = SumCheckMode::Disabled;
 
   std::array<std::uint8_t, 32> frame {};
   std::size_t frame_size = 0;
-  Status status = FrameCodec::encode_error_response(config, 0x7151U, frame, frame_size);
+  Status status = FrameCodec::encode_error_response(
+      config,
+      FrameCodecContext::format2(0x7AU),
+      0x7151U,
+      frame,
+      frame_size);
   assert(status.ok());
 
   constexpr std::string_view expected = "\x15""7AFB0000QNAK7151";
@@ -1207,10 +1486,59 @@ void test_encode_ascii_c2_format2_error_preserves_four_digit_code() {
 
   const auto decode = FrameCodec::decode_response(
       config,
+      FrameCodecContext::format2(0x7AU),
       std::span<const std::uint8_t>(frame.data(), frame_size));
   assert(decode.status == DecodeStatus::Complete);
   assert(decode.frame.type == mcprotocol::serial::ResponseType::PlcError);
   assert(decode.frame.error_code == 0x7151U);
+}
+
+void test_format2_raw_context_is_explicit_and_strict() {
+  auto config = make_ascii_c4_format2_config();
+  config.sum_check_mode = SumCheckMode::Disabled;
+  const std::array<std::uint8_t, 1> request_data {0x00U};
+  std::array<std::uint8_t, 128> frame {};
+  std::size_t frame_size = 123U;
+
+  Status status = FrameCodec::encode_request(config, request_data, frame, frame_size);
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(frame_size == 0U);
+
+  status = FrameCodec::encode_success_response(
+      config,
+      FrameCodecContext::format2(0x2AU),
+      {},
+      frame,
+      frame_size);
+  assert(status.ok());
+
+  const auto mismatch = FrameCodec::decode_response(
+      config,
+      FrameCodecContext::format2(0x2BU),
+      std::span<const std::uint8_t>(frame.data(), frame_size));
+  assert(mismatch.status == DecodeStatus::Complete);
+  assert(mismatch.response_identity_mismatch);
+  assert(mismatch.bytes_consumed == frame_size);
+
+  frame[1] = 'G';
+  const auto malformed = FrameCodec::decode_response(
+      config,
+      FrameCodecContext::format2(0x2AU),
+      std::span<const std::uint8_t>(frame.data(), frame_size));
+  assert(malformed.status == DecodeStatus::Error);
+  assert(malformed.error.code == StatusCode::Parse);
+  assert(!malformed.response_identity_mismatch);
+
+  const auto non_format2 = make_binary_c4_config();
+  frame_size = 123U;
+  status = FrameCodec::encode_request(
+      non_format2,
+      FrameCodecContext::format2(0x00U),
+      request_data,
+      frame,
+      frame_size);
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(frame_size == 0U);
 }
 
 void test_encode_ascii_c1_batch_read_words_qna_request_shape() {
@@ -1632,9 +1960,9 @@ void test_decode_ascii_c1_loopback_response() {
   assert(std::string_view(echoed.data(), 5) == "ABCDE");
 }
 
-void test_encode_ascii_c1_loopback_rejects_non_ff_pc_no() {
+void test_encode_ascii_c1_loopback_uses_internal_ff_pc_no() {
   auto config = make_ascii_c1_format4_qna_config();
-  config.route.pc_no = 0x01U;
+  config.route = RouteConfig {C1MultidropRoute {0x00U}};
   constexpr std::string_view loopback = "ABCDE";
   std::array<std::uint8_t, 64> request_data {};
   std::size_t request_size = 0;
@@ -1643,8 +1971,7 @@ void test_encode_ascii_c1_loopback_rejects_non_ff_pc_no() {
       std::span<const char>(loopback.data(), loopback.size()),
       request_data,
       request_size);
-  assert(!status.ok());
-  assert(status.code == StatusCode::InvalidArgument);
+  assert(status.ok());
 }
 
 void test_encode_ascii_c1_extended_file_register_read_a_request_shape() {
@@ -1872,13 +2199,13 @@ void test_validate_e1_config_and_route_constraints() {
   status = FrameCodec::validate_config(binary_config);
   assert(status.ok());
 
-  ascii_config.route.station_no = 0x01U;
+  ascii_config.route = RouteConfig {C1MultidropRoute {0x01U}};
   status = FrameCodec::validate_config(ascii_config);
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
 
   ascii_config = make_ascii_e1_a_config();
-  ascii_config.route.pc_no = 0x00U;
+  ascii_config.route = RouteConfig {E1Route {E1PcTarget::number(0x00U)}};
   status = FrameCodec::validate_config(ascii_config);
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
@@ -2180,8 +2507,7 @@ void test_encode_ascii_format4_request_appends_crlf() {
 
 void test_decode_ascii_c2_format4_ack_response() {
   auto config = make_ascii_c2_format4_config();
-  config.route.self_station_enabled = true;
-  config.route.self_station_no = 0x02;
+  config.route = multidrop_route(FrameKind::C2, 0x01U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, true, 0x02U);
   std::array<std::uint8_t, 32> frame {};
   std::size_t frame_size = 0;
   Status status = FrameCodec::encode_success_response(config, {}, frame, frame_size);
@@ -2203,8 +2529,7 @@ void test_decode_ascii_c2_format4_ack_response() {
 
 void test_decode_ascii_c2_format4_four_digit_error_response() {
   auto config = make_ascii_c2_format4_config();
-  config.route.self_station_enabled = false;
-  config.sum_check_enabled = true;
+  config.sum_check_mode = SumCheckMode::Enabled;
 
   constexpr std::string_view frame = "\x15""FB0100QNAK0006\r\n";
   const auto decode = FrameCodec::decode_response(
@@ -2401,24 +2726,36 @@ void test_high_level_make_contiguous_requests() {
 }
 
 void test_high_level_protocol_presets() {
+  static_assert(!HasAsciiBlockNumberMember<ProtocolConfig>);
   const ProtocolConfig unspecified_config {};
+  assert(!mcprotocol::serial::is_valid_frame_kind(unspecified_config.frame_kind));
+  assert(!mcprotocol::serial::is_valid_code_mode(unspecified_config.code_mode));
+  assert(!mcprotocol::serial::is_valid_ascii_format(unspecified_config.ascii_format));
   assert(unspecified_config.plc_profile == PlcProfile::Unspecified);
+  assert(!mcprotocol::serial::is_valid_sum_check_mode(unspecified_config.sum_check_mode));
   assert(!FrameCodec::validate_config(unspecified_config).ok());
 
-  const ProtocolConfig config = make_c4_binary_protocol(PlcProfile::MelsecQ);
+  const ProtocolConfig config =
+      make_c4_binary_protocol(
+          PlcProfile::MelsecQ,
+          SumCheckMode::Enabled,
+          host_station_route());
   assert(config.frame_kind == FrameKind::C4);
   assert(config.code_mode == CodeMode::Binary);
   assert(config.plc_profile == PlcProfile::MelsecQ);
-  assert(config.sum_check_enabled);
-  assert(config.route.station_no == 0x00);
+  assert(config.sum_check_mode == SumCheckMode::Enabled);
+  assert(config.route.is_host_station());
+  assert(config.route.station_no() == 0x00);
 
   const ProtocolConfig ascii_config =
-      mcprotocol::serial::highlevel::make_c4_ascii_format2_protocol(PlcProfile::MelsecQ);
+      mcprotocol::serial::highlevel::make_c4_ascii_format2_protocol(
+          PlcProfile::MelsecQ,
+          SumCheckMode::Enabled,
+          host_station_route());
   assert(ascii_config.frame_kind == FrameKind::C4);
   assert(ascii_config.code_mode == CodeMode::Ascii);
   assert(ascii_config.ascii_format == AsciiFormat::Format2);
-  assert(ascii_config.ascii_block_number == 0x00U);
-  assert(ascii_config.sum_check_enabled);
+  assert(ascii_config.sum_check_mode == SumCheckMode::Enabled);
 }
 
 void test_plc_profile_names_and_internal_grouping() {
@@ -2426,6 +2763,7 @@ void test_plc_profile_names_and_internal_grouping() {
   assert(std::string_view(plc_profile_name(PlcProfile::Unspecified)).empty());
   assert(std::string_view(plc_profile_display_name(PlcProfile::Unspecified)).empty());
   assert(!is_plc_profile_specified(PlcProfile::Unspecified));
+  assert(!is_plc_profile_specified(static_cast<PlcProfile>(0xFE)));
   assert(plc_series_from_profile(PlcProfile::Unspecified) == PlcSeries::Unspecified);
   assert(is_plc_profile_specified(PlcProfile::MelsecQ));
 
@@ -4906,6 +5244,284 @@ void completion_callback(void* user, Status status) {
   capture->status = status;
 }
 
+[[nodiscard]] std::uint8_t ascii_hex_digit(std::uint8_t value) {
+  return static_cast<std::uint8_t>(value < 10U ? ('0' + value) : ('A' + value - 10U));
+}
+
+void test_client_discards_foreign_route_then_accepts_current_route() {
+  auto config = make_ascii_c4_format4_config();
+  config.timeout.response_timeout_ms = 10U;
+  MelsecSerialClient client;
+  Status status = client.configure(config);
+  assert(status.ok());
+
+  const BatchReadWordsRequest request {
+      .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100U},
+      .points = 1U,
+  };
+  std::array<std::uint16_t, 1> words {};
+  CallbackCapture capture {};
+  status = client.async_batch_read_words(0U, request, words, completion_callback, &capture);
+  assert(status.ok());
+  status = client.notify_tx_complete(1U);
+  assert(status.ok());
+
+  auto foreign_config = config;
+  foreign_config.route = RouteConfig {C4MultidropRoute {
+      0x02U, 0x01U, C34PcTarget::connected_station()}};
+  const std::array<std::uint8_t, 4> response_data {'1', '2', '3', '4'};
+  std::array<std::uint8_t, 128> frame {};
+  std::size_t frame_size = 0U;
+  status = FrameCodec::encode_success_response(
+      foreign_config,
+      response_data,
+      frame,
+      frame_size);
+  assert(status.ok());
+  client.on_rx_bytes(
+      2U,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(frame.data()),
+          frame_size));
+  assert(!capture.called);
+  assert(client.busy());
+
+  frame_size = 0U;
+  status = FrameCodec::encode_success_response(config, response_data, frame, frame_size);
+  assert(status.ok());
+  client.on_rx_bytes(
+      3U,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(frame.data()),
+          frame_size));
+  assert(capture.called);
+  assert(capture.status.ok());
+  assert(words[0] == 0x1234U);
+
+  MelsecSerialClient reconfigured_client;
+  status = reconfigured_client.configure(config);
+  assert(status.ok());
+  std::array<std::uint16_t, 1> timed_out_words {};
+  CallbackCapture timed_out_capture {};
+  status = reconfigured_client.async_batch_read_words(
+      10U,
+      request,
+      timed_out_words,
+      completion_callback,
+      &timed_out_capture);
+  assert(status.ok());
+  assert(reconfigured_client.notify_tx_complete(11U).ok());
+  reconfigured_client.poll(21U);
+  assert(timed_out_capture.called);
+  assert(timed_out_capture.status.code == StatusCode::Timeout);
+
+  auto next_config = config;
+  next_config.route = RouteConfig {C4MultidropRoute {
+      0x02U, 0x01U, C34PcTarget::connected_station()}};
+  status = reconfigured_client.configure(next_config);
+  assert(status.ok());
+  std::array<std::uint16_t, 1> next_words {};
+  CallbackCapture next_capture {};
+  status = reconfigured_client.async_batch_read_words(
+      30U,
+      request,
+      next_words,
+      completion_callback,
+      &next_capture);
+  assert(status.ok());
+  assert(reconfigured_client.notify_tx_complete(31U).ok());
+
+  frame_size = 0U;
+  status = FrameCodec::encode_success_response(config, response_data, frame, frame_size);
+  assert(status.ok());
+  reconfigured_client.on_rx_bytes(
+      32U,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(frame.data()),
+          frame_size));
+  assert(!next_capture.called);
+  assert(reconfigured_client.busy());
+
+  frame_size = 0U;
+  status = FrameCodec::encode_success_response(next_config, response_data, frame, frame_size);
+  assert(status.ok());
+  reconfigured_client.on_rx_bytes(
+      33U,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(frame.data()),
+          frame_size));
+  assert(next_capture.called);
+  assert(next_capture.status.ok());
+  assert(next_words[0] == 0x1234U);
+}
+
+void test_client_format2_auto_sequence_wrap_and_stale_response_isolation() {
+  auto config = make_ascii_c4_format2_config();
+  config.sum_check_mode = SumCheckMode::Disabled;
+  MelsecSerialClient client;
+  Status status = client.configure(config);
+  assert(status.ok());
+
+  const BatchReadWordsRequest request {
+      .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100U},
+      .points = 1U,
+  };
+  const std::array<std::uint8_t, 4> response_data {'1', '2', '3', '4'};
+
+  for (std::uint32_t request_index = 0U; request_index < 258U; ++request_index) {
+    const std::uint8_t expected_block = static_cast<std::uint8_t>(request_index);
+    std::array<std::uint16_t, 1> words {};
+    CallbackCapture capture {};
+    status = client.async_batch_read_words(
+        request_index * 10U,
+        request,
+        words,
+        completion_callback,
+        &capture);
+    assert(status.ok());
+
+    const auto tx = client.pending_tx_frame();
+    assert(tx.size() > 3U);
+    assert(std::to_integer<std::uint8_t>(tx[0]) == 0x05U);
+    assert(std::to_integer<std::uint8_t>(tx[1]) == ascii_hex_digit(expected_block >> 4U));
+    assert(std::to_integer<std::uint8_t>(tx[2]) == ascii_hex_digit(expected_block & 0x0FU));
+
+    status = client.notify_tx_complete(request_index * 10U + 1U);
+    assert(status.ok());
+
+    if (request_index == 1U) {
+      std::array<std::uint8_t, 128> stale_frame {};
+      std::size_t stale_size = 0U;
+      status = FrameCodec::encode_success_response(
+          config,
+          FrameCodecContext::format2(0x00U),
+          response_data,
+          stale_frame,
+          stale_size);
+      assert(status.ok());
+      client.on_rx_bytes(
+          request_index * 10U + 2U,
+          std::span<const std::byte>(
+              reinterpret_cast<const std::byte*>(stale_frame.data()),
+              stale_size));
+      assert(!capture.called);
+      assert(client.busy());
+    }
+
+    std::array<std::uint8_t, 128> response_frame {};
+    std::size_t response_size = 0U;
+    status = FrameCodec::encode_success_response(
+        config,
+        FrameCodecContext::format2(expected_block),
+        response_data,
+        response_frame,
+        response_size);
+    assert(status.ok());
+    client.on_rx_bytes(
+        request_index * 10U + 3U,
+        std::span<const std::byte>(
+            reinterpret_cast<const std::byte*>(response_frame.data()),
+            response_size));
+    assert(capture.called);
+    assert(capture.status.ok());
+    assert(words[0] == 0x1234U);
+  }
+
+  std::array<std::uint16_t, 1> cancelled_words {};
+  CallbackCapture cancelled_capture {};
+  status = client.async_batch_read_words(
+      3000U,
+      request,
+      cancelled_words,
+      completion_callback,
+      &cancelled_capture);
+  assert(status.ok());
+  const auto cancelled_tx = client.pending_tx_frame();
+  assert(std::to_integer<std::uint8_t>(cancelled_tx[1]) == '0');
+  assert(std::to_integer<std::uint8_t>(cancelled_tx[2]) == '2');
+  client.cancel();
+  assert(cancelled_capture.called);
+  assert(cancelled_capture.status.code == StatusCode::Cancelled);
+
+  std::array<std::uint16_t, 1> next_words {};
+  CallbackCapture next_capture {};
+  status = client.async_batch_read_words(
+      3010U,
+      request,
+      next_words,
+      completion_callback,
+      &next_capture);
+  assert(status.ok());
+  const auto next_tx = client.pending_tx_frame();
+  assert(std::to_integer<std::uint8_t>(next_tx[1]) == '0');
+  assert(std::to_integer<std::uint8_t>(next_tx[2]) == '3');
+  client.cancel();
+
+  std::array<std::uint16_t, 1> timeout_words {};
+  CallbackCapture timeout_capture {};
+  status = client.async_batch_read_words(
+      4000U,
+      request,
+      timeout_words,
+      completion_callback,
+      &timeout_capture);
+  assert(status.ok());
+  status = client.notify_tx_complete(4001U);
+  assert(status.ok());
+  client.poll(4001U + config.timeout.response_timeout_ms);
+  assert(timeout_capture.called);
+  assert(timeout_capture.status.code == StatusCode::Timeout);
+
+  std::array<std::uint16_t, 1> after_timeout_words {};
+  CallbackCapture after_timeout_capture {};
+  status = client.async_batch_read_words(
+      10000U,
+      request,
+      after_timeout_words,
+      completion_callback,
+      &after_timeout_capture);
+  assert(status.ok());
+  const auto after_timeout_tx = client.pending_tx_frame();
+  assert(std::to_integer<std::uint8_t>(after_timeout_tx[1]) == '0');
+  assert(std::to_integer<std::uint8_t>(after_timeout_tx[2]) == '5');
+  status = client.notify_tx_complete(10001U);
+  assert(status.ok());
+
+  std::array<std::uint8_t, 128> late_frame {};
+  std::size_t late_size = 0U;
+  status = FrameCodec::encode_success_response(
+      config,
+      FrameCodecContext::format2(0x04U),
+      response_data,
+      late_frame,
+      late_size);
+  assert(status.ok());
+  client.on_rx_bytes(
+      10002U,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(late_frame.data()),
+          late_size));
+  assert(!after_timeout_capture.called);
+
+  std::array<std::uint8_t, 128> current_frame {};
+  std::size_t current_size = 0U;
+  status = FrameCodec::encode_success_response(
+      config,
+      FrameCodecContext::format2(0x05U),
+      response_data,
+      current_frame,
+      current_size);
+  assert(status.ok());
+  client.on_rx_bytes(
+      10003U,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(current_frame.data()),
+          current_size));
+  assert(after_timeout_capture.called);
+  assert(after_timeout_capture.status.ok());
+  assert(after_timeout_words[0] == 0x1234U);
+}
+
 void test_client_binary_cpu_model_roundtrip() {
   const auto config = make_binary_c4_config();
   MelsecSerialClient client;
@@ -6625,9 +7241,154 @@ void test_encode_multi_block_write_rejects_long_devices_as_head() {
   }
 }
 
+void test_protocol_config_rejects_unknown_enum_values() {
+  static_assert(!std::is_invocable_v<
+                decltype(&mcprotocol::serial::highlevel::make_c4_binary_protocol),
+                PlcProfile>);
+  static_assert(!std::is_invocable_v<
+                decltype(&mcprotocol::serial::highlevel::make_c4_binary_protocol),
+                PlcProfile,
+                SumCheckMode>);
+  static_assert(std::is_invocable_v<
+                decltype(&mcprotocol::serial::highlevel::make_c4_binary_protocol),
+                PlcProfile,
+                SumCheckMode,
+                RouteConfig>);
+
+  ProtocolConfig config = make_binary_c4_config();
+
+  config.frame_kind = static_cast<FrameKind>(0xFF);
+  Status status = FrameCodec::validate_config(config);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  config = make_binary_c4_config();
+  config.code_mode = static_cast<CodeMode>(0xFF);
+  status = FrameCodec::validate_config(config);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  config = make_binary_c4_config();
+  config.code_mode = CodeMode::Ascii;
+  config.ascii_format = static_cast<AsciiFormat>(0xFF);
+  status = FrameCodec::validate_config(config);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  config = make_binary_c4_config();
+  config.plc_profile = static_cast<PlcProfile>(0xFE);
+  status = FrameCodec::validate_config(config);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  config = make_binary_c4_config();
+  config.route = RouteConfig {};
+  status = FrameCodec::validate_config(config);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  config = make_binary_c4_config();
+  config.sum_check_mode = static_cast<SumCheckMode>(0xFF);
+  status = FrameCodec::validate_config(config);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  config.sum_check_mode = SumCheckMode::Enabled;
+  assert(FrameCodec::validate_config(config).ok());
+  config.sum_check_mode = SumCheckMode::Disabled;
+  assert(FrameCodec::validate_config(config).ok());
+
+  config.frame_kind = static_cast<FrameKind>(0xFF);
+  std::array<std::uint8_t, 64> frame {};
+  std::size_t frame_size = 123U;
+  const std::array<std::uint8_t, 1> request_data {0x00};
+  status = FrameCodec::encode_request(config, request_data, frame, frame_size);
+  assert(!status.ok());
+  assert(frame_size == 0U);
+}
+
+void test_serial_config_requires_explicit_valid_settings() {
+  static_assert(!std::is_default_constructible_v<PosixSerialConfig>);
+  static_assert(std::is_constructible_v<
+                PosixSerialConfig,
+                std::string_view,
+                std::uint32_t,
+                std::uint32_t,
+                std::uint32_t,
+                SerialParity,
+                HardwareFlowControl>);
+
+  ProtocolConfig binary_protocol {};
+  binary_protocol.code_mode = CodeMode::Binary;
+  ProtocolConfig ascii_protocol {};
+  ascii_protocol.code_mode = CodeMode::Ascii;
+
+  const PosixSerialConfig binary_serial(
+      "COM3", 19200, 8, 1, SerialParity::Even, HardwareFlowControl::None);
+  assert(mcprotocol::serial::validate_serial_config(binary_serial).ok());
+  assert(mcprotocol::serial::validate_mc_serial_config(binary_serial, binary_protocol).ok());
+
+  const PosixSerialConfig ascii_7_serial(
+      "/dev/ttyUSB0", 9600, 7, 2, SerialParity::Odd, HardwareFlowControl::RtsCts);
+  assert(mcprotocol::serial::validate_mc_serial_config(ascii_7_serial, ascii_protocol).ok());
+
+  const PosixSerialConfig ascii_8_serial(
+      "/dev/ttyUSB0", 9600, 8, 2, SerialParity::None, HardwareFlowControl::None);
+  assert(mcprotocol::serial::validate_mc_serial_config(ascii_8_serial, ascii_protocol).ok());
+
+  assert(!mcprotocol::serial::validate_serial_config(
+              PosixSerialConfig("", 9600, 8, 1, SerialParity::None, HardwareFlowControl::None))
+              .ok());
+  constexpr char embedded_nul_path[] = {'C', 'O', 'M', '3', '\0', 'x'};
+  assert(!mcprotocol::serial::validate_serial_config(PosixSerialConfig(
+              std::string_view(embedded_nul_path, sizeof(embedded_nul_path)),
+              9600,
+              8,
+              1,
+              SerialParity::None,
+              HardwareFlowControl::None))
+              .ok());
+  assert(!mcprotocol::serial::validate_serial_config(
+              PosixSerialConfig("COM3", 0, 8, 1, SerialParity::None, HardwareFlowControl::None))
+              .ok());
+
+  for (const std::uint32_t data_bits : {5U, 6U, 9U, 263U}) {
+    assert(!mcprotocol::serial::validate_serial_config(PosixSerialConfig(
+                "COM3", 9600, data_bits, 1, SerialParity::None, HardwareFlowControl::None))
+                .ok());
+  }
+  for (const std::uint32_t stop_bits : {0U, 3U, 257U}) {
+    assert(!mcprotocol::serial::validate_serial_config(PosixSerialConfig(
+                "COM3", 9600, 8, stop_bits, SerialParity::None, HardwareFlowControl::None))
+                .ok());
+  }
+
+  assert(!mcprotocol::serial::validate_serial_config(PosixSerialConfig(
+              "COM3",
+              9600,
+              8,
+              1,
+              static_cast<SerialParity>(0xFF),
+              HardwareFlowControl::None))
+              .ok());
+  assert(!mcprotocol::serial::validate_serial_config(PosixSerialConfig(
+              "COM3",
+              9600,
+              8,
+              1,
+              SerialParity::None,
+              static_cast<HardwareFlowControl>(0xFF)))
+              .ok());
+
+  const PosixSerialConfig binary_7_serial(
+      "COM3", 9600, 7, 1, SerialParity::Even, HardwareFlowControl::None);
+  assert(!mcprotocol::serial::validate_mc_serial_config(binary_7_serial, binary_protocol).ok());
+}
+
 }  // namespace
 
 int main() {
+  test_serial_config_requires_explicit_valid_settings();
   test_module_io_constants();
   test_format5_batch_read_request_matches_manual();
   test_iq_l_uses_q_l_binary_request_shape();
@@ -6658,6 +7419,9 @@ int main() {
   test_validate_ascii_c2_config_and_reject_binary();
   test_validate_ascii_c1_config_and_reject_binary();
   test_validate_c4_routed_access_and_connected_station_only_commands();
+  test_route_types_require_frame_specific_station_and_network();
+  test_response_route_identity_is_strict();
+  test_pc_targets_are_required_typed_and_frame_specific();
   test_encode_ascii_format2_request_inserts_block_number();
   test_decode_ascii_format2_partial_header_returns_incomplete();
   test_decode_ascii_format1_partial_header_returns_incomplete();
@@ -6666,6 +7430,7 @@ int main() {
   test_decode_ascii_format2_ack_response();
   test_decode_ascii_c2_format2_four_digit_error_response();
   test_encode_ascii_c2_format2_error_preserves_four_digit_code();
+  test_format2_raw_context_is_explicit_and_strict();
   test_encode_ascii_c2_format3_request_uses_fb_frame_id_and_short_command();
   test_decode_ascii_c2_format3_data_response();
   test_decode_ascii_c2_format3_four_digit_error_response();
@@ -6685,7 +7450,7 @@ int main() {
   test_encode_ascii_c1_write_module_buffer_request_shape();
   test_encode_ascii_c1_loopback_request_shape();
   test_decode_ascii_c1_loopback_response();
-  test_encode_ascii_c1_loopback_rejects_non_ff_pc_no();
+  test_encode_ascii_c1_loopback_uses_internal_ff_pc_no();
   test_encode_ascii_c1_extended_file_register_read_a_request_shape();
   test_encode_ascii_c1_direct_extended_file_register_read_qna_request_shape();
   test_encode_ascii_c1_extended_file_register_write_a_request_shape();
@@ -6714,6 +7479,7 @@ int main() {
   test_high_level_make_contiguous_requests();
   test_high_level_protocol_presets();
   test_plc_profile_names_and_internal_grouping();
+  test_protocol_config_rejects_unknown_enum_values();
   test_plc_profile_is_required_for_encoding();
   test_high_level_make_random_bit_item();
   test_high_level_make_random_dword_item_defaults();
@@ -6790,6 +7556,8 @@ int main() {
   test_make_qualified_buffer_write_words_request_encodes_little_endian_bytes();
   test_decode_qualified_buffer_word_values_decodes_little_endian_bytes();
   test_client_binary_cpu_model_roundtrip();
+  test_client_discards_foreign_route_then_accepts_current_route();
+  test_client_format2_auto_sequence_wrap_and_stale_response_isolation();
   test_client_binary_read_user_frame_roundtrip();
   test_client_binary_write_user_frame_roundtrip();
   test_client_binary_e1_batch_read_words_roundtrip();

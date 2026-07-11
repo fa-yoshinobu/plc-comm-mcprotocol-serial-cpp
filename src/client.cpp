@@ -143,6 +143,7 @@ struct StreamDecodeResult {
 
 [[nodiscard]] StreamDecodeResult decode_stream_buffer(
     const ProtocolConfig& config,
+    FrameCodecContext frame_context,
     std::uint8_t e1_response_subheader,
     std::size_t e1_success_response_data_size,
     std::span<const std::uint8_t> bytes) noexcept {
@@ -208,7 +209,8 @@ struct StreamDecodeResult {
           if (bytes.size() < total_size) {
             return result;
           }
-          DecodeResult candidate = FrameCodec::decode_response(config, bytes.first(total_size));
+          DecodeResult candidate =
+              FrameCodec::decode_response(config, frame_context, bytes.first(total_size));
           candidate.bytes_consumed = total_size;
           result.status = candidate.status;
           result.decode = candidate;
@@ -240,7 +242,8 @@ struct StreamDecodeResult {
       if (bytes.size() < total_size) {
         return result;
       }
-      DecodeResult candidate = FrameCodec::decode_response(config, bytes.first(total_size));
+      DecodeResult candidate =
+          FrameCodec::decode_response(config, frame_context, bytes.first(total_size));
       candidate.bytes_consumed = total_size;
       result.status = candidate.status;
       result.decode = candidate;
@@ -266,7 +269,11 @@ struct StreamDecodeResult {
       result.discard_prefix = offset;
     }
 
-    DecodeResult candidate = FrameCodec::decode_response(config, bytes.subspan(offset));
+    DecodeResult candidate = FrameCodec::decode_response(config, frame_context, bytes.subspan(offset));
+    if (candidate.response_identity_mismatch && candidate.bytes_consumed != 0U) {
+      result.discard_prefix = offset + candidate.bytes_consumed;
+      return result;
+    }
     if (candidate.status == DecodeStatus::Complete) {
       candidate.bytes_consumed += offset;
       result.status = DecodeStatus::Complete;
@@ -320,6 +327,8 @@ Status MelsecSerialClient::configure(const ProtocolConfig& config) noexcept {
   }
   config_ = config;
   configured_ = true;
+  active_format2_block_number_ = 0U;
+  active_format2_block_number_valid_ = false;
   return ok_status();
 }
 
@@ -377,6 +386,9 @@ void MelsecSerialClient::on_rx_bytes(
   for (;;) {
     const StreamDecodeResult stream_decode = decode_stream_buffer(
         config_,
+        active_format2_block_number_valid_
+            ? FrameCodecContext::format2(active_format2_block_number_)
+            : FrameCodecContext::none(),
         expected_e1_response_subheader(),
         expected_e1_success_response_data_size(),
         std::span<const std::uint8_t>(rx_frame_.data(), rx_frame_size_));
@@ -474,13 +486,27 @@ Status MelsecSerialClient::start_request(
   }
 
   std::size_t encoded_size = 0;
+  const bool format2 = is_ascii_mode(config_) &&
+                       !is_c1_frame(config_) &&
+                       !is_e1_frame(config_) &&
+                       config_.ascii_format == AsciiFormat::Format2;
+  const FrameCodecContext frame_context = format2
+                                              ? FrameCodecContext::format2(next_format2_block_number_)
+                                              : FrameCodecContext::none();
   const Status encode_status = FrameCodec::encode_request(
       config_,
+      frame_context,
       std::span<const std::uint8_t>(request_data_.data(), request_data_size),
       tx_frame_,
       encoded_size);
   if (!encode_status.ok()) {
     return encode_status;
+  }
+
+  active_format2_block_number_valid_ = format2;
+  if (format2) {
+    active_format2_block_number_ = next_format2_block_number_;
+    next_format2_block_number_ = static_cast<std::uint8_t>(next_format2_block_number_ + 1U);
   }
 
   tx_frame_size_ = encoded_size;

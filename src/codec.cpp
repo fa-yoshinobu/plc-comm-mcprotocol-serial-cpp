@@ -222,6 +222,28 @@ class ByteWriter {
   return (!is_c1_frame(config) && !is_e1_frame(config) && config.ascii_format == AsciiFormat::Format2) ? 2U : 0U;
 }
 
+[[nodiscard]] constexpr bool uses_format2_block_number(const ProtocolConfig& config) noexcept {
+  return is_ascii_mode(config) && ascii_block_number_length(config) != 0U;
+}
+
+[[nodiscard]] Status validate_frame_context(
+    const ProtocolConfig& config,
+    FrameCodecContext context) noexcept {
+  if (uses_format2_block_number(config)) {
+    return context.has_format2_block_number()
+               ? ok_status()
+               : make_status(
+                     StatusCode::InvalidArgument,
+                     "ASCII Format2 requires an explicit per-wire block number");
+  }
+  if (context.has_format2_block_number()) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "Format2 block number is invalid for the selected frame");
+  }
+  return ok_status();
+}
+
 [[nodiscard]] constexpr std::size_t ascii_route_length(FrameKind frame_kind) noexcept {
   switch (frame_kind) {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_C4
@@ -1503,27 +1525,27 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] bool encode_ascii_route(ByteWriter& writer, const ProtocolConfig& config) noexcept {
-  if (!append_ascii_hex(writer, config.route.station_no, 2)) {
+  if (!append_ascii_hex(writer, config.route.station_no(), 2)) {
     return false;
   }
   if (is_c2_frame(config)) {
-    return append_ascii_hex(writer, config.route.self_station_enabled ? config.route.self_station_no : 0U, 2);
+    return append_ascii_hex(writer, config.route.self_station_no(), 2);
   }
-  if (!append_ascii_hex(writer, config.route.network_no, 2)) {
+  if (!append_ascii_hex(writer, config.route.network_no(), 2)) {
     return false;
   }
-  if (!append_ascii_hex(writer, config.route.pc_no, 2)) {
+  if (!append_ascii_hex(writer, config.route.pc_no(), 2)) {
     return false;
   }
   if (is_c4_frame(config)) {
-    if (!append_ascii_hex(writer, config.route.request_destination_module_io_no, 4)) {
+    if (!append_ascii_hex(writer, config.route.request_destination_module_io_no(), 4)) {
       return false;
     }
-    if (!append_ascii_hex(writer, config.route.request_destination_module_station_no, 2)) {
+    if (!append_ascii_hex(writer, config.route.request_destination_module_station_no(), 2)) {
       return false;
     }
   }
-  return append_ascii_hex(writer, config.route.self_station_enabled ? config.route.self_station_no : 0U, 2);
+  return append_ascii_hex(writer, config.route.self_station_no(), 2);
 }
 
 [[nodiscard]] bool append_ascii_frame_id(ByteWriter& writer, FrameKind frame_kind) noexcept {
@@ -1534,12 +1556,12 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] bool encode_binary_route(ByteWriter& writer, const ProtocolConfig& config) noexcept {
-  return writer.push(config.route.station_no) &&
-         writer.push(config.route.network_no) &&
-         writer.push(config.route.pc_no) &&
-         writer.append_le16(config.route.request_destination_module_io_no) &&
-         writer.push(config.route.request_destination_module_station_no) &&
-         writer.push(config.route.self_station_enabled ? config.route.self_station_no : 0U);
+  return writer.push(static_cast<std::uint8_t>(config.route.station_no())) &&
+         writer.push(static_cast<std::uint8_t>(config.route.network_no())) &&
+         writer.push(static_cast<std::uint8_t>(config.route.pc_no())) &&
+         writer.append_le16(config.route.request_destination_module_io_no()) &&
+         writer.push(config.route.request_destination_module_station_no()) &&
+         writer.push(config.route.self_station_no());
 }
 
 [[nodiscard]] Status unsupported(const char* message) noexcept {
@@ -1557,15 +1579,15 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
-[[nodiscard]] constexpr bool is_valid_multidrop_station_no(std::uint8_t station_no) noexcept {
-  return station_no <= 0x1FU || station_no == 0xFFU;
+[[nodiscard]] constexpr bool is_valid_multidrop_station_no(std::uint32_t station_no) noexcept {
+  return station_no <= 0x1FU;
 }
 
-[[nodiscard]] constexpr bool is_valid_routed_network_no(std::uint8_t network_no) noexcept {
-  return network_no <= 0xEFU || network_no == 0xFEU;
+[[nodiscard]] constexpr bool is_valid_routed_network_no(std::uint32_t network_no) noexcept {
+  return network_no <= 0xEFU;
 }
 
-[[nodiscard]] constexpr bool is_valid_routed_pc_no(std::uint8_t pc_no) noexcept {
+[[nodiscard]] constexpr bool is_valid_routed_pc_no(std::uint32_t pc_no) noexcept {
   return pc_no == 0xFFU ||
          (pc_no >= 0x01U && pc_no <= 0x78U) ||
          pc_no == 0x7DU ||
@@ -1573,15 +1595,27 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
          pc_no == 0xFEU;
 }
 
+[[nodiscard]] constexpr C34PcTarget c34_pc_target_from_wire(std::uint32_t pc_no) noexcept {
+  switch (pc_no) {
+    case 0x7DU:
+      return C34PcTarget::control_system();
+    case 0x7EU:
+      return C34PcTarget::standby_system();
+    case 0xFEU:
+      return C34PcTarget::special_fe();
+    case 0xFFU:
+      return C34PcTarget::connected_station();
+    default:
+      return C34PcTarget::number(pc_no);
+  }
+}
+
 [[nodiscard]] constexpr bool uses_routed_header(const ProtocolConfig& config) noexcept {
   return is_c3_frame(config) || is_c4_frame(config);
 }
 
 [[nodiscard]] constexpr bool is_connected_station_route(const ProtocolConfig& config) noexcept {
-  return config.route.network_no == 0x00U &&
-         config.route.pc_no == 0xFFU &&
-         config.route.request_destination_module_io_no == module_io::OwnStation &&
-         config.route.request_destination_module_station_no == 0x00U;
+  return config.route.is_host_station();
 }
 
 [[nodiscard]] Status validate_connected_station_only_command_config(
@@ -1898,6 +1932,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] Status encode_frame_payload_ascii(
     const ProtocolConfig& config,
+    FrameCodecContext context,
     std::span<const std::uint8_t> request_data,
     std::span<std::uint8_t> out_payload,
     std::size_t& out_size) noexcept {
@@ -1907,7 +1942,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
       return invalid_argument("1E request data must begin with a command subheader");
     }
     if (!payload_writer.append(request_data.first(2U)) ||
-        !append_ascii_hex(payload_writer, config.route.pc_no, 2U) ||
+        !append_ascii_hex(payload_writer, config.route.pc_no(), 2U) ||
         !append_ascii_hex(payload_writer, e1_acpu_monitoring_timer(config), 4U) ||
         !payload_writer.append(request_data.subspan(2U))) {
       return buffer_too_small("1E ASCII frame payload buffer is too small");
@@ -1916,8 +1951,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     return ok_status();
   }
   if (is_c1_frame(config)) {
-    if (!append_ascii_hex(payload_writer, config.route.station_no, 2) ||
-        !append_ascii_hex(payload_writer, config.route.pc_no, 2) ||
+    if (!append_ascii_hex(payload_writer, config.route.station_no(), 2) ||
+        !append_ascii_hex(payload_writer, config.route.pc_no(), 2) ||
         !payload_writer.append(request_data)) {
       return buffer_too_small("ASCII frame payload buffer is too small");
     }
@@ -1925,7 +1960,10 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     return ok_status();
   }
   if ((ascii_block_number_length(config) != 0U &&
-       !append_ascii_hex(payload_writer, config.ascii_block_number, ascii_block_number_length(config))) ||
+       !append_ascii_hex(
+           payload_writer,
+           context.format2_block_number(),
+           ascii_block_number_length(config))) ||
       !append_ascii_frame_id(payload_writer, config.frame_kind) ||
       !encode_ascii_route(payload_writer, config) ||
       !payload_writer.append(request_data)) {
@@ -1946,7 +1984,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
       return invalid_argument("1E request data must begin with a command subheader");
     }
     if (!payload_writer.push(request_data[0]) ||
-        !payload_writer.push(config.route.pc_no) ||
+        !payload_writer.push(static_cast<std::uint8_t>(config.route.pc_no())) ||
         !payload_writer.append_le16(e1_acpu_monitoring_timer(config)) ||
         !payload_writer.append(request_data.subspan(1U))) {
       return buffer_too_small("1E binary frame payload buffer is too small");
@@ -2352,6 +2390,25 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     return plc_profile_status;
   }
 
+  if (!is_valid_frame_kind(config.frame_kind)) {
+    return invalid_argument("Unknown frame family");
+  }
+
+  if (!is_valid_code_mode(config.code_mode)) {
+    return invalid_argument("Unknown code mode");
+  }
+
+  if (!config.route.is_specified()) {
+    return invalid_argument("Route selection is required");
+  }
+  if (!config.route.supports_frame(config.frame_kind)) {
+    return invalid_argument("Route type does not match the selected frame family");
+  }
+
+  if (!is_valid_sum_check_mode(config.sum_check_mode)) {
+    return invalid_argument("Sum-check mode is required");
+  }
+
   if (!is_frame_kind_enabled(config.frame_kind)) {
     return unsupported("Selected frame family is compiled out");
   }
@@ -2361,12 +2418,8 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
   }
 
   if (is_ascii_mode(config)) {
-    if (!is_e1_frame(config) &&
-        config.ascii_format != AsciiFormat::Format1 &&
-        config.ascii_format != AsciiFormat::Format2 &&
-        config.ascii_format != AsciiFormat::Format3 &&
-        config.ascii_format != AsciiFormat::Format4) {
-      return unsupported("Only ASCII Format1, Format2, Format3, and Format4 are supported");
+    if (!is_valid_ascii_format(config.ascii_format)) {
+      return invalid_argument("Unknown ASCII format");
     }
   } else if (!is_c4_frame(config) && !is_e1_frame(config)) {
     return unsupported("Binary mode supports only 4C Format5 or 1E");
@@ -2379,55 +2432,53 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     if (config.ascii_format == AsciiFormat::Format2) {
       return unsupported("1C frames do not support ASCII Format2");
     }
-    if (config.route.self_station_enabled) {
+    if (config.route.self_station_enabled()) {
       return invalid_argument("1C frame does not use self-station routing");
     }
   }
 
   if (is_e1_frame(config)) {
-    if (config.route.self_station_enabled) {
+    if (!config.route.pc_target_valid()) {
+      return invalid_argument("1E PC target is invalid");
+    }
+    if (config.route.self_station_enabled()) {
       return invalid_argument("1E frame does not use self-station routing");
     }
-    if (config.route.station_no != 0x00U ||
-        config.route.network_no != 0x00U ||
-        config.route.request_destination_module_io_no != module_io::OwnStation ||
-        config.route.request_destination_module_station_no != 0x00U) {
+    if (config.route.station_no() != 0x00U ||
+        config.route.network_no() != 0x00U ||
+        config.route.request_destination_module_io_no() != module_io::OwnStation ||
+        config.route.request_destination_module_station_no() != 0x00U) {
       return invalid_argument("1E frame uses only route.pc_no; keep the other route fields at defaults");
     }
-    if (config.route.pc_no != 0xFFU && (config.route.pc_no == 0x00U || config.route.pc_no > 0x40U)) {
+    if (config.route.pc_no() != 0xFFU && (config.route.pc_no() == 0x00U || config.route.pc_no() > 0x40U)) {
       return invalid_argument("1E PC No. must be 0xFF or in range 0x01..0x40");
     }
     return ok_status();
   }
 
-  if (config.route.self_station_enabled && config.route.self_station_no > 0x1FU) {
+  if (config.route.self_station_enabled() && config.route.self_station_no() > 0x1FU) {
     return invalid_argument("Self-station number must be in range 0x00..0x1F");
   }
 
-  if (config.route.kind == RouteKind::HostStation) {
-    if (config.route.station_no != 0x00U ||
-        config.route.network_no != 0x00U ||
-        config.route.pc_no != 0xFFU ||
-        config.route.request_destination_module_io_no != module_io::OwnStation ||
-        config.route.request_destination_module_station_no != 0x00U) {
-      return invalid_argument("Host station route must use station=0, network=0, pc=FF, module_io=03FF, module_station=0");
-    }
-  } else {
-    if (!is_valid_multidrop_station_no(config.route.station_no)) {
-      return invalid_argument("Multidrop route station must be 0x00..0x1F or 0xFF");
+  if (config.route.is_multidrop()) {
+    if (!is_valid_multidrop_station_no(config.route.station_no())) {
+      return invalid_argument("Multidrop route station must be in range 0x00..0x1F");
     }
     if (!uses_routed_header(config)) {
-      if (config.route.network_no != 0x00U ||
-          config.route.pc_no != 0xFFU ||
-          config.route.request_destination_module_io_no != module_io::OwnStation ||
-          config.route.request_destination_module_station_no != 0x00U) {
+      if (config.route.network_no() != 0x00U ||
+          config.route.pc_no() != 0xFFU ||
+          config.route.request_destination_module_io_no() != module_io::OwnStation ||
+          config.route.request_destination_module_station_no() != 0x00U) {
         return invalid_argument("1C/2C multidrop route uses only station and self-station fields");
       }
     } else {
-      if (!is_valid_routed_network_no(config.route.network_no)) {
-        return invalid_argument("3C/4C network number must be 0x00..0xEF or 0xFE");
+      if (!config.route.pc_target_valid()) {
+        return invalid_argument("3C/4C PC target is invalid");
       }
-      if (!is_valid_routed_pc_no(config.route.pc_no)) {
+      if (!is_valid_routed_network_no(config.route.network_no())) {
+        return invalid_argument("3C/4C network number must be in range 0x00..0xEF");
+      }
+      if (!is_valid_routed_pc_no(config.route.pc_no())) {
         return invalid_argument("3C/4C PC No. must be 0xFF, 0x01..0x78, 0x7D, 0x7E, or 0xFE");
       }
     }
@@ -2441,9 +2492,23 @@ Status FrameCodec::encode_request(
     std::span<const std::uint8_t> request_data,
     std::span<std::uint8_t> out_frame,
     std::size_t& out_size) noexcept {
+  return encode_request(config, FrameCodecContext::none(), request_data, out_frame, out_size);
+}
+
+Status FrameCodec::encode_request(
+    const ProtocolConfig& config,
+    FrameCodecContext context,
+    std::span<const std::uint8_t> request_data,
+    std::span<std::uint8_t> out_frame,
+    std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status config_status = validate_config(config);
   if (!config_status.ok()) {
     return config_status;
+  }
+  const Status context_status = validate_frame_context(config, context);
+  if (!context_status.ok()) {
+    return context_status;
   }
 
   const Status request_status = validate_request_data_size(config, request_data);
@@ -2454,7 +2519,12 @@ Status FrameCodec::encode_request(
   std::array<std::uint8_t, kMaxRequestFrameBytes> payload_storage {};
   std::size_t payload_size = 0;
   Status status = (is_ascii_mode(config))
-                      ? encode_frame_payload_ascii(config, request_data, payload_storage, payload_size)
+                      ? encode_frame_payload_ascii(
+                            config,
+                            context,
+                            request_data,
+                            payload_storage,
+                            payload_size)
                       : encode_frame_payload_binary(config, request_data, payload_storage, payload_size);
   if (!status.ok()) {
     return status;
@@ -2475,7 +2545,7 @@ Status FrameCodec::encode_request(
       if (!frame_writer.push(kAsciiEnq) || !frame_writer.append(std::span<const std::uint8_t>(payload_storage.data(), payload_size))) {
         return buffer_too_small("ASCII request frame buffer is too small");
       }
-      if (config.sum_check_enabled) {
+      if (is_sum_check_enabled(config)) {
         const auto sum = compute_sum_check_ascii(std::span<const std::uint8_t>(payload_storage.data(), payload_size));
         if (!frame_writer.append(sum)) {
           return buffer_too_small("ASCII request sum-check buffer is too small");
@@ -2486,7 +2556,7 @@ Status FrameCodec::encode_request(
           !frame_writer.push(kAsciiEtx)) {
         return buffer_too_small("ASCII request frame buffer is too small");
       }
-      if (config.sum_check_enabled) {
+      if (is_sum_check_enabled(config)) {
         std::array<std::uint8_t, kMaxRequestFrameBytes + 1U> sum_bytes {};
         std::memcpy(sum_bytes.data(), payload_storage.data(), payload_size);
         sum_bytes[payload_size] = kAsciiEtx;
@@ -2525,7 +2595,7 @@ Status FrameCodec::encode_request(
       return buffer_too_small("Binary request frame buffer is too small");
     }
 
-    if (config.sum_check_enabled) {
+    if (is_sum_check_enabled(config)) {
       const auto sum = compute_sum_check_ascii(payload_writer.written());
       if (!frame_writer.append(sum)) {
         return buffer_too_small("Binary request sum-check buffer is too small");
@@ -2542,9 +2612,28 @@ Status FrameCodec::encode_success_response(
     std::span<const std::uint8_t> response_data,
     std::span<std::uint8_t> out_frame,
     std::size_t& out_size) noexcept {
+  return encode_success_response(
+      config,
+      FrameCodecContext::none(),
+      response_data,
+      out_frame,
+      out_size);
+}
+
+Status FrameCodec::encode_success_response(
+    const ProtocolConfig& config,
+    FrameCodecContext context,
+    std::span<const std::uint8_t> response_data,
+    std::span<std::uint8_t> out_frame,
+    std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status config_status = validate_config(config);
   if (!config_status.ok()) {
     return config_status;
+  }
+  const Status context_status = validate_frame_context(config, context);
+  if (!context_status.ok()) {
+    return context_status;
   }
 
   if (is_e1_frame(config)) {
@@ -2557,7 +2646,8 @@ Status FrameCodec::encode_success_response(
   if (is_ascii_mode(config)) {
     std::array<std::uint8_t, kMaxRequestFrameBytes> payload_storage {};
     std::size_t payload_size = 0;
-    Status payload_status = encode_frame_payload_ascii(config, {}, payload_storage, payload_size);
+    Status payload_status =
+        encode_frame_payload_ascii(config, context, {}, payload_storage, payload_size);
     if (!payload_status.ok()) {
       return payload_status;
     }
@@ -2577,7 +2667,7 @@ Status FrameCodec::encode_success_response(
             !writer.push(kAsciiEtx)) {
           return buffer_too_small("ASCII response frame buffer is too small");
         }
-        if (config.sum_check_enabled) {
+        if (is_sum_check_enabled(config)) {
           std::array<std::uint8_t, kMaxRequestFrameBytes + 1U> sum_bytes {};
           std::memcpy(sum_bytes.data(), payload_storage.data(), prefix_size);
           std::memcpy(sum_bytes.data() + prefix_size, response_data.data(), response_data.size());
@@ -2599,7 +2689,7 @@ Status FrameCodec::encode_success_response(
           !writer.push(kAsciiEtx)) {
         return buffer_too_small("ASCII response frame buffer is too small");
       }
-      if (config.sum_check_enabled && !response_data.empty()) {
+      if (is_sum_check_enabled(config) && !response_data.empty()) {
         const auto written = writer.written();
         const auto sum = compute_sum_check_ascii(written.subspan(1));
         if (!writer.append(sum)) {
@@ -2647,7 +2737,7 @@ Status FrameCodec::encode_success_response(
   if (!frame_writer.push(kBinaryDle) || !frame_writer.push(kAsciiEtx)) {
     return buffer_too_small("Binary response frame buffer is too small");
   }
-  if (config.sum_check_enabled) {
+  if (is_sum_check_enabled(config)) {
     const auto sum = compute_sum_check_ascii(payload_writer.written());
     if (!frame_writer.append(sum)) {
       return buffer_too_small("Binary response sum-check buffer is too small");
@@ -2662,9 +2752,28 @@ Status FrameCodec::encode_error_response(
     std::uint16_t error_code,
     std::span<std::uint8_t> out_frame,
     std::size_t& out_size) noexcept {
+  return encode_error_response(
+      config,
+      FrameCodecContext::none(),
+      error_code,
+      out_frame,
+      out_size);
+}
+
+Status FrameCodec::encode_error_response(
+    const ProtocolConfig& config,
+    FrameCodecContext context,
+    std::uint16_t error_code,
+    std::span<std::uint8_t> out_frame,
+    std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status config_status = validate_config(config);
   if (!config_status.ok()) {
     return config_status;
+  }
+  const Status context_status = validate_frame_context(config, context);
+  if (!context_status.ok()) {
+    return context_status;
   }
 
   if (is_e1_frame(config)) {
@@ -2677,7 +2786,8 @@ Status FrameCodec::encode_error_response(
   if (is_ascii_mode(config)) {
     std::array<std::uint8_t, kMaxRequestFrameBytes> payload_storage {};
     std::size_t payload_size = 0;
-    Status payload_status = encode_frame_payload_ascii(config, {}, payload_storage, payload_size);
+    Status payload_status =
+        encode_frame_payload_ascii(config, context, {}, payload_storage, payload_size);
     if (!payload_status.ok()) {
       return payload_status;
     }
@@ -2745,7 +2855,7 @@ Status FrameCodec::encode_error_response(
   if (!frame_writer.push(kBinaryDle) || !frame_writer.push(kAsciiEtx)) {
     return buffer_too_small("Binary error response frame buffer is too small");
   }
-  if (config.sum_check_enabled) {
+  if (is_sum_check_enabled(config)) {
     const auto sum = compute_sum_check_ascii(payload_writer.written());
     if (!frame_writer.append(sum)) {
       return buffer_too_small("Binary error response sum-check buffer is too small");
@@ -2758,6 +2868,13 @@ Status FrameCodec::encode_error_response(
 DecodeResult FrameCodec::decode_response(
     const ProtocolConfig& config,
     std::span<const std::uint8_t> bytes) noexcept {
+  return decode_response(config, FrameCodecContext::none(), bytes);
+}
+
+DecodeResult FrameCodec::decode_response(
+    const ProtocolConfig& config,
+    FrameCodecContext context,
+    std::span<const std::uint8_t> bytes) noexcept {
   const Status config_status = validate_config(config);
   if (!config_status.ok()) {
     return DecodeResult {
@@ -2767,9 +2884,174 @@ DecodeResult FrameCodec::decode_response(
         .bytes_consumed = 0,
     };
   }
+  const Status context_status = validate_frame_context(config, context);
+  if (!context_status.ok()) {
+    return DecodeResult {
+        .status = DecodeStatus::Error,
+        .frame = RawResponseFrame {},
+        .error = context_status,
+        .bytes_consumed = 0,
+    };
+  }
 
   if (bytes.empty()) {
     return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+  }
+
+  if (uses_format2_block_number(config)) {
+    if (bytes.size() < 3U) {
+      return DecodeResult {
+          .status = DecodeStatus::Incomplete,
+          .frame = RawResponseFrame {},
+          .error = ok_status(),
+          .bytes_consumed = 0,
+      };
+    }
+    std::uint32_t parsed_block_number = 0U;
+    if (!parse_ascii_hex(bytes.subspan(1U, 2U), parsed_block_number) ||
+        parsed_block_number > 0xFFU) {
+      return DecodeResult {
+          .status = DecodeStatus::Error,
+          .frame = RawResponseFrame {},
+          .error = parse_error("Failed to parse ASCII Format2 block number"),
+          .bytes_consumed = 3U,
+      };
+    }
+    const std::uint8_t actual_block_number = static_cast<std::uint8_t>(parsed_block_number);
+    if (actual_block_number != context.format2_block_number()) {
+      DecodeResult foreign = decode_response(
+          config,
+          FrameCodecContext::format2(actual_block_number),
+          bytes);
+      if (foreign.status != DecodeStatus::Incomplete) {
+        foreign.response_identity_mismatch = true;
+      }
+      return foreign;
+    }
+  }
+
+  if (is_ascii_mode(config) && !is_e1_frame(config) &&
+      (bytes[0] == kAsciiAck || bytes[0] == kAsciiNak || bytes[0] == kAsciiStx)) {
+    const std::size_t block_size = ascii_block_number_length(config);
+    const std::size_t frame_id_size = ascii_frame_id_length(config.frame_kind);
+    const std::size_t route_size = ascii_route_length(config.frame_kind);
+    const std::size_t route_offset = 1U + block_size + frame_id_size;
+    const std::size_t route_end = route_offset + route_size;
+    if (bytes.size() < route_end) {
+      return DecodeResult {
+          .status = DecodeStatus::Incomplete,
+          .frame = RawResponseFrame {},
+          .error = ok_status(),
+          .bytes_consumed = 0,
+      };
+    }
+
+    if (frame_id_size != 0U) {
+      std::uint32_t parsed_frame_id = 0U;
+      if (!parse_ascii_hex(bytes.subspan(1U + block_size, frame_id_size), parsed_frame_id) ||
+          parsed_frame_id != frame_id(config.frame_kind)) {
+        return DecodeResult {
+            .status = DecodeStatus::Error,
+            .frame = RawResponseFrame {},
+            .error = parse_error("ASCII response frame ID does not match protocol"),
+            .bytes_consumed = route_end,
+        };
+      }
+    }
+
+    auto parse_route_field = [&](std::size_t offset, std::size_t width, std::uint32_t& value) noexcept {
+      return parse_ascii_hex(bytes.subspan(route_offset + offset, width), value);
+    };
+
+    std::uint32_t station = 0U;
+    std::uint32_t network = 0U;
+    std::uint32_t pc = 0xFFU;
+    std::uint32_t module_io_no = module_io::OwnStation;
+    std::uint32_t module_station_no = 0U;
+    std::uint32_t self_station_no = 0U;
+    bool route_parse_ok = false;
+    RouteConfig actual_route {};
+    switch (config.frame_kind) {
+      case FrameKind::C1:
+        route_parse_ok = parse_route_field(0U, 2U, station) &&
+                         parse_route_field(2U, 2U, pc);
+        if (route_parse_ok) {
+          actual_route = RouteConfig::c1_wire_route(
+              static_cast<std::uint8_t>(station),
+              static_cast<std::uint8_t>(pc));
+        }
+        break;
+      case FrameKind::C2:
+        route_parse_ok = parse_route_field(0U, 2U, station) &&
+                         parse_route_field(2U, 2U, self_station_no);
+        if (route_parse_ok) {
+          actual_route = RouteConfig {C2MultidropRoute {
+              static_cast<std::uint8_t>(station),
+              self_station_no != 0U,
+              static_cast<std::uint8_t>(self_station_no)}};
+        }
+        break;
+      case FrameKind::C3:
+        route_parse_ok = parse_route_field(0U, 2U, station) &&
+                         parse_route_field(2U, 2U, network) &&
+                         parse_route_field(4U, 2U, pc) &&
+                         parse_route_field(6U, 2U, self_station_no);
+        if (route_parse_ok) {
+          actual_route = RouteConfig {C3MultidropRoute {
+              static_cast<std::uint8_t>(station),
+              static_cast<std::uint8_t>(network),
+              c34_pc_target_from_wire(pc),
+              self_station_no != 0U,
+              static_cast<std::uint8_t>(self_station_no)}};
+        }
+        break;
+      case FrameKind::C4:
+        route_parse_ok = parse_route_field(0U, 2U, station) &&
+                         parse_route_field(2U, 2U, network) &&
+                         parse_route_field(4U, 2U, pc) &&
+                         parse_route_field(6U, 4U, module_io_no) &&
+                         parse_route_field(10U, 2U, module_station_no) &&
+                         parse_route_field(12U, 2U, self_station_no);
+        if (route_parse_ok) {
+          actual_route = RouteConfig {C4MultidropRoute {
+              static_cast<std::uint8_t>(station),
+              static_cast<std::uint8_t>(network),
+              c34_pc_target_from_wire(pc),
+              static_cast<std::uint16_t>(module_io_no),
+              static_cast<std::uint8_t>(module_station_no),
+              self_station_no != 0U,
+              static_cast<std::uint8_t>(self_station_no)}};
+        }
+        break;
+      case FrameKind::E1:
+        break;
+    }
+
+    if (!route_parse_ok) {
+      return DecodeResult {
+          .status = DecodeStatus::Error,
+          .frame = RawResponseFrame {},
+          .error = parse_error("Failed to parse ASCII response route identity"),
+          .bytes_consumed = route_end,
+      };
+    }
+
+    const bool route_mismatch =
+        station != config.route.station_no() ||
+        network != config.route.network_no() ||
+        pc != config.route.pc_no() ||
+        module_io_no != config.route.request_destination_module_io_no() ||
+        module_station_no != config.route.request_destination_module_station_no() ||
+        self_station_no != config.route.self_station_no();
+    if (route_mismatch) {
+      ProtocolConfig foreign_config = config;
+      foreign_config.route = actual_route;
+      DecodeResult foreign = decode_response(foreign_config, context, bytes);
+      if (foreign.status != DecodeStatus::Incomplete) {
+        foreign.response_identity_mismatch = true;
+      }
+      return foreign;
+    }
   }
 
   if (is_e1_frame(config)) {
@@ -2969,7 +3251,7 @@ DecodeResult FrameCodec::decode_response(
       }
 
       const std::size_t etx_index = static_cast<std::size_t>(std::distance(bytes.begin(), etx_it));
-      const std::size_t checksum_size = config.sum_check_enabled ? 2U : 0U;
+      const std::size_t checksum_size = is_sum_check_enabled(config) ? 2U : 0U;
       const std::size_t total_size = etx_index + 1U + checksum_size + terminator_size;
       if (bytes.size() < total_size) {
         return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
@@ -2978,7 +3260,7 @@ DecodeResult FrameCodec::decode_response(
         return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
       }
 
-      if (config.sum_check_enabled &&
+      if (is_sum_check_enabled(config) &&
           !verify_ascii_sum(bytes.subspan(1, etx_index), bytes.subspan(etx_index + 1U, 2U))) {
         return DecodeResult {
             .status = DecodeStatus::Error,
@@ -3073,7 +3355,7 @@ DecodeResult FrameCodec::decode_response(
 
     if (success_match) {
       const bool has_data = etx_index > content_offset;
-      const std::size_t checksum_size = (config.sum_check_enabled && has_data) ? 2U : 0U;
+      const std::size_t checksum_size = (is_sum_check_enabled(config) && has_data) ? 2U : 0U;
       if (bytes.size() < (etx_index + 1U + checksum_size)) {
         return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
       }
@@ -3200,12 +3482,12 @@ DecodeResult FrameCodec::decode_response(
     return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
   }
 
-  const std::size_t checksum_size = config.sum_check_enabled ? 2U : 0U;
+  const std::size_t checksum_size = is_sum_check_enabled(config) ? 2U : 0U;
   if (bytes.size() < (index + checksum_size)) {
     return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
   }
 
-  if (config.sum_check_enabled &&
+  if (is_sum_check_enabled(config) &&
       !verify_ascii_sum(std::span<const std::uint8_t>(payload.data(), payload_size), bytes.subspan(index, 2U))) {
     return DecodeResult {
         .status = DecodeStatus::Error,
@@ -3254,6 +3536,22 @@ DecodeResult FrameCodec::decode_response(
     };
   }
 
+  const std::size_t route_offset = 3U;
+  const std::uint8_t response_station = payload[route_offset];
+  const std::uint8_t response_network = payload[route_offset + 1U];
+  const std::uint8_t response_pc = payload[route_offset + 2U];
+  const std::uint16_t response_module_io = static_cast<std::uint16_t>(
+      payload[route_offset + 3U] | (payload[route_offset + 4U] << 8U));
+  const std::uint8_t response_module_station = payload[route_offset + 5U];
+  const std::uint8_t response_self_station = payload[route_offset + 6U];
+  const bool route_identity_mismatch =
+      response_station != config.route.station_no() ||
+      response_network != config.route.network_no() ||
+      response_pc != config.route.pc_no() ||
+      response_module_io != config.route.request_destination_module_io_no() ||
+      response_module_station != config.route.request_destination_module_station_no() ||
+      response_self_station != config.route.self_station_no();
+
   const std::size_t response_id_offset = 2U + 1U + route_size;
   const std::uint16_t response_id =
       static_cast<std::uint16_t>(payload[response_id_offset] | (payload[response_id_offset + 1U] << 8U));
@@ -3288,6 +3586,7 @@ DecodeResult FrameCodec::decode_response(
       .frame = frame,
       .error = ok_status(),
       .bytes_consumed = index + checksum_size,
+      .response_identity_mismatch = route_identity_mismatch,
   };
 }
 
@@ -6259,9 +6558,8 @@ Status parse_read_host_buffer_response(
           .frame_kind = config.frame_kind,
           .code_mode = config.code_mode,
           .ascii_format = config.ascii_format,
-          .ascii_block_number = config.ascii_block_number,
           .plc_profile = config.plc_profile,
-          .sum_check_enabled = config.sum_check_enabled,
+          .sum_check_mode = config.sum_check_mode,
           .route = config.route,
           .timeout = config.timeout,
       },
@@ -6913,7 +7211,7 @@ Status encode_loopback(
     if (!c1_status.ok()) {
       return c1_status;
     }
-    if (config.route.pc_no != 0xFFU) {
+    if (config.route.pc_no() != 0xFFU) {
       return invalid_argument("1C loopback requires route.pc_no = 0xFF");
     }
     ByteWriter writer(out_request_data);

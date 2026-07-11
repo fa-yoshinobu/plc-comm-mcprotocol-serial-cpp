@@ -20,12 +20,6 @@ namespace {
 
 bool g_dump_frames = false;
 
-#if defined(_WIN32)
-constexpr const char* kDefaultSerialDevicePath = "COM1";
-#else
-constexpr const char* kDefaultSerialDevicePath = "/dev/ttyUSB0";
-#endif
-
 using mcprotocol::serial::AsciiFormat;
 using mcprotocol::serial::BatchReadBitsRequest;
 using mcprotocol::serial::BatchReadWordsRequest;
@@ -33,6 +27,11 @@ using mcprotocol::serial::BatchWriteBitsRequest;
 using mcprotocol::serial::BatchWriteWordsRequest;
 using mcprotocol::serial::BitValue;
 using mcprotocol::serial::CodeMode;
+using mcprotocol::serial::C1MultidropRoute;
+using mcprotocol::serial::C2MultidropRoute;
+using mcprotocol::serial::C3MultidropRoute;
+using mcprotocol::serial::C4MultidropRoute;
+using mcprotocol::serial::C34PcTarget;
 using mcprotocol::serial::CpuModelInfo;
 using mcprotocol::serial::DeviceAddress;
 using mcprotocol::serial::DeviceCode;
@@ -43,11 +42,15 @@ using mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest;
 using mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest;
 using mcprotocol::serial::ExtendedFileRegisterMonitorRegistration;
 using mcprotocol::serial::ExtendedFileRegisterRandomWriteWordItem;
+using mcprotocol::serial::E1PcTarget;
+using mcprotocol::serial::E1Route;
 using mcprotocol::serial::FrameKind;
 using mcprotocol::serial::GlobalSignalControlRequest;
 using mcprotocol::serial::GlobalSignalTarget;
+using mcprotocol::serial::HardwareFlowControl;
 using mcprotocol::serial::HostBufferReadRequest;
 using mcprotocol::serial::HostBufferWriteRequest;
+using mcprotocol::serial::HostStationRoute;
 using mcprotocol::serial::LinkDirectDevice;
 using mcprotocol::serial::LinkDirectMonitorRegistration;
 using mcprotocol::serial::LinkDirectMultiBlockReadBlock;
@@ -76,10 +79,13 @@ using mcprotocol::serial::RandomWriteBitItem;
 using mcprotocol::serial::RandomWriteWordItem;
 using mcprotocol::serial::RemoteOperationMode;
 using mcprotocol::serial::RemoteRunClearMode;
+using mcprotocol::serial::RouteConfig;
 using mcprotocol::serial::RouteKind;
 using mcprotocol::serial::Rs485Hooks;
+using mcprotocol::serial::SerialParity;
 using mcprotocol::serial::Status;
 using mcprotocol::serial::StatusCode;
+using mcprotocol::serial::SumCheckMode;
 using mcprotocol::serial::UserFrameDeleteRequest;
 using mcprotocol::serial::UserFrameReadRequest;
 using mcprotocol::serial::UserFrameRegistrationData;
@@ -174,16 +180,49 @@ enum class ProbeMultiBlockMode : std::uint8_t {
   BitB,
 };
 
+enum class CliPcTargetKind : std::uint8_t {
+  Unspecified,
+  Number,
+  ControlSystem,
+  StandbySystem,
+  SpecialFe,
+  ConnectedStation,
+};
+
 struct CommandState {
   bool done = false;
   Status status {};
 };
 
 struct CliOptions {
-  PosixSerialConfig serial {};
+  std::string_view serial_device {};
+  std::uint32_t baud_rate = 0;
+  std::uint32_t data_bits = 0;
+  std::uint32_t stop_bits = 0;
+  SerialParity parity = SerialParity::None;
+  HardwareFlowControl hardware_flow_control = HardwareFlowControl::None;
+  bool serial_device_specified = false;
+  bool baud_rate_specified = false;
+  bool data_bits_specified = false;
+  bool stop_bits_specified = false;
+  bool parity_specified = false;
+  bool hardware_flow_control_specified = false;
   ProtocolConfig protocol {};
   bool frame_specified = false;
   bool plc_profile_specified = false;
+  bool sum_check_specified = false;
+  RouteKind route_kind = RouteKind::Unspecified;
+  std::uint8_t station_no = 0x00U;
+  std::uint8_t network_no = 0x00U;
+  bool self_station_enabled = false;
+  std::uint8_t self_station_no = 0x00U;
+  bool route_kind_specified = false;
+  bool station_specified = false;
+  bool network_specified = false;
+  CliPcTargetKind pc_target_kind = CliPcTargetKind::Unspecified;
+  std::uint32_t pc_target_number = 0U;
+  bool pc_target_specified = false;
+  bool self_station_specified = false;
   bool rts_toggle = false;
   bool dump_frames = false;
   CommandKind command = CommandKind::None;
@@ -470,24 +509,22 @@ void print_usage() {
       "  mcprotocol_cli [options] probe-write-module-buffer\n"
       "\n"
       "Options:\n"
-#if defined(_WIN32)
-      "  --device PATH               Serial device path (default: COM1)\n"
-#else
-      "  --device PATH               Serial device path (default: /dev/ttyUSB0)\n"
-#endif
-      "  --baud RATE                Baud rate (default: 9600)\n"
-      "  --data-bits N              Data bits: 5/6/7/8 (default: 8)\n"
-      "  --stop-bits N              Stop bits: 1/2 (default: 1)\n"
-      "  --parity N|E|O             Parity (default: N)\n"
-      "  --rts-cts on|off           Hardware flow control (default: off)\n"
+      "  --device PATH              Required. Serial device path\n"
+      "  --baud RATE                Required. Baud rate greater than zero\n"
+      "  --data-bits N              Required. Data bits: 7/8; binary requires 8\n"
+      "  --stop-bits N              Required. Stop bits: 1/2\n"
+      "  --parity N|E|O             Required. Parity: none/even/odd\n"
+      "  --hardware-flow MODE       Required. none | rts-cts\n"
       "  --rts-toggle on|off        Toggle RTS during TX for RS-485 DE control\n"
       "  --dump-frames on|off       Print raw TX/RX frame bytes to stderr (default: off)\n"
       "  --frame MODE               Required. c4-binary | c4-ascii-f1 | c4-ascii-f2 | c4-ascii-f3 | c4-ascii-f4 | c3-ascii-f1 | c3-ascii-f2 | c3-ascii-f3 | c3-ascii-f4 | c2-ascii-f1 | c2-ascii-f2 | c2-ascii-f3 | c2-ascii-f4 | c1-ascii-f1 | c1-ascii-f3 | c1-ascii-f4 | e1-binary | e1-ascii\n"
       "  --plc-profile PROFILE      Required. Canonical PLC profile: melsec:iq-r | melsec:iq-l | melsec:iq-f | melsec:qcpu | melsec:lcpu | melsec:qna | melsec:ana-anu | melsec:a\n"
-      "  --block-no N               ASCII Format2 block number 0..255 (default: 0)\n"
-      "  --station N                Station number; non-zero implies multidrop\n"
+      "  --route ROUTE              Required. host | multidrop\n"
+      "  --station N                Station number for an explicit multidrop route\n"
+      "  --network N                Required for 3C/4C multidrop; invalid for 1C/2C/host\n"
+      "  --pc-target TARGET         Required for 3C/4C/1E non-host routes: 1..N | control | standby | special-fe | connected\n"
       "  --self-station N           Self-station number for m:n connections\n"
-      "  --sum-check on|off         Enable or disable sum-check (default: on)\n"
+      "  --sum-check on|off         Required. Explicit sum-check mode\n"
       "  --response-timeout-ms N    Response timeout in milliseconds (default: 5000)\n"
       "  --inter-byte-timeout-ms N  Inter-byte timeout in milliseconds (default: 250)\n"
       "\n"
@@ -601,6 +638,112 @@ void print_usage() {
     return true;
   }
   return false;
+}
+
+[[nodiscard]] bool parse_serial_parity(std::string_view text, SerialParity& out_value) {
+  if (text == "N" || text == "n" || text == "none") {
+    out_value = SerialParity::None;
+    return true;
+  }
+  if (text == "E" || text == "e" || text == "even") {
+    out_value = SerialParity::Even;
+    return true;
+  }
+  if (text == "O" || text == "o" || text == "odd") {
+    out_value = SerialParity::Odd;
+    return true;
+  }
+  return false;
+}
+
+[[nodiscard]] bool parse_hardware_flow_control(
+    std::string_view text,
+    HardwareFlowControl& out_value) {
+  if (text == "none") {
+    out_value = HardwareFlowControl::None;
+    return true;
+  }
+  if (text == "rts-cts") {
+    out_value = HardwareFlowControl::RtsCts;
+    return true;
+  }
+  return false;
+}
+
+[[nodiscard]] bool parse_sum_check_mode(std::string_view text, SumCheckMode& out_value) {
+  bool enabled = false;
+  if (!parse_on_off(text, enabled)) {
+    return false;
+  }
+  out_value = enabled ? SumCheckMode::Enabled : SumCheckMode::Disabled;
+  return true;
+}
+
+[[nodiscard]] bool parse_pc_target(
+    std::string_view text,
+    CliPcTargetKind& out_kind,
+    std::uint32_t& out_number) {
+  if (text == "control") {
+    out_kind = CliPcTargetKind::ControlSystem;
+    return true;
+  }
+  if (text == "standby") {
+    out_kind = CliPcTargetKind::StandbySystem;
+    return true;
+  }
+  if (text == "special-fe") {
+    out_kind = CliPcTargetKind::SpecialFe;
+    return true;
+  }
+  if (text == "connected") {
+    out_kind = CliPcTargetKind::ConnectedStation;
+    return true;
+  }
+  if (!parse_u32_auto(text, out_number)) {
+    return false;
+  }
+  out_kind = CliPcTargetKind::Number;
+  return true;
+}
+
+[[nodiscard]] constexpr C34PcTarget make_c34_pc_target(
+    CliPcTargetKind kind,
+    std::uint32_t number) noexcept {
+  switch (kind) {
+    case CliPcTargetKind::ControlSystem:
+      return C34PcTarget::control_system();
+    case CliPcTargetKind::StandbySystem:
+      return C34PcTarget::standby_system();
+    case CliPcTargetKind::SpecialFe:
+      return C34PcTarget::special_fe();
+    case CliPcTargetKind::ConnectedStation:
+      return C34PcTarget::connected_station();
+    case CliPcTargetKind::Number:
+      switch (number) {
+        case 0x7DU:
+          return C34PcTarget::control_system();
+        case 0x7EU:
+          return C34PcTarget::standby_system();
+        case 0xFEU:
+          return C34PcTarget::special_fe();
+        case 0xFFU:
+          return C34PcTarget::connected_station();
+        default:
+          return C34PcTarget::number(number);
+      }
+    case CliPcTargetKind::Unspecified:
+      return C34PcTarget::number(number);
+  }
+  return C34PcTarget::number(number);
+}
+
+[[nodiscard]] constexpr E1PcTarget make_e1_pc_target(
+    CliPcTargetKind kind,
+    std::uint32_t number) noexcept {
+  return kind == CliPcTargetKind::ConnectedStation ||
+                 (kind == CliPcTargetKind::Number && number == 0xFFU)
+             ? E1PcTarget::connected_station()
+             : E1PcTarget::number(number);
 }
 
 [[nodiscard]] bool parse_global_signal_target(
@@ -1063,20 +1206,7 @@ void print_usage() {
 }
 
 [[nodiscard]] bool parse_args(int argc, char** argv, CliOptions& options) {
-  options.serial.device_path = kDefaultSerialDevicePath;
-  options.protocol.frame_kind = FrameKind::C4;
-  options.protocol.code_mode = CodeMode::Binary;
-  options.protocol.ascii_format = AsciiFormat::Format3;
-  options.protocol.ascii_block_number = 0x00;
   options.protocol.plc_profile = PlcProfile::Unspecified;
-  options.protocol.sum_check_enabled = true;
-  options.protocol.route.kind = RouteKind::HostStation;
-  options.protocol.route.station_no = 0x00;
-  options.protocol.route.network_no = 0x00;
-  options.protocol.route.pc_no = 0xFF;
-  options.protocol.route.request_destination_module_io_no = mcprotocol::serial::module_io::OwnStation;
-  options.protocol.route.request_destination_module_station_no = 0x00;
-  options.protocol.route.self_station_enabled = false;
   options.protocol.timeout.response_timeout_ms = 5000;
   options.protocol.timeout.inter_byte_timeout_ms = 250;
 
@@ -1084,31 +1214,39 @@ void print_usage() {
   while (index < argc) {
     const std::string_view arg(argv[index]);
     if (arg == "--device" && (index + 1) < argc) {
-      options.serial.device_path = argv[++index];
+      options.serial_device = argv[++index];
+      options.serial_device_specified = true;
     } else if (arg == "--baud" && (index + 1) < argc) {
       std::uint32_t value = 0;
       if (!parse_u32(argv[++index], value)) {
         return false;
       }
-      options.serial.baud_rate = value;
+      options.baud_rate = value;
+      options.baud_rate_specified = true;
     } else if (arg == "--data-bits" && (index + 1) < argc) {
       std::uint32_t value = 0;
-      if (!parse_u32(argv[++index], value) || value > 8U) {
+      if (!parse_u32(argv[++index], value)) {
         return false;
       }
-      options.serial.data_bits = static_cast<std::uint8_t>(value);
+      options.data_bits = value;
+      options.data_bits_specified = true;
     } else if (arg == "--stop-bits" && (index + 1) < argc) {
       std::uint32_t value = 0;
-      if (!parse_u32(argv[++index], value) || value > 2U) {
+      if (!parse_u32(argv[++index], value)) {
         return false;
       }
-      options.serial.stop_bits = static_cast<std::uint8_t>(value);
+      options.stop_bits = value;
+      options.stop_bits_specified = true;
     } else if (arg == "--parity" && (index + 1) < argc) {
-      options.serial.parity = argv[++index][0];
-    } else if (arg == "--rts-cts" && (index + 1) < argc) {
-      if (!parse_on_off(argv[++index], options.serial.rts_cts)) {
+      if (!parse_serial_parity(argv[++index], options.parity)) {
         return false;
       }
+      options.parity_specified = true;
+    } else if (arg == "--hardware-flow" && (index + 1) < argc) {
+      if (!parse_hardware_flow_control(argv[++index], options.hardware_flow_control)) {
+        return false;
+      }
+      options.hardware_flow_control_specified = true;
     } else if (arg == "--rts-toggle" && (index + 1) < argc) {
       if (!parse_on_off(argv[++index], options.rts_toggle)) {
         return false;
@@ -1127,30 +1265,51 @@ void print_usage() {
         return false;
       }
       options.plc_profile_specified = true;
-    } else if (arg == "--block-no" && (index + 1) < argc) {
+    } else if (arg == "--route" && (index + 1) < argc) {
+      const std::string_view value(argv[++index]);
+      if (value == "host") {
+        options.route_kind = RouteKind::HostStation;
+      } else if (value == "multidrop") {
+        options.route_kind = RouteKind::MultidropStation;
+      } else {
+        return false;
+      }
+      options.route_kind_specified = true;
+    } else if (arg == "--station" && (index + 1) < argc) {
       std::uint32_t value = 0;
       if (!parse_u32_auto(argv[++index], value) || value > 0xFFU) {
         return false;
       }
-      options.protocol.ascii_block_number = static_cast<std::uint8_t>(value);
-    } else if (arg == "--station" && (index + 1) < argc) {
+      options.station_no = static_cast<std::uint8_t>(value);
+      options.station_specified = true;
+    } else if (arg == "--network" && (index + 1) < argc) {
       std::uint32_t value = 0;
-      if (!parse_u32_auto(argv[++index], value)) {
+      if (!parse_u32_auto(argv[++index], value) || value > 0xFFU) {
         return false;
       }
-      options.protocol.route.station_no = static_cast<std::uint8_t>(value);
-      options.protocol.route.kind = value == 0U ? RouteKind::HostStation : RouteKind::MultidropStation;
+      options.network_no = static_cast<std::uint8_t>(value);
+      options.network_specified = true;
+    } else if (arg == "--pc-target" && (index + 1) < argc) {
+      if (!parse_pc_target(
+              argv[++index],
+              options.pc_target_kind,
+              options.pc_target_number)) {
+        return false;
+      }
+      options.pc_target_specified = true;
     } else if (arg == "--self-station" && (index + 1) < argc) {
       std::uint32_t value = 0;
-      if (!parse_u32_auto(argv[++index], value)) {
+      if (!parse_u32_auto(argv[++index], value) || value > 0xFFU) {
         return false;
       }
-      options.protocol.route.self_station_enabled = true;
-      options.protocol.route.self_station_no = static_cast<std::uint8_t>(value);
+      options.self_station_enabled = true;
+      options.self_station_no = static_cast<std::uint8_t>(value);
+      options.self_station_specified = true;
     } else if (arg == "--sum-check" && (index + 1) < argc) {
-      if (!parse_on_off(argv[++index], options.protocol.sum_check_enabled)) {
+      if (!parse_sum_check_mode(argv[++index], options.protocol.sum_check_mode)) {
         return false;
       }
+      options.sum_check_specified = true;
     } else if (arg == "--response-timeout-ms" && (index + 1) < argc) {
       std::uint32_t value = 0;
       if (!parse_u32(argv[++index], value)) {
@@ -1303,9 +1462,86 @@ void print_usage() {
     return false;
   }
 
-  if (options.command != CommandKind::RecoverC24 &&
-      (!options.frame_specified || !options.plc_profile_specified)) {
+  if (!options.serial_device_specified ||
+      !options.baud_rate_specified ||
+      !options.data_bits_specified ||
+      !options.stop_bits_specified ||
+      !options.parity_specified ||
+      !options.hardware_flow_control_specified) {
     return false;
+  }
+
+  if (options.command != CommandKind::RecoverC24 &&
+      (!options.frame_specified || !options.plc_profile_specified || !options.sum_check_specified ||
+       !options.route_kind_specified)) {
+    return false;
+  }
+
+  if (options.command != CommandKind::RecoverC24) {
+    if (options.route_kind == RouteKind::HostStation) {
+      if (options.station_specified || options.network_specified || options.pc_target_specified ||
+          options.self_station_specified) {
+        return false;
+      }
+      options.protocol.route = RouteConfig {HostStationRoute {}};
+    } else if (options.route_kind == RouteKind::MultidropStation) {
+      switch (options.protocol.frame_kind) {
+        case FrameKind::C1:
+          if (!options.station_specified || options.network_specified ||
+              options.pc_target_specified || options.self_station_specified) {
+            return false;
+          }
+          options.protocol.route = RouteConfig {C1MultidropRoute {options.station_no}};
+          break;
+        case FrameKind::C2:
+          if (!options.station_specified || options.network_specified || options.pc_target_specified) {
+            return false;
+          }
+          options.protocol.route = RouteConfig {C2MultidropRoute {
+              options.station_no,
+              options.self_station_enabled,
+              options.self_station_no}};
+          break;
+        case FrameKind::C3:
+          if (!options.station_specified || !options.network_specified ||
+              !options.pc_target_specified) {
+            return false;
+          }
+          options.protocol.route = RouteConfig {C3MultidropRoute {
+              options.station_no,
+              options.network_no,
+              make_c34_pc_target(options.pc_target_kind, options.pc_target_number),
+              options.self_station_enabled,
+              options.self_station_no}};
+          break;
+        case FrameKind::C4:
+          if (!options.station_specified || !options.network_specified ||
+              !options.pc_target_specified) {
+            return false;
+          }
+          options.protocol.route = RouteConfig {C4MultidropRoute {
+              options.station_no,
+              options.network_no,
+              make_c34_pc_target(options.pc_target_kind, options.pc_target_number),
+              mcprotocol::serial::module_io::OwnStation,
+              0x00U,
+              options.self_station_enabled,
+              options.self_station_no}};
+          break;
+        case FrameKind::E1:
+          if (options.station_specified || options.network_specified ||
+              options.self_station_specified || !options.pc_target_specified ||
+              (options.pc_target_kind != CliPcTargetKind::Number &&
+               options.pc_target_kind != CliPcTargetKind::ConnectedStation)) {
+            return false;
+          }
+          options.protocol.route = RouteConfig {E1Route {
+              make_e1_pc_target(options.pc_target_kind, options.pc_target_number)}};
+          break;
+      }
+    } else {
+      return false;
+    }
   }
 
   switch (options.command) {
@@ -1572,11 +1808,29 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
     std::span<const std::uint8_t> request_data,
     mcprotocol::serial::RawResponseFrame& out_frame,
     bool dump_frames = false) {
+  static std::uint8_t next_raw_format2_block_number = 0U;
+  const bool format2 = config.code_mode == CodeMode::Ascii &&
+                       config.frame_kind != FrameKind::C1 &&
+                       config.frame_kind != FrameKind::E1 &&
+                       config.ascii_format == AsciiFormat::Format2;
+  const mcprotocol::serial::FrameCodecContext frame_context =
+      format2
+          ? mcprotocol::serial::FrameCodecContext::format2(next_raw_format2_block_number)
+          : mcprotocol::serial::FrameCodecContext::none();
   std::array<std::uint8_t, mcprotocol::serial::kMaxRequestFrameBytes> tx_frame {};
   std::size_t tx_size = 0;
-  Status status = mcprotocol::serial::FrameCodec::encode_request(config, request_data, tx_frame, tx_size);
+  Status status = mcprotocol::serial::FrameCodec::encode_request(
+      config,
+      frame_context,
+      request_data,
+      tx_frame,
+      tx_size);
   if (!status.ok()) {
     return status;
+  }
+  if (format2) {
+    next_raw_format2_block_number =
+        static_cast<std::uint8_t>(next_raw_format2_block_number + 1U);
   }
 
   status = discard_stale_rx(port);
@@ -1653,7 +1907,17 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
     inter_byte_deadline_ms = now_ms() + config.timeout.inter_byte_timeout_ms;
 
     const mcprotocol::serial::DecodeResult decode =
-        mcprotocol::serial::FrameCodec::decode_response(config, std::span<const std::uint8_t>(rx_frame.data(), rx_size));
+        mcprotocol::serial::FrameCodec::decode_response(
+            config,
+            frame_context,
+            std::span<const std::uint8_t>(rx_frame.data(), rx_size));
+    if (decode.response_identity_mismatch && decode.bytes_consumed != 0U) {
+      const std::size_t remaining = rx_size - decode.bytes_consumed;
+      std::memmove(rx_frame.data(), rx_frame.data() + decode.bytes_consumed, remaining);
+      rx_size = remaining;
+      saw_rx = remaining != 0U;
+      continue;
+    }
     if (decode.status == mcprotocol::serial::DecodeStatus::Complete) {
       out_frame = decode.frame;
       if (decode.frame.type == mcprotocol::serial::ResponseType::PlcError) {
@@ -2740,14 +3004,38 @@ int main(int argc, char** argv) {
   }
   g_dump_frames = options.dump_frames;
 
+  const PosixSerialConfig serial(
+      options.serial_device,
+      options.baud_rate,
+      options.data_bits,
+      options.stop_bits,
+      options.parity,
+      options.hardware_flow_control);
+
+  Status status = options.command == CommandKind::RecoverC24
+                      ? mcprotocol::serial::validate_serial_config(serial)
+                      : mcprotocol::serial::validate_mc_serial_config(serial, options.protocol);
+  if (!status.ok()) {
+    print_status_error("Invalid serial configuration", status);
+    return 1;
+  }
+
+  MelsecSerialClient client;
+  if (options.command != CommandKind::RecoverC24) {
+    status = client.configure(options.protocol);
+    if (!status.ok()) {
+      print_status_error("Invalid protocol configuration", status);
+      return 1;
+    }
+  }
+
   PosixSerialPort port;
-  Status status = port.open(options.serial);
+  status = port.open(serial);
   if (!status.ok()) {
     print_status_error("Failed to open serial port", status);
     return 1;
   }
 
-  MelsecSerialClient client;
   if (options.command != CommandKind::RecoverC24) {
     if (options.rts_toggle) {
       client.set_rs485_hooks(Rs485Hooks {
@@ -2755,12 +3043,6 @@ int main(int argc, char** argv) {
           .on_tx_end = on_tx_end,
           .user = &port,
       });
-    }
-
-    status = client.configure(options.protocol);
-    if (!status.ok()) {
-      print_status_error("Invalid protocol configuration", status);
-      return 1;
     }
   }
 

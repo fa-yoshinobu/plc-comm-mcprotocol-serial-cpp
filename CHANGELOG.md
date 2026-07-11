@@ -17,6 +17,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- Library: Removed default construction and implicit values from `PosixSerialConfig`. Device path,
+  baud rate, data bits, stop bits, parity, and hardware flow control are now required constructor
+  arguments.
+- Library: Replaced the public `char parity` and `bool rts_cts` fields with the typed
+  `SerialParity` and `HardwareFlowControl` enums.
+- Tooling: Removed the CLI's implicit serial device, 9600 baud, 8N1, and disabled-flow defaults.
+  `--device`, `--baud`, `--data-bits`, `--stop-bits`, `--parity`, and `--hardware-flow` are required.
+- Library: `ProtocolConfig {}` no longer silently selects C4, Binary, ASCII Format3, or enabled
+  sum-check. These fields begin invalid and must be explicitly selected or supplied by a named
+  preset before configuration can succeed.
+- Library: Replaced `bool sum_check_enabled` with `SumCheckMode::{Enabled, Disabled}`. The C4
+  protocol presets now require a `SumCheckMode` argument.
+- Tooling: `mcprotocol_cli --sum-check on|off` and the corresponding validation-script inputs are
+  required instead of defaulting to a checksum policy.
+- Library: Removed `ProtocolConfig::ascii_block_number` and the CLI `--block-no` option. Format2
+  clients now allocate and wrap block numbers per wire request; raw codec callers use an explicit
+  `FrameCodecContext::format2(number)`.
+- Library: Removed the mutable route aggregate and implicit HostStation selection. Protocol
+  configuration and named presets now require `RouteConfig {HostStationRoute {}}` or an explicit
+  frame-specific multidrop route; HostStation fixed header fields are no longer writable.
+- Tooling: Added required `--route host|multidrop`. `--station` no longer selects a route from its
+  numeric value and is rejected for a host route.
+- Library: Split multidrop configuration into `C1MultidropRoute`, `C2MultidropRoute`,
+  `C3MultidropRoute`, and `C4MultidropRoute`. Station is mandatory for every multidrop frame;
+  network is additionally mandatory for 3C/4C. Generic station `0xFF`, network `0xFE`, overflow,
+  and wrong-frame route types are rejected before encoding.
+- Tooling: Added required `--network` for 3C/4C multidrop routes. It is rejected for host and 1C/2C
+  routes.
+- Library: Replaced the optional raw route PC number with mandatory typed `C34PcTarget` and
+  `E1PcTarget` values. 3C/4C and 1E callers must explicitly select a numbered or special target,
+  including the connected-station `0xFF` target; host fixes `0xFF` internally and 1C/2C expose no
+  PC-target input.
+- Tooling: Added required `--pc-target` for 3C/4C/1E non-host routes. Named 3C/4C selectors are
+  `control`, `standby`, `special-fe`, and `connected`; ordinary numeric targets are range checked
+  before narrowing, and equivalent raw special values are normalized to the canonical selector.
+
+### Changed
+
+- Library: Rejects 5/6 data bits for MC protocol; binary mode requires 8 bits and ASCII accepts an
+  explicit 7 or 8. Serial and protocol combinations are validated before opening the OS handle.
+- Library: POSIX device paths are copied to a checked NUL-terminated buffer before `open()`.
+- Library: Frame, code-mode, ASCII-format, PLC-profile, and sum-check enums are checked exhaustively
+  before request encoding; unknown underlying values are rejected as invalid input. Route
+  selection is represented by constructible types rather than a caller-settable enum.
+- Library: Format2 response block numbers are parsed as strict hexadecimal identity fields. A
+  complete mismatched/late frame is consumed without completing the active request, while malformed
+  identity text is reported as a parse error.
+- Library: ASCII and binary response route headers are parsed and compared with the active request.
+  Complete responses from another station/network/PC/module/self-station identity are consumed
+  without completing the request; malformed ASCII route text is a parse error.
+
+### Tests
+
+- Added compile-time and runtime coverage for required serial configuration, invalid and unknown
+  values, embedded-NUL paths, and binary/ASCII data-bit combinations.
+- Added Format2 coverage for explicit raw context, missing/inactive context rejection, 00..FF wrap,
+  stale response isolation, cancellation, timeout followed by a late response, and malformed block
+  numbers.
+- Added route omission, required preset/CLI argument, fieldless HostStation, and explicit
+  Multidrop coverage.
+- Added frame-specific route-construction, explicit zero, boundary/overflow/special-value,
+  wrong-frame, route-match/mismatch/malformed, foreign-response, and post-timeout route-isolation
+  coverage.
+- Added mandatory typed PC-target, frame-specific range, special-selector, CLI omission/overflow,
+  inactive-field, pre-encode rejection, and foreign-PC response-isolation coverage.
+
 ## [3.1.0] - 2026-07-10
 
 ### Fixed

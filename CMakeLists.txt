@@ -197,6 +197,15 @@ if(MCPROTOCOL_EFFECTIVE_BUILD_CLI)
   )
 
   target_link_libraries(mcprotocol_cli PRIVATE mcprotocol_serial)
+
+  if(BUILD_TESTING AND Python3_Interpreter_FOUND)
+    add_test(
+      NAME cli_serial_config_tests
+      COMMAND ${Python3_EXECUTABLE}
+              ${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_serial_config_tests.py
+              $<TARGET_FILE:mcprotocol_cli>
+    )
+  endif()
 endif()
 
 if(MCPROTOCOL_BUILD_EXAMPLES)

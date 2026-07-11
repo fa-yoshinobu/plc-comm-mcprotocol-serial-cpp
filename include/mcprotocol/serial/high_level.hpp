@@ -94,59 +94,49 @@ using mcprotocol::serial::detail::parse_u32;
 }  // namespace detail
 
 /// \brief Returns a practical `Format5 / Binary / C4` configuration for an explicit PLC profile.
-[[nodiscard]] constexpr ProtocolConfig make_c4_binary_protocol(PlcProfile profile) noexcept {
+[[nodiscard]] constexpr ProtocolConfig make_c4_binary_protocol(
+    PlcProfile profile,
+    SumCheckMode sum_check_mode,
+    RouteConfig route) noexcept {
   ProtocolConfig config {};
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Binary;
   config.ascii_format = AsciiFormat::Format3;
   config.plc_profile = profile;
-  config.sum_check_enabled = true;
-  config.route.kind = RouteKind::HostStation;
-  config.route.station_no = 0x00;
-  config.route.network_no = 0x00;
-  config.route.pc_no = 0xFF;
-  config.route.request_destination_module_io_no = module_io::OwnStation;
-  config.route.request_destination_module_station_no = 0x00;
-  config.route.self_station_enabled = false;
-  config.route.self_station_no = 0x00;
+  config.sum_check_mode = sum_check_mode;
+  config.route = route;
   config.timeout.response_timeout_ms = 5000;
   config.timeout.inter_byte_timeout_ms = 250;
   return config;
 }
 
 /// \brief Returns a practical `Format4 / ASCII / C4` configuration for an explicit PLC profile.
-[[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format4_protocol(PlcProfile profile) noexcept {
+[[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format4_protocol(
+    PlcProfile profile,
+    SumCheckMode sum_check_mode,
+    RouteConfig route) noexcept {
   ProtocolConfig config {};
   config.frame_kind = FrameKind::C4;
   config.code_mode = CodeMode::Ascii;
   config.ascii_format = AsciiFormat::Format4;
   config.plc_profile = profile;
-  config.sum_check_enabled = false;
-  config.route.kind = RouteKind::MultidropStation;
-  config.route.station_no = 0x00;
-  config.route.network_no = 0x00;
-  config.route.pc_no = 0xFF;
-  config.route.request_destination_module_io_no = module_io::OwnStation;
-  config.route.request_destination_module_station_no = 0x00;
-  config.route.self_station_enabled = false;
-  config.route.self_station_no = 0x00;
+  config.sum_check_mode = sum_check_mode;
+  config.route = route;
   config.timeout.response_timeout_ms = 5000;
   config.timeout.inter_byte_timeout_ms = 250;
   return config;
 }
 
-/// \brief Returns a practical default for `Format2 / ASCII / C4`.
+/// \brief Returns a `Format2 / ASCII / C4` configuration with explicit profile and sum-check mode.
 ///
 /// `Format2` is the `Format1` style `ENQ/ACK/NAK/STX/ETX` link with an extra 1-byte block
-/// number inserted before the frame ID. The default block number is `0x00`; change
-/// `ProtocolConfig::ascii_block_number` if the host side needs a different value.
-[[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format2_protocol(PlcProfile profile) noexcept {
-  ProtocolConfig config = make_c4_ascii_format4_protocol(profile);
+/// number inserted before the frame ID. Block-number lifecycle is addressed separately by D-096.
+[[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format2_protocol(
+    PlcProfile profile,
+    SumCheckMode sum_check_mode,
+    RouteConfig route) noexcept {
+  ProtocolConfig config = make_c4_ascii_format4_protocol(profile, sum_check_mode, route);
   config.ascii_format = AsciiFormat::Format2;
-  config.sum_check_enabled = true;
-  config.route.kind = RouteKind::HostStation;
-  config.route.station_no = 0x00;
-  config.ascii_block_number = 0x00;
   return config;
 }
 

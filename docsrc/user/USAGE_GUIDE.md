@@ -22,7 +22,58 @@ The public API is designed for host tools and MCU firmware:
 
 ## Entry path 1: high-level helpers
 
-`make_c4_ascii_format4_protocol(PlcProfile::...)` creates a `ProtocolConfig` preset. Request builders such as `make_batch_read_words_request("D100", count, request)` convert plain device strings into typed request structs.
+`make_c4_ascii_format4_protocol(PlcProfile::..., SumCheckMode::..., RouteConfig {...})` creates a
+`ProtocolConfig` preset with explicit checksum and route policies. Request builders such as
+`make_batch_read_words_request("D100", count, request)` convert plain device strings into typed
+request structs.
+
+`ProtocolConfig {}` is intentionally not a usable connection preset: frame family, code mode,
+ASCII format (for ASCII), PLC profile, sum-check mode, and route must be selected explicitly. Named presets
+make the frame and code-mode selection visible in the function name, while still requiring the PLC
+profile, `SumCheckMode::Enabled` or `SumCheckMode::Disabled`, and a typed route argument. The
+library never switches frame, code mode, format, profile, sum-check policy, or route after an error
+or timeout.
+
+### Route selection
+
+Use `RouteConfig {HostStationRoute {}}` for the connected host-station route. This type has no
+station, network, PC, destination-module, or self-station inputs; the protocol-defined connected
+station header is fixed internally. For multidrop, select the frame-specific type:
+`C1MultidropRoute(station)`, `C2MultidropRoute(station)`,
+`C3MultidropRoute(station, network, pc_target)`,
+`C4MultidropRoute(station, network, pc_target)`, or `E1Route(pc_target)`. Station zero and network
+zero remain valid only when explicitly passed. A 3C/4C PC target is constructed with
+`C34PcTarget::number(0x01U..0x78U)` or one of `control_system()`, `standby_system()`,
+`special_fe()`, and `connected_station()`. A 1E target uses
+`E1PcTarget::number(0x01U..0x40U)` or `connected_station()`. The special wire values cannot be
+passed through `number()`, which prevents an ordinary number from silently acquiring special
+meaning. Raw numeric CLI values `0x7D`, `0x7E`, `0xFE`, and `0xFF` are accepted only at that
+external boundary and normalized to the corresponding canonical selector before validation.
+
+`RouteConfig {}` is invalid. The CLI likewise requires `--route host` or `--route multidrop`;
+3C/4C additionally require `--network` and `--pc-target`, while 1E multidrop requires
+`--pc-target`. Use `--pc-target connected` when explicit `0xFF` is correct. A station or PC value
+never selects or changes a route implicitly.
+
+Every response route header field that exists in the selected frame is compared with the
+configured route. A complete 3C/4C response from a different station, network, or PC target is
+discarded while the client continues waiting for the matching response. The 1E response message
+does not echo its request PC target, so the PC target is enforced on request construction and
+encoding rather than inferred from response bytes. Malformed ASCII route hexadecimal is reported
+as a parse error. Timeout, NAK, malformed input, or mismatch never causes automatic route discovery
+or fallback.
+
+### Format2 request identity
+
+Do not configure a fixed Format2 block number. `MelsecSerialClient` assigns a new value for each
+wire request, advances through `00` to `FF`, wraps to `00` only after the prior request has finished,
+and accepts only the matching response. A late response from a timed-out or cancelled request is
+discarded instead of being returned as the next request's result.
+
+`FrameCodecContext::format2(number)` is available only for raw frame construction, negative tests,
+and protocol investigation where the caller intentionally owns one wire identity. Passing a
+Format2 context to another format, or using a Format2 raw codec without one, is an error. The CLI
+does not expose a normal `--block-no` connection option.
 
 ```cpp
 #include <cstdint>
@@ -38,8 +89,10 @@ int main() {
   using mcprotocol::serial::highlevel::make_batch_read_words_request;
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
-  ProtocolConfig protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
-  protocol.route.station_no = 0;
+  ProtocolConfig protocol = make_c4_ascii_format4_protocol(
+      PlcProfile::MelsecQ,
+      mcprotocol::serial::SumCheckMode::Disabled,
+      mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
 
   BatchReadWordsRequest request {};
   Status status = make_batch_read_words_request("D100", 2, request);
@@ -67,21 +120,26 @@ int main() {
 #include "mcprotocol_serial.hpp"
 
 int main() {
+  using mcprotocol::serial::HardwareFlowControl;
   using mcprotocol::serial::PlcProfile;
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
+  using mcprotocol::serial::SerialParity;
   using mcprotocol::serial::Status;
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
-  PosixSerialConfig serial {};
-  serial.device_path = "/dev/ttyUSB0";
-  serial.baud_rate = 19200;
-  serial.data_bits = 8;
-  serial.stop_bits = 1;
-  serial.parity = 'E';
-  serial.rts_cts = false;
+  const PosixSerialConfig serial(
+      "/dev/ttyUSB0",
+      19200,
+      8,
+      1,
+      SerialParity::Even,
+      HardwareFlowControl::None);
 
-  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(
+      PlcProfile::MelsecQ,
+      mcprotocol::serial::SumCheckMode::Disabled,
+      mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
   PosixSyncClient plc;
   Status status = plc.open(serial, protocol);
   if (!status.ok()) {
@@ -108,19 +166,25 @@ int main() {
 #include "mcprotocol_serial.hpp"
 
 int main() {
+  using mcprotocol::serial::HardwareFlowControl;
   using mcprotocol::serial::PlcProfile;
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
+  using mcprotocol::serial::SerialParity;
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
-  PosixSerialConfig serial {};
-  serial.device_path = "/dev/ttyUSB0";
-  serial.baud_rate = 19200;
-  serial.data_bits = 8;
-  serial.stop_bits = 1;
-  serial.parity = 'E';
+  const PosixSerialConfig serial(
+      "/dev/ttyUSB0",
+      19200,
+      8,
+      1,
+      SerialParity::Even,
+      HardwareFlowControl::None);
   PosixSyncClient plc;
-  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(
+      PlcProfile::MelsecQ,
+      mcprotocol::serial::SumCheckMode::Disabled,
+      mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
   if (!plc.open(serial, protocol).ok()) {
     return 1;
   }
@@ -146,20 +210,26 @@ int main() {
 #include "mcprotocol_serial.hpp"
 
 int main() {
+  using mcprotocol::serial::HardwareFlowControl;
   using mcprotocol::serial::PlcProfile;
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
+  using mcprotocol::serial::SerialParity;
   using mcprotocol::serial::highlevel::RandomWriteWordSpec;
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
-  PosixSerialConfig serial {};
-  serial.device_path = "/dev/ttyUSB0";
-  serial.baud_rate = 19200;
-  serial.data_bits = 8;
-  serial.stop_bits = 1;
-  serial.parity = 'E';
+  const PosixSerialConfig serial(
+      "/dev/ttyUSB0",
+      19200,
+      8,
+      1,
+      SerialParity::Even,
+      HardwareFlowControl::None);
   PosixSyncClient plc;
-  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(
+      PlcProfile::MelsecQ,
+      mcprotocol::serial::SumCheckMode::Disabled,
+      mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
   if (!plc.open(serial, protocol).ok()) {
     return 1;
   }
@@ -190,21 +260,27 @@ int main() {
 
 int main() {
   using mcprotocol::serial::CpuModelInfo;
+  using mcprotocol::serial::HardwareFlowControl;
   using mcprotocol::serial::PlcProfile;
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
   using mcprotocol::serial::RemoteOperationMode;
   using mcprotocol::serial::RemoteRunClearMode;
+  using mcprotocol::serial::SerialParity;
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
-  PosixSerialConfig serial {};
-  serial.device_path = "/dev/ttyUSB0";
-  serial.baud_rate = 19200;
-  serial.data_bits = 8;
-  serial.stop_bits = 1;
-  serial.parity = 'E';
+  const PosixSerialConfig serial(
+      "/dev/ttyUSB0",
+      19200,
+      8,
+      1,
+      SerialParity::Even,
+      HardwareFlowControl::None);
   PosixSyncClient plc;
-  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
+  auto protocol = make_c4_ascii_format4_protocol(
+      PlcProfile::MelsecQ,
+      mcprotocol::serial::SumCheckMode::Disabled,
+      mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
   if (!plc.open(serial, protocol).ok()) {
     return 1;
   }
@@ -264,7 +340,10 @@ int main() {
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   MelsecSerialClient client;
-  const auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
+  const auto protocol = make_c4_ascii_format4_protocol(
+      PlcProfile::MelsecQ,
+      mcprotocol::serial::SumCheckMode::Disabled,
+      mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
   Status status = client.configure(protocol);
   if (!status.ok()) {
     return 1;
@@ -367,11 +446,15 @@ and are not propagated to applications that link it.
 
 ## Serial config reference
 
+`PosixSerialConfig` has no default constructor. All six connection fields are required and are
+validated before the OS serial handle is opened. Values must match the PLC serial module and host
+adapter; the library does not infer or retry a different setting.
+
 | Field | Type | Example | Notes |
 | --- | --- | --- | --- |
 | `device_path` | `std::string_view` | `/dev/ttyUSB0`, `COM3` | Host serial device path. |
 | `baud_rate` | `std::uint32_t` | `19200` | Must match the PLC serial module. |
-| `data_bits` | `std::uint8_t` | `8` | Host quickstart uses 8 data bits. |
-| `stop_bits` | `std::uint8_t` | `2` | Host quickstart uses 2 stop bits. |
-| `parity` | `char` | `'E'` | Use `'N'`, `'E'`, or `'O'` as supported by the host backend. |
-| `rts_cts` | `bool` | `false` | Hardware flow-control flag for host serial ports. |
+| `data_bits` | `std::uint32_t` | `8` | Binary requires 8. ASCII accepts an explicit 7 or 8. |
+| `stop_bits` | `std::uint32_t` | `1` | Explicitly select 1 or 2 to match the module. |
+| `parity` | `SerialParity` | `SerialParity::Even` | Explicitly select `None`, `Even`, or `Odd`. |
+| `hardware_flow_control` | `HardwareFlowControl` | `HardwareFlowControl::None` | Explicitly select `None` or `RtsCts`; this is separate from RS-485 direction control. |

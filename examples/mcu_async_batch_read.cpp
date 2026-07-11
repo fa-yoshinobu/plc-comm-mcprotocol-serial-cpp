@@ -18,8 +18,9 @@ using mcprotocol::serial::MelsecSerialClient;
 using mcprotocol::serial::PlcProfile;
 using mcprotocol::serial::ProtocolConfig;
 using mcprotocol::serial::RouteConfig;
-using mcprotocol::serial::RouteKind;
+using mcprotocol::serial::HostStationRoute;
 using mcprotocol::serial::Status;
+using mcprotocol::serial::SumCheckMode;
 
 struct ExampleApp {
   MelsecSerialClient client;
@@ -40,17 +41,8 @@ ProtocolConfig make_protocol() {
   config.code_mode = CodeMode::Ascii;
   config.ascii_format = AsciiFormat::Format4;
   config.plc_profile = PlcProfile::MelsecQ;
-  config.sum_check_enabled = false;
-  config.route = RouteConfig {
-      .kind = RouteKind::HostStation,
-      .station_no = 0x00,
-      .network_no = 0x00,
-      .pc_no = 0xFF,
-      .request_destination_module_io_no = mcprotocol::serial::module_io::OwnStation,
-      .request_destination_module_station_no = 0x00,
-      .self_station_enabled = false,
-      .self_station_no = 0x00,
-  };
+  config.sum_check_mode = SumCheckMode::Disabled;
+  config.route = RouteConfig {HostStationRoute {}};
   return config;
 }
 

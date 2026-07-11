@@ -28,6 +28,10 @@ namespace mcprotocol::serial {
 #endif
 }
 
+[[nodiscard]] constexpr bool is_sum_check_enabled(const ProtocolConfig& config) noexcept {
+  return config.sum_check_mode == SumCheckMode::Enabled;
+}
+
 }  // namespace mcprotocol::serial
 
 #endif  // MCPROTOCOL_SERIAL_PROTOCOL_PREDICATES_HPP_

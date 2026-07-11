@@ -521,6 +521,9 @@ class MelsecSerialClient {
   void* callback_user_ = nullptr;
   std::uint32_t response_deadline_ms_ = 0;
   std::uint32_t inter_byte_deadline_ms_ = 0;
+  std::uint8_t next_format2_block_number_ = 0;
+  std::uint8_t active_format2_block_number_ = 0;
+  bool active_format2_block_number_valid_ = false;
 
   std::array<std::uint8_t, kMaxRequestFrameBytes> tx_frame_ {};
   std::size_t tx_frame_size_ = 0;

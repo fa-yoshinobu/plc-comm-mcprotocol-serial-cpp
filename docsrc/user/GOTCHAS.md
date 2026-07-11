@@ -36,7 +36,7 @@
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| Only one station responds, or no RS-485 station responds. | `route.station_no` does not match the station number configured on the target serial module. | Set `protocol.route.kind = RouteKind::MultidropStation` and set `protocol.route.station_no` to the target station. For RS-232C point-to-point host-station use, keep station `0`. |
+| Only one station responds, or no RS-485 station responds. | The selected frame-specific multidrop station/network/PC target does not match the target serial module. | Construct the appropriate frame-specific route. For 3C/4C supply a `C34PcTarget`; for 1E supply an `E1PcTarget`. When the connected-station value is correct, select `connected_station()` explicitly. For an RS-232C point-to-point connected station, select `RouteConfig {HostStationRoute {}}`; do not represent it as mutable station or PC values. |
 
 ## `host_sync.hpp` symbol not found
 

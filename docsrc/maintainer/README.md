@@ -14,6 +14,7 @@ This section is not part of the user-facing manual.
 | PLC profile decisions and evidence status | [plc_profiles/README.md](plc_profiles/README.md) |
 | MC serial live error-code observations | [MC_SERIAL_ERROR_CODE_EVIDENCE.md](MC_SERIAL_ERROR_CODE_EVIDENCE.md) |
 | Implementation notes for maintainers | [DEVELOPER_NOTES.md](DEVELOPER_NOTES.md) |
+| 2026-07 quality-overhaul decisions and evidence | [QUALITY_OVERHAUL_20260711.md](QUALITY_OVERHAUL_20260711.md) |
 | Native command check policy | [NATIVE_COMMAND_BACKLOG.md](NATIVE_COMMAND_BACKLOG.md) |
 | Target-dependent command evidence | [TARGET_DEPENDENT_NATIVE_COMMANDS.md](TARGET_DEPENDENT_NATIVE_COMMANDS.md) |
 | Documentation and CI maintenance | [DOCS_AND_CI.md](DOCS_AND_CI.md) |

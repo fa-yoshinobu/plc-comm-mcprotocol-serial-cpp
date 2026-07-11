@@ -133,8 +133,9 @@ framework = arduino
 
 int exercise_core_api() {
   auto protocol = mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(
-      mcprotocol::serial::PlcProfile::MelsecQ);
-  protocol.route.station_no = 0;
+      mcprotocol::serial::PlcProfile::MelsecQ,
+      mcprotocol::serial::SumCheckMode::Disabled,
+      mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
 
   mcprotocol::serial::MelsecSerialClient client;
   const mcprotocol::serial::Status status = client.configure(protocol);

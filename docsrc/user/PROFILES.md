@@ -55,7 +55,9 @@ that exist only in one protocol family are listed as not applicable.
 
 ```cpp
 auto protocol = mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(
-    mcprotocol::serial::PlcProfile::MelsecQ);
+    mcprotocol::serial::PlcProfile::MelsecQ,
+    mcprotocol::serial::SumCheckMode::Disabled,
+    mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
 ```
 
 Or assign the field directly when you build a custom `ProtocolConfig`:
@@ -88,4 +90,6 @@ const char* label = mcprotocol::serial::plc_profile_display_name(profile); // "M
 | `melsec:ana-anu` | Select only when the target should use AnA/AnU command-family selection. |
 | `melsec:a` | Select for A-series-compatible targets; extended file-register ER/EW commands require this profile. |
 
-The profile does not replace serial settings. Baud rate, parity, stop bits, frame type, sum-check behavior, and station number still have to match the PLC serial module.
+The profile does not replace serial settings. Baud rate, parity, stop bits, frame type, sum-check
+behavior, and station number still have to match the PLC serial module. Select sum-check explicitly
+with `SumCheckMode::Enabled` or `SumCheckMode::Disabled`; a named frame preset does not infer it.

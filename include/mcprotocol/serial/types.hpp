@@ -185,6 +185,19 @@ enum class FrameKind : std::uint8_t {
   E1
 };
 
+/// \brief Returns whether `frame_kind` is a defined public frame-family value.
+[[nodiscard]] constexpr bool is_valid_frame_kind(FrameKind frame_kind) noexcept {
+  switch (frame_kind) {
+    case FrameKind::C4:
+    case FrameKind::C3:
+    case FrameKind::C2:
+    case FrameKind::C1:
+    case FrameKind::E1:
+      return true;
+  }
+  return false;
+}
+
 /// \brief Request/response payload encoding.
 enum class CodeMode : std::uint8_t {
   /// Text-encoded command data and response data.
@@ -192,6 +205,16 @@ enum class CodeMode : std::uint8_t {
   /// Compact binary command data and response data.
   Binary
 };
+
+/// \brief Returns whether `code_mode` is a defined public payload-encoding value.
+[[nodiscard]] constexpr bool is_valid_code_mode(CodeMode code_mode) noexcept {
+  switch (code_mode) {
+    case CodeMode::Ascii:
+    case CodeMode::Binary:
+      return true;
+  }
+  return false;
+}
 
 /// \brief ASCII formatting variant for `C4` / `C3` / `C2` serial frames.
 enum class AsciiFormat : std::uint8_t {
@@ -204,6 +227,34 @@ enum class AsciiFormat : std::uint8_t {
   /// CR/LF terminated layout often used by host-facing bring-up tools.
   Format4
 };
+
+/// \brief Explicit sum-check policy for frame families that support configuration.
+enum class SumCheckMode : std::uint8_t {
+  Disabled,
+  Enabled,
+};
+
+/// \brief Returns whether `mode` is a defined public sum-check value.
+[[nodiscard]] constexpr bool is_valid_sum_check_mode(SumCheckMode mode) noexcept {
+  switch (mode) {
+    case SumCheckMode::Disabled:
+    case SumCheckMode::Enabled:
+      return true;
+  }
+  return false;
+}
+
+/// \brief Returns whether `format` is a defined public ASCII framing value.
+[[nodiscard]] constexpr bool is_valid_ascii_format(AsciiFormat format) noexcept {
+  switch (format) {
+    case AsciiFormat::Format1:
+    case AsciiFormat::Format2:
+    case AsciiFormat::Format3:
+    case AsciiFormat::Format4:
+      return true;
+  }
+  return false;
+}
 
 /// \brief PLC family selection used for subcommand and device-layout differences.
 enum class PlcSeries : std::uint8_t {
@@ -376,11 +427,26 @@ enum class PlcProfile : std::uint8_t {
 }
 
 [[nodiscard]] constexpr bool is_plc_profile_specified(PlcProfile profile) noexcept {
-  return profile != PlcProfile::Unspecified;
+  switch (profile) {
+    case PlcProfile::MelsecIqR:
+    case PlcProfile::MelsecIqL:
+    case PlcProfile::MelsecIqF:
+    case PlcProfile::MelsecQ:
+    case PlcProfile::MelsecL:
+    case PlcProfile::MelsecQnA:
+    case PlcProfile::MelsecAnAAnU:
+    case PlcProfile::MelsecA:
+      return true;
+    case PlcProfile::Unspecified:
+      return false;
+  }
+  return false;
 }
 
 /// \brief Route layout inside the request header.
 enum class RouteKind : std::uint8_t {
+  /// No route was selected. This value is observable but cannot encode a request.
+  Unspecified,
   /// Host-station route with fixed `station=0`, `network=0`, `pc=FF`, and local module fields.
   HostStation,
   /// Multidrop/routed route. `1C/2C` use the station fields; `3C/4C` also carry network/PC fields.
@@ -520,28 +586,314 @@ struct TimeoutConfig {
   std::uint32_t inter_byte_timeout_ms = 250;
 };
 
-/// \brief Route header fields for serial MC requests.
+/// \brief Connected host-station route.
 ///
-/// The same struct is shared across `2C`/`3C`/`4C`, `1C`, and `1E`, but not every field is active
-/// on every frame family. `FrameCodec::validate_config()` checks the combinations that are legal for
-/// the selected frame.
-struct RouteConfig {
-  /// Route interpretation used by the selected frame family.
-  RouteKind kind = RouteKind::HostStation;
-  /// Target station number on multidrop serial links.
-  std::uint8_t station_no = 0x00;
-  /// Network number used by routed `3C/4C` requests.
-  std::uint8_t network_no = 0x00;
-  /// PLC number field used by `3C/4C` and legacy frame families.
-  std::uint8_t pc_no = 0xFF;
-  /// Destination I/O number for the target CPU/module in `3C/4C` routing.
-  std::uint16_t request_destination_module_io_no = module_io::OwnStation;
-  /// Destination station number for the target CPU/module in `3C/4C` routing.
-  std::uint8_t request_destination_module_station_no = 0x00;
-  /// Enables self-station routing on frame families that support it.
-  bool self_station_enabled = false;
-  /// Self-station number used when `self_station_enabled` is true.
-  std::uint8_t self_station_no = 0x00;
+/// The connected-station header values are protocol constants and therefore are intentionally not
+/// exposed as mutable inputs.
+struct HostStationRoute {};
+
+/// \brief Meaning of a 3C/4C routed PC target.
+enum class C34PcTargetKind : std::uint8_t {
+  Number,
+  ControlSystem,
+  StandbySystem,
+  SpecialFe,
+  ConnectedStation,
+};
+
+/// \brief Mandatory typed PC target for 3C/4C multidrop routes.
+class C34PcTarget {
+ public:
+  [[nodiscard]] static constexpr C34PcTarget number(std::uint32_t value) noexcept {
+    return C34PcTarget(C34PcTargetKind::Number, value);
+  }
+  [[nodiscard]] static constexpr C34PcTarget control_system() noexcept {
+    return C34PcTarget(C34PcTargetKind::ControlSystem, 0x7DU);
+  }
+  [[nodiscard]] static constexpr C34PcTarget standby_system() noexcept {
+    return C34PcTarget(C34PcTargetKind::StandbySystem, 0x7EU);
+  }
+  [[nodiscard]] static constexpr C34PcTarget special_fe() noexcept {
+    return C34PcTarget(C34PcTargetKind::SpecialFe, 0xFEU);
+  }
+  [[nodiscard]] static constexpr C34PcTarget connected_station() noexcept {
+    return C34PcTarget(C34PcTargetKind::ConnectedStation, 0xFFU);
+  }
+
+  [[nodiscard]] constexpr C34PcTargetKind kind() const noexcept { return kind_; }
+  [[nodiscard]] constexpr std::uint32_t value() const noexcept { return value_; }
+  [[nodiscard]] constexpr bool is_valid() const noexcept {
+    switch (kind_) {
+      case C34PcTargetKind::Number:
+        return value_ >= 0x01U && value_ <= 0x78U;
+      case C34PcTargetKind::ControlSystem:
+        return value_ == 0x7DU;
+      case C34PcTargetKind::StandbySystem:
+        return value_ == 0x7EU;
+      case C34PcTargetKind::SpecialFe:
+        return value_ == 0xFEU;
+      case C34PcTargetKind::ConnectedStation:
+        return value_ == 0xFFU;
+    }
+    return false;
+  }
+
+ private:
+  constexpr C34PcTarget(C34PcTargetKind kind, std::uint32_t value) noexcept
+      : kind_(kind), value_(value) {}
+
+  C34PcTargetKind kind_;
+  std::uint32_t value_;
+};
+
+/// \brief Meaning of a 1E PC target.
+enum class E1PcTargetKind : std::uint8_t {
+  Number,
+  ConnectedStation,
+};
+
+/// \brief Mandatory typed PC target for an explicit 1E route.
+class E1PcTarget {
+ public:
+  [[nodiscard]] static constexpr E1PcTarget number(std::uint32_t value) noexcept {
+    return E1PcTarget(E1PcTargetKind::Number, value);
+  }
+  [[nodiscard]] static constexpr E1PcTarget connected_station() noexcept {
+    return E1PcTarget(E1PcTargetKind::ConnectedStation, 0xFFU);
+  }
+
+  [[nodiscard]] constexpr E1PcTargetKind kind() const noexcept { return kind_; }
+  [[nodiscard]] constexpr std::uint32_t value() const noexcept { return value_; }
+  [[nodiscard]] constexpr bool is_valid() const noexcept {
+    switch (kind_) {
+      case E1PcTargetKind::Number:
+        return value_ >= 0x01U && value_ <= 0x40U;
+      case E1PcTargetKind::ConnectedStation:
+        return value_ == 0xFFU;
+    }
+    return false;
+  }
+
+ private:
+  constexpr E1PcTarget(E1PcTargetKind kind, std::uint32_t value) noexcept
+      : kind_(kind), value_(value) {}
+
+  E1PcTargetKind kind_;
+  std::uint32_t value_;
+};
+
+/// \brief Explicit 1C multidrop route. Network and self-station fields do not exist on this type.
+class C1MultidropRoute {
+ public:
+  constexpr explicit C1MultidropRoute(std::uint32_t station_no) noexcept
+      : station_no_(station_no) {}
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
+
+ private:
+  std::uint32_t station_no_;
+};
+
+/// \brief Explicit 2C multidrop route with a mandatory station number.
+///
+/// The temporary enabled/number pair remains until D-103 replaces it with topology-specific types.
+class C2MultidropRoute {
+ public:
+  constexpr explicit C2MultidropRoute(
+      std::uint32_t station_no,
+      bool self_station_enabled = false,
+      std::uint8_t self_station_no = 0x00U) noexcept
+      : station_no_(station_no),
+        self_station_enabled_(self_station_enabled),
+        self_station_no_(self_station_no) {}
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
+  [[nodiscard]] constexpr bool self_station_enabled() const noexcept {
+    return self_station_enabled_;
+  }
+  [[nodiscard]] constexpr std::uint8_t self_station_no() const noexcept {
+    return self_station_no_;
+  }
+
+ private:
+  std::uint32_t station_no_;
+  bool self_station_enabled_;
+  std::uint8_t self_station_no_;
+};
+
+/// \brief Explicit 3C routed multidrop route with mandatory station and network numbers.
+class C3MultidropRoute {
+ public:
+  constexpr C3MultidropRoute(
+      std::uint32_t station_no,
+      std::uint32_t network_no,
+      C34PcTarget pc_target,
+      bool self_station_enabled = false,
+      std::uint8_t self_station_no = 0x00U) noexcept
+      : station_no_(station_no),
+        network_no_(network_no),
+        pc_target_(pc_target),
+        self_station_enabled_(self_station_enabled),
+        self_station_no_(self_station_no) {}
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
+  [[nodiscard]] constexpr std::uint32_t network_no() const noexcept { return network_no_; }
+  [[nodiscard]] constexpr C34PcTarget pc_target() const noexcept { return pc_target_; }
+  [[nodiscard]] constexpr bool self_station_enabled() const noexcept {
+    return self_station_enabled_;
+  }
+  [[nodiscard]] constexpr std::uint8_t self_station_no() const noexcept {
+    return self_station_no_;
+  }
+
+ private:
+  std::uint32_t station_no_;
+  std::uint32_t network_no_;
+  C34PcTarget pc_target_;
+  bool self_station_enabled_;
+  std::uint8_t self_station_no_;
+};
+
+/// \brief Explicit 4C routed multidrop route with mandatory station and network numbers.
+class C4MultidropRoute {
+ public:
+  constexpr C4MultidropRoute(
+      std::uint32_t station_no,
+      std::uint32_t network_no,
+      C34PcTarget pc_target,
+      std::uint16_t module_io_no = module_io::OwnStation,
+      std::uint8_t module_station_no = 0x00U,
+      bool self_station_enabled = false,
+      std::uint8_t self_station_no = 0x00U) noexcept
+      : station_no_(station_no),
+        network_no_(network_no),
+        pc_target_(pc_target),
+        module_io_no_(module_io_no),
+        module_station_no_(module_station_no),
+        self_station_enabled_(self_station_enabled),
+        self_station_no_(self_station_no) {}
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
+  [[nodiscard]] constexpr std::uint32_t network_no() const noexcept { return network_no_; }
+  [[nodiscard]] constexpr C34PcTarget pc_target() const noexcept { return pc_target_; }
+  [[nodiscard]] constexpr std::uint16_t module_io_no() const noexcept { return module_io_no_; }
+  [[nodiscard]] constexpr std::uint8_t module_station_no() const noexcept {
+    return module_station_no_;
+  }
+  [[nodiscard]] constexpr bool self_station_enabled() const noexcept {
+    return self_station_enabled_;
+  }
+  [[nodiscard]] constexpr std::uint8_t self_station_no() const noexcept {
+    return self_station_no_;
+  }
+
+ private:
+  std::uint32_t station_no_;
+  std::uint32_t network_no_;
+  C34PcTarget pc_target_;
+  std::uint16_t module_io_no_;
+  std::uint8_t module_station_no_;
+  bool self_station_enabled_;
+  std::uint8_t self_station_no_;
+};
+
+/// \brief Explicit non-default 1E route with a mandatory typed PC target.
+class E1Route {
+ public:
+  constexpr explicit E1Route(E1PcTarget pc_target) noexcept : pc_target_(pc_target) {}
+  [[nodiscard]] constexpr E1PcTarget pc_target() const noexcept { return pc_target_; }
+
+ private:
+  E1PcTarget pc_target_;
+};
+
+/// \brief Explicit route selection for a protocol session.
+///
+/// Default construction represents an omitted route and is rejected before request encoding. Use
+/// `RouteConfig {HostStationRoute {}}` or a frame-specific route type explicitly.
+class RouteConfig {
+ public:
+  constexpr RouteConfig() noexcept = default;
+  constexpr explicit RouteConfig(HostStationRoute) noexcept : kind_(RouteKind::HostStation) {}
+  constexpr explicit RouteConfig(C1MultidropRoute route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C1),
+        station_no_(route.station_no()) {}
+  constexpr explicit RouteConfig(C2MultidropRoute route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C2),
+        station_no_(route.station_no()), self_station_enabled_(route.self_station_enabled()),
+        self_station_no_(route.self_station_no()) {}
+  constexpr explicit RouteConfig(C3MultidropRoute route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C3),
+        station_no_(route.station_no()), network_no_(route.network_no()),
+        pc_no_(route.pc_target().value()), pc_target_valid_(route.pc_target().is_valid()),
+        self_station_enabled_(route.self_station_enabled()), self_station_no_(route.self_station_no()) {}
+  constexpr explicit RouteConfig(C4MultidropRoute route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C4),
+        station_no_(route.station_no()), network_no_(route.network_no()),
+        pc_no_(route.pc_target().value()), pc_target_valid_(route.pc_target().is_valid()),
+        module_io_no_(route.module_io_no()), module_station_no_(route.module_station_no()),
+        self_station_enabled_(route.self_station_enabled()), self_station_no_(route.self_station_no()) {}
+  constexpr explicit RouteConfig(E1Route route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::E1),
+        pc_no_(route.pc_target().value()), pc_target_valid_(route.pc_target().is_valid()) {}
+
+  [[nodiscard]] constexpr RouteKind kind() const noexcept { return kind_; }
+  [[nodiscard]] constexpr bool is_specified() const noexcept {
+    return kind_ != RouteKind::Unspecified;
+  }
+  [[nodiscard]] constexpr bool is_host_station() const noexcept {
+    return kind_ == RouteKind::HostStation;
+  }
+  [[nodiscard]] constexpr bool is_multidrop() const noexcept {
+    return kind_ == RouteKind::MultidropStation;
+  }
+  [[nodiscard]] constexpr bool supports_frame(FrameKind frame_kind) const noexcept {
+    return is_host_station() || (is_multidrop() && route_frame_ == frame_kind);
+  }
+
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept {
+    return is_multidrop() ? station_no_ : 0x00U;
+  }
+  [[nodiscard]] constexpr std::uint32_t network_no() const noexcept {
+    return is_multidrop() ? network_no_ : 0x00U;
+  }
+  [[nodiscard]] constexpr std::uint32_t pc_no() const noexcept {
+    return is_multidrop() ? pc_no_ : 0xFFU;
+  }
+  [[nodiscard]] constexpr bool pc_target_valid() const noexcept {
+    return is_host_station() || pc_target_valid_;
+  }
+  [[nodiscard]] constexpr std::uint16_t request_destination_module_io_no() const noexcept {
+    return is_multidrop() ? module_io_no_ : module_io::OwnStation;
+  }
+  [[nodiscard]] constexpr std::uint8_t request_destination_module_station_no() const noexcept {
+    return is_multidrop() ? module_station_no_ : 0x00U;
+  }
+  [[nodiscard]] constexpr bool self_station_enabled() const noexcept {
+    return is_multidrop() && self_station_enabled_;
+  }
+  [[nodiscard]] constexpr std::uint8_t self_station_no() const noexcept {
+    return self_station_enabled() ? self_station_no_ : 0x00U;
+  }
+
+ private:
+  friend class FrameCodec;
+
+  [[nodiscard]] static constexpr RouteConfig c1_wire_route(
+      std::uint8_t station_no,
+      std::uint8_t pc_no) noexcept {
+    RouteConfig route {C1MultidropRoute {station_no}};
+    route.pc_no_ = pc_no;
+    route.pc_target_valid_ = true;
+    return route;
+  }
+
+  RouteKind kind_ = RouteKind::Unspecified;
+  FrameKind route_frame_ = static_cast<FrameKind>(0xFF);
+  std::uint32_t station_no_ = 0x00U;
+  std::uint32_t network_no_ = 0x00U;
+  std::uint32_t pc_no_ = 0xFFU;
+  bool pc_target_valid_ = false;
+  std::uint16_t module_io_no_ = module_io::OwnStation;
+  std::uint8_t module_station_no_ = 0x00U;
+  bool self_station_enabled_ = false;
+  std::uint8_t self_station_no_ = 0x00U;
 };
 
 /// \brief Top-level protocol configuration shared by codecs and client requests.
@@ -553,23 +905,21 @@ struct RouteConfig {
 /// - `CommandCodec` for command subcommand/device-layout differences
 /// - `MelsecSerialClient` and `PosixSyncClient` for runtime request execution
 struct ProtocolConfig {
-  /// Selected serial frame family.
-  FrameKind frame_kind = FrameKind::C4;
-  /// Selected payload encoding inside the frame.
-  CodeMode code_mode = CodeMode::Binary;
-  /// Selected ASCII framing flavor when `code_mode == CodeMode::Ascii`.
-  AsciiFormat ascii_format = AsciiFormat::Format3;
-  /// Block number used only by `ASCII Format2` on `2C/3C/4C`.
-  ///
-  /// The external device chooses this value in the range `0x00..0xFF`. It is ignored by
-  /// `Format1`, `Format3`, `Format4`, binary `Format5`, `1C`, and `1E`.
-  std::uint8_t ascii_block_number = 0x00;
+  /// Selected serial frame family. A named preset or caller must assign a defined value.
+  FrameKind frame_kind = static_cast<FrameKind>(0xFF);
+  /// Selected payload encoding. A named preset or caller must assign a defined value.
+  CodeMode code_mode = static_cast<CodeMode>(0xFF);
+  /// Selected ASCII framing flavor. ASCII callers must assign a defined value.
+  AsciiFormat ascii_format = static_cast<AsciiFormat>(0xFF);
   /// Public PLC profile used to derive frame-family compatibility and device/subcommand layout.
   ///
   /// Applications must set this explicitly before encoding requests or running a client.
   PlcProfile plc_profile = PlcProfile::Unspecified;
-  /// Enables or disables the ASCII/binary sum-check where that frame family supports it.
-  bool sum_check_enabled = true;
+  /// Explicit ASCII/binary sum-check policy where the selected frame family supports it.
+  ///
+  /// The invalid initial value ensures generic aggregate construction cannot silently enable a
+  /// checksum. Use a named protocol preset or assign `Enabled`/`Disabled` explicitly.
+  SumCheckMode sum_check_mode = static_cast<SumCheckMode>(0xFF);
   /// Route header fields used for every encoded request.
   RouteConfig route {};
   /// Request timeout policy used by the async client and stream decoder.
