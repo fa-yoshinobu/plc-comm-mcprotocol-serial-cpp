@@ -314,7 +314,7 @@ Status mcprotocol::serial::CommandCodec::encode_link_direct_batch_write_bits(con
 #### `encode_link_direct_random_read`
 
 ```cpp
-Status mcprotocol::serial::CommandCodec::encode_link_direct_random_read(const ProtocolConfig &config, std::span< const LinkDirectRandomReadItem > items, std::span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
+Status mcprotocol::serial::CommandCodec::encode_link_direct_random_read(const ProtocolConfig &config, std::span< const LinkDirectRandomReadWordItem > word_items, std::span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
 ```
 
 #### `encode_random_read`
@@ -326,13 +326,13 @@ Status mcprotocol::serial::CommandCodec::encode_random_read(const ProtocolConfig
 #### `parse_random_read_response`
 
 ```cpp
-Status mcprotocol::serial::CommandCodec::parse_random_read_response(const ProtocolConfig &config, std::span< const RandomReadItem > items, std::span< const std::uint8_t > response_data, std::span< std::uint32_t > out_values) noexcept
+Status mcprotocol::serial::CommandCodec::parse_random_read_response(const ProtocolConfig &config, const RandomReadRequest &request, std::span< const std::uint8_t > response_data, std::span< std::uint16_t > out_words, std::span< std::uint32_t > out_dwords) noexcept
 ```
 
 #### `encode_random_write_words`
 
 ```cpp
-Status mcprotocol::serial::CommandCodec::encode_random_write_words(const ProtocolConfig &config, std::span< const RandomWriteWordItem > items, std::span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
+Status mcprotocol::serial::CommandCodec::encode_random_write_words(const ProtocolConfig &config, std::span< const RandomWriteWordItem > word_items, std::span< const RandomWriteDWordItem > dword_items, std::span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
 ```
 
 #### `encode_random_write_extended_file_register_words`
@@ -416,7 +416,7 @@ Status mcprotocol::serial::CommandCodec::encode_read_monitor(const ProtocolConfi
 #### `encode_read_monitor`
 
 ```cpp
-Status mcprotocol::serial::CommandCodec::encode_read_monitor(const ProtocolConfig &config, std::span< const RandomReadItem > items, std::span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
+Status mcprotocol::serial::CommandCodec::encode_read_monitor(const ProtocolConfig &config, const MonitorRegistration &registration, std::span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
 ```
 
 #### `encode_read_extended_file_register_monitor`
@@ -428,7 +428,7 @@ Status mcprotocol::serial::CommandCodec::encode_read_extended_file_register_moni
 #### `parse_read_monitor_response`
 
 ```cpp
-Status mcprotocol::serial::CommandCodec::parse_read_monitor_response(const ProtocolConfig &config, std::span< const RandomReadItem > items, std::span< const std::uint8_t > response_data, std::span< std::uint32_t > out_values) noexcept
+Status mcprotocol::serial::CommandCodec::parse_read_monitor_response(const ProtocolConfig &config, const MonitorRegistration &registration, std::span< const std::uint8_t > response_data, std::span< std::uint16_t > out_words, std::span< std::uint32_t > out_dwords) noexcept
 ```
 
 #### `parse_read_extended_file_register_monitor_response`
@@ -703,21 +703,37 @@ Status mcprotocol::serial::highlevel::make_batch_write_bits_request(std::string_
 
 Builds a contiguous bit-write request from a string address such as M100.
 
-#### `make_random_read_item`
+#### `make_random_read_word_item`
 
 ```cpp
-Status mcprotocol::serial::highlevel::make_random_read_item(std::string_view device, RandomReadItem &out_item, bool double_word=false) noexcept
+Status mcprotocol::serial::highlevel::make_random_read_word_item(std::string_view device, RandomReadWordItem &out_item) noexcept
 ```
 
-Builds one sparse random-read item from a string address.
+Builds one explicitly word-width sparse random-read item from a string address.
+
+#### `make_random_read_dword_item`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_random_read_dword_item(std::string_view device, RandomReadDWordItem &out_item) noexcept
+```
+
+Builds one explicitly double-word-width sparse random-read item.
 
 #### `make_random_write_word_item`
 
 ```cpp
-Status mcprotocol::serial::highlevel::make_random_write_word_item(std::string_view device, std::uint32_t value, RandomWriteWordItem &out_item, bool double_word=false) noexcept
+Status mcprotocol::serial::highlevel::make_random_write_word_item(std::string_view device, std::uint16_t value, RandomWriteWordItem &out_item) noexcept
 ```
 
 Builds one sparse random word-write item from a string address.
+
+#### `make_random_write_dword_item`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_random_write_dword_item(std::string_view device, std::uint32_t value, RandomWriteDWordItem &out_item) noexcept
+```
+
+Builds one explicitly double-word-width sparse random write item.
 
 #### `make_random_write_bit_item`
 
@@ -730,17 +746,17 @@ Builds one sparse random bit-write item from a string address.
 #### `make_random_read_request`
 
 ```cpp
-Status mcprotocol::serial::highlevel::make_random_read_request(std::span< const RandomReadSpec > specs, std::span< RandomReadItem > out_items, RandomReadRequest &out_request) noexcept
+Status mcprotocol::serial::highlevel::make_random_read_request(std::span< const RandomReadWordSpec > word_specs, std::span< const RandomReadDWordSpec > dword_specs, std::span< RandomReadWordItem > out_word_items, std::span< RandomReadDWordItem > out_dword_items, RandomReadRequest &out_request) noexcept
 ```
 
 Builds a sparse random-read request from string-address specs.
 
-Use this when you want 0403 style sparse addressing without hand-filling RandomReadItem entries.
+Use this when you want 0403 style sparse addressing without hand-filling the explicit-width Word and DWord item types.
 
 #### `make_monitor_registration`
 
 ```cpp
-Status mcprotocol::serial::highlevel::make_monitor_registration(std::span< const RandomReadSpec > specs, std::span< RandomReadItem > out_items, MonitorRegistration &out_request) noexcept
+Status mcprotocol::serial::highlevel::make_monitor_registration(std::span< const RandomReadWordSpec > word_specs, std::span< const RandomReadDWordSpec > dword_specs, std::span< RandomReadWordItem > out_word_items, std::span< RandomReadDWordItem > out_dword_items, MonitorRegistration &out_request) noexcept
 ```
 
 Builds a sparse monitor registration payload from string-address specs.
@@ -754,6 +770,14 @@ Status mcprotocol::serial::highlevel::make_random_write_word_items(std::span< co
 ```
 
 Builds sparse random word-write items from string-address specs.
+
+#### `make_random_write_dword_items`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_random_write_dword_items(std::span< const RandomWriteDWordSpec > specs, std::span< RandomWriteDWordItem > out_items, std::span< const RandomWriteDWordItem > &out_item_view) noexcept
+```
+
+Builds sparse explicit double-word write items from string-address specs.
 
 #### `make_random_write_bit_items`
 
@@ -797,6 +821,7 @@ Library-level status code returned by encode, decode, transport, and client oper
 | `PlcError` |  |
 | `BufferTooSmall` |  |
 | `Cancelled` |  |
+| `OperationOutcomeUnknown` | A state-changing request may have reached the PLC, but its result was not confirmed. |
 
 #### `SerialParity`
 
@@ -1085,6 +1110,20 @@ Meaning of a 1E PC target.
 | `Number` |  |
 | `ConnectedStation` |  |
 
+#### `C4DestinationModuleKind`
+
+Meaning of a mandatory 4C request-destination module target.
+
+| Value | Description |
+| --- | --- |
+| `OwnStation` |  |
+| `MultipleCpu` |  |
+| `RedundantControlSystemCpu` |  |
+| `RedundantStandbySystemCpu` |  |
+| `RedundantSystemACpu` |  |
+| `RedundantSystemBCpu` |  |
+| `Explicit` |  |
+
 #### Variables And Constants
 
 #### `kMaxRequestFrameBytes`
@@ -1367,9 +1406,9 @@ bool mcprotocol::serial::is_plc_profile_specified(PlcProfile profile) noexcept
 
 ### Namespace `mcprotocol::serial::module_io`
 
-Named request-destination module I/O numbers used by 3C / 4C serial routing.
+Named request-destination module I/O numbers used by 4C serial routing.
 
-RouteConfig::request_destination_module_io_no defaults to OwnStation. The CPU constants are useful when a 3C / 4C request is intentionally routed to a multi-CPU or redundant-CPU target. The serial request header accepts the documented request-destination module I/O number field; common CPU values are 0x03D0..0x03D3, 0x03E0..0x03E3, and own station 0x03FF. Remote-head names are provided as vocabulary aliases for parity with the other plc-comm implementations; do not assume a remote-head route is valid on serial hardware unless the selected module, PLC family, and configuration define it.
+The CPU constants are useful when a 4C request is intentionally routed to a multi-CPU or redundant-CPU target. The serial request header accepts the documented request-destination module I/O number field; common CPU values are 0x03D0..0x03D3, 0x03E0..0x03E3, and own station 0x03FF. Remote-head names are provided as vocabulary aliases for parity with the other plc-comm implementations; do not assume a remote-head route is valid on serial hardware unless the selected module, PLC family, and configuration define it.
 
 #### Variables And Constants
 
@@ -1503,6 +1542,10 @@ Status mcprotocol::serial::MelsecSerialClient::configure(const ProtocolConfig &c
 
 Stores protocol settings and validates the static configuration.
 
+Configures a session, or acknowledges that the caller reset the underlying transport.
+
+When requires_transport_reset() is true, drain/close/reopen the UART transport before calling this again. A successful call clears the flag and allows new requests.
+
 #### `set_rs485_hooks`
 
 ```cpp
@@ -1518,6 +1561,16 @@ bool mcprotocol::serial::MelsecSerialClient::busy() const noexcept
 ```
 
 Returns whether a request is currently in flight.
+
+#### `requires_transport_reset`
+
+```cpp
+bool mcprotocol::serial::MelsecSerialClient::requires_transport_reset() const noexcept
+```
+
+Returns true after an unsequenced timeout until reset plus reconfiguration.
+
+Format2 has a per-request block identity and can discard its own late response. Other frame families cannot safely distinguish a same-route late response from the next request.
 
 #### `pending_tx_frame`
 
@@ -1674,7 +1727,7 @@ Starts helper qualified word write over module-buffer access.
 #### `async_random_read`
 
 ```cpp
-Status mcprotocol::serial::MelsecSerialClient::async_random_read(std::uint32_t now_ms, const RandomReadRequest &request, std::span< std::uint32_t > out_values, CompletionHandler callback, void *user) noexcept
+Status mcprotocol::serial::MelsecSerialClient::async_random_read(std::uint32_t now_ms, const RandomReadRequest &request, std::span< std::uint16_t > out_words, std::span< std::uint32_t > out_dwords, CompletionHandler callback, void *user) noexcept
 ```
 
 Starts native random read (0403).
@@ -1682,7 +1735,7 @@ Starts native random read (0403).
 #### `async_link_direct_random_read`
 
 ```cpp
-Status mcprotocol::serial::MelsecSerialClient::async_link_direct_random_read(std::uint32_t now_ms, std::span< const LinkDirectRandomReadItem > items, std::span< std::uint32_t > out_values, CompletionHandler callback, void *user) noexcept
+Status mcprotocol::serial::MelsecSerialClient::async_link_direct_random_read(std::uint32_t now_ms, std::span< const LinkDirectRandomReadWordItem > word_items, std::span< std::uint16_t > out_words, CompletionHandler callback, void *user) noexcept
 ```
 
 Starts native Jn\\... random read (0403 + device extension specification).
@@ -1690,10 +1743,12 @@ Starts native Jn\\... random read (0403 + device extension specification).
 #### `async_random_write_words`
 
 ```cpp
-Status mcprotocol::serial::MelsecSerialClient::async_random_write_words(std::uint32_t now_ms, std::span< const RandomWriteWordItem > items, CompletionHandler callback, void *user) noexcept
+Status mcprotocol::serial::MelsecSerialClient::async_random_write_words(std::uint32_t now_ms, std::span< const RandomWriteWordItem > word_items, std::span< const RandomWriteDWordItem > dword_items, CompletionHandler callback, void *user) noexcept
 ```
 
 Starts native random word/dword write (1402 word path).
+
+Every item requires an explicit value. Once transmission has started, timeout, cancellation, or an unconfirmed transport failure completes as StatusCode::OperationOutcomeUnknown; the library never retries the write.
 
 #### `async_random_write_extended_file_register_words`
 
@@ -1711,6 +1766,8 @@ Status mcprotocol::serial::MelsecSerialClient::async_link_direct_random_write_wo
 
 Starts native Jn\\... random word write (1402 + device extension specification).
 
+Every item requires an explicit value. An unconfirmed result after transmission is StatusCode::OperationOutcomeUnknown and is never retried automatically.
+
 #### `async_random_write_bits`
 
 ```cpp
@@ -1719,6 +1776,8 @@ Status mcprotocol::serial::MelsecSerialClient::async_random_write_bits(std::uint
 
 Starts native random bit write (1402 bit path).
 
+Every item requires an explicit Off or On. An unconfirmed result after transmission is StatusCode::OperationOutcomeUnknown and is never retried automatically.
+
 #### `async_link_direct_random_write_bits`
 
 ```cpp
@@ -1726,6 +1785,8 @@ Status mcprotocol::serial::MelsecSerialClient::async_link_direct_random_write_bi
 ```
 
 Starts native Jn\\... random bit write (1402 + device extension specification).
+
+Every item requires an explicit Off or On. An unconfirmed result after transmission is StatusCode::OperationOutcomeUnknown and is never retried automatically.
 
 #### `async_multi_block_read`
 
@@ -1788,7 +1849,7 @@ Starts native Jn\\... monitor registration (0801 + device extension specificatio
 #### `async_read_monitor`
 
 ```cpp
-Status mcprotocol::serial::MelsecSerialClient::async_read_monitor(std::uint32_t now_ms, std::span< std::uint32_t > out_values, CompletionHandler callback, void *user) noexcept
+Status mcprotocol::serial::MelsecSerialClient::async_read_monitor(std::uint32_t now_ms, std::span< std::uint16_t > out_words, std::span< std::uint32_t > out_dwords, CompletionHandler callback, void *user) noexcept
 ```
 
 Starts monitor read (0802) using the most recent registration.
@@ -1847,7 +1908,9 @@ Starts CPU-model read.
 Status mcprotocol::serial::MelsecSerialClient::async_remote_run(std::uint32_t now_ms, RemoteOperationMode mode, RemoteRunClearMode clear_mode, CompletionHandler callback, void *user) noexcept
 ```
 
-Starts remote RUN (1001).
+Starts remote RUN (1001) with mandatory conflict and clear policies.
+
+After transmission starts, an unconfirmed transport/timeout result is reported as StatusCode::OperationOutcomeUnknown; the library never retries this command.
 
 #### `async_remote_stop`
 
@@ -1863,7 +1926,9 @@ Starts remote STOP (1002).
 Status mcprotocol::serial::MelsecSerialClient::async_remote_pause(std::uint32_t now_ms, RemoteOperationMode mode, CompletionHandler callback, void *user) noexcept
 ```
 
-Starts remote PAUSE (1003).
+Starts remote PAUSE (1003) with a mandatory conflict policy.
+
+After transmission starts, an unconfirmed transport/timeout result is reported as StatusCode::OperationOutcomeUnknown; the library never retries with another policy.
 
 #### `async_remote_latch_clear`
 
@@ -1905,7 +1970,7 @@ Status mcprotocol::serial::MelsecSerialClient::async_remote_reset(std::uint32_t 
 
 Starts remote RESET (1006).
 
-The manual notes that some targets may reset before returning a response. In that case this client treats a pure response-timeout with no received bytes as success for this operation.
+Completion means the request bytes were transmitted successfully. The command does not wait for a normal response and does not claim that the PLC completed its reset.
 
 #### `async_read_user_frame`
 
@@ -2152,10 +2217,12 @@ Reads the remote CPU model synchronously.
 #### `remote_run`
 
 ```cpp
-Status mcprotocol::serial::PosixSyncClient::remote_run(RemoteOperationMode mode=RemoteOperationMode::DoNotExecuteForcibly, RemoteRunClearMode clear_mode=RemoteRunClearMode::DoNotClear) noexcept
+Status mcprotocol::serial::PosixSyncClient::remote_run(RemoteOperationMode mode, RemoteRunClearMode clear_mode) noexcept
 ```
 
 Issues remote RUN (1001) synchronously.
+
+Both the conflict policy and clear scope are mandatory. If transmission starts but the response cannot be confirmed, this returns StatusCode::OperationOutcomeUnknown.
 
 #### `remote_stop`
 
@@ -2168,10 +2235,12 @@ Issues remote STOP (1002) synchronously.
 #### `remote_pause`
 
 ```cpp
-Status mcprotocol::serial::PosixSyncClient::remote_pause(RemoteOperationMode mode=RemoteOperationMode::DoNotExecuteForcibly) noexcept
+Status mcprotocol::serial::PosixSyncClient::remote_pause(RemoteOperationMode mode) noexcept
 ```
 
 Issues remote PAUSE (1003) synchronously.
+
+The conflict policy is mandatory. If transmission starts but the response cannot be confirmed, this returns StatusCode::OperationOutcomeUnknown.
 
 #### `remote_latch_clear`
 
@@ -2213,7 +2282,7 @@ Status mcprotocol::serial::PosixSyncClient::remote_reset() noexcept
 
 Issues remote RESET (1006) synchronously.
 
-Some targets reset before returning a response. In that case the underlying client treats a pure response-timeout with no received bytes as success for this operation.
+Completion means the request bytes were transmitted successfully. It does not confirm the resulting PLC reset state.
 
 #### `read_user_frame`
 
@@ -2414,18 +2483,26 @@ Use this for profiles whose qualified access route is native device access (1401
 #### `random_read`
 
 ```cpp
-Status mcprotocol::serial::PosixSyncClient::random_read(std::span< const highlevel::RandomReadSpec > items, std::span< std::uint32_t > out_values) noexcept
+Status mcprotocol::serial::PosixSyncClient::random_read(std::span< const highlevel::RandomReadWordSpec > word_items, std::span< const highlevel::RandomReadDWordSpec > dword_items, std::span< std::uint16_t > out_words, std::span< std::uint32_t > out_dwords) noexcept
 ```
 
-Reads sparse word/dword items synchronously from string-address specs.
+Reads sparse Word and DWord items synchronously from explicit-width specs.
 
-#### `random_read`
+#### `random_read_word`
 
 ```cpp
-Status mcprotocol::serial::PosixSyncClient::random_read(std::string_view device, std::uint32_t &out_value, bool double_word=false) noexcept
+Status mcprotocol::serial::PosixSyncClient::random_read_word(std::string_view device, std::uint16_t &out_value) noexcept
 ```
 
-Reads one sparse word/dword item synchronously from a string address.
+Reads one sparse Word item synchronously from a string address.
+
+#### `random_read_dword`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::random_read_dword(std::string_view device, std::uint32_t &out_value) noexcept
+```
+
+Reads one sparse DWord item synchronously from a string address.
 
 #### `random_write_words`
 
@@ -2433,7 +2510,19 @@ Reads one sparse word/dword item synchronously from a string address.
 Status mcprotocol::serial::PosixSyncClient::random_write_words(std::span< const highlevel::RandomWriteWordSpec > items) noexcept
 ```
 
-Writes sparse word/dword items synchronously from string-address specs.
+Writes sparse Word items synchronously from string-address specs.
+
+Each spec requires an explicit value. A result that cannot be confirmed after transmission is reported as StatusCode::OperationOutcomeUnknown and is never retried automatically.
+
+#### `random_write_dwords`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::random_write_dwords(std::span< const highlevel::RandomWriteDWordSpec > items) noexcept
+```
+
+Writes sparse DWord items synchronously from string-address specs.
+
+Each spec requires an explicit value. A result that cannot be confirmed after transmission is reported as StatusCode::OperationOutcomeUnknown and is never retried automatically.
 
 #### `random_write_extended_file_register_words`
 
@@ -2446,10 +2535,18 @@ Writes extended file-register words randomly.
 #### `random_write_word`
 
 ```cpp
-Status mcprotocol::serial::PosixSyncClient::random_write_word(std::string_view device, std::uint32_t value, bool double_word=false) noexcept
+Status mcprotocol::serial::PosixSyncClient::random_write_word(std::string_view device, std::uint16_t value) noexcept
 ```
 
-Writes one sparse word/dword item synchronously from a string address.
+Writes one sparse Word item synchronously from a string address.
+
+#### `random_write_dword`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::random_write_dword(std::string_view device, std::uint32_t value) noexcept
+```
+
+Writes one sparse DWord item synchronously from a string address.
 
 #### `random_write_bits`
 
@@ -2458,6 +2555,8 @@ Status mcprotocol::serial::PosixSyncClient::random_write_bits(std::span< const h
 ```
 
 Writes sparse bit items synchronously from string-address specs.
+
+Each spec requires an explicit Off or On. A result that cannot be confirmed after transmission is StatusCode::OperationOutcomeUnknown and is never retried automatically.
 
 #### `random_write_bit`
 
@@ -2470,18 +2569,26 @@ Writes one sparse bit item synchronously from a string address.
 #### `register_monitor`
 
 ```cpp
-Status mcprotocol::serial::PosixSyncClient::register_monitor(std::span< const highlevel::RandomReadSpec > items) noexcept
+Status mcprotocol::serial::PosixSyncClient::register_monitor(std::span< const highlevel::RandomReadWordSpec > word_items, std::span< const highlevel::RandomReadDWordSpec > dword_items) noexcept
 ```
 
-Registers a sparse monitor synchronously from string-address specs.
+Registers sparse Word and DWord monitor items from explicit-width specs.
 
-#### `register_monitor`
+#### `register_monitor_word`
 
 ```cpp
-Status mcprotocol::serial::PosixSyncClient::register_monitor(std::string_view device, bool double_word=false) noexcept
+Status mcprotocol::serial::PosixSyncClient::register_monitor_word(std::string_view device) noexcept
 ```
 
-Registers one sparse monitor item synchronously from a string address.
+Registers one sparse Word monitor item synchronously.
+
+#### `register_monitor_dword`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::register_monitor_dword(std::string_view device) noexcept
+```
+
+Registers one sparse DWord monitor item synchronously.
 
 #### `register_extended_file_register_monitor`
 
@@ -2494,18 +2601,10 @@ Registers extended file-register monitor data synchronously.
 #### `read_monitor`
 
 ```cpp
-Status mcprotocol::serial::PosixSyncClient::read_monitor(std::span< std::uint32_t > out_values) noexcept
+Status mcprotocol::serial::PosixSyncClient::read_monitor(std::span< std::uint16_t > out_words, std::span< std::uint32_t > out_dwords) noexcept
 ```
 
-Reads the most recently registered monitor items synchronously.
-
-#### `read_monitor`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_monitor(std::uint32_t &out_value) noexcept
-```
-
-Reads one previously registered monitor item synchronously.
+Reads the most recently registered Word and DWord monitor items synchronously.
 
 #### `read_extended_file_register_monitor`
 
@@ -2619,6 +2718,44 @@ Status mcprotocol::serial::PosixSerialPort::set_rts(bool enabled) noexcept
 
 Sets the RTS line when the underlying driver supports it.
 
+### Class `mcprotocol::serial::E1MonitoringTimer`
+
+PLC-side ACPU monitoring timer encoded in 1E requests.
+
+This protocol field is independent of the host communication response timeout. Values are expressed in milliseconds at the public boundary and must be exact 250 ms units representable by the 16-bit wire field. Zero is preserved as the protocol's explicit zero value.
+
+#### Member Functions
+
+#### `E1MonitoringTimer`
+
+```cpp
+mcprotocol::serial::E1MonitoringTimer::E1MonitoringTimer() noexcept=default
+```
+
+#### `milliseconds`
+
+```cpp
+static E1MonitoringTimer mcprotocol::serial::E1MonitoringTimer::milliseconds(std::uint32_t value) noexcept
+```
+
+#### `value_ms`
+
+```cpp
+std::uint32_t mcprotocol::serial::E1MonitoringTimer::value_ms() const noexcept
+```
+
+#### `ticks`
+
+```cpp
+std::uint32_t mcprotocol::serial::E1MonitoringTimer::ticks() const noexcept
+```
+
+#### `is_valid`
+
+```cpp
+bool mcprotocol::serial::E1MonitoringTimer::is_valid() const noexcept
+```
+
 ### Class `mcprotocol::serial::C34PcTarget`
 
 Mandatory typed PC target for 3C/4C multidrop routes.
@@ -2709,6 +2846,108 @@ std::uint32_t mcprotocol::serial::E1PcTarget::value() const noexcept
 bool mcprotocol::serial::E1PcTarget::is_valid() const noexcept
 ```
 
+### Class `mcprotocol::serial::C4DestinationModule`
+
+Mandatory typed request-destination module for a 4C multidrop route.
+
+#### Member Functions
+
+#### `own_station`
+
+```cpp
+static C4DestinationModule mcprotocol::serial::C4DestinationModule::own_station() noexcept
+```
+
+#### `multiple_cpu`
+
+```cpp
+static C4DestinationModule mcprotocol::serial::C4DestinationModule::multiple_cpu(std::uint32_t cpu_number) noexcept
+```
+
+#### `redundant_control_system_cpu`
+
+```cpp
+static C4DestinationModule mcprotocol::serial::C4DestinationModule::redundant_control_system_cpu() noexcept
+```
+
+#### `redundant_standby_system_cpu`
+
+```cpp
+static C4DestinationModule mcprotocol::serial::C4DestinationModule::redundant_standby_system_cpu() noexcept
+```
+
+#### `redundant_system_a_cpu`
+
+```cpp
+static C4DestinationModule mcprotocol::serial::C4DestinationModule::redundant_system_a_cpu() noexcept
+```
+
+#### `redundant_system_b_cpu`
+
+```cpp
+static C4DestinationModule mcprotocol::serial::C4DestinationModule::redundant_system_b_cpu() noexcept
+```
+
+#### `explicit_target`
+
+```cpp
+static C4DestinationModule mcprotocol::serial::C4DestinationModule::explicit_target(std::uint32_t io_number, std::uint32_t station_number) noexcept
+```
+
+#### `kind`
+
+```cpp
+C4DestinationModuleKind mcprotocol::serial::C4DestinationModule::kind() const noexcept
+```
+
+#### `io_number`
+
+```cpp
+std::uint32_t mcprotocol::serial::C4DestinationModule::io_number() const noexcept
+```
+
+#### `station_number`
+
+```cpp
+std::uint32_t mcprotocol::serial::C4DestinationModule::station_number() const noexcept
+```
+
+#### `is_own_station_selector`
+
+```cpp
+bool mcprotocol::serial::C4DestinationModule::is_own_station_selector() const noexcept
+```
+
+#### `is_valid`
+
+```cpp
+bool mcprotocol::serial::C4DestinationModule::is_valid() const noexcept
+```
+
+### Class `mcprotocol::serial::SelfStationNo`
+
+Mandatory request-source station number for an m:n multidrop route.
+
+#### Member Functions
+
+#### `number`
+
+```cpp
+static SelfStationNo mcprotocol::serial::SelfStationNo::number(std::uint32_t value) noexcept
+```
+
+#### `value`
+
+```cpp
+std::uint32_t mcprotocol::serial::SelfStationNo::value() const noexcept
+```
+
+#### `is_valid`
+
+```cpp
+bool mcprotocol::serial::SelfStationNo::is_valid() const noexcept
+```
+
 ### Class `mcprotocol::serial::C1MultidropRoute`
 
 Explicit 1C multidrop route. Network and self-station fields do not exist on this type.
@@ -2727,132 +2966,190 @@ mcprotocol::serial::C1MultidropRoute::C1MultidropRoute(std::uint32_t station_no)
 std::uint32_t mcprotocol::serial::C1MultidropRoute::station_no() const noexcept
 ```
 
-### Class `mcprotocol::serial::C2MultidropRoute`
+### Class `mcprotocol::serial::C2StandardMultidropRoute`
 
-Explicit 2C multidrop route with a mandatory station number.
-
-The temporary enabled/number pair remains until D-103 replaces it with topology-specific types.
+Explicit 2C normal/1:n multidrop route. Self-station is fixed to zero.
 
 #### Member Functions
 
-#### `C2MultidropRoute`
+#### `C2StandardMultidropRoute`
 
 ```cpp
-mcprotocol::serial::C2MultidropRoute::C2MultidropRoute(std::uint32_t station_no, bool self_station_enabled=false, std::uint8_t self_station_no=0x00U) noexcept
+mcprotocol::serial::C2StandardMultidropRoute::C2StandardMultidropRoute(std::uint32_t station_no) noexcept
 ```
 
 #### `station_no`
 
 ```cpp
-std::uint32_t mcprotocol::serial::C2MultidropRoute::station_no() const noexcept
+std::uint32_t mcprotocol::serial::C2StandardMultidropRoute::station_no() const noexcept
 ```
 
-#### `self_station_enabled`
+### Class `mcprotocol::serial::C2MnMultidropRoute`
+
+Explicit 2C m:n multidrop route with a mandatory self-station number.
+
+#### Member Functions
+
+#### `C2MnMultidropRoute`
 
 ```cpp
-bool mcprotocol::serial::C2MultidropRoute::self_station_enabled() const noexcept
+mcprotocol::serial::C2MnMultidropRoute::C2MnMultidropRoute(std::uint32_t station_no, SelfStationNo self_station_no) noexcept
+```
+
+#### `station_no`
+
+```cpp
+std::uint32_t mcprotocol::serial::C2MnMultidropRoute::station_no() const noexcept
 ```
 
 #### `self_station_no`
 
 ```cpp
-std::uint8_t mcprotocol::serial::C2MultidropRoute::self_station_no() const noexcept
+SelfStationNo mcprotocol::serial::C2MnMultidropRoute::self_station_no() const noexcept
 ```
 
-### Class `mcprotocol::serial::C3MultidropRoute`
+### Class `mcprotocol::serial::C3StandardMultidropRoute`
 
-Explicit 3C routed multidrop route with mandatory station and network numbers.
+Explicit 3C normal/1:n multidrop route. Self-station is fixed to zero.
 
 #### Member Functions
 
-#### `C3MultidropRoute`
+#### `C3StandardMultidropRoute`
 
 ```cpp
-mcprotocol::serial::C3MultidropRoute::C3MultidropRoute(std::uint32_t station_no, std::uint32_t network_no, C34PcTarget pc_target, bool self_station_enabled=false, std::uint8_t self_station_no=0x00U) noexcept
+mcprotocol::serial::C3StandardMultidropRoute::C3StandardMultidropRoute(std::uint32_t station_no, std::uint32_t network_no, C34PcTarget pc_target) noexcept
 ```
 
 #### `station_no`
 
 ```cpp
-std::uint32_t mcprotocol::serial::C3MultidropRoute::station_no() const noexcept
+std::uint32_t mcprotocol::serial::C3StandardMultidropRoute::station_no() const noexcept
 ```
 
 #### `network_no`
 
 ```cpp
-std::uint32_t mcprotocol::serial::C3MultidropRoute::network_no() const noexcept
+std::uint32_t mcprotocol::serial::C3StandardMultidropRoute::network_no() const noexcept
 ```
 
 #### `pc_target`
 
 ```cpp
-C34PcTarget mcprotocol::serial::C3MultidropRoute::pc_target() const noexcept
+C34PcTarget mcprotocol::serial::C3StandardMultidropRoute::pc_target() const noexcept
 ```
 
-#### `self_station_enabled`
+### Class `mcprotocol::serial::C3MnMultidropRoute`
 
-```cpp
-bool mcprotocol::serial::C3MultidropRoute::self_station_enabled() const noexcept
-```
-
-#### `self_station_no`
-
-```cpp
-std::uint8_t mcprotocol::serial::C3MultidropRoute::self_station_no() const noexcept
-```
-
-### Class `mcprotocol::serial::C4MultidropRoute`
-
-Explicit 4C routed multidrop route with mandatory station and network numbers.
+Explicit 3C m:n multidrop route with a mandatory self-station number.
 
 #### Member Functions
 
-#### `C4MultidropRoute`
+#### `C3MnMultidropRoute`
 
 ```cpp
-mcprotocol::serial::C4MultidropRoute::C4MultidropRoute(std::uint32_t station_no, std::uint32_t network_no, C34PcTarget pc_target, std::uint16_t module_io_no=module_io::OwnStation, std::uint8_t module_station_no=0x00U, bool self_station_enabled=false, std::uint8_t self_station_no=0x00U) noexcept
+mcprotocol::serial::C3MnMultidropRoute::C3MnMultidropRoute(std::uint32_t station_no, std::uint32_t network_no, C34PcTarget pc_target, SelfStationNo self_station_no) noexcept
 ```
 
 #### `station_no`
 
 ```cpp
-std::uint32_t mcprotocol::serial::C4MultidropRoute::station_no() const noexcept
+std::uint32_t mcprotocol::serial::C3MnMultidropRoute::station_no() const noexcept
 ```
 
 #### `network_no`
 
 ```cpp
-std::uint32_t mcprotocol::serial::C4MultidropRoute::network_no() const noexcept
+std::uint32_t mcprotocol::serial::C3MnMultidropRoute::network_no() const noexcept
 ```
 
 #### `pc_target`
 
 ```cpp
-C34PcTarget mcprotocol::serial::C4MultidropRoute::pc_target() const noexcept
-```
-
-#### `module_io_no`
-
-```cpp
-std::uint16_t mcprotocol::serial::C4MultidropRoute::module_io_no() const noexcept
-```
-
-#### `module_station_no`
-
-```cpp
-std::uint8_t mcprotocol::serial::C4MultidropRoute::module_station_no() const noexcept
-```
-
-#### `self_station_enabled`
-
-```cpp
-bool mcprotocol::serial::C4MultidropRoute::self_station_enabled() const noexcept
+C34PcTarget mcprotocol::serial::C3MnMultidropRoute::pc_target() const noexcept
 ```
 
 #### `self_station_no`
 
 ```cpp
-std::uint8_t mcprotocol::serial::C4MultidropRoute::self_station_no() const noexcept
+SelfStationNo mcprotocol::serial::C3MnMultidropRoute::self_station_no() const noexcept
+```
+
+### Class `mcprotocol::serial::C4StandardMultidropRoute`
+
+Explicit 4C normal/1:n multidrop route. Self-station is fixed to zero.
+
+#### Member Functions
+
+#### `C4StandardMultidropRoute`
+
+```cpp
+mcprotocol::serial::C4StandardMultidropRoute::C4StandardMultidropRoute(std::uint32_t station_no, std::uint32_t network_no, C34PcTarget pc_target, C4DestinationModule destination_module) noexcept
+```
+
+#### `station_no`
+
+```cpp
+std::uint32_t mcprotocol::serial::C4StandardMultidropRoute::station_no() const noexcept
+```
+
+#### `network_no`
+
+```cpp
+std::uint32_t mcprotocol::serial::C4StandardMultidropRoute::network_no() const noexcept
+```
+
+#### `pc_target`
+
+```cpp
+C34PcTarget mcprotocol::serial::C4StandardMultidropRoute::pc_target() const noexcept
+```
+
+#### `destination_module`
+
+```cpp
+C4DestinationModule mcprotocol::serial::C4StandardMultidropRoute::destination_module() const noexcept
+```
+
+### Class `mcprotocol::serial::C4MnMultidropRoute`
+
+Explicit 4C m:n multidrop route with a mandatory self-station number.
+
+#### Member Functions
+
+#### `C4MnMultidropRoute`
+
+```cpp
+mcprotocol::serial::C4MnMultidropRoute::C4MnMultidropRoute(std::uint32_t station_no, std::uint32_t network_no, C34PcTarget pc_target, C4DestinationModule destination_module, SelfStationNo self_station_no) noexcept
+```
+
+#### `station_no`
+
+```cpp
+std::uint32_t mcprotocol::serial::C4MnMultidropRoute::station_no() const noexcept
+```
+
+#### `network_no`
+
+```cpp
+std::uint32_t mcprotocol::serial::C4MnMultidropRoute::network_no() const noexcept
+```
+
+#### `pc_target`
+
+```cpp
+C34PcTarget mcprotocol::serial::C4MnMultidropRoute::pc_target() const noexcept
+```
+
+#### `destination_module`
+
+```cpp
+C4DestinationModule mcprotocol::serial::C4MnMultidropRoute::destination_module() const noexcept
+```
+
+#### `self_station_no`
+
+```cpp
+SelfStationNo mcprotocol::serial::C4MnMultidropRoute::self_station_no() const noexcept
 ```
 
 ### Class `mcprotocol::serial::E1Route`
@@ -2902,19 +3199,37 @@ mcprotocol::serial::RouteConfig::RouteConfig(C1MultidropRoute route) noexcept
 #### `RouteConfig`
 
 ```cpp
-mcprotocol::serial::RouteConfig::RouteConfig(C2MultidropRoute route) noexcept
+mcprotocol::serial::RouteConfig::RouteConfig(C2StandardMultidropRoute route) noexcept
 ```
 
 #### `RouteConfig`
 
 ```cpp
-mcprotocol::serial::RouteConfig::RouteConfig(C3MultidropRoute route) noexcept
+mcprotocol::serial::RouteConfig::RouteConfig(C2MnMultidropRoute route) noexcept
 ```
 
 #### `RouteConfig`
 
 ```cpp
-mcprotocol::serial::RouteConfig::RouteConfig(C4MultidropRoute route) noexcept
+mcprotocol::serial::RouteConfig::RouteConfig(C3StandardMultidropRoute route) noexcept
+```
+
+#### `RouteConfig`
+
+```cpp
+mcprotocol::serial::RouteConfig::RouteConfig(C3MnMultidropRoute route) noexcept
+```
+
+#### `RouteConfig`
+
+```cpp
+mcprotocol::serial::RouteConfig::RouteConfig(C4StandardMultidropRoute route) noexcept
+```
+
+#### `RouteConfig`
+
+```cpp
+mcprotocol::serial::RouteConfig::RouteConfig(C4MnMultidropRoute route) noexcept
 ```
 
 #### `RouteConfig`
@@ -2980,25 +3295,43 @@ bool mcprotocol::serial::RouteConfig::pc_target_valid() const noexcept
 #### `request_destination_module_io_no`
 
 ```cpp
-std::uint16_t mcprotocol::serial::RouteConfig::request_destination_module_io_no() const noexcept
+std::uint32_t mcprotocol::serial::RouteConfig::request_destination_module_io_no() const noexcept
 ```
 
 #### `request_destination_module_station_no`
 
 ```cpp
-std::uint8_t mcprotocol::serial::RouteConfig::request_destination_module_station_no() const noexcept
+std::uint32_t mcprotocol::serial::RouteConfig::request_destination_module_station_no() const noexcept
 ```
 
-#### `self_station_enabled`
+#### `destination_module_valid`
 
 ```cpp
-bool mcprotocol::serial::RouteConfig::self_station_enabled() const noexcept
+bool mcprotocol::serial::RouteConfig::destination_module_valid() const noexcept
+```
+
+#### `destination_module_is_own_station`
+
+```cpp
+bool mcprotocol::serial::RouteConfig::destination_module_is_own_station() const noexcept
+```
+
+#### `is_mn_multidrop`
+
+```cpp
+bool mcprotocol::serial::RouteConfig::is_mn_multidrop() const noexcept
 ```
 
 #### `self_station_no`
 
 ```cpp
-std::uint8_t mcprotocol::serial::RouteConfig::self_station_no() const noexcept
+std::uint32_t mcprotocol::serial::RouteConfig::self_station_no() const noexcept
+```
+
+#### `self_station_valid`
+
+```cpp
+bool mcprotocol::serial::RouteConfig::self_station_valid() const noexcept
 ```
 
 ## Structs
@@ -3087,7 +3420,7 @@ bool mcprotocol::serial::DecodeResult::response_identity_mismatch = false
 
 True when a complete response belongs to a different Format2 or route identity.
 
-### Struct `mcprotocol::serial::highlevel::RandomReadSpec`
+### Struct `mcprotocol::serial::highlevel::RandomReadWordSpec`
 
 String-address spec used to build sparse random-read or monitor requests.
 
@@ -3096,29 +3429,37 @@ String-address spec used to build sparse random-read or monitor requests.
 #### `device`
 
 ```cpp
-std::string_view mcprotocol::serial::highlevel::RandomReadSpec::device {}
+std::string_view mcprotocol::serial::highlevel::RandomReadWordSpec::device {}
 ```
 
-Plain device string such as D100, LZ0, or LCN10.
+Plain device string such as D100 selected explicitly as 16-bit.
 
-#### `double_word`
+### Struct `mcprotocol::serial::highlevel::RandomReadDWordSpec`
 
-```cpp
-bool mcprotocol::serial::highlevel::RandomReadSpec::double_word = false
-```
-
-true when the target should be encoded as a double-word sparse item.
-
-### Struct `mcprotocol::serial::highlevel::RandomWriteWordSpec`
-
-String-address spec used to build sparse random word-write items.
+String-address spec selected explicitly for 32-bit sparse read/monitor access.
 
 #### Fields
 
 #### `device`
 
 ```cpp
-std::string_view mcprotocol::serial::highlevel::RandomWriteWordSpec::device {}
+std::string_view mcprotocol::serial::highlevel::RandomReadDWordSpec::device {}
+```
+
+Plain device string such as D100, LZ0, or LCN10 selected explicitly as 32-bit.
+
+### Struct `mcprotocol::serial::highlevel::RandomWriteWordSpec`
+
+String-address spec used to build sparse random word-write items.
+
+Device and value must be supplied together. Explicit zero is valid.
+
+#### Fields
+
+#### `device`
+
+```cpp
+std::string_view mcprotocol::serial::highlevel::RandomWriteWordSpec::device
 ```
 
 Plain device string such as D100 or LZ0.
@@ -3126,29 +3467,75 @@ Plain device string such as D100 or LZ0.
 #### `value`
 
 ```cpp
-std::uint32_t mcprotocol::serial::highlevel::RandomWriteWordSpec::value = 0
+std::uint16_t mcprotocol::serial::highlevel::RandomWriteWordSpec::value
 ```
 
-Word or double-word value written to device.
+Explicit 16-bit word value written to device.
 
-#### `double_word`
+#### Member Functions
+
+#### `RandomWriteWordSpec`
 
 ```cpp
-bool mcprotocol::serial::highlevel::RandomWriteWordSpec::double_word = false
+mcprotocol::serial::highlevel::RandomWriteWordSpec::RandomWriteWordSpec()=delete
 ```
 
-true when the item should be encoded as a double-word sparse write.
+#### `RandomWriteWordSpec`
 
-### Struct `mcprotocol::serial::highlevel::RandomWriteBitSpec`
+```cpp
+mcprotocol::serial::highlevel::RandomWriteWordSpec::RandomWriteWordSpec(std::string_view target_device, std::uint16_t write_value) noexcept
+```
 
-String-address spec used to build sparse random bit-write items.
+### Struct `mcprotocol::serial::highlevel::RandomWriteDWordSpec`
+
+String-address spec used to build an explicit double-word sparse write item.
+
+Device and value must be supplied together. Explicit zero is valid.
 
 #### Fields
 
 #### `device`
 
 ```cpp
-std::string_view mcprotocol::serial::highlevel::RandomWriteBitSpec::device {}
+std::string_view mcprotocol::serial::highlevel::RandomWriteDWordSpec::device
+```
+
+Plain device string such as D100 or LZ0.
+
+#### `value`
+
+```cpp
+std::uint32_t mcprotocol::serial::highlevel::RandomWriteDWordSpec::value
+```
+
+Explicit 32-bit double-word value written to device.
+
+#### Member Functions
+
+#### `RandomWriteDWordSpec`
+
+```cpp
+mcprotocol::serial::highlevel::RandomWriteDWordSpec::RandomWriteDWordSpec()=delete
+```
+
+#### `RandomWriteDWordSpec`
+
+```cpp
+mcprotocol::serial::highlevel::RandomWriteDWordSpec::RandomWriteDWordSpec(std::string_view target_device, std::uint32_t write_value) noexcept
+```
+
+### Struct `mcprotocol::serial::highlevel::RandomWriteBitSpec`
+
+String-address spec used to build sparse random bit-write items.
+
+Device and value must be supplied together. Explicit Off is valid.
+
+#### Fields
+
+#### `device`
+
+```cpp
+std::string_view mcprotocol::serial::highlevel::RandomWriteBitSpec::device
 ```
 
 Plain bit-device string such as M100 or X10.
@@ -3156,10 +3543,24 @@ Plain bit-device string such as M100 or X10.
 #### `value`
 
 ```cpp
-BitValue mcprotocol::serial::highlevel::RandomWriteBitSpec::value = BitValue::Off
+BitValue mcprotocol::serial::highlevel::RandomWriteBitSpec::value
 ```
 
 Bit value written to device.
+
+#### Member Functions
+
+#### `RandomWriteBitSpec`
+
+```cpp
+mcprotocol::serial::highlevel::RandomWriteBitSpec::RandomWriteBitSpec()=delete
+```
+
+#### `RandomWriteBitSpec`
+
+```cpp
+mcprotocol::serial::highlevel::RandomWriteBitSpec::RandomWriteBitSpec(std::string_view target_device, BitValue write_value) noexcept
+```
 
 ### Struct `mcprotocol::serial::highlevel::LongStateReadSpec`
 
@@ -3225,7 +3626,7 @@ std::uint16_t mcprotocol::serial::LinkDirectDevice::network_number = 0
 DeviceAddress mcprotocol::serial::LinkDirectDevice::device {}
 ```
 
-### Struct `mcprotocol::serial::LinkDirectRandomReadItem`
+### Struct `mcprotocol::serial::LinkDirectRandomReadWordItem`
 
 One sparse Jn\\... item used by native random-read and monitor registration.
 
@@ -3234,55 +3635,75 @@ One sparse Jn\\... item used by native random-read and monitor registration.
 #### `device`
 
 ```cpp
-LinkDirectDevice mcprotocol::serial::LinkDirectRandomReadItem::device {}
-```
-
-#### `double_word`
-
-```cpp
-bool mcprotocol::serial::LinkDirectRandomReadItem::double_word = false
+LinkDirectDevice mcprotocol::serial::LinkDirectRandomReadWordItem::device {}
 ```
 
 ### Struct `mcprotocol::serial::LinkDirectRandomWriteWordItem`
 
 One sparse Jn\\... word item used by native random word-write.
 
+Device and value must be supplied together. Explicit zero is valid.
+
 #### Fields
 
 #### `device`
 
 ```cpp
-LinkDirectDevice mcprotocol::serial::LinkDirectRandomWriteWordItem::device {}
+LinkDirectDevice mcprotocol::serial::LinkDirectRandomWriteWordItem::device
 ```
 
 #### `value`
 
 ```cpp
-std::uint32_t mcprotocol::serial::LinkDirectRandomWriteWordItem::value = 0
+std::uint16_t mcprotocol::serial::LinkDirectRandomWriteWordItem::value
 ```
 
-#### `double_word`
+#### Member Functions
+
+#### `LinkDirectRandomWriteWordItem`
 
 ```cpp
-bool mcprotocol::serial::LinkDirectRandomWriteWordItem::double_word = false
+mcprotocol::serial::LinkDirectRandomWriteWordItem::LinkDirectRandomWriteWordItem()=delete
+```
+
+#### `LinkDirectRandomWriteWordItem`
+
+```cpp
+mcprotocol::serial::LinkDirectRandomWriteWordItem::LinkDirectRandomWriteWordItem(LinkDirectDevice target_device, std::uint16_t write_value) noexcept
 ```
 
 ### Struct `mcprotocol::serial::LinkDirectRandomWriteBitItem`
 
 One sparse Jn\\... bit item used by native random bit-write.
 
+Device and value must be supplied together. Explicit Off is valid.
+
 #### Fields
 
 #### `device`
 
 ```cpp
-LinkDirectDevice mcprotocol::serial::LinkDirectRandomWriteBitItem::device {}
+LinkDirectDevice mcprotocol::serial::LinkDirectRandomWriteBitItem::device
 ```
 
 #### `value`
 
 ```cpp
-BitValue mcprotocol::serial::LinkDirectRandomWriteBitItem::value = BitValue::Off
+BitValue mcprotocol::serial::LinkDirectRandomWriteBitItem::value
+```
+
+#### Member Functions
+
+#### `LinkDirectRandomWriteBitItem`
+
+```cpp
+mcprotocol::serial::LinkDirectRandomWriteBitItem::LinkDirectRandomWriteBitItem()=delete
+```
+
+#### `LinkDirectRandomWriteBitItem`
+
+```cpp
+mcprotocol::serial::LinkDirectRandomWriteBitItem::LinkDirectRandomWriteBitItem(LinkDirectDevice target_device, BitValue write_value) noexcept
 ```
 
 ### Struct `mcprotocol::serial::LinkDirectMultiBlockReadBlock`
@@ -3375,10 +3796,10 @@ Jn\\... monitor registration payload (0801 + device extension specification).
 
 #### Fields
 
-#### `items`
+#### `word_items`
 
 ```cpp
-std::span<const LinkDirectRandomReadItem> mcprotocol::serial::LinkDirectMonitorRegistration::items {}
+std::span<const LinkDirectRandomReadWordItem> mcprotocol::serial::LinkDirectMonitorRegistration::word_items {}
 ```
 
 ### Struct `mcprotocol::serial::PosixSerialConfig`
@@ -3503,14 +3924,14 @@ Timeout settings used by the frame decoder and async client.
 
 These values are transport-facing rather than command-facing:
 
-- response_timeout_ms is the total request timeout once TX finishes - inter_byte_timeout_ms is the gap timeout while RX is already in progress
+- response_timeout_ms is the total request timeout once TX finishes - inter_byte_timeout_ms is RX inactivity after the library receives a response byte/chunk; one OS/UART callback may contain multiple physical bytes whose internal spacing is unobservable
 
 #### Fields
 
 #### `response_timeout_ms`
 
 ```cpp
-std::uint32_t mcprotocol::serial::TimeoutConfig::response_timeout_ms = 5000
+std::uint32_t mcprotocol::serial::TimeoutConfig::response_timeout_ms = 3000
 ```
 
 Maximum wait after TX completion before the request is treated as timed out.
@@ -3521,7 +3942,7 @@ Maximum wait after TX completion before the request is treated as timed out.
 std::uint32_t mcprotocol::serial::TimeoutConfig::inter_byte_timeout_ms = 250
 ```
 
-Maximum allowed idle gap between RX bytes once a response has started.
+Maximum RX inactivity after a response byte/chunk; defaults to 250 ms.
 
 ### Struct `mcprotocol::serial::HostStationRoute`
 
@@ -3598,6 +4019,14 @@ TimeoutConfig mcprotocol::serial::ProtocolConfig::timeout {}
 ```
 
 Request timeout policy used by the async client and stream decoder.
+
+#### `e1_monitoring_timer`
+
+```cpp
+E1MonitoringTimer mcprotocol::serial::ProtocolConfig::e1_monitoring_timer {}
+```
+
+PLC-side processing timer used only by 1E request frames; defaults to 4 seconds.
 
 ### Struct `mcprotocol::serial::DeviceAddress`
 
@@ -3855,50 +4284,66 @@ std::span<const ExtendedFileRegisterAddress> mcprotocol::serial::ExtendedFileReg
 
 Sparse list of block-addressed file-register items to register for monitoring.
 
-### Struct `mcprotocol::serial::RandomReadItem`
+### Struct `mcprotocol::serial::RandomReadWordItem`
 
 #### Fields
 
 #### `device`
 
 ```cpp
-DeviceAddress mcprotocol::serial::RandomReadItem::device {}
+DeviceAddress mcprotocol::serial::RandomReadWordItem::device {}
 ```
 
-Target device address for this sparse item.
+Target device address read as one 16-bit word (bit devices return a 16-point mask word).
 
-#### `double_word`
+### Struct `mcprotocol::serial::RandomReadDWordItem`
+
+One explicitly double-word-width item in a native random-read or monitor request.
+
+#### Fields
+
+#### `device`
 
 ```cpp
-bool mcprotocol::serial::RandomReadItem::double_word = false
+DeviceAddress mcprotocol::serial::RandomReadDWordItem::device {}
 ```
 
-true when the item should be encoded as a double-word device access.
+Target device address read as one 32-bit double word.
 
 ### Struct `mcprotocol::serial::RandomReadRequest`
 
-Native random-read request made of sparse word/dword items.
+Native random-read request with separate word and double-word domains.
 
 #### Fields
 
-#### `items`
+#### `word_items`
 
 ```cpp
-std::span<const RandomReadItem> mcprotocol::serial::RandomReadRequest::items {}
+std::span<const RandomReadWordItem> mcprotocol::serial::RandomReadRequest::word_items {}
 ```
 
-Sparse word/dword items encoded in the native random-read request.
+Sparse 16-bit items, encoded first and returned through the word output span.
+
+#### `dword_items`
+
+```cpp
+std::span<const RandomReadDWordItem> mcprotocol::serial::RandomReadRequest::dword_items {}
+```
+
+Sparse 32-bit items, encoded second and returned through the dword output span.
 
 ### Struct `mcprotocol::serial::RandomWriteWordItem`
 
-One word or double-word item inside native random write (1402 word path).
+One explicitly word-width item inside native random write (1402 word path).
+
+Device and value are a single construction boundary. Explicit zero is valid; omission is not.
 
 #### Fields
 
 #### `device`
 
 ```cpp
-DeviceAddress mcprotocol::serial::RandomWriteWordItem::device {}
+DeviceAddress mcprotocol::serial::RandomWriteWordItem::device
 ```
 
 Target device address for the sparse write.
@@ -3906,29 +4351,75 @@ Target device address for the sparse write.
 #### `value`
 
 ```cpp
-std::uint32_t mcprotocol::serial::RandomWriteWordItem::value = 0
+std::uint16_t mcprotocol::serial::RandomWriteWordItem::value
 ```
 
-One word or double-word value to write.
+One 16-bit word value to write.
 
-#### `double_word`
+#### Member Functions
+
+#### `RandomWriteWordItem`
 
 ```cpp
-bool mcprotocol::serial::RandomWriteWordItem::double_word = false
+mcprotocol::serial::RandomWriteWordItem::RandomWriteWordItem()=delete
 ```
 
-true when the target is encoded as a double-word write item.
+#### `RandomWriteWordItem`
 
-### Struct `mcprotocol::serial::RandomWriteBitItem`
+```cpp
+mcprotocol::serial::RandomWriteWordItem::RandomWriteWordItem(DeviceAddress target_device, std::uint16_t write_value) noexcept
+```
 
-One bit item inside native random write (1402 bit path).
+### Struct `mcprotocol::serial::RandomWriteDWordItem`
+
+One explicitly double-word-width item inside native random write (1402 word path).
+
+Device and value are a single construction boundary. Explicit zero is valid; omission is not.
 
 #### Fields
 
 #### `device`
 
 ```cpp
-DeviceAddress mcprotocol::serial::RandomWriteBitItem::device {}
+DeviceAddress mcprotocol::serial::RandomWriteDWordItem::device
+```
+
+Target device address for the sparse write.
+
+#### `value`
+
+```cpp
+std::uint32_t mcprotocol::serial::RandomWriteDWordItem::value
+```
+
+One 32-bit double-word value to write.
+
+#### Member Functions
+
+#### `RandomWriteDWordItem`
+
+```cpp
+mcprotocol::serial::RandomWriteDWordItem::RandomWriteDWordItem()=delete
+```
+
+#### `RandomWriteDWordItem`
+
+```cpp
+mcprotocol::serial::RandomWriteDWordItem::RandomWriteDWordItem(DeviceAddress target_device, std::uint32_t write_value) noexcept
+```
+
+### Struct `mcprotocol::serial::RandomWriteBitItem`
+
+One bit item inside native random write (1402 bit path).
+
+Device and value are a single construction boundary. Explicit Off is valid; omission and unknown enum values are rejected.
+
+#### Fields
+
+#### `device`
+
+```cpp
+DeviceAddress mcprotocol::serial::RandomWriteBitItem::device
 ```
 
 Target bit device address for the sparse write.
@@ -3936,10 +4427,24 @@ Target bit device address for the sparse write.
 #### `value`
 
 ```cpp
-BitValue mcprotocol::serial::RandomWriteBitItem::value = BitValue::Off
+BitValue mcprotocol::serial::RandomWriteBitItem::value
 ```
 
 Bit value written to device.
+
+#### Member Functions
+
+#### `RandomWriteBitItem`
+
+```cpp
+mcprotocol::serial::RandomWriteBitItem::RandomWriteBitItem()=delete
+```
+
+#### `RandomWriteBitItem`
+
+```cpp
+mcprotocol::serial::RandomWriteBitItem::RandomWriteBitItem(DeviceAddress target_device, BitValue write_value) noexcept
+```
 
 ### Struct `mcprotocol::serial::MultiBlockReadBlock`
 
@@ -4095,13 +4600,21 @@ Number of entries contributed by this block to the aggregate output storage.
 
 #### Fields
 
-#### `items`
+#### `word_items`
 
 ```cpp
-std::span<const RandomReadItem> mcprotocol::serial::MonitorRegistration::items {}
+std::span<const RandomReadWordItem> mcprotocol::serial::MonitorRegistration::word_items {}
 ```
 
-Sparse list of word/dword items to register for a later 0802 read.
+Sparse 16-bit items registered first.
+
+#### `dword_items`
+
+```cpp
+std::span<const RandomReadDWordItem> mcprotocol::serial::MonitorRegistration::dword_items {}
+```
+
+Sparse 32-bit items registered second. Unsupported for 1C and 1E monitor commands.
 
 ### Struct `mcprotocol::serial::UserFrameReadRequest`
 

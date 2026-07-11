@@ -367,11 +367,10 @@ Acceptance criteria:
 4. Timeout, NAK, parse failure, and no-response paths do not retry with another route.
 
 Progress: implementation completed. `RouteConfig {}` is invalid; valid construction uses
-`HostStationRoute`, `C1MultidropRoute`, `C2MultidropRoute`, `C3MultidropRoute`,
-`C4MultidropRoute`, or `E1Route`. Inactive frame fields do not exist on C1/C2/C3 types, wrong-frame
-route types are rejected, every C4 preset requires a route, and CLI route selection is explicit.
-D-101..D-103 remain separate for typed PC/module/self-station selectors and constraints; D-101 is
-now implemented below.
+`HostStationRoute`, `C1MultidropRoute`, the topology-specific 2C/3C/4C route types, or `E1Route`.
+Inactive frame fields do not exist on frame-specific types, wrong-frame route types are rejected,
+every preset requires a route, and CLI route selection is explicit. D-101..D-103 refine this route
+contract with mandatory typed PC, destination-module, topology, and self-station inputs.
 
 - [x] Implementation completed in this repository.
 - [x] Tests added or updated for every acceptance criterion.
@@ -477,9 +476,432 @@ universally valid topology meaning.
   behavior are deterministic contracts; existing hardware support evidence is unchanged).
 - [ ] Documentation and final acceptance agree with the completed implementation.
 
+## D-102: mandatory typed 4C destination module
+
+Scope: 4C multidrop and HostStation route types, 1C/2C/3C/1E inactive fields, ASCII/binary
+encoders and decoders, connected-only command validation, client response isolation, presets,
+CLI/scripts, tests, generated API reference, migration notes, and user documentation.
+
+Target contract: every 4C multidrop route contains an explicit `C4DestinationModule`. HostStation
+fixes OwnStation `0x03FF/0x00` internally, while other frame-specific routes expose no
+destination-module input. Known CPU meanings use typed selectors; configuration-dependent module
+routes use an explicit I/O/station pair without profile-derived fallback.
+
+Compatibility impact: the defaulted raw module I/O/station constructor arguments are removed.
+4C multidrop callers must supply a typed target even when OwnStation is correct. CLI/scripts must
+supply `--module-target`; the option is rejected for every other route/frame.
+
+Acceptance criteria:
+
+1. Neither `C4StandardMultidropRoute` nor `C4MnMultidropRoute` can be constructed without
+   `C4DestinationModule`; HostStation and 1C/2C/3C/1E route types have no caller-settable
+   destination-module field.
+2. OwnStation, Multiple CPU 1..4, and redundant control/standby/system A/system B selectors encode
+   their defined values. Explicit targets preserve all 16-bit I/O and 8-bit station values.
+3. Missing, malformed, negative, nonnumeric, I/O above `0xFFFF`, station above `0xFF`, and invalid
+   known-selector indices fail before request bytes or OS transport; no value is narrowed, wrapped,
+   masked, or replaced with OwnStation.
+4. RemoteHead numeric aliases are not presented as Multiple CPU semantic proof. A
+   configuration-dependent route uses the explicit selector and remains subject to hardware/profile
+   evidence outside the wire-width validator.
+5. ASCII and binary response destination-module fields are compared with the configured route. A
+   complete foreign-module response is consumed without completing the request, and no error path
+   retries with another module.
+6. Connected-station-only helpers accept HostStation or the explicit OwnStation selector and reject
+   other module selectors before request encoding. Routed read/write commands remain valid for
+   non-own targets when the selected command/profile supports them.
+
+Progress: implementation and deterministic tests are complete. Public construction, wide-value
+validation, CLI/scripts, pre-encode/no-TX behavior, selector values, connected-only command routing,
+routed reads, and ASCII/binary module identity are covered. RemoteHead aliases remain raw vocabulary
+constants and do not acquire a convenient typed selector without configuration evidence.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
+- [ ] Claude source review completed (`pending user authorization`).
+- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  selector construction, wire-width validation, request bytes, response identity, command routing,
+  and no-fallback behavior are deterministic contracts; configuration-dependent module support
+  remains explicit and is not promoted to verified hardware support).
+- [ ] Documentation and final acceptance agree with the completed implementation.
+
+## D-103: mandatory typed m:n self-station topology
+
+Scope: 2C/3C/4C route types, HostStation/1C/1E inactive fields, ASCII/binary encoders and decoders,
+client response isolation, presets, CLI/scripts, tests, generated API reference, migration notes,
+and user documentation.
+
+Target contract: normal/1:n and m:n are different route types. A standard route contains no
+self-station input and encodes zero internally. An m:n route requires a typed `SelfStationNo`
+between 0 and 31, including an explicit zero when zero is assigned. No bool/number state pair,
+omission fallback, topology inference, narrowing, or retry with another self-station exists.
+
+Compatibility impact: `C2MultidropRoute`, `C3MultidropRoute`, `C4MultidropRoute`,
+`self_station_enabled`, and raw optional `self_station_no` construction are removed. Callers select
+`C2/C3/C4StandardMultidropRoute` or `C2/C3/C4MnMultidropRoute`; the latter requires
+`SelfStationNo`. CLI/scripts require `--topology standard|mn` for 2C/3C/4C multidrop, and only
+`mn` accepts and requires `--self-station`.
+
+Acceptance criteria:
+
+1. Standard 2C/3C/4C route types expose no self-station input; m:n counterparts cannot be
+   constructed without `SelfStationNo`; HostStation, 1C, and 1E expose neither topology nor
+   self-station input.
+2. `SelfStationNo` accepts explicit 0 through 31. Missing, negative, nonnumeric, 32, and wider
+   values fail before request bytes or OS transport without narrowing, masking, wrapping, or
+   conversion to standard topology.
+3. Standard and m:n-zero requests encode the same self-station wire value while remaining distinct
+   caller intent. 2C, 3C, and ASCII/binary 4C encode all valid values unchanged.
+4. CLI/scripts require topology only for 2C/3C/4C multidrop. Standard rejects self-station; m:n
+   requires it; all other route/frame combinations reject both options.
+5. ASCII self-station text is parsed strictly and ASCII/binary response identity includes the
+   configured self-station. A complete foreign-source response is consumed without completing the
+   request, and the matching response can still complete it.
+6. Timeout, NAK, mismatch, malformed input, or no response never changes topology/self-station or
+   retries another value. Hardware assignment and station-count rules remain explicit user
+   configuration rather than library inference.
+
+Progress: implementation and deterministic tests are complete. Public topology types, mandatory
+typed m:n value, explicit zero, upper and invalid boundaries, C1/1E inactive-field absence,
+2C/3C/4C wire bytes, CLI omission/combination validation, strict foreign self-station identity, and
+client discard-then-match behavior are covered. User documentation states that the library cannot
+infer C24 station assignment or configuration-wide station-count constraints.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
+- [ ] Claude source review completed (`pending user authorization`).
+- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  type construction, width validation, frame bytes, response identity, stream isolation, and
+  no-fallback behavior are deterministic contracts; PLC topology assignment is documented without
+  being promoted to verified hardware evidence).
+- [ ] Documentation and final acceptance agree with the completed implementation.
+
+## D-104: three-second response deadline and independent 1E monitoring timer
+
+Scope: `TimeoutConfig`, `E1MonitoringTimer`, frame validation/encoding, async/sync clients, CLI raw
+and normal request loops, high-level presets, Linux/PowerShell scripts, Remote RESET completion,
+tests, generated API reference, migration notes, and user documentation.
+
+Target contract: the omitted host communication response timeout is 3000 ms for every frame and
+runtime path. It is one wrap-safe deadline from successful TX completion to a complete response and
+is not restarted by received data. The PLC-side 1E monitoring timer is independent, defaults to
+4000 ms (`0x0010`), and preserves only exact representable 250 ms units without rounding or
+saturation. A command defined not to return a normal response completes on successful TX as
+request-transmitted, not PLC-operation-success.
+
+Compatibility impact: code relying on the former 5000 ms host default now receives 3000 ms unless
+it supplies a valid explicit value. 1E callers that relied on response-timeout-derived rounding or
+`0xFFFF` saturation must set `E1MonitoringTimer` independently. Remote RESET no longer waits for a
+timeout or accepts a fabricated timeout-success result; its completion message describes request
+transmission. Global-signal and transmission-sequence timeout paths now remain timeout failures.
+
+Acceptance criteria:
+
+1. `TimeoutConfig`, named presets, CLI, sync/async paths, and scripts use 3000 ms when the response
+   timeout is omitted. Explicit 1..2147483647 ms values are preserved; zero, negative/nonnumeric
+   external values, and larger unsigned values fail before frame bytes or serial open.
+2. The response deadline begins only after successful TX completion, compares correctly across a
+   32-bit monotonic-clock wrap, remains fixed after partial RX, and is separate from queue/open,
+   retry, inter-byte, PLC processing, and application deadlines. An unsequenced timeout prevents
+   another request until transport reset plus reconfiguration; the host sync wrapper closes its
+   owned serial port. Format2 instead isolates its late response by block identity.
+3. `E1MonitoringTimer` defaults to 4000 ms/`0x0010` independently of a 3000 ms host timeout.
+   Explicit 0, 250, and maximum 16383750 ms encode unchanged; non-250 ms values and overflow fail
+   before encoding without rounding, truncation, or saturation.
+4. CLI exposes `--e1-monitoring-timer-ms` only for 1E. Environment/PowerShell wrappers preserve
+   omission rather than injecting 5000/8000 ms response defaults and reject the E1-only option on
+   other frames.
+5. Remote RESET completes immediately after successful TX with an explicit request-transmitted,
+   PLC-state-unconfirmed result. Transport failure remains failure. It does not wait for or use the
+   response timeout as a success condition.
+6. Commands not proven to be no-normal-response operations do not convert timeout to success.
+   Timeout, partial RX, malformed response, PLC error, or no response does not retry or alter either
+   timeout/timer value.
+
+Progress: implementation and deterministic tests are complete. Defaults, explicit boundaries,
+pre-encode/pre-open rejection, 1E ASCII/binary request fields, response/monitoring independence,
+clock wrap, fixed total deadline after partial RX, Remote RESET transmission completion, transport
+failure, non-RESET timeout behavior, unsequenced post-timeout reuse blocking, host-port closure
+policy, and Format2 identity-based reuse are covered.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
+- [ ] Claude source review completed (`pending user authorization`).
+- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  defaults, validation, deadline math, request fields, and TX-completion state are deterministic;
+  no existing hardware compatibility evidence is changed or promoted).
+- [ ] Documentation and final acceptance agree with the completed implementation.
+
+## D-105: 250 ms inter-byte RX-inactivity timeout
+
+Scope: `TimeoutConfig::inter_byte_timeout_ms`, frame validation, async/sync client receive paths,
+CLI raw receive loop, high-level presets, Linux/PowerShell scripts, partial-frame state, tests,
+generated API reference, migration notes, and user documentation.
+
+Target contract: the omitted inter-byte timeout is 250 ms everywhere. It begins only after the
+library receives response data and measures inactivity since the last delivered byte/chunk. Each
+new chunk restarts only this deadline; it never restarts or extends the fixed total response
+deadline. Explicit values are positive and wrap-safe, and expired partial data cannot be reused by
+another request.
+
+Compatibility impact: zero and values above 2147483647 ms are now configuration errors rather than
+immediate or wrap-unsafe deadlines. A chunk delivered at the exact deadline is timed out before
+decode. The FX5U soak wrapper no longer silently replaces omission with 1000 ms; users needing that
+value must specify it. Unsequenced partial timeout requires transport reset and reconfiguration.
+
+Acceptance criteria:
+
+1. `TimeoutConfig`, named presets, async/sync clients, CLI, and scripts use 250 ms on omission.
+   Explicit 1..2147483647 ms values are preserved; zero, negative/nonnumeric external values, and
+   larger unsigned values fail before frame bytes or serial open.
+2. No response data means only the total response deadline applies. After the first received
+   byte/chunk, each additional chunk arriving before expiry restarts only the inter-byte deadline.
+3. A chunk arriving at or after the inactivity deadline is rejected before append/decode. One-byte,
+   multi-chunk, complete-frame, exact-boundary, and 32-bit clock-wrap behavior use the same
+   comparison in async/MCU, sync, and CLI paths.
+4. The 3000 ms total response deadline remains fixed after every chunk and wins when it expires
+   first. Inter-byte timeout does not cover queueing, port open, TX, retry, PLC processing, or
+   application deadlines.
+5. Timeout discards incomplete decoder bytes. Unsequenced frames block subsequent requests until
+   transport reset plus reconfiguration; the host sync wrapper closes its port. Format2 may remain
+   usable because its block identity rejects the old response.
+6. Documentation defines this as library-observed RX inactivity. When an OS read/UART callback
+   contains multiple physical bytes, their internal physical spacing is not observable and is not
+   presented as independently measured.
+
+Progress: implementation and deterministic tests are complete. Default/preset/CLI/script values,
+valid and invalid bounds, no-RX behavior, one-byte and multiple-chunk restarts, complete response,
+exact expiry, 32-bit wrap, fixed total deadline, partial-state clearing, transport-reset gating,
+and Format2 late-response identity are covered.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
+- [ ] Claude source review completed (`pending user authorization`).
+- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  defaults, value validation, clock math, chunk state, and timeout state transitions are
+  deterministic; physical adapter gap characteristics remain user configuration).
+- [ ] Documentation and final acceptance agree with the completed implementation.
+
+## D-106: mandatory Remote RUN conflict and clear policies
+
+Scope: `RemoteOperationMode`, `RemoteRunClearMode`, command encoder, async and host-sync clients,
+CLI positional arguments, result status, transport/reset state, tests, generated API reference,
+migration notes, and user documentation.
+
+Target contract: Remote RUN requires an explicit conflict policy and clear scope at every public
+entry point. The library never infers non-forced execution or no-clear. After transmission starts,
+failure to obtain a trustworthy result is distinguishable as an unknown PLC outcome and never
+causes an automatic retry.
+
+Compatibility impact: `PosixSyncClient::remote_run()` and `remote_run(mode)` no longer compile.
+CLI `remote-run` with zero or one policy is rejected before serial open. Code that treated a
+post-transmission timeout as proof that RUN did not occur must handle
+`StatusCode::OperationOutcomeUnknown` and inspect PLC state before deciding whether to retry.
+
+Acceptance criteria:
+
+1. Encoder, async client, host-sync client, and CLI require both typed policies. The two conflict
+   modes and three clear modes remain meaning-bearing enums rather than bools or magic numbers.
+2. Missing either or both CLI policies, empty/unknown text, extra arguments, and unknown enum
+   values fail before serial open, frame bytes, or client TX. No default or fallback is applied.
+3. All six policy combinations produce identical command data through binary/ASCII encoding and
+   the shared sync/async/CLI path. Do-not-clear is accepted only when explicitly selected.
+4. Unsupported frame/profile combinations and invalid policy values return a pre-send error with
+   zero encoded size and no active request.
+5. Once Remote RUN transmission starts, transport failure, timeout, post-TX cancellation, or an
+   unconfirmable response returns `OperationOutcomeUnknown`; an explicit PLC error remains a
+   confirmed PLC response. Host sync closes the port when the outcome is unknown.
+6. Remote RUN is issued at most once. An unknown outcome produces no internal retry, clears the
+   pending frame, and requires transport reset/reconfiguration for unsequenced frames; Format2
+   continues to isolate late responses by block identity.
+
+Progress: implementation and deterministic tests are complete. Sync omission is a compile-time
+failure; CLI omission/unknown/extra input fails before open; all six policies, binary/ASCII wire
+data, unknown enums, unsupported 1E, zero output, async transport failure, timeout, post-TX cancel,
+unknown outcome, no retry, reset gating, and existing success roundtrips are covered.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
+- [ ] Claude source review completed (`pending user authorization`).
+- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  argument presence, enum validation, command bytes, retry absence, result classification, and
+  state transitions are deterministic; no claim is made about a particular PLC's resulting state).
+- [ ] Documentation and final acceptance agree with the completed implementation.
+
+## D-107: mandatory Remote PAUSE conflict policy
+
+Scope: `RemoteOperationMode`, Remote PAUSE command encoder, async and host-sync clients, CLI
+positional arguments and parser aliases, result status, transport/reset state, tests, generated API
+reference, migration notes, and user documentation.
+
+Target contract: Remote PAUSE requires one explicit conflict policy at every public entry point.
+The library never infers non-forced execution, accepts a magic-number substitute, escalates to
+forced execution after failure, or retries an unconfirmed PAUSE.
+
+Compatibility impact: `PosixSyncClient::remote_pause()` no longer compiles. CLI `remote-pause`
+without exactly one `no-force|force` argument is rejected before serial open. The former `normal`,
+`safe`, `1`, `0001`, `3`, and `0003` CLI aliases are removed. Post-transmission failure may now
+return `StatusCode::OperationOutcomeUnknown` instead of a generic timeout/transport status.
+
+Acceptance criteria:
+
+1. Encoder, async client, host-sync client, and CLI require one typed conflict policy. Both enum
+   values remain explicit and there is no no-argument overload or bool/magic-number API.
+2. Missing, empty/unknown, alias, numeric, or extra CLI input and unknown enum values fail before
+   serial open, frame bytes, or client TX. No non-forced fallback is applied.
+3. Both policies produce identical command data through binary/ASCII encoding and the shared
+   sync/async/CLI path. The documentation defines force as remote-operation-source conflict
+   handling, not output retention.
+4. Unsupported frame/profile combinations and invalid policies return a pre-send error with zero
+   encoded size and no active request.
+5. Once PAUSE transmission starts, transport failure, timeout, post-TX cancellation, or an
+   unconfirmable response returns `OperationOutcomeUnknown`; a PLC error remains a confirmed error
+   and does not trigger a forced retry.
+6. PAUSE is issued at most once. Unknown outcome clears the pending frame and requires transport
+   reset/reconfiguration for unsequenced frames; Format2 retains block-identity isolation.
+
+Progress: implementation and deterministic tests are complete. Sync omission is a compile-time
+failure; exact CLI input is checked before open; both policies, binary/ASCII data, unknown enums,
+unsupported 1E, zero output, success, confirmed PLC error, transport failure, timeout, post-TX
+cancel, unknown outcome, no retry/escalation, and reset gating are covered.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
+- [ ] Claude source review completed (`pending user authorization`).
+- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  argument presence, enum validation, command bytes, retry/escalation absence, result
+  classification, and state transitions are deterministic; no PLC resulting state is claimed).
+- [ ] Documentation and final acceptance agree with the completed implementation.
+
+## D-108: explicit Word/DWord sparse-access types
+
+Scope: generic and link-direct random read/write and monitor item types, codec and response parser,
+async and host-sync clients, CLI syntax, examples, tests, generated API reference, migration notes,
+and user documentation.
+
+Target contract: sparse access width is selected by the public type and output span, never inferred
+from the device code or a defaulted boolean. Generic native commands keep Word and DWord items and
+results separate. Link-direct sparse access exposes only its supported Word width.
+
+Compatibility impact: `RandomReadItem`, `RandomReadSpec`, public `double_word` members, ambiguous
+`random_read`/monitor scalar overloads, and link-direct width switches are removed. Word write
+values are `uint16_t`; DWord values are `uint32_t`. CLI sparse reads require `word:` or `dword:`,
+and DWord writes use `random-write-dwords`.
+
+Acceptance criteria:
+
+1. Generic random read/write and monitor APIs use distinct Word and DWord item/spec types, separate
+   request spans, and separate `uint16_t`/`uint32_t` result spans. No public bool, device-code
+   inference, narrowing, masking, alias, or fallback selects width.
+2. Word writes preserve `0` and `0xFFFF`; DWord writes preserve `0x00010000` and `0xFFFFFFFF`.
+   Mixed requests encode Word items followed by DWord items and decode each group into the matching
+   typed output without losing request/result mapping.
+3. Devices that require the DWord route, including `LZ`, are rejected through Word item types and
+   accepted only through an applicable DWord path. Long-device and profile restrictions remain
+   explicit and are not bypassed by a width conversion.
+4. 1C and 1E restrictions reject unsupported DWord random-write/monitor requests before client TX;
+   1E random read remains unsupported. Invalid requests leave no pending frame or active request.
+5. Link-direct random read, random write, and monitor expose only Word item/value/result types. No
+   DWord option or `double_word` member remains in their public surface.
+6. CLI sparse reads require exact `word:DEVICE` or `dword:DEVICE` input. Word and DWord writes use
+   separate commands, with Word overflow rejected before serial open.
+7. Source examples, user guidance, generated API reference, migration notes, and changelog use only
+   the explicit-width contract.
+
+Progress: implementation and deterministic tests are complete. Boundary values, mixed random and
+monitor decoding, D/LZ width selection, 1C/1E pre-send rejection, link-direct Word-only types, CLI
+width syntax, output-buffer preflight, count-overflow rejection, and removal of former public names
+are covered. All repository verification below passed.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
+- [ ] Claude source review completed (`pending user authorization`).
+- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  type separation, exact command bytes, response decoding, validation order, and no-TX behavior are
+  deterministic, and no target PLC value or capability is claimed).
+- [x] Documentation and final acceptance agree with the completed implementation.
+
+## D-109: mandatory random-write values and unknown outcomes
+
+Scope: generic and link-direct random Word/DWord/Bit item types, high-level specs and helpers,
+codec validation, asynchronous and host-sync clients, CLI parsing, examples, tests, generated API
+reference, migration notes, and user documentation.
+
+Target contract: every sparse write target and value are supplied at the same construction
+boundary. Explicit Word/DWord zero and `BitValue::Off` are valid values; omission, empty input,
+unknown bit values, and partially valid item lists never become zero/OFF writes. Once transmission
+has started, an unconfirmed result is outcome-unknown and is never retried automatically.
+
+Compatibility impact: `RandomWriteWordItem`, `RandomWriteDWordItem`, `RandomWriteBitItem`, their
+high-level specs, and link-direct random-write items are no longer aggregates with public default
+construction. Code that default-constructs an item and later assigns only some fields must migrate
+to the device-and-value constructor. CLI entries without `=VALUE` are rejected before serial open.
+
+Acceptance criteria:
+
+1. Public generic item/spec types for Word, DWord, and Bit random writes require device and value in
+   one constructor and are not default constructible. Link-direct random-write items follow the
+   same rule. Explicit zero/OFF construction remains valid.
+2. Word values remain exactly 16-bit, DWord values exactly 32-bit, and Bit values must be exactly
+   `BitValue::Off` or `BitValue::On`; unknown bit enum values are rejected before frame generation.
+3. A request containing one invalid item is rejected atomically before transmission. The library
+   does not filter the invalid item and send the remaining writes.
+4. Single-item and many-item high-level helpers require explicit values. No overload, builder,
+   aggregate initialization, or internal fallback supplies zero/OFF for a caller.
+5. CLI generic and link-direct random writes require a nonempty `DEVICE=VALUE` for every item,
+   reject Word overflow and Bit values other than `0`/`1`, and complete all parsing before opening
+   the serial device. Explicit `=0` reaches normal connection handling.
+6. Word `0`/`0xFFFF`, DWord `0`/`0x00010000`/`0xFFFFFFFF`, and Bit OFF/ON retain their exact wire
+   values without narrowing, masking, or missing-value substitution.
+7. Cancellation before transmission remains `Cancelled`. Transport failure, timeout,
+   cancellation, or another unconfirmed failure after transmission is
+   `OperationOutcomeUnknown`, clears the pending frame, and never triggers an automatic retry.
+   A confirmed PLC error remains `PlcError`.
+8. Source examples, user guidance, generated API reference, migration notes, and changelog use only
+   the mandatory-value contract and explain explicit zero/OFF and outcome-unknown handling.
+
+Progress: implementation, deterministic tests, full repository/package verification, and final
+diff self-review are complete. Constructor omission, explicit boundary values, atomic invalid-item
+rejection, CLI pre-open parsing, unknown enums, success/confirmed PLC error, transport failure,
+timeout, pre/post-TX cancellation, outcome-unknown classification, no retry, reset gating, feature-
+disabled builds, generated documentation, and packaged consumers are covered.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
+- [ ] Claude source review completed (`pending user authorization`).
+- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  constructor availability, parser validation, exact wire values, no-TX behavior, outcome
+  classification, reset gating, and retry absence are deterministic, and no PLC resulting state is
+  claimed).
+- [x] Documentation and final acceptance agree with the completed implementation.
+
 ## Verification evidence
 
-- Build/test command: `run_ci.bat --build-dir build_win`, passed 2026-07-11.
+- Build/test command: `run_ci.bat --build-dir build_win --with-platformio`, last passed 2026-07-12.
 - Automated results: CMake/Ninja full host build passed; `codec_tests`,
   `standard_header_consumer`, and `cli_serial_config_tests` all passed (3/3); Markdown links and the
   generated API-reference drift check passed.
@@ -519,5 +941,70 @@ universally valid topology meaning.
   and absence of PC fallback. Host CI passed 3/3, all configured PlatformIO environments passed,
   both packed-package consumers passed, scripts parsed, Markdown links passed, and the generated
   API reference matched after the D-101 implementation.
+- D-102 evidence covers mandatory typed 4C destination modules; HostStation and inactive-frame
+  field absence; OwnStation, Multiple CPU, redundant CPU, explicit-target, width, omission,
+  malformed-input, and alias semantics; zero request bytes/client TX on invalid targets;
+  OwnStation-only read/write command gating; routed batch read/write; strict ASCII module parsing;
+  ASCII/binary foreign-module identity; and absence of module fallback. Host CI passed 3/3, all
+  configured PlatformIO environments passed, both packed-package consumers passed, scripts parsed,
+  Markdown links passed, and the generated API reference matched after the D-102 implementation.
+- D-103 evidence covers separate standard and m:n route types; mandatory `SelfStationNo`; explicit
+  zero and 1..31; missing, negative, nonnumeric, overflow, and invalid-combination rejection before
+  serial open; absence from HostStation/1C/1E; 2C/3C/4C ASCII/binary wire values; strict foreign
+  self-station decode identity; client discard followed by matching-response completion; and no
+  topology/self-station fallback. Host CI passed 3/3, all nine PlatformIO environments passed, both
+  packed-package consumers passed, all four Bash scripts and the PowerShell script parsed,
+  Markdown links passed, the generated API reference matched, and `git diff --check` passed.
+- D-104 evidence covers the common 3000 ms default; 1..`INT32_MAX`, zero, overflow, negative, and
+  nonnumeric boundaries; wrap-safe async/CLI comparison; total-deadline preservation after partial
+  RX; independent 1E 4000 ms/`0x0010` default, zero/max vectors, non-unit/overflow rejection;
+  Remote RESET TX-completion semantics and transport failure; ordinary command timeout failure;
+  unsequenced timeout reuse blocking and Format2 identity-based reuse. Host CI passed 3/3, all nine
+  PlatformIO environments passed, both packed-package consumers passed, all four Bash scripts and
+  the PowerShell script parsed, Markdown links passed, the generated API reference matched, and
+  `git diff --check` passed.
+- D-105 evidence covers the common 250 ms default; 1..`INT32_MAX`, zero, overflow, negative, and
+  nonnumeric boundaries; no-RX behavior; one-byte and multiple-chunk deadline restarts; a complete
+  response assembled from chunks; exact-boundary rejection before append/decode; 32-bit clock
+  wrap; preservation of the fixed total response deadline; incomplete-state discard; unsequenced
+  transport-reset gating; Format2 identity isolation; and CLI post-read deadline checks. Host CI
+  passed 3/3, all nine PlatformIO environments passed, both packed-package consumers passed, all
+  four Bash scripts and the PowerShell script parsed, Markdown links passed, the generated API
+  reference matched, and `git diff --check` passed.
+- D-106 evidence covers compile-time rejection of zero/one-policy sync calls; exact CLI two-policy
+  validation before serial open; all six conflict/clear combinations; binary and ASCII command
+  data; unknown enum and unsupported 1E rejection with zero output; async success; transport
+  failure, timeout, and post-TX cancellation as `OperationOutcomeUnknown`; pending-frame clearing;
+  no automatic retry; and unsequenced reset gating. Existing `StatusCode` numeric values were
+  preserved by appending the new value. Host CI passed 3/3, all nine PlatformIO environments
+  passed, both packed-package consumers passed, all four Bash scripts and the PowerShell script
+  parsed, Markdown links passed, the generated API reference matched, and `git diff --check`
+  passed.
+- D-107 evidence covers compile-time rejection of no-policy sync calls; exact CLI one-policy
+  validation before serial open; removal and rejection of normal/safe/numeric aliases for both RUN
+  and PAUSE; both PAUSE policies; binary and ASCII command data; unknown enum and unsupported 1E
+  rejection with zero output; success and confirmed PLC-error responses; transport failure,
+  timeout, and post-TX cancellation as `OperationOutcomeUnknown`; no force escalation or retry;
+  pending-frame clearing; and unsequenced reset gating. Host CI passed 3/3, all nine PlatformIO
+  environments passed, both packed-package consumers passed, all four Bash scripts and the
+  PowerShell script parsed, Markdown links passed, the generated API reference matched, and
+  `git diff --check` passed.
+- D-108 evidence covers the absence of public width booleans and former ambiguous types; separate
+  Word/DWord request and result spans; Word `0`/`0xFFFF` and DWord `0x00010000`/`0xFFFFFFFF` wire
+  values; mixed random and monitor decoding; D and LZ route selection; 1C/1E pre-send rejection;
+  link-direct Word-only types; client output-buffer preflight; non-wrapping oversized-count
+  rejection; strict CLI width syntax and Word overflow rejection before serial open. Host CI passed
+  3/3, all nine PlatformIO environments passed, both packed-package consumers passed, Markdown
+  links passed, the generated API reference matched, and `git diff --check` passed.
+- D-109 evidence covers compile-time rejection of default-constructed generic/high-level/link-direct
+  random-write items; device-and-value construction; explicit Word/DWord zero and maxima; explicit
+  Bit OFF/ON; high-level and codec unknown-enum rejection; atomic no-TX behavior for a mixed valid
+  and invalid item list; generic and link-direct CLI missing/empty/unknown-value rejection before
+  serial open; pre-TX cancellation as `Cancelled`; timeout, transport failure, and post-TX
+  cancellation as `OperationOutcomeUnknown`; confirmed PLC error preservation; pending-frame
+  clearing; reset gating; and no automatic retry. The first full run detected and corrected a
+  feature-disabled `OperationKind` conditional-compilation defect. The final run passed Host CI
+  3/3, all nine PlatformIO environments, both packed-package consumers, Markdown links, generated
+  API-reference drift, Bash/PowerShell syntax, and `git diff --check`.
 - Physical serial/PLC communication: not executed in this implementation batch.
 - Claude review: not executed; explicit user authorization is required for a future review batch.

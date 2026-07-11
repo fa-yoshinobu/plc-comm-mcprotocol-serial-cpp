@@ -5,6 +5,18 @@
 
 namespace mcprotocol::serial {
 
+constexpr std::uint32_t kMaxWrapSafeTimeoutMs = 0x7FFFFFFFU;
+
+[[nodiscard]] constexpr bool is_wrap_safe_timeout_ms(std::uint32_t timeout_ms) noexcept {
+  return timeout_ms > 0U && timeout_ms <= kMaxWrapSafeTimeoutMs;
+}
+
+[[nodiscard]] constexpr bool deadline_reached(
+    std::uint32_t now_ms,
+    std::uint32_t deadline_ms) noexcept {
+  return static_cast<std::int32_t>(now_ms - deadline_ms) >= 0;
+}
+
 [[nodiscard]] constexpr bool is_iq_r_series(const ProtocolConfig& config) noexcept {
   const PlcSeries series = plc_series_from_profile(config.plc_profile);
   return series == PlcSeries::IQ_R;

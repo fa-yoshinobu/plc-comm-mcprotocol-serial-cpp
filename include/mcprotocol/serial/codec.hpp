@@ -310,7 +310,7 @@ namespace CommandCodec {
 /// @{
 [[nodiscard]] Status encode_link_direct_random_read(
     const ProtocolConfig& config,
-    std::span<const LinkDirectRandomReadItem> items,
+    std::span<const LinkDirectRandomReadWordItem> word_items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
@@ -322,13 +322,15 @@ namespace CommandCodec {
 
 [[nodiscard]] Status parse_random_read_response(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const RandomReadRequest& request,
     std::span<const std::uint8_t> response_data,
-    std::span<std::uint32_t> out_values) noexcept;
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) noexcept;
 
 [[nodiscard]] Status encode_random_write_words(
     const ProtocolConfig& config,
-    std::span<const RandomWriteWordItem> items,
+    std::span<const RandomWriteWordItem> word_items,
+    std::span<const RandomWriteDWordItem> dword_items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
@@ -419,7 +421,7 @@ namespace CommandCodec {
 
 [[nodiscard]] Status encode_read_monitor(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const MonitorRegistration& registration,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
@@ -431,9 +433,10 @@ namespace CommandCodec {
 
 [[nodiscard]] Status parse_read_monitor_response(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const MonitorRegistration& registration,
     std::span<const std::uint8_t> response_data,
-    std::span<std::uint32_t> out_values) noexcept;
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) noexcept;
 
 [[nodiscard]] Status parse_read_extended_file_register_monitor_response(
     const ProtocolConfig& config,

@@ -1,6 +1,7 @@
 #include "mcprotocol/serial/host_sync.hpp"
 
 #include "host_now_ms.hpp"
+#include "fixed_item_buffer.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -43,6 +44,12 @@ void trace_bytes(const char* label, std::span<const std::byte> bytes) noexcept {
     std::fprintf(stderr, "%02X", static_cast<unsigned int>(value));
   }
   std::fprintf(stderr, "\n");
+}
+
+[[nodiscard]] constexpr Status operation_outcome_unknown_status() noexcept {
+  return make_status(
+      StatusCode::OperationOutcomeUnknown,
+      "State-changing command transmission started but its response was not confirmed; PLC state is unknown");
 }
 
 }  // namespace
@@ -94,7 +101,7 @@ const ProtocolConfig& PosixSyncClient::protocol_config() const noexcept {
   return protocol_config_;
 }
 
-Status PosixSyncClient::run_until_complete() noexcept {
+Status PosixSyncClient::run_until_complete(bool operation_outcome_unknown_after_write) noexcept {
   completion_ = {};
 
   Status status = port_.flush_rx();
@@ -107,18 +114,30 @@ Status PosixSyncClient::run_until_complete() noexcept {
   status = port_.write_all(client_.pending_tx_frame());
   if (!status.ok()) {
     client_.cancel();
+    if (operation_outcome_unknown_after_write) {
+      port_.close();
+      return operation_outcome_unknown_status();
+    }
     return status;
   }
 
   status = port_.drain_tx();
   if (!status.ok()) {
     client_.cancel();
+    if (operation_outcome_unknown_after_write) {
+      port_.close();
+      return operation_outcome_unknown_status();
+    }
     return status;
   }
 
   status = client_.notify_tx_complete(now_ms());
   if (!status.ok()) {
     client_.cancel();
+    if (operation_outcome_unknown_after_write) {
+      port_.close();
+      return operation_outcome_unknown_status();
+    }
     return status;
   }
   if (completion_.done) {
@@ -130,6 +149,10 @@ Status PosixSyncClient::run_until_complete() noexcept {
     status = port_.read_some(rx_buffer_, 20, received);
     if (!status.ok()) {
       client_.cancel();
+      if (operation_outcome_unknown_after_write) {
+        port_.close();
+        return operation_outcome_unknown_status();
+      }
       return status;
     }
 
@@ -148,6 +171,10 @@ Status PosixSyncClient::run_until_complete() noexcept {
     client_.poll(now_ms());
   }
 
+  if (completion_.status.code == StatusCode::Timeout ||
+      completion_.status.code == StatusCode::OperationOutcomeUnknown) {
+    port_.close();
+  }
   return completion_.status;
 }
 
@@ -175,7 +202,7 @@ Status PosixSyncClient::remote_run(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::remote_stop() noexcept {
@@ -198,7 +225,7 @@ Status PosixSyncClient::remote_pause(RemoteOperationMode mode) noexcept {
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::remote_latch_clear() noexcept {
@@ -723,11 +750,15 @@ Status PosixSyncClient::direct_write_extended_file_register_words(
 }
 
 Status PosixSyncClient::random_read(
-    std::span<const highlevel::RandomReadSpec> items,
-    std::span<std::uint32_t> out_values) noexcept {
-  std::array<RandomReadItem, kMaxRandomAccessItems> parsed_items {};
+    std::span<const highlevel::RandomReadWordSpec> word_items,
+    std::span<const highlevel::RandomReadDWordSpec> dword_items,
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) noexcept {
+  std::array<RandomReadWordItem, kMaxRandomAccessItems> parsed_word_items {};
+  std::array<RandomReadDWordItem, kMaxRandomAccessItems> parsed_dword_items {};
   RandomReadRequest request {};
-  Status status = highlevel::make_random_read_request(items, parsed_items, request);
+  Status status = highlevel::make_random_read_request(
+      word_items, dword_items, parsed_word_items, parsed_dword_items, request);
   if (!status.ok()) {
     return status;
   }
@@ -735,7 +766,8 @@ Status PosixSyncClient::random_read(
   status = client_.async_random_read(
       now_ms(),
       request,
-      out_values,
+      out_words,
+      out_dwords,
       &PosixSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
@@ -744,19 +776,24 @@ Status PosixSyncClient::random_read(
   return run_until_complete();
 }
 
-Status PosixSyncClient::random_read(
+Status PosixSyncClient::random_read_word(
     std::string_view device,
-    std::uint32_t& out_value,
-    bool double_word) noexcept {
-  const std::array<highlevel::RandomReadSpec, 1> items {{
-      {.device = device, .double_word = double_word},
-  }};
-  return random_read(items, std::span<std::uint32_t>(&out_value, 1U));
+    std::uint16_t& out_value) noexcept {
+  const std::array<highlevel::RandomReadWordSpec, 1> items {{{.device = device}}};
+  return random_read(items, {}, std::span<std::uint16_t>(&out_value, 1U), {});
+}
+
+Status PosixSyncClient::random_read_dword(
+    std::string_view device,
+    std::uint32_t& out_value) noexcept {
+  const std::array<highlevel::RandomReadDWordSpec, 1> items {{{.device = device}}};
+  return random_read({}, items, {}, std::span<std::uint32_t>(&out_value, 1U));
 }
 
 Status PosixSyncClient::random_write_words(
     std::span<const highlevel::RandomWriteWordSpec> items) noexcept {
-  std::array<RandomWriteWordItem, kMaxRandomAccessItems> parsed_items {};
+  auto parsed_items = detail::make_filled_array<RandomWriteWordItem, kMaxRandomAccessItems>(
+      RandomWriteWordItem(DeviceAddress {DeviceCode::D, 0U}, 0U));
   std::span<const RandomWriteWordItem> request_items {};
   Status status = highlevel::make_random_write_word_items(items, parsed_items, request_items);
   if (!status.ok()) {
@@ -766,12 +803,30 @@ Status PosixSyncClient::random_write_words(
   status = client_.async_random_write_words(
       now_ms(),
       request_items,
+      {},
       &PosixSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
+}
+
+Status PosixSyncClient::random_write_dwords(
+    std::span<const highlevel::RandomWriteDWordSpec> items) noexcept {
+  auto parsed_items = detail::make_filled_array<RandomWriteDWordItem, kMaxRandomAccessItems>(
+      RandomWriteDWordItem(DeviceAddress {DeviceCode::D, 0U}, 0U));
+  std::span<const RandomWriteDWordItem> request_items {};
+  Status status = highlevel::make_random_write_dword_items(items, parsed_items, request_items);
+  if (!status.ok()) {
+    return status;
+  }
+  status = client_.async_random_write_words(
+      now_ms(), {}, request_items, &PosixSyncClient::on_request_complete, &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::random_write_extended_file_register_words(
@@ -789,17 +844,26 @@ Status PosixSyncClient::random_write_extended_file_register_words(
 
 Status PosixSyncClient::random_write_word(
     std::string_view device,
-    std::uint32_t value,
-    bool double_word) noexcept {
+    std::uint16_t value) noexcept {
   const std::array<highlevel::RandomWriteWordSpec, 1> items {{
-      {.device = device, .value = value, .double_word = double_word},
+      highlevel::RandomWriteWordSpec(device, value),
   }};
   return random_write_words(items);
 }
 
+Status PosixSyncClient::random_write_dword(
+    std::string_view device,
+    std::uint32_t value) noexcept {
+  const std::array<highlevel::RandomWriteDWordSpec, 1> items {{
+      highlevel::RandomWriteDWordSpec(device, value),
+  }};
+  return random_write_dwords(items);
+}
+
 Status PosixSyncClient::random_write_bits(
     std::span<const highlevel::RandomWriteBitSpec> items) noexcept {
-  std::array<RandomWriteBitItem, kMaxRandomAccessItems> parsed_items {};
+  auto parsed_items = detail::make_filled_array<RandomWriteBitItem, kMaxRandomAccessItems>(
+      RandomWriteBitItem(DeviceAddress {DeviceCode::M, 0U}, BitValue::Off));
   std::span<const RandomWriteBitItem> request_items {};
   Status status = highlevel::make_random_write_bit_items(items, parsed_items, request_items);
   if (!status.ok()) {
@@ -814,23 +878,26 @@ Status PosixSyncClient::random_write_bits(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::random_write_bit(
     std::string_view device,
     BitValue value) noexcept {
   const std::array<highlevel::RandomWriteBitSpec, 1> items {{
-      {.device = device, .value = value},
+      highlevel::RandomWriteBitSpec(device, value),
   }};
   return random_write_bits(items);
 }
 
 Status PosixSyncClient::register_monitor(
-    std::span<const highlevel::RandomReadSpec> items) noexcept {
-  std::array<RandomReadItem, kMaxMonitorItems> parsed_items {};
+    std::span<const highlevel::RandomReadWordSpec> word_items,
+    std::span<const highlevel::RandomReadDWordSpec> dword_items) noexcept {
+  std::array<RandomReadWordItem, kMaxMonitorItems> parsed_word_items {};
+  std::array<RandomReadDWordItem, kMaxMonitorItems> parsed_dword_items {};
   MonitorRegistration request {};
-  Status status = highlevel::make_monitor_registration(items, parsed_items, request);
+  Status status = highlevel::make_monitor_registration(
+      word_items, dword_items, parsed_word_items, parsed_dword_items, request);
   if (!status.ok()) {
     return status;
   }
@@ -846,13 +913,14 @@ Status PosixSyncClient::register_monitor(
   return run_until_complete();
 }
 
-Status PosixSyncClient::register_monitor(
-    std::string_view device,
-    bool double_word) noexcept {
-  const std::array<highlevel::RandomReadSpec, 1> items {{
-      {.device = device, .double_word = double_word},
-  }};
-  return register_monitor(items);
+Status PosixSyncClient::register_monitor_word(std::string_view device) noexcept {
+  const std::array<highlevel::RandomReadWordSpec, 1> items {{{.device = device}}};
+  return register_monitor(items, {});
+}
+
+Status PosixSyncClient::register_monitor_dword(std::string_view device) noexcept {
+  const std::array<highlevel::RandomReadDWordSpec, 1> items {{{.device = device}}};
+  return register_monitor({}, items);
 }
 
 Status PosixSyncClient::register_extended_file_register_monitor(
@@ -868,20 +936,19 @@ Status PosixSyncClient::register_extended_file_register_monitor(
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_monitor(std::span<std::uint32_t> out_values) noexcept {
+Status PosixSyncClient::read_monitor(
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) noexcept {
   const Status status = client_.async_read_monitor(
       now_ms(),
-      out_values,
+      out_words,
+      out_dwords,
       &PosixSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
   }
   return run_until_complete();
-}
-
-Status PosixSyncClient::read_monitor(std::uint32_t& out_value) noexcept {
-  return read_monitor(std::span<std::uint32_t>(&out_value, 1U));
 }
 
 Status PosixSyncClient::read_extended_file_register_monitor(

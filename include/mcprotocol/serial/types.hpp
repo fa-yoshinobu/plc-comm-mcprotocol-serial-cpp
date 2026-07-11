@@ -144,11 +144,10 @@ constexpr std::size_t kMaxUserFrameRegistrationBytes = 80U;
 constexpr std::size_t kCpuModelNameLength = 16;
 
 /// \namespace mcprotocol::serial::module_io
-/// \brief Named request-destination module I/O numbers used by `3C` / `4C` serial routing.
+/// \brief Named request-destination module I/O numbers used by `4C` serial routing.
 ///
-/// `RouteConfig::request_destination_module_io_no` defaults to `OwnStation`. The CPU constants
-/// are useful when a `3C` / `4C` request is intentionally routed to a multi-CPU or redundant-CPU
-/// target. The serial request header accepts the documented request-destination module I/O number
+/// The CPU constants are useful when a `4C` request is intentionally routed to a multi-CPU or
+/// redundant-CPU target. The serial request header accepts the documented request-destination module I/O number
 /// field; common CPU values are `0x03D0..0x03D3`, `0x03E0..0x03E3`, and own station `0x03FF`.
 /// Remote-head names are provided as vocabulary aliases for parity with the other plc-comm
 /// implementations; do not assume a remote-head route is valid on serial hardware unless the
@@ -578,12 +577,40 @@ enum class ResponseType : std::uint8_t {
 /// These values are transport-facing rather than command-facing:
 ///
 /// - `response_timeout_ms` is the total request timeout once TX finishes
-/// - `inter_byte_timeout_ms` is the gap timeout while RX is already in progress
+/// - `inter_byte_timeout_ms` is RX inactivity after the library receives a response byte/chunk;
+///   one OS/UART callback may contain multiple physical bytes whose internal spacing is unobservable
 struct TimeoutConfig {
   /// Maximum wait after TX completion before the request is treated as timed out.
-  std::uint32_t response_timeout_ms = 5000;
-  /// Maximum allowed idle gap between RX bytes once a response has started.
+  std::uint32_t response_timeout_ms = 3000;
+  /// Maximum RX inactivity after a response byte/chunk; defaults to 250 ms.
   std::uint32_t inter_byte_timeout_ms = 250;
+};
+
+/// \brief PLC-side ACPU monitoring timer encoded in 1E requests.
+///
+/// This protocol field is independent of the host communication response timeout. Values are
+/// expressed in milliseconds at the public boundary and must be exact 250 ms units representable
+/// by the 16-bit wire field. Zero is preserved as the protocol's explicit zero value.
+class E1MonitoringTimer {
+ public:
+  constexpr E1MonitoringTimer() noexcept = default;
+
+  [[nodiscard]] static constexpr E1MonitoringTimer milliseconds(
+      std::uint32_t value) noexcept {
+    return E1MonitoringTimer(value);
+  }
+
+  [[nodiscard]] constexpr std::uint32_t value_ms() const noexcept { return value_ms_; }
+  [[nodiscard]] constexpr std::uint32_t ticks() const noexcept { return value_ms_ / 250U; }
+  [[nodiscard]] constexpr bool is_valid() const noexcept {
+    return (value_ms_ % 250U) == 0U && ticks() <= 0xFFFFU;
+  }
+
+ private:
+  constexpr explicit E1MonitoringTimer(std::uint32_t value_ms) noexcept
+      : value_ms_(value_ms) {}
+
+  std::uint32_t value_ms_ = 4000U;
 };
 
 /// \brief Connected host-station route.
@@ -682,6 +709,131 @@ class E1PcTarget {
   std::uint32_t value_;
 };
 
+/// \brief Meaning of a mandatory 4C request-destination module target.
+enum class C4DestinationModuleKind : std::uint8_t {
+  OwnStation,
+  MultipleCpu,
+  RedundantControlSystemCpu,
+  RedundantStandbySystemCpu,
+  RedundantSystemACpu,
+  RedundantSystemBCpu,
+  Explicit,
+};
+
+/// \brief Mandatory typed request-destination module for a 4C multidrop route.
+class C4DestinationModule {
+ public:
+  [[nodiscard]] static constexpr C4DestinationModule own_station() noexcept {
+    return C4DestinationModule(
+        C4DestinationModuleKind::OwnStation, module_io::OwnStation, 0x00U, 0U);
+  }
+  [[nodiscard]] static constexpr C4DestinationModule multiple_cpu(
+      std::uint32_t cpu_number) noexcept {
+    const bool valid = cpu_number >= 1U && cpu_number <= 4U;
+    return C4DestinationModule(
+        C4DestinationModuleKind::MultipleCpu,
+        valid ? (module_io::MultipleCpu1 + cpu_number - 1U) : 0U,
+        0x00U,
+        cpu_number);
+  }
+  [[nodiscard]] static constexpr C4DestinationModule redundant_control_system_cpu() noexcept {
+    return C4DestinationModule(
+        C4DestinationModuleKind::RedundantControlSystemCpu,
+        module_io::ControlSystemCpu,
+        0x00U,
+        0U);
+  }
+  [[nodiscard]] static constexpr C4DestinationModule redundant_standby_system_cpu() noexcept {
+    return C4DestinationModule(
+        C4DestinationModuleKind::RedundantStandbySystemCpu,
+        module_io::StandbySystemCpu,
+        0x00U,
+        0U);
+  }
+  [[nodiscard]] static constexpr C4DestinationModule redundant_system_a_cpu() noexcept {
+    return C4DestinationModule(
+        C4DestinationModuleKind::RedundantSystemACpu,
+        module_io::SystemACpu,
+        0x00U,
+        0U);
+  }
+  [[nodiscard]] static constexpr C4DestinationModule redundant_system_b_cpu() noexcept {
+    return C4DestinationModule(
+        C4DestinationModuleKind::RedundantSystemBCpu,
+        module_io::SystemBCpu,
+        0x00U,
+        0U);
+  }
+  [[nodiscard]] static constexpr C4DestinationModule explicit_target(
+      std::uint32_t io_number,
+      std::uint32_t station_number) noexcept {
+    return C4DestinationModule(
+        C4DestinationModuleKind::Explicit, io_number, station_number, 0U);
+  }
+
+  [[nodiscard]] constexpr C4DestinationModuleKind kind() const noexcept { return kind_; }
+  [[nodiscard]] constexpr std::uint32_t io_number() const noexcept { return io_number_; }
+  [[nodiscard]] constexpr std::uint32_t station_number() const noexcept {
+    return station_number_;
+  }
+  [[nodiscard]] constexpr bool is_own_station_selector() const noexcept {
+    return kind_ == C4DestinationModuleKind::OwnStation && is_valid();
+  }
+  [[nodiscard]] constexpr bool is_valid() const noexcept {
+    switch (kind_) {
+      case C4DestinationModuleKind::OwnStation:
+        return io_number_ == module_io::OwnStation && station_number_ == 0U;
+      case C4DestinationModuleKind::MultipleCpu:
+        return selector_number_ >= 1U && selector_number_ <= 4U &&
+               io_number_ == (module_io::MultipleCpu1 + selector_number_ - 1U) &&
+               station_number_ == 0U;
+      case C4DestinationModuleKind::RedundantControlSystemCpu:
+        return io_number_ == module_io::ControlSystemCpu && station_number_ == 0U;
+      case C4DestinationModuleKind::RedundantStandbySystemCpu:
+        return io_number_ == module_io::StandbySystemCpu && station_number_ == 0U;
+      case C4DestinationModuleKind::RedundantSystemACpu:
+        return io_number_ == module_io::SystemACpu && station_number_ == 0U;
+      case C4DestinationModuleKind::RedundantSystemBCpu:
+        return io_number_ == module_io::SystemBCpu && station_number_ == 0U;
+      case C4DestinationModuleKind::Explicit:
+        return io_number_ <= 0xFFFFU && station_number_ <= 0xFFU;
+    }
+    return false;
+  }
+
+ private:
+  constexpr C4DestinationModule(
+      C4DestinationModuleKind kind,
+      std::uint32_t io_number,
+      std::uint32_t station_number,
+      std::uint32_t selector_number) noexcept
+      : kind_(kind),
+        io_number_(io_number),
+        station_number_(station_number),
+        selector_number_(selector_number) {}
+
+  C4DestinationModuleKind kind_;
+  std::uint32_t io_number_;
+  std::uint32_t station_number_;
+  std::uint32_t selector_number_;
+};
+
+/// \brief Mandatory request-source station number for an m:n multidrop route.
+class SelfStationNo {
+ public:
+  [[nodiscard]] static constexpr SelfStationNo number(std::uint32_t value) noexcept {
+    return SelfStationNo(value);
+  }
+
+  [[nodiscard]] constexpr std::uint32_t value() const noexcept { return value_; }
+  [[nodiscard]] constexpr bool is_valid() const noexcept { return value_ <= 0x1FU; }
+
+ private:
+  constexpr explicit SelfStationNo(std::uint32_t value) noexcept : value_(value) {}
+
+  std::uint32_t value_;
+};
+
 /// \brief Explicit 1C multidrop route. Network and self-station fields do not exist on this type.
 class C1MultidropRoute {
  public:
@@ -693,53 +845,70 @@ class C1MultidropRoute {
   std::uint32_t station_no_;
 };
 
-/// \brief Explicit 2C multidrop route with a mandatory station number.
-///
-/// The temporary enabled/number pair remains until D-103 replaces it with topology-specific types.
-class C2MultidropRoute {
+/// \brief Explicit 2C normal/1:n multidrop route. Self-station is fixed to zero.
+class C2StandardMultidropRoute {
  public:
-  constexpr explicit C2MultidropRoute(
-      std::uint32_t station_no,
-      bool self_station_enabled = false,
-      std::uint8_t self_station_no = 0x00U) noexcept
-      : station_no_(station_no),
-        self_station_enabled_(self_station_enabled),
-        self_station_no_(self_station_no) {}
+  constexpr explicit C2StandardMultidropRoute(std::uint32_t station_no) noexcept
+      : station_no_(station_no) {}
   [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
-  [[nodiscard]] constexpr bool self_station_enabled() const noexcept {
-    return self_station_enabled_;
-  }
-  [[nodiscard]] constexpr std::uint8_t self_station_no() const noexcept {
+
+ private:
+  std::uint32_t station_no_;
+};
+
+/// \brief Explicit 2C m:n multidrop route with a mandatory self-station number.
+class C2MnMultidropRoute {
+ public:
+  constexpr C2MnMultidropRoute(
+      std::uint32_t station_no,
+      SelfStationNo self_station_no) noexcept
+      : station_no_(station_no), self_station_no_(self_station_no) {}
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
+  [[nodiscard]] constexpr SelfStationNo self_station_no() const noexcept {
     return self_station_no_;
   }
 
  private:
   std::uint32_t station_no_;
-  bool self_station_enabled_;
-  std::uint8_t self_station_no_;
+  SelfStationNo self_station_no_;
 };
 
-/// \brief Explicit 3C routed multidrop route with mandatory station and network numbers.
-class C3MultidropRoute {
+/// \brief Explicit 3C normal/1:n multidrop route. Self-station is fixed to zero.
+class C3StandardMultidropRoute {
  public:
-  constexpr C3MultidropRoute(
+  constexpr C3StandardMultidropRoute(
+      std::uint32_t station_no,
+      std::uint32_t network_no,
+      C34PcTarget pc_target) noexcept
+      : station_no_(station_no),
+        network_no_(network_no),
+        pc_target_(pc_target) {}
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
+  [[nodiscard]] constexpr std::uint32_t network_no() const noexcept { return network_no_; }
+  [[nodiscard]] constexpr C34PcTarget pc_target() const noexcept { return pc_target_; }
+
+ private:
+  std::uint32_t station_no_;
+  std::uint32_t network_no_;
+  C34PcTarget pc_target_;
+};
+
+/// \brief Explicit 3C m:n multidrop route with a mandatory self-station number.
+class C3MnMultidropRoute {
+ public:
+  constexpr C3MnMultidropRoute(
       std::uint32_t station_no,
       std::uint32_t network_no,
       C34PcTarget pc_target,
-      bool self_station_enabled = false,
-      std::uint8_t self_station_no = 0x00U) noexcept
+      SelfStationNo self_station_no) noexcept
       : station_no_(station_no),
         network_no_(network_no),
         pc_target_(pc_target),
-        self_station_enabled_(self_station_enabled),
         self_station_no_(self_station_no) {}
   [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
   [[nodiscard]] constexpr std::uint32_t network_no() const noexcept { return network_no_; }
   [[nodiscard]] constexpr C34PcTarget pc_target() const noexcept { return pc_target_; }
-  [[nodiscard]] constexpr bool self_station_enabled() const noexcept {
-    return self_station_enabled_;
-  }
-  [[nodiscard]] constexpr std::uint8_t self_station_no() const noexcept {
+  [[nodiscard]] constexpr SelfStationNo self_station_no() const noexcept {
     return self_station_no_;
   }
 
@@ -747,39 +916,56 @@ class C3MultidropRoute {
   std::uint32_t station_no_;
   std::uint32_t network_no_;
   C34PcTarget pc_target_;
-  bool self_station_enabled_;
-  std::uint8_t self_station_no_;
+  SelfStationNo self_station_no_;
 };
 
-/// \brief Explicit 4C routed multidrop route with mandatory station and network numbers.
-class C4MultidropRoute {
+/// \brief Explicit 4C normal/1:n multidrop route. Self-station is fixed to zero.
+class C4StandardMultidropRoute {
  public:
-  constexpr C4MultidropRoute(
+  constexpr C4StandardMultidropRoute(
       std::uint32_t station_no,
       std::uint32_t network_no,
       C34PcTarget pc_target,
-      std::uint16_t module_io_no = module_io::OwnStation,
-      std::uint8_t module_station_no = 0x00U,
-      bool self_station_enabled = false,
-      std::uint8_t self_station_no = 0x00U) noexcept
+      C4DestinationModule destination_module) noexcept
       : station_no_(station_no),
         network_no_(network_no),
         pc_target_(pc_target),
-        module_io_no_(module_io_no),
-        module_station_no_(module_station_no),
-        self_station_enabled_(self_station_enabled),
+        destination_module_(destination_module) {}
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
+  [[nodiscard]] constexpr std::uint32_t network_no() const noexcept { return network_no_; }
+  [[nodiscard]] constexpr C34PcTarget pc_target() const noexcept { return pc_target_; }
+  [[nodiscard]] constexpr C4DestinationModule destination_module() const noexcept {
+    return destination_module_;
+  }
+
+ private:
+  std::uint32_t station_no_;
+  std::uint32_t network_no_;
+  C34PcTarget pc_target_;
+  C4DestinationModule destination_module_;
+};
+
+/// \brief Explicit 4C m:n multidrop route with a mandatory self-station number.
+class C4MnMultidropRoute {
+ public:
+  constexpr C4MnMultidropRoute(
+      std::uint32_t station_no,
+      std::uint32_t network_no,
+      C34PcTarget pc_target,
+      C4DestinationModule destination_module,
+      SelfStationNo self_station_no) noexcept
+      : station_no_(station_no),
+        network_no_(network_no),
+        pc_target_(pc_target),
+        destination_module_(destination_module),
         self_station_no_(self_station_no) {}
   [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
   [[nodiscard]] constexpr std::uint32_t network_no() const noexcept { return network_no_; }
   [[nodiscard]] constexpr C34PcTarget pc_target() const noexcept { return pc_target_; }
-  [[nodiscard]] constexpr std::uint16_t module_io_no() const noexcept { return module_io_no_; }
-  [[nodiscard]] constexpr std::uint8_t module_station_no() const noexcept {
-    return module_station_no_;
+  [[nodiscard]] constexpr C4DestinationModule destination_module() const noexcept {
+    return destination_module_;
   }
-  [[nodiscard]] constexpr bool self_station_enabled() const noexcept {
-    return self_station_enabled_;
-  }
-  [[nodiscard]] constexpr std::uint8_t self_station_no() const noexcept {
+  [[nodiscard]] constexpr SelfStationNo self_station_no() const noexcept {
     return self_station_no_;
   }
 
@@ -787,10 +973,8 @@ class C4MultidropRoute {
   std::uint32_t station_no_;
   std::uint32_t network_no_;
   C34PcTarget pc_target_;
-  std::uint16_t module_io_no_;
-  std::uint8_t module_station_no_;
-  bool self_station_enabled_;
-  std::uint8_t self_station_no_;
+  C4DestinationModule destination_module_;
+  SelfStationNo self_station_no_;
 };
 
 /// \brief Explicit non-default 1E route with a mandatory typed PC target.
@@ -814,21 +998,42 @@ class RouteConfig {
   constexpr explicit RouteConfig(C1MultidropRoute route) noexcept
       : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C1),
         station_no_(route.station_no()) {}
-  constexpr explicit RouteConfig(C2MultidropRoute route) noexcept
+  constexpr explicit RouteConfig(C2StandardMultidropRoute route) noexcept
       : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C2),
-        station_no_(route.station_no()), self_station_enabled_(route.self_station_enabled()),
-        self_station_no_(route.self_station_no()) {}
-  constexpr explicit RouteConfig(C3MultidropRoute route) noexcept
+        station_no_(route.station_no()) {}
+  constexpr explicit RouteConfig(C2MnMultidropRoute route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C2),
+        station_no_(route.station_no()), mn_multidrop_(true),
+        self_station_no_(route.self_station_no().value()),
+        self_station_valid_(route.self_station_no().is_valid()) {}
+  constexpr explicit RouteConfig(C3StandardMultidropRoute route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C3),
+        station_no_(route.station_no()), network_no_(route.network_no()),
+        pc_no_(route.pc_target().value()), pc_target_valid_(route.pc_target().is_valid()) {}
+  constexpr explicit RouteConfig(C3MnMultidropRoute route) noexcept
       : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C3),
         station_no_(route.station_no()), network_no_(route.network_no()),
         pc_no_(route.pc_target().value()), pc_target_valid_(route.pc_target().is_valid()),
-        self_station_enabled_(route.self_station_enabled()), self_station_no_(route.self_station_no()) {}
-  constexpr explicit RouteConfig(C4MultidropRoute route) noexcept
+        mn_multidrop_(true), self_station_no_(route.self_station_no().value()),
+        self_station_valid_(route.self_station_no().is_valid()) {}
+  constexpr explicit RouteConfig(C4StandardMultidropRoute route) noexcept
       : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C4),
         station_no_(route.station_no()), network_no_(route.network_no()),
         pc_no_(route.pc_target().value()), pc_target_valid_(route.pc_target().is_valid()),
-        module_io_no_(route.module_io_no()), module_station_no_(route.module_station_no()),
-        self_station_enabled_(route.self_station_enabled()), self_station_no_(route.self_station_no()) {}
+        module_io_no_(route.destination_module().io_number()),
+        module_station_no_(route.destination_module().station_number()),
+        destination_module_valid_(route.destination_module().is_valid()),
+        destination_module_own_selector_(route.destination_module().is_own_station_selector()) {}
+  constexpr explicit RouteConfig(C4MnMultidropRoute route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C4),
+        station_no_(route.station_no()), network_no_(route.network_no()),
+        pc_no_(route.pc_target().value()), pc_target_valid_(route.pc_target().is_valid()),
+        module_io_no_(route.destination_module().io_number()),
+        module_station_no_(route.destination_module().station_number()),
+        destination_module_valid_(route.destination_module().is_valid()),
+        destination_module_own_selector_(route.destination_module().is_own_station_selector()),
+        mn_multidrop_(true), self_station_no_(route.self_station_no().value()),
+        self_station_valid_(route.self_station_no().is_valid()) {}
   constexpr explicit RouteConfig(E1Route route) noexcept
       : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::E1),
         pc_no_(route.pc_target().value()), pc_target_valid_(route.pc_target().is_valid()) {}
@@ -859,17 +1064,26 @@ class RouteConfig {
   [[nodiscard]] constexpr bool pc_target_valid() const noexcept {
     return is_host_station() || pc_target_valid_;
   }
-  [[nodiscard]] constexpr std::uint16_t request_destination_module_io_no() const noexcept {
+  [[nodiscard]] constexpr std::uint32_t request_destination_module_io_no() const noexcept {
     return is_multidrop() ? module_io_no_ : module_io::OwnStation;
   }
-  [[nodiscard]] constexpr std::uint8_t request_destination_module_station_no() const noexcept {
+  [[nodiscard]] constexpr std::uint32_t request_destination_module_station_no() const noexcept {
     return is_multidrop() ? module_station_no_ : 0x00U;
   }
-  [[nodiscard]] constexpr bool self_station_enabled() const noexcept {
-    return is_multidrop() && self_station_enabled_;
+  [[nodiscard]] constexpr bool destination_module_valid() const noexcept {
+    return is_host_station() || destination_module_valid_;
   }
-  [[nodiscard]] constexpr std::uint8_t self_station_no() const noexcept {
-    return self_station_enabled() ? self_station_no_ : 0x00U;
+  [[nodiscard]] constexpr bool destination_module_is_own_station() const noexcept {
+    return is_host_station() || destination_module_own_selector_;
+  }
+  [[nodiscard]] constexpr bool is_mn_multidrop() const noexcept {
+    return is_multidrop() && mn_multidrop_;
+  }
+  [[nodiscard]] constexpr std::uint32_t self_station_no() const noexcept {
+    return is_mn_multidrop() ? self_station_no_ : 0x00U;
+  }
+  [[nodiscard]] constexpr bool self_station_valid() const noexcept {
+    return !is_mn_multidrop() || self_station_valid_;
   }
 
  private:
@@ -890,10 +1104,13 @@ class RouteConfig {
   std::uint32_t network_no_ = 0x00U;
   std::uint32_t pc_no_ = 0xFFU;
   bool pc_target_valid_ = false;
-  std::uint16_t module_io_no_ = module_io::OwnStation;
-  std::uint8_t module_station_no_ = 0x00U;
-  bool self_station_enabled_ = false;
-  std::uint8_t self_station_no_ = 0x00U;
+  std::uint32_t module_io_no_ = module_io::OwnStation;
+  std::uint32_t module_station_no_ = 0x00U;
+  bool destination_module_valid_ = false;
+  bool destination_module_own_selector_ = false;
+  bool mn_multidrop_ = false;
+  std::uint32_t self_station_no_ = 0x00U;
+  bool self_station_valid_ = true;
 };
 
 /// \brief Top-level protocol configuration shared by codecs and client requests.
@@ -924,6 +1141,8 @@ struct ProtocolConfig {
   RouteConfig route {};
   /// Request timeout policy used by the async client and stream decoder.
   TimeoutConfig timeout {};
+  /// PLC-side processing timer used only by 1E request frames; defaults to 4 seconds.
+  E1MonitoringTimer e1_monitoring_timer {};
 };
 
 /// \brief Device code plus numeric address.
@@ -1033,36 +1252,67 @@ struct ExtendedFileRegisterMonitorRegistration {
 
 /// \name Device-Memory Random And Multi-Block Requests
 /// @{
-/// \brief One item inside a native random-read request (`0403` or monitor registration).
-struct RandomReadItem {
-  /// Target device address for this sparse item.
+/// \brief One explicitly word-width item in a native random-read or monitor request.
+struct RandomReadWordItem {
+  /// Target device address read as one 16-bit word (bit devices return a 16-point mask word).
   DeviceAddress device {};
-  /// `true` when the item should be encoded as a double-word device access.
-  bool double_word = false;
 };
 
-/// \brief Native random-read request made of sparse word/dword items.
+/// \brief One explicitly double-word-width item in a native random-read or monitor request.
+struct RandomReadDWordItem {
+  /// Target device address read as one 32-bit double word.
+  DeviceAddress device {};
+};
+
+/// \brief Native random-read request with separate word and double-word domains.
 struct RandomReadRequest {
-  /// Sparse word/dword items encoded in the native random-read request.
-  std::span<const RandomReadItem> items {};
+  /// Sparse 16-bit items, encoded first and returned through the word output span.
+  std::span<const RandomReadWordItem> word_items {};
+  /// Sparse 32-bit items, encoded second and returned through the dword output span.
+  std::span<const RandomReadDWordItem> dword_items {};
 };
 
-/// \brief One word or double-word item inside native random write (`1402` word path).
+/// \brief One explicitly word-width item inside native random write (`1402` word path).
+///
+/// Device and value are a single construction boundary. Explicit zero is valid; omission is not.
 struct RandomWriteWordItem {
+  RandomWriteWordItem() = delete;
+  constexpr RandomWriteWordItem(DeviceAddress target_device, std::uint16_t write_value) noexcept
+      : device(target_device), value(write_value) {}
+
   /// Target device address for the sparse write.
-  DeviceAddress device {};
-  /// One word or double-word value to write.
-  std::uint32_t value = 0;
-  /// `true` when the target is encoded as a double-word write item.
-  bool double_word = false;
+  DeviceAddress device;
+  /// One 16-bit word value to write.
+  std::uint16_t value;
+};
+
+/// \brief One explicitly double-word-width item inside native random write (`1402` word path).
+///
+/// Device and value are a single construction boundary. Explicit zero is valid; omission is not.
+struct RandomWriteDWordItem {
+  RandomWriteDWordItem() = delete;
+  constexpr RandomWriteDWordItem(DeviceAddress target_device, std::uint32_t write_value) noexcept
+      : device(target_device), value(write_value) {}
+
+  /// Target device address for the sparse write.
+  DeviceAddress device;
+  /// One 32-bit double-word value to write.
+  std::uint32_t value;
 };
 
 /// \brief One bit item inside native random write (`1402` bit path).
+///
+/// Device and value are a single construction boundary. Explicit `Off` is valid; omission and
+/// unknown enum values are rejected.
 struct RandomWriteBitItem {
+  RandomWriteBitItem() = delete;
+  constexpr RandomWriteBitItem(DeviceAddress target_device, BitValue write_value) noexcept
+      : device(target_device), value(write_value) {}
+
   /// Target bit device address for the sparse write.
-  DeviceAddress device {};
+  DeviceAddress device;
   /// Bit value written to `device`.
-  BitValue value = BitValue::Off;
+  BitValue value;
 };
 
 /// \brief One block inside native multi-block read (`0406`).
@@ -1120,8 +1370,10 @@ struct MultiBlockReadBlockResult {
 /// @{
 /// \brief Monitor registration payload used by `0801`.
 struct MonitorRegistration {
-  /// Sparse list of word/dword items to register for a later `0802` read.
-  std::span<const RandomReadItem> items {};
+  /// Sparse 16-bit items registered first.
+  std::span<const RandomReadWordItem> word_items {};
+  /// Sparse 32-bit items registered second. Unsupported for 1C and 1E monitor commands.
+  std::span<const RandomReadDWordItem> dword_items {};
 };
 /// @}
 

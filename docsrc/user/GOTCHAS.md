@@ -36,7 +36,28 @@
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| Only one station responds, or no RS-485 station responds. | The selected frame-specific multidrop station/network/PC target does not match the target serial module. | Construct the appropriate frame-specific route. For 3C/4C supply a `C34PcTarget`; for 1E supply an `E1PcTarget`. When the connected-station value is correct, select `connected_station()` explicitly. For an RS-232C point-to-point connected station, select `RouteConfig {HostStationRoute {}}`; do not represent it as mutable station or PC values. |
+| Only one station responds, or no RS-485 station responds. | The selected frame-specific multidrop station/network/PC/destination-module target or connection topology does not match the serial-network configuration. | Construct the appropriate frame-specific route. For normal/1:n use a `*StandardMultidropRoute`; for m:n use a `*MnMultidropRoute` and the assigned mandatory `SelfStationNo` (0..31). Do not reuse a C24-side station number or infer station-count rules. For 3C/4C supply a `C34PcTarget`; 4C also requires `C4DestinationModule`; 1E requires `E1PcTarget`. For an RS-232C point-to-point connected station, select `RouteConfig {HostStationRoute {}}`. |
+
+## 1E timer changes when communication timeout changes
+
+| Symptom | Root cause | Fix |
+| --- | --- | --- |
+| A 1E request needs a different PLC processing timer than the host response deadline. | These are independent limits: response timeout controls host waiting, while the 1E monitoring timer is encoded into the PLC request. | Leave the common response timeout at 3000 ms or set it explicitly, and configure `E1MonitoringTimer::milliseconds(...)` separately in exact 250 ms units. No rounding or saturation is performed. |
+
+## Response starts but times out before completion
+
+| Symptom | Root cause | Fix |
+| --- | --- | --- |
+| Some response bytes arrive, then the request fails with an inter-byte timeout. | No RX data chunk reached the library for the configured inactivity interval. This is separate from the fixed total response deadline. | Keep the 250 ms default unless the actual serial/adapter delivery gaps require an explicit positive value. After an unsequenced timeout, reset/drain the transport and reconfigure before another request; do not reuse partial response bytes. |
+
+## Remote RUN or PAUSE result is unknown
+
+| Symptom | Root cause | Fix |
+| --- | --- | --- |
+| Remote RUN returns `StatusCode::OperationOutcomeUnknown`. | Transmission started, but transport failure, timeout, cancellation, or an invalid response prevented confirmation. The PLC may already have applied the requested RUN and clear policies. | Do not resend automatically. Inspect the PLC state, reset/reopen the transport when required, and decide the next action explicitly. |
+| `remote_run()` does not compile, or CLI `remote-run` exits with usage. | Conflict and clear policies are mandatory. | Pass `RemoteOperationMode::{DoNotExecuteForcibly, ExecuteForcibly}` and one `RemoteRunClearMode`, or CLI `no-force|force` plus `no-clear|outside-latch|all-clear`. |
+| Remote PAUSE returns `StatusCode::OperationOutcomeUnknown`. | PAUSE transmission started, but its result was not confirmed. The library does not retry or escalate to forced execution. | Inspect the PLC state before deciding the next operation. Reopen/reset the transport when required. |
+| `remote_pause()` does not compile, or CLI `remote-pause` exits with usage. | The conflict policy is mandatory and only the exact CLI names `no-force` and `force` are accepted. | Pass one `RemoteOperationMode` or one exact CLI policy. Do not use numeric or compatibility aliases. |
 
 ## `host_sync.hpp` symbol not found
 
@@ -66,4 +87,6 @@
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| `D100:D`, `D100:F`, or `D100.0` fails in the high-level string parser. | The current parser accepts plain device strings only. | Use `D100`, `M100`, `X10`, and typed C++ fields such as `double_word` where needed. |
+| `D100:D`, `D100:F`, or `D100.0` fails in the high-level string parser. | The parser accepts plain device strings; width is selected by the API type rather than a suffix. | Use `D100`, `M100`, or `X10` with the explicit Word or DWord API. For CLI sparse reads, use `word:D100` or `dword:D100`. |
+| A random-write item does not compile without a value, or CLI rejects `D100`/`M100`. | Random-write values are mandatory so an omitted value cannot silently become zero or OFF. | Construct the item/spec with both device and value, or use CLI `DEVICE=VALUE`. Explicit `=0` is valid. |
+| A random write returns `OperationOutcomeUnknown`. | Transmission started, but the PLC response was not confirmed. The value may already have changed. | Inspect the PLC/device state and reconfigure/reset the transport as required. Do not retry automatically. |

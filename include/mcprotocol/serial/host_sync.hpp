@@ -54,16 +54,21 @@ class PosixSyncClient {
   [[nodiscard]] Status read_cpu_model(CpuModelInfo& out_info) noexcept;
 
   /// \brief Issues remote RUN (`1001`) synchronously.
+  ///
+  /// Both the conflict policy and clear scope are mandatory. If transmission starts but the
+  /// response cannot be confirmed, this returns `StatusCode::OperationOutcomeUnknown`.
   [[nodiscard]] Status remote_run(
-      RemoteOperationMode mode = RemoteOperationMode::DoNotExecuteForcibly,
-      RemoteRunClearMode clear_mode = RemoteRunClearMode::DoNotClear) noexcept;
+      RemoteOperationMode mode,
+      RemoteRunClearMode clear_mode) noexcept;
 
   /// \brief Issues remote STOP (`1002`) synchronously.
   [[nodiscard]] Status remote_stop() noexcept;
 
   /// \brief Issues remote PAUSE (`1003`) synchronously.
-  [[nodiscard]] Status remote_pause(
-      RemoteOperationMode mode = RemoteOperationMode::DoNotExecuteForcibly) noexcept;
+  ///
+  /// The conflict policy is mandatory. If transmission starts but the response cannot be
+  /// confirmed, this returns `StatusCode::OperationOutcomeUnknown`.
+  [[nodiscard]] Status remote_pause(RemoteOperationMode mode) noexcept;
 
   /// \brief Issues remote latch clear (`1005`) synchronously.
   [[nodiscard]] Status remote_latch_clear() noexcept;
@@ -79,8 +84,8 @@ class PosixSyncClient {
 
   /// \brief Issues remote RESET (`1006`) synchronously.
   ///
-  /// Some targets reset before returning a response. In that case the underlying client treats a
-  /// pure response-timeout with no received bytes as success for this operation.
+  /// Completion means the request bytes were transmitted successfully. It does not confirm the
+  /// resulting PLC reset state.
   [[nodiscard]] Status remote_reset() noexcept;
 
   /// \brief Reads user-frame registration data synchronously (`0610`).
@@ -207,32 +212,55 @@ class PosixSyncClient {
       std::string_view head_device,
       std::span<const std::uint16_t> words) noexcept;
 
-  /// \brief Reads sparse word/dword items synchronously from string-address specs.
+  /// \brief Reads sparse Word and DWord items synchronously from explicit-width specs.
   [[nodiscard]] Status random_read(
-      std::span<const highlevel::RandomReadSpec> items,
-      std::span<std::uint32_t> out_values) noexcept;
+      std::span<const highlevel::RandomReadWordSpec> word_items,
+      std::span<const highlevel::RandomReadDWordSpec> dword_items,
+      std::span<std::uint16_t> out_words,
+      std::span<std::uint32_t> out_dwords) noexcept;
 
-  /// \brief Reads one sparse word/dword item synchronously from a string address.
-  [[nodiscard]] Status random_read(
+  /// \brief Reads one sparse Word item synchronously from a string address.
+  [[nodiscard]] Status random_read_word(
       std::string_view device,
-      std::uint32_t& out_value,
-      bool double_word = false) noexcept;
+      std::uint16_t& out_value) noexcept;
 
-  /// \brief Writes sparse word/dword items synchronously from string-address specs.
+  /// \brief Reads one sparse DWord item synchronously from a string address.
+  [[nodiscard]] Status random_read_dword(
+      std::string_view device,
+      std::uint32_t& out_value) noexcept;
+
+  /// \brief Writes sparse Word items synchronously from string-address specs.
+  ///
+  /// Each spec requires an explicit value. A result that cannot be confirmed after transmission is
+  /// reported as `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
   [[nodiscard]] Status random_write_words(
       std::span<const highlevel::RandomWriteWordSpec> items) noexcept;
+
+  /// \brief Writes sparse DWord items synchronously from string-address specs.
+  ///
+  /// Each spec requires an explicit value. A result that cannot be confirmed after transmission is
+  /// reported as `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
+  [[nodiscard]] Status random_write_dwords(
+      std::span<const highlevel::RandomWriteDWordSpec> items) noexcept;
 
   /// \brief Writes extended file-register words randomly.
   [[nodiscard]] Status random_write_extended_file_register_words(
       std::span<const ExtendedFileRegisterRandomWriteWordItem> items) noexcept;
 
-  /// \brief Writes one sparse word/dword item synchronously from a string address.
+  /// \brief Writes one sparse Word item synchronously from a string address.
   [[nodiscard]] Status random_write_word(
       std::string_view device,
-      std::uint32_t value,
-      bool double_word = false) noexcept;
+      std::uint16_t value) noexcept;
+
+  /// \brief Writes one sparse DWord item synchronously from a string address.
+  [[nodiscard]] Status random_write_dword(
+      std::string_view device,
+      std::uint32_t value) noexcept;
 
   /// \brief Writes sparse bit items synchronously from string-address specs.
+  ///
+  /// Each spec requires an explicit `Off` or `On`. A result that cannot be confirmed after
+  /// transmission is `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
   [[nodiscard]] Status random_write_bits(
       std::span<const highlevel::RandomWriteBitSpec> items) noexcept;
 
@@ -241,24 +269,25 @@ class PosixSyncClient {
       std::string_view device,
       BitValue value) noexcept;
 
-  /// \brief Registers a sparse monitor synchronously from string-address specs.
+  /// \brief Registers sparse Word and DWord monitor items from explicit-width specs.
   [[nodiscard]] Status register_monitor(
-      std::span<const highlevel::RandomReadSpec> items) noexcept;
+      std::span<const highlevel::RandomReadWordSpec> word_items,
+      std::span<const highlevel::RandomReadDWordSpec> dword_items) noexcept;
 
-  /// \brief Registers one sparse monitor item synchronously from a string address.
-  [[nodiscard]] Status register_monitor(
-      std::string_view device,
-      bool double_word = false) noexcept;
+  /// \brief Registers one sparse Word monitor item synchronously.
+  [[nodiscard]] Status register_monitor_word(std::string_view device) noexcept;
+
+  /// \brief Registers one sparse DWord monitor item synchronously.
+  [[nodiscard]] Status register_monitor_dword(std::string_view device) noexcept;
 
   /// \brief Registers extended file-register monitor data synchronously.
   [[nodiscard]] Status register_extended_file_register_monitor(
       const ExtendedFileRegisterMonitorRegistration& request) noexcept;
 
-  /// \brief Reads the most recently registered monitor items synchronously.
-  [[nodiscard]] Status read_monitor(std::span<std::uint32_t> out_values) noexcept;
-
-  /// \brief Reads one previously registered monitor item synchronously.
-  [[nodiscard]] Status read_monitor(std::uint32_t& out_value) noexcept;
+  /// \brief Reads the most recently registered Word and DWord monitor items synchronously.
+  [[nodiscard]] Status read_monitor(
+      std::span<std::uint16_t> out_words,
+      std::span<std::uint32_t> out_dwords) noexcept;
 
   /// \brief Reads the most recently registered extended file-register monitor items synchronously.
   [[nodiscard]] Status read_extended_file_register_monitor(
@@ -271,7 +300,8 @@ class PosixSyncClient {
   };
 
   static void on_request_complete(void* user, Status status) noexcept;
-  [[nodiscard]] Status run_until_complete() noexcept;
+  [[nodiscard]] Status run_until_complete(
+      bool operation_outcome_unknown_after_write = false) noexcept;
 
   PosixSerialPort port_ {};
   MelsecSerialClient client_ {};

@@ -58,9 +58,9 @@ int main() {
     return 1;
   }
 
-  std::uint32_t sparse_d100 = 0;
+  std::uint16_t sparse_d100 = 0;
   // Random read shows the sparse-device path without writing to the PLC.
-  status = plc.random_read("D100", sparse_d100);
+  status = plc.random_read_word("D100", sparse_d100);
   if (!status.ok()) {
     std::fprintf(stderr, "random_read failed: %s\n", status.message);
     return 1;

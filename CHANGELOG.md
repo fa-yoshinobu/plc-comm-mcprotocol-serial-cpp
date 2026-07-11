@@ -19,6 +19,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### BREAKING
 
+- Library: Replaced `RandomReadItem` and the public `double_word` switches with explicit
+  `RandomReadWordItem`/`RandomReadDWordItem`, typed Word/DWord write items, separate request spans,
+  and separate `uint16_t`/`uint32_t` response spans. The host-sync API now uses width-specific
+  method names. No width is inferred from a device code.
+- Library: Link-direct random read/write/monitor now exposes only its supported Word-width item and
+  output types; the former DWord boolean is removed.
+- Tooling: `random-read` requires `word:DEVICE` or `dword:DEVICE`. DWord writes use the new
+  `random-write-dwords` command; `random-write-words` rejects values outside `0..65535`.
+- Library: Random Word, DWord, and Bit write items/specs, including link-direct items, are no longer
+  default constructible. Device and value must be supplied together; explicit zero/OFF remains
+  valid, and unknown bit enum values reject the entire request before transmission.
+- Library: A random write whose result cannot be confirmed after transmission now completes as
+  `OperationOutcomeUnknown`, clears the pending frame, and is never retried automatically.
+- Tooling: Random-write CLI items require `DEVICE=VALUE` and validate every item before opening the
+  serial device. Missing/empty values and bit values other than `0` or `1` are rejected.
+
 - Library: Removed default construction and implicit values from `PosixSerialConfig`. Device path,
   baud rate, data bits, stop bits, parity, and hardware flow control are now required constructor
   arguments.
@@ -41,10 +57,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   frame-specific multidrop route; HostStation fixed header fields are no longer writable.
 - Tooling: Added required `--route host|multidrop`. `--station` no longer selects a route from its
   numeric value and is rejected for a host route.
-- Library: Split multidrop configuration into `C1MultidropRoute`, `C2MultidropRoute`,
-  `C3MultidropRoute`, and `C4MultidropRoute`. Station is mandatory for every multidrop frame;
-  network is additionally mandatory for 3C/4C. Generic station `0xFF`, network `0xFE`, overflow,
-  and wrong-frame route types are rejected before encoding.
+- Library: Split multidrop configuration into `C1MultidropRoute` and topology-specific
+  `C2/C3/C4StandardMultidropRoute` and `C2/C3/C4MnMultidropRoute` types. Station is mandatory for
+  every multidrop frame; network is additionally mandatory for 3C/4C. Generic station `0xFF`,
+  network `0xFE`, overflow, and wrong-frame route types are rejected before encoding.
 - Tooling: Added required `--network` for 3C/4C multidrop routes. It is rejected for host and 1C/2C
   routes.
 - Library: Replaced the optional raw route PC number with mandatory typed `C34PcTarget` and
@@ -54,8 +70,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tooling: Added required `--pc-target` for 3C/4C/1E non-host routes. Named 3C/4C selectors are
   `control`, `standby`, `special-fe`, and `connected`; ordinary numeric targets are range checked
   before narrowing, and equivalent raw special values are normalized to the canonical selector.
+- Library: Replaced the defaulted raw 4C destination-module I/O/station pair with mandatory typed
+  `C4DestinationModule`. 4C multidrop callers must explicitly select own station, Multiple CPU,
+  redundant CPU, or a configuration-dependent explicit target; HostStation fixes own station
+  internally and other frame-specific routes expose no destination-module input.
+- Tooling: Added required `--module-target` for 4C multidrop routes. Host, 1C, 2C, 3C, and 1E
+  routes reject it.
+- Library: Removed the ambiguous `self_station_enabled` plus `self_station_no` pair. Normal/1:n
+  route types expose no self-station input; m:n route types require typed `SelfStationNo` 0..31,
+  including explicit zero.
+- Tooling: Added required `--topology standard|mn` for 2C/3C/4C multidrop. `standard` rejects
+  `--self-station`; `mn` requires `--self-station 0..31`.
+- Library: Changed the omitted host response timeout from 5000 ms to the cross-library 3000 ms
+  value. Explicit values must be 1..2147483647 ms and are applied as one wrap-safe total deadline
+  from TX completion without extension after RX starts.
+- Library: Separated the 1E ACPU monitoring timer from the host response timeout. The new
+  `E1MonitoringTimer` defaults to 4000 ms (`0x0010`) and rejects non-250 ms units or field overflow
+  instead of rounding or saturating.
+- Library: Remote RESET now completes immediately after successful transmission and reports request
+  transmission rather than PLC reset success. Global-signal and transmission-sequence timeouts are
+  no longer converted to success.
+- Tooling: CLI response timeout now defaults to 3000 ms. Added the optional 1E-only
+  `--e1-monitoring-timer-ms`; Linux/PowerShell scripts no longer inject a 5000/8000 ms response
+  fallback.
+- Library: Kept the omitted inter-byte timeout at 250 ms across generic config, presets, clients,
+  CLI, and scripts. Explicit values must be 1..2147483647 ms; zero and larger values fail before
+  encoding/open instead of becoming immediate or wrap-unsafe deadlines.
+- Library: RX deadline checks now occur before accepting each chunk as well as during polling. Each
+  delivered chunk restarts only the inter-byte inactivity deadline; the total response deadline is
+  unchanged. A chunk at or after either deadline is rejected.
+- Tooling: Removed the FX5U soak wrapper's hidden 1000 ms inter-byte fallback. Linux scripts preserve
+  omission or forward an explicit `MCPROTOCOL_INTER_BYTE_TIMEOUT_MS` value.
+- Library: `PosixSyncClient::remote_run` no longer supplies implicit non-forced and no-clear
+  policies. Callers must pass both `RemoteOperationMode` and `RemoteRunClearMode`; the encoder and
+  async API continue to require the same typed values.
+- Tooling: `remote-run` now requires exactly two positional policies: `no-force|force` and
+  `no-clear|outside-latch|all-clear`. Missing, unknown, or extra values fail before serial open.
+- Library: `PosixSyncClient::remote_pause` no longer supplies an implicit non-forced policy.
+  Callers must pass `RemoteOperationMode` explicitly, matching the encoder and async API.
+- Tooling: `remote-pause` now requires exactly one `no-force|force` argument. Removed the
+  `normal`, `safe`, and numeric conflict-policy aliases from both Remote RUN and PAUSE parsing.
 
 ### Changed
+
+- Library: Added `StatusCode::OperationOutcomeUnknown`. Remote RUN transport failure, timeout,
+  cancellation after TX, or an unconfirmable response reports that the PLC RUN state is unknown
+  instead of looking like a pre-send validation failure. Remote RUN is never retried automatically.
+- Library: Applied the same unknown-outcome and no-automatic-retry contract to Remote PAUSE.
+  Explicit PLC errors remain confirmed PLC responses and never trigger force escalation.
 
 - Library: Rejects 5/6 data bits for MC protocol; binary mode requires 8 bits and ASCII accepts an
   explicit 7 or 8. Serial and protocol combinations are validated before opening the OS handle.
@@ -69,6 +131,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: ASCII and binary response route headers are parsed and compared with the active request.
   Complete responses from another station/network/PC/module/self-station identity are consumed
   without completing the request; malformed ASCII route text is a parse error.
+- Library: CLI and async-client deadline comparisons share the same wrap-safe comparison. The CLI
+  continues enforcing the total response deadline after partial RX instead of switching solely to
+  the inter-byte deadline.
+- Library: Unsequenced frame timeouts now require transport reset and client reconfiguration before
+  another request; the host sync wrapper closes its serial port. Format2 remains reusable because
+  its block identity isolates late responses.
 
 ### Tests
 
@@ -84,6 +152,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coverage.
 - Added mandatory typed PC-target, frame-specific range, special-selector, CLI omission/overflow,
   inactive-field, pre-encode rejection, and foreign-PC response-isolation coverage.
+- Added mandatory 4C destination-module construction, selector/range/alias, CLI omission and
+  malformed-input, connected-only command, routed read, no-TX, and foreign-module response coverage.
+- Added response-timeout default/range/wrap/partial-RX coverage, independent 1E timer default and
+  boundary vectors, CLI parse/validation cases, and immediate Remote RESET transmission completion.
+- Added inter-byte default/range, one-byte/multi-chunk, exact-boundary, deadline restart, 32-bit
+  wrap, complete-response, partial-state discard, post-timeout isolation, and CLI boundary coverage.
 
 ## [3.1.0] - 2026-07-10
 

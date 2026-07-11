@@ -469,11 +469,7 @@ class ByteWriter {
 
 [[nodiscard]] constexpr std::uint16_t e1_acpu_monitoring_timer(
     const ProtocolConfig& config) noexcept {
-  if (config.timeout.response_timeout_ms == 0U) {
-    return 0U;
-  }
-  const std::uint32_t ticks = (config.timeout.response_timeout_ms + 249U) / 250U;
-  return static_cast<std::uint16_t>(ticks > 0xFFFFU ? 0xFFFFU : ticks);
+  return static_cast<std::uint16_t>(config.e1_monitoring_timer.ticks());
 }
 
 [[nodiscard]] constexpr bool is_remote_password_iq_r(const ProtocolConfig& config) noexcept {
@@ -1065,17 +1061,14 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return append_ascii_device_number(writer, head_device_number, 7U, false);
 }
 
-[[nodiscard]] Status validate_random_write_word_item_device(
+[[nodiscard]] Status validate_random_item_device(
     const ProtocolConfig& config,
-    const RandomWriteWordItem& item,
-    const char* word_message,
-    const char* dword_message) noexcept;
-[[nodiscard]] Status validate_random_read_item_device(
-    const ProtocolConfig& config,
-    const RandomReadItem& item,
+    const DeviceAddress& device,
+    bool double_word,
     const char* word_message,
     const char* dword_message) noexcept;
 [[nodiscard]] Status validate_bit_device(const DeviceAddress& device, const char* message) noexcept;
+[[nodiscard]] constexpr bool is_valid_bit_value(BitValue value) noexcept;
 [[nodiscard]] bool is_bit_device_code(DeviceCode code) noexcept;
 [[nodiscard]] bool is_c1_word_unit_bit_head(const DeviceAddress& device) noexcept;
 
@@ -1084,12 +1077,10 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_c1_random_write_word_item(
     const ProtocolConfig& config,
     const RandomWriteWordItem& item) noexcept {
-  if (item.double_word) {
-    return invalid_argument("1C random write words does not support double-word items");
-  }
-  const Status item_status = validate_random_write_word_item_device(
+  const Status item_status = validate_random_item_device(
       config,
-      item,
+      item.device,
+      false,
       "1C random write words requires supported word or 16-point bit devices",
       "1C random write words does not support double-word items");
   if (!item_status.ok()) {
@@ -1118,14 +1109,12 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] Status validate_c1_monitor_item(
     const ProtocolConfig& config,
-    const RandomReadItem& item,
+    const RandomReadWordItem& item,
     bool bit_units) noexcept {
-  if (item.double_word) {
-    return invalid_argument("1C monitor does not support double-word items");
-  }
-  const Status item_status = validate_random_read_item_device(
+  const Status item_status = validate_random_item_device(
       config,
-      item,
+      item.device,
+      false,
       "1C monitor requires supported devices",
       "1C monitor does not support double-word items");
   if (!item_status.ok()) {
@@ -1210,12 +1199,17 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return is_bit_device_code(code) ? 40U : 256U;
 }
 
-[[nodiscard]] bool c1_monitor_uses_bit_units(std::span<const RandomReadItem> items) noexcept {
-  if (items.empty()) {
+[[nodiscard]] bool c1_monitor_uses_bit_units(
+    std::span<const RandomReadWordItem> word_items,
+    std::span<const RandomReadDWordItem> dword_items) noexcept {
+  if (!dword_items.empty()) {
     return false;
   }
-  for (const RandomReadItem& item : items) {
-    if (item.double_word || !is_bit_device_code(item.device.code)) {
+  if (word_items.empty()) {
+    return false;
+  }
+  for (const RandomReadWordItem& item : word_items) {
+    if (!is_bit_device_code(item.device.code)) {
       return false;
     }
   }
@@ -1281,10 +1275,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] Status validate_link_direct_random_read_item(
     const ProtocolConfig& config,
-    const LinkDirectRandomReadItem& item) noexcept {
-  if (item.double_word) {
-    return invalid_argument("Link direct random read does not support double-word items");
-  }
+    const LinkDirectRandomReadWordItem& item) noexcept {
   if (is_link_direct_word_device(item.device.device.code)) {
     return validate_link_direct_word_device(config, item.device);
   }
@@ -1297,9 +1288,6 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_link_direct_random_write_word_item(
     const ProtocolConfig& config,
     const LinkDirectRandomWriteWordItem& item) noexcept {
-  if (item.double_word) {
-    return invalid_argument("Link direct random word write does not support double-word items");
-  }
   return validate_link_direct_word_device(config, item.device);
 }
 
@@ -1559,9 +1547,11 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return writer.push(static_cast<std::uint8_t>(config.route.station_no())) &&
          writer.push(static_cast<std::uint8_t>(config.route.network_no())) &&
          writer.push(static_cast<std::uint8_t>(config.route.pc_no())) &&
-         writer.append_le16(config.route.request_destination_module_io_no()) &&
-         writer.push(config.route.request_destination_module_station_no()) &&
-         writer.push(config.route.self_station_no());
+         writer.append_le16(static_cast<std::uint16_t>(
+             config.route.request_destination_module_io_no())) &&
+         writer.push(static_cast<std::uint8_t>(
+             config.route.request_destination_module_station_no())) &&
+         writer.push(static_cast<std::uint8_t>(config.route.self_station_no()));
 }
 
 [[nodiscard]] Status unsupported(const char* message) noexcept {
@@ -1615,7 +1605,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] constexpr bool is_connected_station_route(const ProtocolConfig& config) noexcept {
-  return config.route.is_host_station();
+  return config.route.destination_module_is_own_station();
 }
 
 [[nodiscard]] Status validate_connected_station_only_command_config(
@@ -2212,68 +2202,40 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
-[[nodiscard]] Status validate_random_read_item_device(
+[[nodiscard]] Status validate_random_item_device(
     const ProtocolConfig& config,
-    const RandomReadItem& item,
+    const DeviceAddress& device,
+    bool double_word,
     const char* word_message,
     const char* dword_message) noexcept {
-  const DeviceSpec* spec = find_device_spec(item.device.code);
+  const DeviceSpec* spec = find_device_spec(device.code);
   if (spec == nullptr) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
+    return invalid_argument(double_word ? dword_message : word_message);
   }
-  if (is_qualified_only_device(item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
+  if (is_qualified_only_device(device.code)) {
+    return invalid_argument(double_word ? dword_message : word_message);
   }
   const Status profile_status = validate_profile_plain_device_support(
       config,
-      item.device.code,
-      item.double_word ? dword_message : word_message);
+      device.code,
+      double_word ? dword_message : word_message);
   if (!profile_status.ok()) {
     return profile_status;
   }
-  if (requires_random_dword_access(item.device.code) != item.double_word &&
-      requires_random_dword_access(item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
+  if (requires_random_dword_access(device.code) && !double_word) {
+    return invalid_argument(word_message);
   }
-  if (is_random_device_unsupported_by_profile(config, item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
+  if (is_random_device_unsupported_by_profile(config, device.code)) {
+    return invalid_argument(double_word ? dword_message : word_message);
   }
-  if (is_long_contact_coil_device(item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
+  if (is_long_contact_coil_device(device.code)) {
+    return invalid_argument(double_word ? dword_message : word_message);
   }
   return ok_status();
 }
 
-[[nodiscard]] Status validate_random_write_word_item_device(
-    const ProtocolConfig& config,
-    const RandomWriteWordItem& item,
-    const char* word_message,
-    const char* dword_message) noexcept {
-  const DeviceSpec* spec = find_device_spec(item.device.code);
-  if (spec == nullptr) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
-  }
-  if (is_qualified_only_device(item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
-  }
-  const Status profile_status = validate_profile_plain_device_support(
-      config,
-      item.device.code,
-      item.double_word ? dword_message : word_message);
-  if (!profile_status.ok()) {
-    return profile_status;
-  }
-  if (requires_random_dword_access(item.device.code) != item.double_word &&
-      requires_random_dword_access(item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
-  }
-  if (is_random_device_unsupported_by_profile(config, item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
-  }
-  if (is_long_contact_coil_device(item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
-  }
-  return ok_status();
+[[nodiscard]] constexpr bool is_valid_bit_value(BitValue value) noexcept {
+  return value == BitValue::Off || value == BitValue::On;
 }
 
 [[nodiscard]] Status validate_request_data_size(
@@ -2398,6 +2360,19 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     return invalid_argument("Unknown code mode");
   }
 
+  if (!is_wrap_safe_timeout_ms(config.timeout.response_timeout_ms)) {
+    return invalid_argument("Response timeout must be in range 1..2147483647 ms");
+  }
+
+  if (!is_wrap_safe_timeout_ms(config.timeout.inter_byte_timeout_ms)) {
+    return invalid_argument("Inter-byte timeout must be in range 1..2147483647 ms");
+  }
+
+  if (!config.e1_monitoring_timer.is_valid()) {
+    return invalid_argument(
+        "1E monitoring timer must be an exact 250 ms unit in range 0..16383750 ms");
+  }
+
   if (!config.route.is_specified()) {
     return invalid_argument("Route selection is required");
   }
@@ -2432,17 +2407,11 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     if (config.ascii_format == AsciiFormat::Format2) {
       return unsupported("1C frames do not support ASCII Format2");
     }
-    if (config.route.self_station_enabled()) {
-      return invalid_argument("1C frame does not use self-station routing");
-    }
   }
 
   if (is_e1_frame(config)) {
     if (!config.route.pc_target_valid()) {
       return invalid_argument("1E PC target is invalid");
-    }
-    if (config.route.self_station_enabled()) {
-      return invalid_argument("1E frame does not use self-station routing");
     }
     if (config.route.station_no() != 0x00U ||
         config.route.network_no() != 0x00U ||
@@ -2456,7 +2425,7 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     return ok_status();
   }
 
-  if (config.route.self_station_enabled() && config.route.self_station_no() > 0x1FU) {
+  if (!config.route.self_station_valid()) {
     return invalid_argument("Self-station number must be in range 0x00..0x1F");
   }
 
@@ -2480,6 +2449,9 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
       }
       if (!is_valid_routed_pc_no(config.route.pc_no())) {
         return invalid_argument("3C/4C PC No. must be 0xFF, 0x01..0x78, 0x7D, 0x7E, or 0xFE");
+      }
+      if (is_c4_frame(config) && !config.route.destination_module_valid()) {
+        return invalid_argument("4C request-destination module target is invalid");
       }
     }
   }
@@ -2985,10 +2957,10 @@ DecodeResult FrameCodec::decode_response(
         route_parse_ok = parse_route_field(0U, 2U, station) &&
                          parse_route_field(2U, 2U, self_station_no);
         if (route_parse_ok) {
-          actual_route = RouteConfig {C2MultidropRoute {
-              static_cast<std::uint8_t>(station),
-              self_station_no != 0U,
-              static_cast<std::uint8_t>(self_station_no)}};
+          actual_route = self_station_no == 0U
+              ? RouteConfig {C2StandardMultidropRoute {station}}
+              : RouteConfig {C2MnMultidropRoute {
+                    station, SelfStationNo::number(self_station_no)}};
         }
         break;
       case FrameKind::C3:
@@ -2997,12 +2969,14 @@ DecodeResult FrameCodec::decode_response(
                          parse_route_field(4U, 2U, pc) &&
                          parse_route_field(6U, 2U, self_station_no);
         if (route_parse_ok) {
-          actual_route = RouteConfig {C3MultidropRoute {
-              static_cast<std::uint8_t>(station),
-              static_cast<std::uint8_t>(network),
-              c34_pc_target_from_wire(pc),
-              self_station_no != 0U,
-              static_cast<std::uint8_t>(self_station_no)}};
+          actual_route = self_station_no == 0U
+              ? RouteConfig {C3StandardMultidropRoute {
+                    station, network, c34_pc_target_from_wire(pc)}}
+              : RouteConfig {C3MnMultidropRoute {
+                    station,
+                    network,
+                    c34_pc_target_from_wire(pc),
+                    SelfStationNo::number(self_station_no)}};
         }
         break;
       case FrameKind::C4:
@@ -3013,14 +2987,18 @@ DecodeResult FrameCodec::decode_response(
                          parse_route_field(10U, 2U, module_station_no) &&
                          parse_route_field(12U, 2U, self_station_no);
         if (route_parse_ok) {
-          actual_route = RouteConfig {C4MultidropRoute {
-              static_cast<std::uint8_t>(station),
-              static_cast<std::uint8_t>(network),
-              c34_pc_target_from_wire(pc),
-              static_cast<std::uint16_t>(module_io_no),
-              static_cast<std::uint8_t>(module_station_no),
-              self_station_no != 0U,
-              static_cast<std::uint8_t>(self_station_no)}};
+          actual_route = self_station_no == 0U
+              ? RouteConfig {C4StandardMultidropRoute {
+                    station,
+                    network,
+                    c34_pc_target_from_wire(pc),
+                    C4DestinationModule::explicit_target(module_io_no, module_station_no)}}
+              : RouteConfig {C4MnMultidropRoute {
+                    station,
+                    network,
+                    c34_pc_target_from_wire(pc),
+                    C4DestinationModule::explicit_target(module_io_no, module_station_no),
+                    SelfStationNo::number(self_station_no)}};
         }
         break;
       case FrameKind::E1:
@@ -4502,7 +4480,7 @@ Status encode_link_direct_batch_write_bits(
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
 Status encode_link_direct_random_read(
     const ProtocolConfig& config,
-    std::span<const LinkDirectRandomReadItem> items,
+    std::span<const LinkDirectRandomReadWordItem> word_items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -4510,16 +4488,16 @@ Status encode_link_direct_random_read(
     return plc_profile_status;
   }
   if (is_e1_frame(config)) {
-    (void)items;
+    (void)word_items;
     (void)out_request_data;
     (void)out_size;
     return unsupported("1E frame does not define link-direct access");
   }
-  if (items.empty()) {
+  if (word_items.empty()) {
     return invalid_argument("Link direct random read requires at least one item");
   }
 
-  for (const LinkDirectRandomReadItem& item : items) {
+  for (const LinkDirectRandomReadWordItem& item : word_items) {
     const Status item_status = validate_link_direct_random_read_item(config, item);
     if (!item_status.ok()) {
       return item_status;
@@ -4528,18 +4506,18 @@ Status encode_link_direct_random_read(
 
   const ProtocolConfig wire_config = link_direct_native_wire_config(config);
   const std::uint16_t limit = is_iq_r_series(wire_config) ? 96U : 192U;
-  if (items.size() > limit) {
+  if (word_items.size() > limit) {
     return invalid_argument("Link direct random read access-point count exceeds supported range");
   }
 
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x0403U, extended_word_subcommand(wire_config)) ||
-      !append_random_word_dword_count(writer, wire_config, static_cast<std::uint16_t>(items.size())) ||
+      !append_random_word_dword_count(writer, wire_config, static_cast<std::uint16_t>(word_items.size())) ||
       !append_random_word_dword_count(writer, wire_config, 0U)) {
     return buffer_too_small("Link direct random read request buffer is too small");
   }
 
-  for (const LinkDirectRandomReadItem& item : items) {
+  for (const LinkDirectRandomReadWordItem& item : word_items) {
     if (!append_link_direct_device_reference(writer, wire_config, item.device)) {
       return buffer_too_small("Link direct random read request buffer is too small");
     }
@@ -4564,42 +4542,51 @@ Status encode_random_read(
     (void)out_size;
     return unsupported("1E frame does not define random-read commands");
   }
-  if (request.items.empty()) {
+  if (request.word_items.empty() && request.dword_items.empty()) {
     return invalid_argument("Random read requires at least one item");
   }
-  std::uint16_t word_count = 0;
-  std::uint16_t dword_count = 0;
-  for (const RandomReadItem& item : request.items) {
-    const Status item_status = validate_random_read_item_device(
+  for (const RandomReadWordItem& item : request.word_items) {
+    const Status item_status = validate_random_item_device(
         config,
-        item,
+        item.device,
+        false,
         "Random read item must be a supported word device",
         "Random read item must be a supported double-word device");
     if (!item_status.ok()) {
       return item_status;
     }
-    item.double_word ? ++dword_count : ++word_count;
+  }
+  for (const RandomReadDWordItem& item : request.dword_items) {
+    const Status item_status = validate_random_item_device(
+        config,
+        item.device,
+        true,
+        "Random read item must be a supported word device",
+        "Random read item must be a supported double-word device");
+    if (!item_status.ok()) {
+      return item_status;
+    }
   }
 
   const std::uint16_t limit = random_read_access_point_limit(config);
-  if (static_cast<std::uint16_t>(word_count + dword_count) > limit) {
+  if (request.word_items.size() + request.dword_items.size() > limit) {
     return invalid_argument("Random read access-point count exceeds supported range");
   }
 
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x0403U, word_subcommand(config)) ||
-      !append_random_word_dword_count(writer, config, word_count) ||
-      !append_random_word_dword_count(writer, config, dword_count)) {
+      !append_random_word_dword_count(writer, config, static_cast<std::uint16_t>(request.word_items.size())) ||
+      !append_random_word_dword_count(writer, config, static_cast<std::uint16_t>(request.dword_items.size()))) {
     return buffer_too_small("Random read request buffer is too small");
   }
 
-  for (const RandomReadItem& item : request.items) {
-    if (!item.double_word && !append_device_reference(writer, config, item.device)) {
+  for (const RandomReadWordItem& item : request.word_items) {
+    if (!append_device_reference(writer, config, item.device)) {
       return buffer_too_small("Random read request buffer is too small");
     }
   }
-  for (const RandomReadItem& item : request.items) {
-    if (item.double_word && !append_device_reference(writer, config, item.device)) {
+  for (const RandomReadDWordItem& item : request.dword_items) {
+    if (!append_device_reference(writer, config, item.device)) {
       return buffer_too_small("Random read request buffer is too small");
     }
   }
@@ -4610,7 +4597,7 @@ Status encode_random_read(
 #else
 Status encode_link_direct_random_read(
     const ProtocolConfig& config,
-    std::span<const LinkDirectRandomReadItem> items,
+    std::span<const LinkDirectRandomReadWordItem> word_items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -4618,7 +4605,7 @@ Status encode_link_direct_random_read(
     return plc_profile_status;
   }
   (void)config;
-  (void)items;
+  (void)word_items;
   (void)out_request_data;
   (void)out_size;
   return unsupported("Random commands are disabled at build time");
@@ -4644,53 +4631,48 @@ Status encode_random_read(
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
 Status parse_random_read_response(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const RandomReadRequest& request,
     std::span<const std::uint8_t> response_data,
-    std::span<std::uint32_t> out_values) noexcept {
-  if (out_values.size() < items.size()) {
-    return buffer_too_small("Random read output buffer is too small");
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) noexcept {
+  if (out_words.size() < request.word_items.size() ||
+      out_dwords.size() < request.dword_items.size()) {
+    return buffer_too_small("Random read output buffers are too small");
   }
 
-  std::size_t expected_size = 0;
-  for (const RandomReadItem& item : items) {
-    expected_size += item.double_word ? (is_ascii_mode(config) ? 8U : 4U)
-                                      : (is_ascii_mode(config) ? 4U : 2U);
-  }
+  const std::size_t expected_size =
+      request.word_items.size() * (is_ascii_mode(config) ? 4U : 2U) +
+      request.dword_items.size() * (is_ascii_mode(config) ? 8U : 4U);
   if (response_data.size() != expected_size) {
     return parse_error("Random read response length mismatch");
   }
 
   std::size_t cursor = 0;
-  for (std::size_t index = 0; index < items.size(); ++index) {
-    if (items[index].double_word) {
-      continue;
-    }
+  for (std::size_t index = 0; index < request.word_items.size(); ++index) {
     if (is_ascii_mode(config)) {
-      if (!parse_ascii_dword(response_data.subspan(cursor, 4U), out_values[index])) {
+      std::uint32_t value = 0U;
+      if (!parse_ascii_dword(response_data.subspan(cursor, 4U), value)) {
         return parse_error("Failed to parse random read ASCII word value");
       }
-      out_values[index] &= 0xFFFFU;
+      out_words[index] = static_cast<std::uint16_t>(value);
       cursor += 4U;
     } else {
       std::uint16_t word_value = 0;
       if (!parse_binary_word(response_data, cursor, word_value)) {
         return parse_error("Failed to parse random read binary word value");
       }
-      out_values[index] = word_value;
+      out_words[index] = word_value;
       cursor += 2U;
     }
   }
-  for (std::size_t index = 0; index < items.size(); ++index) {
-    if (!items[index].double_word) {
-      continue;
-    }
+  for (std::size_t index = 0; index < request.dword_items.size(); ++index) {
     if (is_ascii_mode(config)) {
-      if (!parse_ascii_dword(response_data.subspan(cursor, 8U), out_values[index])) {
+      if (!parse_ascii_dword(response_data.subspan(cursor, 8U), out_dwords[index])) {
         return parse_error("Failed to parse random read ASCII double-word value");
       }
       cursor += 8U;
     } else {
-      if (!parse_binary_dword(response_data, cursor, out_values[index])) {
+      if (!parse_binary_dword(response_data, cursor, out_dwords[index])) {
         return parse_error("Failed to parse random read binary double-word value");
       }
       cursor += 4U;
@@ -4701,13 +4683,15 @@ Status parse_random_read_response(
 #else
 Status parse_random_read_response(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const RandomReadRequest& request,
     std::span<const std::uint8_t> response_data,
-    std::span<std::uint32_t> out_values) noexcept {
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) noexcept {
   (void)config;
-  (void)items;
+  (void)request;
   (void)response_data;
-  (void)out_values;
+  (void)out_words;
+  (void)out_dwords;
   return unsupported("Random commands are disabled at build time");
 }
 #endif
@@ -4755,8 +4739,8 @@ Status encode_link_direct_random_write_words(
 
   for (const LinkDirectRandomWriteWordItem& item : items) {
     if (!append_link_direct_device_reference(writer, wire_config, item.device) ||
-        (is_ascii_mode(config) ? !append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))
-                                             : !writer.append_le16(static_cast<std::uint16_t>(item.value & 0xFFFFU)))) {
+        (is_ascii_mode(config) ? !append_word_data_ascii(writer, item.value)
+                               : !writer.append_le16(item.value))) {
       return buffer_too_small("Link direct random write words request buffer is too small");
     }
   }
@@ -4767,7 +4751,8 @@ Status encode_link_direct_random_write_words(
 
 Status encode_random_write_words(
     const ProtocolConfig& config,
-    std::span<const RandomWriteWordItem> items,
+    std::span<const RandomWriteWordItem> word_items,
+    std::span<const RandomWriteDWordItem> dword_items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -4778,27 +4763,28 @@ Status encode_random_write_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (items.empty()) {
+  if (word_items.empty() && dword_items.empty()) {
     return invalid_argument("Random write words requires at least one item");
   }
 
   if (is_e1_frame(config)) {
-    if (items.size() > 40U) {
+    if (!dword_items.empty()) {
+      return invalid_argument("1E random write words does not support double-word items");
+    }
+    if (word_items.size() > 40U) {
       return invalid_argument("1E random write words count must be in range 1..40");
     }
     ByteWriter writer(out_request_data);
     if (!append_e1_subheader(writer, config, 0x05U) ||
-        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(items.size())) ||
+        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(word_items.size())) ||
         !append_e1_fixed_zero(writer, config)) {
       return buffer_too_small("1E random write words request buffer is too small");
     }
-    for (const RandomWriteWordItem& item : items) {
-      if (item.double_word) {
-        return invalid_argument("1E random write words does not support double-word items");
-      }
-      const Status item_status = validate_random_write_word_item_device(
+    for (const RandomWriteWordItem& item : word_items) {
+      const Status item_status = validate_random_item_device(
           config,
-          item,
+          item.device,
+          false,
           "1E random write words requires supported word or 16-point bit devices",
           "1E random write words does not support double-word items");
       if (!item_status.ok()) {
@@ -4811,8 +4797,8 @@ Status encode_random_write_words(
         return invalid_argument("1E random write words requires bit-device heads aligned to 16 points");
       }
       if (!append_e1_device_reference(writer, config, item.device) ||
-          !(is_ascii_mode(config) ? append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))
-                                               : writer.append_le16(static_cast<std::uint16_t>(item.value & 0xFFFFU)))) {
+          !(is_ascii_mode(config) ? append_word_data_ascii(writer, item.value)
+                                  : writer.append_le16(item.value))) {
         return buffer_too_small("1E random write words request buffer is too small");
       }
     }
@@ -4821,21 +4807,24 @@ Status encode_random_write_words(
   }
 
   if (is_c1_frame(config)) {
-    if (items.size() > 10U) {
+    if (!dword_items.empty()) {
+      return invalid_argument("1C random write words does not support double-word items");
+    }
+    if (word_items.size() > 10U) {
       return invalid_argument("1C random write words count must be in range 1..10");
     }
     ByteWriter writer(out_request_data);
     if (!append_c1_command(writer, config, kC1RandomWriteWordsCommand) ||
-        !append_c1_point_count(writer, static_cast<std::uint16_t>(items.size()))) {
+        !append_c1_point_count(writer, static_cast<std::uint16_t>(word_items.size()))) {
       return buffer_too_small("1C random write words request buffer is too small");
     }
-    for (const RandomWriteWordItem& item : items) {
+    for (const RandomWriteWordItem& item : word_items) {
       const Status item_status = validate_c1_random_write_word_item(config, item);
       if (!item_status.ok()) {
         return item_status;
       }
       if (!append_c1_device_reference(writer, config, item.device) ||
-          !append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))) {
+          !append_word_data_ascii(writer, item.value)) {
         return buffer_too_small("1C random write words request buffer is too small");
       }
     }
@@ -4843,44 +4832,50 @@ Status encode_random_write_words(
     return ok_status();
   }
 
-  std::uint16_t word_count = 0;
-  std::uint16_t dword_count = 0;
-  for (const RandomWriteWordItem& item : items) {
-    const Status item_status = validate_random_write_word_item_device(
+  for (const RandomWriteWordItem& item : word_items) {
+    const Status item_status = validate_random_item_device(
         config,
-        item,
+        item.device,
+        false,
         "Random write item must be a supported word device",
         "Random write item must be a supported double-word device");
     if (!item_status.ok()) {
       return item_status;
     }
-    item.double_word ? ++dword_count : ++word_count;
   }
-  const std::uint16_t weighted_limit = random_write_word_weighted_limit(config);
-  const std::uint16_t weighted_size = static_cast<std::uint16_t>((word_count * 12U) + (dword_count * 14U));
+  for (const RandomWriteDWordItem& item : dword_items) {
+    const Status item_status = validate_random_item_device(
+        config,
+        item.device,
+        true,
+        "Random write item must be a supported word device",
+        "Random write item must be a supported double-word device");
+    if (!item_status.ok()) {
+      return item_status;
+    }
+  }
+  const std::size_t weighted_limit = random_write_word_weighted_limit(config);
+  const std::size_t weighted_size =
+      (word_items.size() * 12U) + (dword_items.size() * 14U);
   if (weighted_size == 0U || weighted_size > weighted_limit) {
     return invalid_argument("Random write words exceeds the supported request size");
   }
 
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x1402U, word_subcommand(config)) ||
-      !append_random_word_dword_count(writer, config, word_count) ||
-      !append_random_word_dword_count(writer, config, dword_count)) {
+      !append_random_word_dword_count(writer, config, static_cast<std::uint16_t>(word_items.size())) ||
+      !append_random_word_dword_count(writer, config, static_cast<std::uint16_t>(dword_items.size()))) {
     return buffer_too_small("Random write words request buffer is too small");
   }
 
-  for (const RandomWriteWordItem& item : items) {
-    if (!item.double_word &&
-        (!append_device_reference(writer, config, item.device) ||
-         (is_ascii_mode(config) ? !append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))
-                                              : !writer.append_le16(static_cast<std::uint16_t>(item.value & 0xFFFFU))))) {
+  for (const RandomWriteWordItem& item : word_items) {
+    if (!append_device_reference(writer, config, item.device) ||
+        (is_ascii_mode(config) ? !append_word_data_ascii(writer, item.value)
+                               : !writer.append_le16(item.value))) {
       return buffer_too_small("Random write words request buffer is too small");
     }
   }
-  for (const RandomWriteWordItem& item : items) {
-    if (!item.double_word) {
-      continue;
-    }
+  for (const RandomWriteDWordItem& item : dword_items) {
     const bool ok =
         append_device_reference(writer, config, item.device) &&
         (is_ascii_mode(config) ? append_dword_data_ascii(writer, item.value)
@@ -4985,7 +4980,8 @@ Status encode_link_direct_random_write_words(
 
 Status encode_random_write_words(
     const ProtocolConfig& config,
-    std::span<const RandomWriteWordItem> items,
+    std::span<const RandomWriteWordItem> word_items,
+    std::span<const RandomWriteDWordItem> dword_items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -4993,7 +4989,8 @@ Status encode_random_write_words(
     return plc_profile_status;
   }
   (void)config;
-  (void)items;
+  (void)word_items;
+  (void)dword_items;
   (void)out_request_data;
   (void)out_size;
   return unsupported("Random commands are disabled at build time");
@@ -5032,6 +5029,11 @@ Status encode_random_write_bits(
   }
   if (items.empty()) {
     return invalid_argument("Random write bits requires at least one item");
+  }
+  for (const RandomWriteBitItem& item : items) {
+    if (!is_valid_bit_value(item.value)) {
+      return invalid_argument("Random write bits requires each value to be Off or On");
+    }
   }
   if (is_e1_frame(config)) {
     if (items.size() > 80U) {
@@ -5164,6 +5166,11 @@ Status encode_link_direct_random_write_bits(
   }
   if (items.empty()) {
     return invalid_argument("Link direct random write bits requires at least one item");
+  }
+  for (const LinkDirectRandomWriteBitItem& item : items) {
+    if (!is_valid_bit_value(item.value)) {
+      return invalid_argument("Link direct random write bits requires each value to be Off or On");
+    }
   }
   const ProtocolConfig wire_config = link_direct_native_wire_config(config);
   const std::uint16_t limit = is_iq_r_series(wire_config) ? 94U : 188U;
@@ -5750,12 +5757,13 @@ Status encode_link_direct_register_monitor(
     (void)out_size;
     return unsupported("1E frame does not define link-direct access");
   }
-  if (request.items.empty()) {
+  if (request.word_items.empty()) {
     return invalid_argument("Link direct monitor registration requires at least one item");
   }
   std::array<std::uint8_t, kMaxRequestDataBytes> random_request_data {};
   std::size_t inner_size = 0;
-  Status status = encode_link_direct_random_read(config, request.items, random_request_data, inner_size);
+  Status status = encode_link_direct_random_read(
+      config, request.word_items, random_request_data, inner_size);
   if (!status.ok()) {
     return status;
   }
@@ -5794,23 +5802,27 @@ Status encode_register_monitor(
     (void)out_size;
     return unsupported("melsec:iq-f does not support monitor registration");
   }
-  if (request.items.empty()) {
+  if (request.word_items.empty() && request.dword_items.empty()) {
     return invalid_argument("Monitor registration requires at least one item");
   }
   if (is_e1_frame(config)) {
-    const bool bit_units = c1_monitor_uses_bit_units(request.items);
+    if (!request.dword_items.empty()) {
+      return invalid_argument("1E monitor does not support double-word items");
+    }
+    const bool bit_units = c1_monitor_uses_bit_units(
+        request.word_items, request.dword_items);
     const std::size_t limit = bit_units ? 40U : 20U;
-    if (request.items.size() > limit) {
+    if (request.word_items.size() > limit) {
       return invalid_argument(bit_units ? "1E bit-unit monitor registration count must be in range 1..40"
                                         : "1E word-unit monitor registration count must be in range 1..20");
     }
     ByteWriter writer(out_request_data);
     if (!append_e1_subheader(writer, config, bit_units ? 0x06U : 0x07U) ||
-        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(request.items.size())) ||
+        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(request.word_items.size())) ||
         !append_e1_fixed_zero(writer, config)) {
       return buffer_too_small("1E monitor registration request buffer is too small");
     }
-    for (const RandomReadItem& item : request.items) {
+    for (const RandomReadWordItem& item : request.word_items) {
       const Status item_status = validate_c1_monitor_item(config, item, bit_units);
       if (!item_status.ok()) {
         return item_status;
@@ -5823,9 +5835,13 @@ Status encode_register_monitor(
     return ok_status();
   }
   if (is_c1_frame(config)) {
-    const bool bit_units = c1_monitor_uses_bit_units(request.items);
+    if (!request.dword_items.empty()) {
+      return invalid_argument("1C monitor does not support double-word items");
+    }
+    const bool bit_units = c1_monitor_uses_bit_units(
+        request.word_items, request.dword_items);
     const std::size_t limit = bit_units ? 40U : 20U;
-    if (request.items.size() > limit) {
+    if (request.word_items.size() > limit) {
       return invalid_argument(bit_units ? "1C bit-unit monitor registration count must be in range 1..40"
                                         : "1C word-unit monitor registration count must be in range 1..20");
     }
@@ -5834,10 +5850,10 @@ Status encode_register_monitor(
             writer,
             config,
             bit_units ? kC1RegisterMonitorBitsCommand : kC1RegisterMonitorWordsCommand) ||
-        !append_c1_point_count(writer, static_cast<std::uint16_t>(request.items.size()))) {
+        !append_c1_point_count(writer, static_cast<std::uint16_t>(request.word_items.size()))) {
       return buffer_too_small("1C monitor registration request buffer is too small");
     }
-    for (const RandomReadItem& item : request.items) {
+    for (const RandomReadWordItem& item : request.word_items) {
       const Status item_status = validate_c1_monitor_item(config, item, bit_units);
       if (!item_status.ok()) {
         return item_status;
@@ -5849,7 +5865,10 @@ Status encode_register_monitor(
     out_size = writer.size();
     return ok_status();
   }
-  RandomReadRequest random_request {.items = request.items};
+  RandomReadRequest random_request {
+      .word_items = request.word_items,
+      .dword_items = request.dword_items,
+  };
   std::array<std::uint8_t, kMaxRequestDataBytes> random_request_data {};
   std::size_t inner_size = 0;
   Status status = encode_random_read(config, random_request, random_request_data, inner_size);
@@ -5969,7 +5988,7 @@ Status encode_read_monitor(
 
 Status encode_read_monitor(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const MonitorRegistration& registration,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -5981,18 +6000,22 @@ Status encode_read_monitor(
     return c1_status;
   }
   if (config.plc_profile == PlcProfile::MelsecIqF) {
-    (void)items;
+    (void)registration;
     (void)out_request_data;
     (void)out_size;
     return unsupported("melsec:iq-f does not support monitor read");
   }
   if (!is_c1_frame(config)) {
     if (is_e1_frame(config)) {
-      if (items.empty()) {
+      if (registration.word_items.empty() && registration.dword_items.empty()) {
         return invalid_argument("1E monitor read requires registered items");
       }
-      const bool bit_units = c1_monitor_uses_bit_units(items);
-      for (const RandomReadItem& item : items) {
+      if (!registration.dword_items.empty()) {
+        return invalid_argument("1E monitor does not support double-word items");
+      }
+      const bool bit_units = c1_monitor_uses_bit_units(
+          registration.word_items, registration.dword_items);
+      for (const RandomReadWordItem& item : registration.word_items) {
         const Status item_status = validate_c1_monitor_item(config, item, bit_units);
         if (!item_status.ok()) {
           return item_status;
@@ -6007,11 +6030,15 @@ Status encode_read_monitor(
     }
     return encode_read_monitor(config, out_request_data, out_size);
   }
-  if (items.empty()) {
+  if (registration.word_items.empty() && registration.dword_items.empty()) {
     return invalid_argument("1C monitor read requires registered items");
   }
-  const bool bit_units = c1_monitor_uses_bit_units(items);
-  for (const RandomReadItem& item : items) {
+  if (!registration.dword_items.empty()) {
+    return invalid_argument("1C monitor does not support double-word items");
+  }
+  const bool bit_units = c1_monitor_uses_bit_units(
+      registration.word_items, registration.dword_items);
+  for (const RandomReadWordItem& item : registration.word_items) {
     const Status item_status = validate_c1_monitor_item(config, item, bit_units);
     if (!item_status.ok()) {
       return item_status;
@@ -6089,25 +6116,30 @@ Status encode_read_extended_file_register_monitor(
 
 Status parse_read_monitor_response(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const MonitorRegistration& registration,
     std::span<const std::uint8_t> response_data,
-    std::span<std::uint32_t> out_values) noexcept {
-  if ((is_c1_frame(config) || is_e1_frame(config)) && c1_monitor_uses_bit_units(items)) {
-    if (out_values.size() < items.size()) {
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) noexcept {
+  if ((is_c1_frame(config) || is_e1_frame(config)) && c1_monitor_uses_bit_units(
+          registration.word_items, registration.dword_items)) {
+    if (out_words.size() < registration.word_items.size()) {
       return buffer_too_small("Monitor output buffer is too small");
     }
     const std::size_t expected_size =
-        is_e1_frame(config) ? items.size() + ((items.size() % 2U) == 0U ? 0U : 1U) : items.size();
+        is_e1_frame(config)
+            ? registration.word_items.size() +
+                  ((registration.word_items.size() % 2U) == 0U ? 0U : 1U)
+            : registration.word_items.size();
     if (response_data.size() != expected_size) {
       return parse_error(is_e1_frame(config)
                              ? "1E bit-unit monitor response length mismatch"
                              : "1C bit-unit monitor response length mismatch");
     }
-    for (std::size_t index = 0; index < items.size(); ++index) {
+    for (std::size_t index = 0; index < registration.word_items.size(); ++index) {
       if (response_data[index] == '0') {
-        out_values[index] = 0U;
+        out_words[index] = 0U;
       } else if (response_data[index] == '1') {
-        out_values[index] = 1U;
+        out_words[index] = 1U;
       } else {
         return parse_error(is_e1_frame(config)
                                ? "1E bit-unit monitor payload contains an invalid bit"
@@ -6116,7 +6148,15 @@ Status parse_read_monitor_response(
     }
     return ok_status();
   }
-  return parse_random_read_response(config, items, response_data, out_values);
+  return parse_random_read_response(
+      config,
+      RandomReadRequest {
+          .word_items = registration.word_items,
+          .dword_items = registration.dword_items,
+      },
+      response_data,
+      out_words,
+      out_dwords);
 }
 
 Status parse_read_extended_file_register_monitor_response(
@@ -6197,7 +6237,7 @@ Status encode_read_monitor(
 
 Status encode_read_monitor(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const MonitorRegistration& registration,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -6205,7 +6245,7 @@ Status encode_read_monitor(
     return plc_profile_status;
   }
   (void)config;
-  (void)items;
+  (void)registration;
   (void)out_request_data;
   (void)out_size;
   return unsupported("Monitor commands are disabled at build time");
@@ -6229,13 +6269,15 @@ Status encode_read_extended_file_register_monitor(
 
 Status parse_read_monitor_response(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const MonitorRegistration& registration,
     std::span<const std::uint8_t> response_data,
-    std::span<std::uint32_t> out_values) noexcept {
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) noexcept {
   (void)config;
-  (void)items;
+  (void)registration;
   (void)response_data;
-  (void)out_values;
+  (void)out_words;
+  (void)out_dwords;
   return unsupported("Monitor commands are disabled at build time");
 }
 
@@ -6956,6 +6998,7 @@ Status encode_remote_run(
     RemoteRunClearMode clear_mode,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
@@ -7016,6 +7059,7 @@ Status encode_remote_pause(
     RemoteOperationMode mode,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;

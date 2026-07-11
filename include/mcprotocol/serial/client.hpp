@@ -39,12 +39,21 @@ class MelsecSerialClient {
   MelsecSerialClient() = default;
 
   /// \brief Stores protocol settings and validates the static configuration.
+  /// \brief Configures a session, or acknowledges that the caller reset the underlying transport.
+  ///
+  /// When `requires_transport_reset()` is true, drain/close/reopen the UART transport before
+  /// calling this again. A successful call clears the flag and allows new requests.
   [[nodiscard]] Status configure(const ProtocolConfig& config) noexcept;
   /// \brief Installs optional RS-485 TX begin/end hooks used by the async workflow.
   void set_rs485_hooks(const Rs485Hooks& hooks) noexcept;
 
   /// \brief Returns whether a request is currently in flight.
   [[nodiscard]] bool busy() const noexcept;
+  /// \brief Returns true after an unsequenced timeout until reset plus reconfiguration.
+  ///
+  /// Format2 has a per-request block identity and can discard its own late response. Other frame
+  /// families cannot safely distinguish a same-route late response from the next request.
+  [[nodiscard]] bool requires_transport_reset() const noexcept;
   /// \brief Returns the encoded frame that should be sent to the UART layer.
   [[nodiscard]] std::span<const std::byte> pending_tx_frame() const noexcept;
 
@@ -175,22 +184,28 @@ class MelsecSerialClient {
   [[nodiscard]] Status async_random_read(
       std::uint32_t now_ms,
       const RandomReadRequest& request,
-      std::span<std::uint32_t> out_values,
+      std::span<std::uint16_t> out_words,
+      std::span<std::uint32_t> out_dwords,
       CompletionHandler callback,
       void* user) noexcept;
 
   /// \brief Starts native `Jn\\...` random read (`0403` + device extension specification).
   [[nodiscard]] Status async_link_direct_random_read(
       std::uint32_t now_ms,
-      std::span<const LinkDirectRandomReadItem> items,
-      std::span<std::uint32_t> out_values,
+      std::span<const LinkDirectRandomReadWordItem> word_items,
+      std::span<std::uint16_t> out_words,
       CompletionHandler callback,
       void* user) noexcept;
 
   /// \brief Starts native random word/dword write (`1402` word path).
+  ///
+  /// Every item requires an explicit value. Once transmission has started, timeout, cancellation,
+  /// or an unconfirmed transport failure completes as `StatusCode::OperationOutcomeUnknown`; the
+  /// library never retries the write.
   [[nodiscard]] Status async_random_write_words(
       std::uint32_t now_ms,
-      std::span<const RandomWriteWordItem> items,
+      std::span<const RandomWriteWordItem> word_items,
+      std::span<const RandomWriteDWordItem> dword_items,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -202,6 +217,9 @@ class MelsecSerialClient {
       void* user) noexcept;
 
   /// \brief Starts native `Jn\\...` random word write (`1402` + device extension specification).
+  ///
+  /// Every item requires an explicit value. An unconfirmed result after transmission is
+  /// `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
   [[nodiscard]] Status async_link_direct_random_write_words(
       std::uint32_t now_ms,
       std::span<const LinkDirectRandomWriteWordItem> items,
@@ -209,6 +227,9 @@ class MelsecSerialClient {
       void* user) noexcept;
 
   /// \brief Starts native random bit write (`1402` bit path).
+  ///
+  /// Every item requires an explicit `Off` or `On`. An unconfirmed result after transmission is
+  /// `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
   [[nodiscard]] Status async_random_write_bits(
       std::uint32_t now_ms,
       std::span<const RandomWriteBitItem> items,
@@ -216,6 +237,9 @@ class MelsecSerialClient {
       void* user) noexcept;
 
   /// \brief Starts native `Jn\\...` random bit write (`1402` + device extension specification).
+  ///
+  /// Every item requires an explicit `Off` or `On`. An unconfirmed result after transmission is
+  /// `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
   [[nodiscard]] Status async_link_direct_random_write_bits(
       std::uint32_t now_ms,
       std::span<const LinkDirectRandomWriteBitItem> items,
@@ -284,7 +308,8 @@ class MelsecSerialClient {
   /// \brief Starts monitor read (`0802`) using the most recent registration.
   [[nodiscard]] Status async_read_monitor(
       std::uint32_t now_ms,
-      std::span<std::uint32_t> out_values,
+      std::span<std::uint16_t> out_words,
+      std::span<std::uint32_t> out_dwords,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -332,7 +357,10 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
 
-  /// \brief Starts remote RUN (`1001`).
+  /// \brief Starts remote RUN (`1001`) with mandatory conflict and clear policies.
+  ///
+  /// After transmission starts, an unconfirmed transport/timeout result is reported as
+  /// `StatusCode::OperationOutcomeUnknown`; the library never retries this command.
   [[nodiscard]] Status async_remote_run(
       std::uint32_t now_ms,
       RemoteOperationMode mode,
@@ -346,7 +374,10 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
 
-  /// \brief Starts remote PAUSE (`1003`).
+  /// \brief Starts remote PAUSE (`1003`) with a mandatory conflict policy.
+  ///
+  /// After transmission starts, an unconfirmed transport/timeout result is reported as
+  /// `StatusCode::OperationOutcomeUnknown`; the library never retries with another policy.
   [[nodiscard]] Status async_remote_pause(
       std::uint32_t now_ms,
       RemoteOperationMode mode,
@@ -381,8 +412,8 @@ class MelsecSerialClient {
 
   /// \brief Starts remote RESET (`1006`).
   ///
-  /// The manual notes that some targets may reset before returning a response. In that case this
-  /// client treats a pure response-timeout with no received bytes as success for this operation.
+  /// Completion means the request bytes were transmitted successfully. The command does not wait
+  /// for a normal response and does not claim that the PLC completed its reset.
   [[nodiscard]] Status async_remote_reset(
       std::uint32_t now_ms,
       CompletionHandler callback,
@@ -507,6 +538,10 @@ class MelsecSerialClient {
   [[nodiscard]] std::uint8_t expected_e1_response_subheader() const noexcept;
   [[nodiscard]] std::size_t expected_e1_success_response_data_size() const noexcept;
   [[nodiscard]] Status handle_response(std::span<const std::uint8_t> response_data) noexcept;
+  [[nodiscard]] Status active_timeout_status(const char* timeout_message) const noexcept;
+  [[nodiscard]] Status active_transport_failure_status(Status transport_status) const noexcept;
+  [[nodiscard]] Status active_unconfirmed_failure_status(Status failure_status) const noexcept;
+  [[nodiscard]] bool active_operation_outcome_can_be_unknown() const noexcept;
   void complete(Status status) noexcept;
   void clear_pending_outputs() noexcept;
   void clear_pending_copies() noexcept;
@@ -515,6 +550,7 @@ class MelsecSerialClient {
   Rs485Hooks rs485_hooks_ {};
   bool configured_ = false;
   bool busy_ = false;
+  bool transport_reset_required_ = false;
   bool awaiting_write_complete_ = false;
   OperationKind operation_ = OperationKind::None;
   CompletionHandler callback_ = nullptr;
@@ -548,7 +584,8 @@ class MelsecSerialClient {
   std::span<std::uint16_t> out_words_ {};
   std::span<BitValue> out_bits_ {};
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
-  std::span<std::uint32_t> out_values_ {};
+  std::span<std::uint16_t> out_random_words_ {};
+  std::span<std::uint32_t> out_random_dwords_ {};
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
   std::span<std::byte> out_bytes_ {};
@@ -565,12 +602,16 @@ class MelsecSerialClient {
   UserFrameRegistrationData* out_user_frame_data_ = nullptr;
 
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
-  std::array<RandomReadItem, kMaxRandomAccessItems> pending_random_items_ {};
-  std::size_t pending_random_item_count_ = 0;
+  std::array<RandomReadWordItem, kMaxRandomAccessItems> pending_random_word_items_ {};
+  std::array<RandomReadDWordItem, kMaxRandomAccessItems> pending_random_dword_items_ {};
+  std::size_t pending_random_word_item_count_ = 0;
+  std::size_t pending_random_dword_item_count_ = 0;
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
-  std::array<RandomReadItem, kMaxMonitorItems> monitor_items_ {};
-  std::size_t monitor_item_count_ = 0;
+  std::array<RandomReadWordItem, kMaxMonitorItems> monitor_word_items_ {};
+  std::array<RandomReadDWordItem, kMaxMonitorItems> monitor_dword_items_ {};
+  std::size_t monitor_word_item_count_ = 0;
+  std::size_t monitor_dword_item_count_ = 0;
   bool monitor_registered_ = false;
   std::array<ExtendedFileRegisterAddress, kMaxMonitorItems> pending_extended_file_register_items_ {};
   std::size_t pending_extended_file_register_item_count_ = 0;

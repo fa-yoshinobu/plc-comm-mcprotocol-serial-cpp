@@ -10,20 +10,10 @@
 namespace mcprotocol::serial {
 namespace {
 
-[[nodiscard]] constexpr Status timeout_status() noexcept {
-  return make_status(StatusCode::Timeout, "Timed out while waiting for a response");
-}
-
-[[nodiscard]] constexpr Status remote_reset_no_response_status() noexcept {
-  return make_status(StatusCode::Ok, "Remote RESET completed without a response");
-}
-
-[[nodiscard]] constexpr Status init_sequence_no_response_status() noexcept {
-  return make_status(StatusCode::Ok, "Transmission-sequence initialization completed without a response");
-}
-
-[[nodiscard]] constexpr Status global_signal_no_response_status() noexcept {
-  return make_status(StatusCode::Ok, "Global signal control completed without a response");
+[[nodiscard]] constexpr Status remote_reset_request_sent_status() noexcept {
+  return make_status(
+      StatusCode::Ok,
+      "Remote RESET request transmission completed; PLC reset state is not confirmed");
 }
 
 [[nodiscard]] constexpr Status cancelled_status() noexcept {
@@ -327,6 +317,7 @@ Status MelsecSerialClient::configure(const ProtocolConfig& config) noexcept {
   }
   config_ = config;
   configured_ = true;
+  transport_reset_required_ = false;
   active_format2_block_number_ = 0U;
   active_format2_block_number_valid_ = false;
   return ok_status();
@@ -338,6 +329,10 @@ void MelsecSerialClient::set_rs485_hooks(const Rs485Hooks& hooks) noexcept {
 
 bool MelsecSerialClient::busy() const noexcept {
   return busy_;
+}
+
+bool MelsecSerialClient::requires_transport_reset() const noexcept {
+  return transport_reset_required_;
 }
 
 std::span<const std::byte> MelsecSerialClient::pending_tx_frame() const noexcept {
@@ -357,7 +352,15 @@ Status MelsecSerialClient::notify_tx_complete(
   }
 
   if (!transport_status.ok()) {
-    complete(transport_status);
+    if (active_operation_outcome_can_be_unknown()) {
+      transport_reset_required_ = true;
+    }
+    complete(active_transport_failure_status(transport_status));
+    return ok_status();
+  }
+
+  if (operation_ == OperationKind::RemoteReset) {
+    complete(remote_reset_request_sent_status());
     return ok_status();
   }
 
@@ -373,9 +376,24 @@ void MelsecSerialClient::on_rx_bytes(
     return;
   }
 
+  if (deadline_reached(now_ms, response_deadline_ms_)) {
+    transport_reset_required_ = !active_format2_block_number_valid_;
+    complete(active_timeout_status("Timed out while waiting for a response"));
+    return;
+  }
+  if (rx_frame_size_ != 0U && deadline_reached(now_ms, inter_byte_deadline_ms_)) {
+    transport_reset_required_ = !active_format2_block_number_valid_;
+    complete(active_timeout_status("Timed out while waiting for the rest of the response"));
+    return;
+  }
+
   const auto incoming = as_u8_span(bytes);
   if ((rx_frame_size_ + incoming.size()) > rx_frame_.size()) {
-    complete(make_status(StatusCode::BufferTooSmall, "Receive frame buffer overflow"));
+    if (active_operation_outcome_can_be_unknown()) {
+      transport_reset_required_ = !active_format2_block_number_valid_;
+    }
+    complete(active_unconfirmed_failure_status(
+        make_status(StatusCode::BufferTooSmall, "Receive frame buffer overflow")));
     return;
   }
 
@@ -405,7 +423,10 @@ void MelsecSerialClient::on_rx_bytes(
     }
 
     if (stream_decode.status == DecodeStatus::Error) {
-      complete(stream_decode.decode.error);
+      if (active_operation_outcome_can_be_unknown()) {
+        transport_reset_required_ = !active_format2_block_number_valid_;
+      }
+      complete(active_unconfirmed_failure_status(stream_decode.decode.error));
       return;
     }
 
@@ -421,7 +442,7 @@ void MelsecSerialClient::on_rx_bytes(
         std::span<const std::uint8_t>(
             stream_decode.decode.frame.response_data.data(),
             stream_decode.decode.frame.response_size));
-    complete(parse_status);
+    complete(active_unconfirmed_failure_status(parse_status));
     return;
   }
 }
@@ -431,37 +452,49 @@ void MelsecSerialClient::poll(std::uint32_t now_ms) noexcept {
     return;
   }
 
-  const auto deadline_reached = [](std::uint32_t now, std::uint32_t deadline) noexcept {
-    return static_cast<std::int32_t>(now - deadline) >= 0;
-  };
-
   if (rx_frame_size_ == 0U) {
     if (deadline_reached(now_ms, response_deadline_ms_)) {
-      if (operation_ == OperationKind::RemoteReset) {
-        complete(remote_reset_no_response_status());
-      } else if (operation_ == OperationKind::InitializeTransmissionSequence) {
-        complete(init_sequence_no_response_status());
-      } else if (operation_ == OperationKind::ControlGlobalSignal) {
-        complete(global_signal_no_response_status());
-      } else {
-        complete(timeout_status());
-      }
+      transport_reset_required_ = !active_format2_block_number_valid_;
+      complete(active_timeout_status("Timed out while waiting for a response"));
     }
     return;
   }
 
   if (deadline_reached(now_ms, inter_byte_deadline_ms_)) {
-    complete(make_status(StatusCode::Timeout, "Timed out while waiting for the rest of the response"));
+    transport_reset_required_ = !active_format2_block_number_valid_;
+    complete(active_timeout_status("Timed out while waiting for the rest of the response"));
     return;
   }
 
   if (deadline_reached(now_ms, response_deadline_ms_)) {
-    complete(timeout_status());
+    transport_reset_required_ = !active_format2_block_number_valid_;
+    complete(active_timeout_status("Timed out while waiting for a response"));
   }
 }
 
 void MelsecSerialClient::cancel() noexcept {
   if (!busy_) {
+    return;
+  }
+  if (active_operation_outcome_can_be_unknown() && !awaiting_write_complete_) {
+    transport_reset_required_ = !active_format2_block_number_valid_;
+    switch (operation_) {
+      case OperationKind::RemoteRun:
+        complete(make_status(
+            StatusCode::OperationOutcomeUnknown,
+            "Remote RUN was transmitted but response waiting was cancelled; PLC RUN state is unknown"));
+        break;
+      case OperationKind::RemotePause:
+        complete(make_status(
+            StatusCode::OperationOutcomeUnknown,
+            "Remote PAUSE was transmitted but response waiting was cancelled; PLC PAUSE state is unknown"));
+        break;
+      default:
+        complete(make_status(
+            StatusCode::OperationOutcomeUnknown,
+            "Random write was transmitted but response waiting was cancelled; PLC data state is unknown"));
+        break;
+    }
     return;
   }
   complete(cancelled_status());
@@ -480,6 +513,11 @@ Status MelsecSerialClient::start_request(
   }
   if (busy_) {
     return make_status(StatusCode::Busy, "Only one request can be in flight at a time");
+  }
+  if (transport_reset_required_) {
+    return make_status(
+        StatusCode::Transport,
+        "Transport reset and client reconfiguration are required after a timeout");
   }
   if (callback == nullptr) {
     return make_status(StatusCode::InvalidArgument, "Completion callback must not be null");
@@ -549,19 +587,19 @@ std::uint8_t MelsecSerialClient::expected_e1_response_subheader() const noexcept
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
     case OperationKind::RegisterMonitor:
-      if (pending_random_item_count_ == 0U) {
+      if (pending_random_word_item_count_ == 0U || pending_random_dword_item_count_ != 0U) {
         return 0x87U;
       }
-      for (std::size_t index = 0; index < pending_random_item_count_; ++index) {
-        if (pending_random_items_[index].double_word || !is_e1_bit_device(pending_random_items_[index].device.code)) {
+      for (std::size_t index = 0; index < pending_random_word_item_count_; ++index) {
+        if (!is_e1_bit_device(pending_random_word_items_[index].device.code)) {
           return 0x87U;
         }
       }
       return 0x86U;
     case OperationKind::ReadMonitor: {
-      bool bit_units = monitor_item_count_ != 0U;
-      for (std::size_t index = 0; index < monitor_item_count_; ++index) {
-        if (monitor_items_[index].double_word || !is_e1_bit_device(monitor_items_[index].device.code)) {
+      bool bit_units = monitor_word_item_count_ != 0U && monitor_dword_item_count_ == 0U;
+      for (std::size_t index = 0; index < monitor_word_item_count_; ++index) {
+        if (!is_e1_bit_device(monitor_word_items_[index].device.code)) {
           bit_units = false;
           break;
         }
@@ -628,20 +666,22 @@ std::size_t MelsecSerialClient::expected_e1_success_response_data_size() const n
     case OperationKind::RegisterExtendedFileRegisterMonitor:
       return 0U;
     case OperationKind::ReadMonitor: {
-      bool bit_units = monitor_item_count_ != 0U;
-      for (std::size_t index = 0; index < monitor_item_count_; ++index) {
-        if (monitor_items_[index].double_word || !is_e1_bit_device(monitor_items_[index].device.code)) {
+      bool bit_units = monitor_word_item_count_ != 0U && monitor_dword_item_count_ == 0U;
+      for (std::size_t index = 0; index < monitor_word_item_count_; ++index) {
+        if (!is_e1_bit_device(monitor_word_items_[index].device.code)) {
           bit_units = false;
           break;
         }
       }
       if (bit_units) {
         if (config_.code_mode == CodeMode::Ascii) {
-          return monitor_item_count_ + ((monitor_item_count_ % 2U) == 0U ? 0U : 1U);
+          return monitor_word_item_count_ +
+                 ((monitor_word_item_count_ % 2U) == 0U ? 0U : 1U);
         }
-        return (monitor_item_count_ + 1U) / 2U;
+        return (monitor_word_item_count_ + 1U) / 2U;
       }
-      return monitor_item_count_ * ascii_word_size;
+      return (monitor_word_item_count_ + (monitor_dword_item_count_ * 2U)) *
+             ascii_word_size;
     }
     case OperationKind::ReadExtendedFileRegisterMonitor:
       return extended_file_register_monitor_item_count_ * ascii_word_size;
@@ -732,9 +772,15 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
     case OperationKind::RandomRead:
       return CommandCodec::parse_random_read_response(
           config_,
-          std::span<const RandomReadItem>(pending_random_items_.data(), pending_random_item_count_),
+          RandomReadRequest {
+              .word_items = std::span<const RandomReadWordItem>(
+                  pending_random_word_items_.data(), pending_random_word_item_count_),
+              .dword_items = std::span<const RandomReadDWordItem>(
+                  pending_random_dword_items_.data(), pending_random_dword_item_count_),
+          },
           response_data,
-          out_values_);
+          out_random_words_,
+          out_random_dwords_);
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
     case OperationKind::MultiBlockRead:
@@ -751,8 +797,16 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
       if (!response_data.empty()) {
         return make_status(StatusCode::Parse, "Monitor registration response must not contain response data");
       }
-      std::copy_n(pending_random_items_.begin(), pending_random_item_count_, monitor_items_.begin());
-      monitor_item_count_ = pending_random_item_count_;
+      std::copy_n(
+          pending_random_word_items_.begin(),
+          pending_random_word_item_count_,
+          monitor_word_items_.begin());
+      std::copy_n(
+          pending_random_dword_items_.begin(),
+          pending_random_dword_item_count_,
+          monitor_dword_items_.begin());
+      monitor_word_item_count_ = pending_random_word_item_count_;
+      monitor_dword_item_count_ = pending_random_dword_item_count_;
       monitor_registered_ = true;
       return ok_status();
     case OperationKind::RegisterExtendedFileRegisterMonitor:
@@ -771,9 +825,15 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
     case OperationKind::ReadMonitor:
       return CommandCodec::parse_read_monitor_response(
           config_,
-          std::span<const RandomReadItem>(monitor_items_.data(), monitor_item_count_),
+          MonitorRegistration {
+              .word_items = std::span<const RandomReadWordItem>(
+                  monitor_word_items_.data(), monitor_word_item_count_),
+              .dword_items = std::span<const RandomReadDWordItem>(
+                  monitor_dword_items_.data(), monitor_dword_item_count_),
+          },
           response_data,
-          out_values_);
+          out_random_words_,
+          out_random_dwords_);
     case OperationKind::ReadExtendedFileRegisterMonitor:
       return CommandCodec::parse_read_extended_file_register_monitor_response(
           config_,
@@ -833,6 +893,82 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
   return make_status(StatusCode::Parse, "Unknown operation kind");
 }
 
+Status MelsecSerialClient::active_timeout_status(const char* timeout_message) const noexcept {
+  if (operation_ == OperationKind::RemoteRun) {
+    return make_status(
+        StatusCode::OperationOutcomeUnknown,
+        "Remote RUN was transmitted but no confirmed response was received; PLC RUN state is unknown");
+  }
+  if (operation_ == OperationKind::RemotePause) {
+    return make_status(
+        StatusCode::OperationOutcomeUnknown,
+        "Remote PAUSE was transmitted but no confirmed response was received; PLC PAUSE state is unknown");
+  }
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+  if (operation_ == OperationKind::RandomWriteWords ||
+      operation_ == OperationKind::RandomWriteBits) {
+    return make_status(
+        StatusCode::OperationOutcomeUnknown,
+        "Random write was transmitted but no confirmed response was received; PLC data state is unknown");
+  }
+#endif
+  return make_status(StatusCode::Timeout, timeout_message);
+}
+
+Status MelsecSerialClient::active_transport_failure_status(Status transport_status) const noexcept {
+  if (operation_ == OperationKind::RemoteRun) {
+    return make_status(
+        StatusCode::OperationOutcomeUnknown,
+        "Remote RUN transmission may have started before transport failure; PLC RUN state is unknown");
+  }
+  if (operation_ == OperationKind::RemotePause) {
+    return make_status(
+        StatusCode::OperationOutcomeUnknown,
+        "Remote PAUSE transmission may have started before transport failure; PLC PAUSE state is unknown");
+  }
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+  if (operation_ == OperationKind::RandomWriteWords ||
+      operation_ == OperationKind::RandomWriteBits) {
+    return make_status(
+        StatusCode::OperationOutcomeUnknown,
+        "Random write transmission may have started before transport failure; PLC data state is unknown");
+  }
+#endif
+  return transport_status;
+}
+
+Status MelsecSerialClient::active_unconfirmed_failure_status(Status failure_status) const noexcept {
+  if (active_operation_outcome_can_be_unknown() && !failure_status.ok() &&
+      failure_status.code != StatusCode::PlcError) {
+    if (operation_ == OperationKind::RemoteRun) {
+      return make_status(
+          StatusCode::OperationOutcomeUnknown,
+          "Remote RUN response could not be confirmed; PLC RUN state is unknown");
+    }
+    if (operation_ == OperationKind::RemotePause) {
+      return make_status(
+          StatusCode::OperationOutcomeUnknown,
+          "Remote PAUSE response could not be confirmed; PLC PAUSE state is unknown");
+    }
+    return make_status(
+        StatusCode::OperationOutcomeUnknown,
+        "Random write response could not be confirmed; PLC data state is unknown");
+  }
+  return failure_status;
+}
+
+bool MelsecSerialClient::active_operation_outcome_can_be_unknown() const noexcept {
+  if (operation_ == OperationKind::RemoteRun || operation_ == OperationKind::RemotePause) {
+    return true;
+  }
+#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+  return operation_ == OperationKind::RandomWriteWords ||
+         operation_ == OperationKind::RandomWriteBits;
+#else
+  return false;
+#endif
+}
+
 void MelsecSerialClient::complete(Status status) noexcept {
   CompletionHandler callback = callback_;
   void* user = callback_user_;
@@ -858,7 +994,8 @@ void MelsecSerialClient::clear_pending_outputs() noexcept {
   out_words_ = {};
   out_bits_ = {};
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
-  out_values_ = {};
+  out_random_words_ = {};
+  out_random_dwords_ = {};
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
   out_bytes_ = {};
@@ -890,7 +1027,8 @@ void MelsecSerialClient::clear_pending_outputs() noexcept {
 
 void MelsecSerialClient::clear_pending_copies() noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
-  pending_random_item_count_ = 0;
+  pending_random_word_item_count_ = 0;
+  pending_random_dword_item_count_ = 0;
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
   pending_extended_file_register_item_count_ = 0;
@@ -1198,16 +1336,26 @@ Status MelsecSerialClient::async_extended_batch_write_words(
 Status MelsecSerialClient::async_random_read(
     std::uint32_t now_ms,
     const RandomReadRequest& request,
-    std::span<std::uint32_t> out_values,
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
-  if (request.items.size() > pending_random_items_.size()) {
+  if (request.word_items.size() > pending_random_word_items_.size() ||
+      request.dword_items.size() > pending_random_dword_items_.size() ||
+      request.word_items.size() + request.dword_items.size() > kMaxRandomAccessItems) {
     return make_status(StatusCode::InvalidArgument, "Random read item count exceeds the client limit");
   }
-  pending_random_item_count_ = request.items.size();
-  std::copy(request.items.begin(), request.items.end(), pending_random_items_.begin());
-  out_values_ = out_values;
+  if (out_words.size() < request.word_items.size() ||
+      out_dwords.size() < request.dword_items.size()) {
+    return make_status(StatusCode::BufferTooSmall, "Random read output buffers are too small");
+  }
+  pending_random_word_item_count_ = request.word_items.size();
+  pending_random_dword_item_count_ = request.dword_items.size();
+  std::copy(request.word_items.begin(), request.word_items.end(), pending_random_word_items_.begin());
+  std::copy(request.dword_items.begin(), request.dword_items.end(), pending_random_dword_items_.begin());
+  out_random_words_ = out_words;
+  out_random_dwords_ = out_dwords;
 
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_random_read(config_, request, request_data_, request_size);
@@ -1220,7 +1368,8 @@ Status MelsecSerialClient::async_random_read(
 #else
   (void)now_ms;
   (void)request;
-  (void)out_values;
+  (void)out_words;
+  (void)out_dwords;
   (void)callback;
   (void)user;
   return feature_disabled("Random commands are disabled at build time");
@@ -1229,25 +1378,30 @@ Status MelsecSerialClient::async_random_read(
 
 Status MelsecSerialClient::async_link_direct_random_read(
     std::uint32_t now_ms,
-    std::span<const LinkDirectRandomReadItem> items,
-    std::span<std::uint32_t> out_values,
+    std::span<const LinkDirectRandomReadWordItem> word_items,
+    std::span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
-  if (items.size() > pending_random_items_.size()) {
+  if (word_items.size() > pending_random_word_items_.size()) {
     return make_status(StatusCode::InvalidArgument, "Link direct random read item count exceeds the client limit");
   }
-  pending_random_item_count_ = items.size();
-  for (std::size_t index = 0; index < items.size(); ++index) {
-    pending_random_items_[index] = RandomReadItem {
-        .device = items[index].device.device,
-        .double_word = items[index].double_word,
+  if (out_words.size() < word_items.size()) {
+    return make_status(StatusCode::BufferTooSmall, "Link direct random read output buffer is too small");
+  }
+  pending_random_word_item_count_ = word_items.size();
+  pending_random_dword_item_count_ = 0U;
+  for (std::size_t index = 0; index < word_items.size(); ++index) {
+    pending_random_word_items_[index] = RandomReadWordItem {
+        .device = word_items[index].device.device,
     };
   }
-  out_values_ = out_values;
+  out_random_words_ = out_words;
+  out_random_dwords_ = {};
 
   std::size_t request_size = 0;
-  const Status status = CommandCodec::encode_link_direct_random_read(config_, items, request_data_, request_size);
+  const Status status = CommandCodec::encode_link_direct_random_read(
+      config_, word_items, request_data_, request_size);
   if (!status.ok()) {
     clear_pending_outputs();
     clear_pending_copies();
@@ -1256,8 +1410,8 @@ Status MelsecSerialClient::async_link_direct_random_read(
   return start_request(now_ms, OperationKind::RandomRead, request_size, callback, user);
 #else
   (void)now_ms;
-  (void)items;
-  (void)out_values;
+  (void)word_items;
+  (void)out_words;
   (void)callback;
   (void)user;
   return feature_disabled("Random commands are disabled at build time");
@@ -1266,19 +1420,22 @@ Status MelsecSerialClient::async_link_direct_random_read(
 
 Status MelsecSerialClient::async_random_write_words(
     std::uint32_t now_ms,
-    std::span<const RandomWriteWordItem> items,
+    std::span<const RandomWriteWordItem> word_items,
+    std::span<const RandomWriteDWordItem> dword_items,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
   std::size_t request_size = 0;
-  const Status status = CommandCodec::encode_random_write_words(config_, items, request_data_, request_size);
+  const Status status = CommandCodec::encode_random_write_words(
+      config_, word_items, dword_items, request_data_, request_size);
   if (!status.ok()) {
     return status;
   }
   return start_request(now_ms, OperationKind::RandomWriteWords, request_size, callback, user);
 #else
   (void)now_ms;
-  (void)items;
+  (void)word_items;
+  (void)dword_items;
   (void)callback;
   (void)user;
   return feature_disabled("Random commands are disabled at build time");
@@ -1516,11 +1673,15 @@ Status MelsecSerialClient::async_register_monitor(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
-  if (request.items.size() > pending_random_items_.size()) {
+  if (request.word_items.size() > pending_random_word_items_.size() ||
+      request.dword_items.size() > pending_random_dword_items_.size() ||
+      request.word_items.size() + request.dword_items.size() > kMaxMonitorItems) {
     return make_status(StatusCode::InvalidArgument, "Monitor item count exceeds the client limit");
   }
-  pending_random_item_count_ = request.items.size();
-  std::copy(request.items.begin(), request.items.end(), pending_random_items_.begin());
+  pending_random_word_item_count_ = request.word_items.size();
+  pending_random_dword_item_count_ = request.dword_items.size();
+  std::copy(request.word_items.begin(), request.word_items.end(), pending_random_word_items_.begin());
+  std::copy(request.dword_items.begin(), request.dword_items.end(), pending_random_dword_items_.begin());
 
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_register_monitor(config_, request, request_data_, request_size);
@@ -1586,14 +1747,14 @@ Status MelsecSerialClient::async_link_direct_register_monitor(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
-  if (request.items.size() > pending_random_items_.size()) {
+  if (request.word_items.size() > pending_random_word_items_.size()) {
     return make_status(StatusCode::InvalidArgument, "Link direct monitor item count exceeds the client limit");
   }
-  pending_random_item_count_ = request.items.size();
-  for (std::size_t index = 0; index < request.items.size(); ++index) {
-    pending_random_items_[index] = RandomReadItem {
-        .device = request.items[index].device.device,
-        .double_word = request.items[index].double_word,
+  pending_random_word_item_count_ = request.word_items.size();
+  pending_random_dword_item_count_ = 0U;
+  for (std::size_t index = 0; index < request.word_items.size(); ++index) {
+    pending_random_word_items_[index] = RandomReadWordItem {
+        .device = request.word_items[index].device.device,
     };
   }
 
@@ -1615,22 +1776,30 @@ Status MelsecSerialClient::async_link_direct_register_monitor(
 
 Status MelsecSerialClient::async_read_monitor(
     std::uint32_t now_ms,
-    std::span<std::uint32_t> out_values,
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
   if (!monitor_registered_) {
     return make_status(StatusCode::InvalidArgument, "Monitor data has not been registered");
   }
-  if (out_values.size() < monitor_item_count_) {
-    return make_status(StatusCode::BufferTooSmall, "Monitor output buffer is too small");
+  if (out_words.size() < monitor_word_item_count_ ||
+      out_dwords.size() < monitor_dword_item_count_) {
+    return make_status(StatusCode::BufferTooSmall, "Monitor output buffers are too small");
   }
-  out_values_ = out_values;
+  out_random_words_ = out_words;
+  out_random_dwords_ = out_dwords;
 
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_read_monitor(
       config_,
-      std::span<const RandomReadItem>(monitor_items_.data(), monitor_item_count_),
+      MonitorRegistration {
+          .word_items = std::span<const RandomReadWordItem>(
+              monitor_word_items_.data(), monitor_word_item_count_),
+          .dword_items = std::span<const RandomReadDWordItem>(
+              monitor_dword_items_.data(), monitor_dword_item_count_),
+      },
       request_data_,
       request_size);
   if (!status.ok()) {
@@ -1640,7 +1809,8 @@ Status MelsecSerialClient::async_read_monitor(
   return start_request(now_ms, OperationKind::ReadMonitor, request_size, callback, user);
 #else
   (void)now_ms;
-  (void)out_values;
+  (void)out_words;
+  (void)out_dwords;
   (void)callback;
   (void)user;
   return feature_disabled("Monitor commands are disabled at build time");

@@ -168,6 +168,6 @@ The serial values in examples are also sample defaults. Match the actual PLC ser
 | --- | --- |
 | No response from the PLC | Baud rate, parity, and stop bits must all match the PLC serial module DIP switch or parameter settings. |
 | PLC error or framing error | Check that the PLC module is configured for the same frame type and code mode. |
-| RS-485 multi-drop does not answer | Select the frame-specific multidrop route and ensure its explicit station—and for 3C/4C, network and PC target—matches the target serial module. Use the explicit 1E PC target when 1E is selected. |
+| RS-485 multi-drop does not answer | Select the frame-specific route and the actual topology. Use a `*StandardMultidropRoute` for normal/1:n or a `*MnMultidropRoute` with the assigned `SelfStationNo` for m:n. Ensure station—and for 3C/4C, network and PC target—matches the serial module. For 4C, also verify the mandatory destination-module target. Use the explicit 1E PC target when 1E is selected. |
 | MCU sample prints zeros or no values | Verify the UART TX/RX pins and the TTL-to-RS-232C or RS-485 interface. |
 | Wiring uncertainty | See the shared [MC Protocol Serial setup guide](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/serial/) before changing software settings. |

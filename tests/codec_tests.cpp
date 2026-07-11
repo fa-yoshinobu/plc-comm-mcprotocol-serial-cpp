@@ -4,15 +4,18 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <type_traits>
 
 #include "mcprotocol/serial/client.hpp"
 #include "mcprotocol/serial/high_level.hpp"
+#include "mcprotocol/serial/host_sync.hpp"
 #include "mcprotocol/serial/link_direct.hpp"
 #include "mcprotocol/serial/posix_serial.hpp"
 #include "mcprotocol/serial/qualified_buffer.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
+#include "../src/fixed_item_buffer.hpp"
 
 namespace {
 
@@ -26,6 +29,43 @@ concept HasStationNumberMember = requires(T value) {
   value.station_no;
 };
 
+template <typename T>
+concept HasSelfStationNumberMethod = requires(T value) {
+  value.self_station_no();
+};
+
+template <typename T>
+concept HasDoubleWordMember = requires(T value) {
+  value.double_word;
+};
+
+template <typename T>
+concept CanRemoteRunWithoutPolicies = requires(T& client) {
+  client.remote_run();
+};
+
+template <typename T>
+concept CanRemoteRunWithOnlyConflictPolicy = requires(T& client) {
+  client.remote_run(mcprotocol::serial::RemoteOperationMode::DoNotExecuteForcibly);
+};
+
+template <typename T>
+concept CanRemoteRunWithBothPolicies = requires(T& client) {
+  client.remote_run(
+      mcprotocol::serial::RemoteOperationMode::DoNotExecuteForcibly,
+      mcprotocol::serial::RemoteRunClearMode::DoNotClear);
+};
+
+template <typename T>
+concept CanRemotePauseWithoutPolicy = requires(T& client) {
+  client.remote_pause();
+};
+
+template <typename T>
+concept CanRemotePauseWithPolicy = requires(T& client) {
+  client.remote_pause(mcprotocol::serial::RemoteOperationMode::DoNotExecuteForcibly);
+};
+
 using mcprotocol::serial::AsciiFormat;
 using mcprotocol::serial::BatchReadBitsRequest;
 using mcprotocol::serial::BatchReadWordsRequest;
@@ -34,12 +74,17 @@ using mcprotocol::serial::BatchWriteWordsRequest;
 using mcprotocol::serial::BitValue;
 using mcprotocol::serial::CodeMode;
 using mcprotocol::serial::C1MultidropRoute;
-using mcprotocol::serial::C2MultidropRoute;
-using mcprotocol::serial::C3MultidropRoute;
-using mcprotocol::serial::C4MultidropRoute;
+using mcprotocol::serial::C2MnMultidropRoute;
+using mcprotocol::serial::C2StandardMultidropRoute;
+using mcprotocol::serial::C3MnMultidropRoute;
+using mcprotocol::serial::C3StandardMultidropRoute;
+using mcprotocol::serial::C4MnMultidropRoute;
+using mcprotocol::serial::C4StandardMultidropRoute;
+using mcprotocol::serial::C4DestinationModule;
 using mcprotocol::serial::C34PcTarget;
 using mcprotocol::serial::CompletionHandler;
 using mcprotocol::serial::CpuModelInfo;
+using mcprotocol::serial::DeviceAddress;
 using mcprotocol::serial::DecodeStatus;
 using mcprotocol::serial::ExtendedFileRegisterAddress;
 using mcprotocol::serial::ExtendedFileRegisterBatchReadWordsRequest;
@@ -63,7 +108,7 @@ using mcprotocol::serial::LinkDirectMultiBlockReadBlock;
 using mcprotocol::serial::LinkDirectMultiBlockReadRequest;
 using mcprotocol::serial::LinkDirectMultiBlockWriteBlock;
 using mcprotocol::serial::LinkDirectMultiBlockWriteRequest;
-using mcprotocol::serial::LinkDirectRandomReadItem;
+using mcprotocol::serial::LinkDirectRandomReadWordItem;
 using mcprotocol::serial::LinkDirectRandomWriteBitItem;
 using mcprotocol::serial::LinkDirectRandomWriteWordItem;
 using mcprotocol::serial::MelsecSerialClient;
@@ -77,17 +122,24 @@ using mcprotocol::serial::MultiBlockWriteBlock;
 using mcprotocol::serial::MultiBlockWriteRequest;
 using mcprotocol::serial::E1Route;
 using mcprotocol::serial::E1PcTarget;
+using mcprotocol::serial::E1MonitoringTimer;
 using mcprotocol::serial::PlcProfile;
 using mcprotocol::serial::PlcSeries;
 using mcprotocol::serial::ProtocolConfig;
 using mcprotocol::serial::PosixSerialConfig;
+using mcprotocol::serial::PosixSyncClient;
 using mcprotocol::serial::QualifiedBufferDeviceKind;
 using mcprotocol::serial::QualifiedBufferWordDevice;
-using mcprotocol::serial::RandomReadItem;
+using mcprotocol::serial::RandomReadDWordItem;
+using mcprotocol::serial::RandomReadWordItem;
 using mcprotocol::serial::RandomReadRequest;
 using mcprotocol::serial::RandomWriteBitItem;
+using mcprotocol::serial::RandomWriteDWordItem;
 using mcprotocol::serial::RandomWriteWordItem;
+using mcprotocol::serial::RemoteOperationMode;
+using mcprotocol::serial::RemoteRunClearMode;
 using mcprotocol::serial::RouteConfig;
+using mcprotocol::serial::SelfStationNo;
 using mcprotocol::serial::SerialModuleChannel;
 using mcprotocol::serial::SerialModuleCommunicationSpeed;
 using mcprotocol::serial::SerialModuleModeNo;
@@ -111,11 +163,15 @@ using mcprotocol::serial::decode_qualified_buffer_word_values;
 using mcprotocol::serial::highlevel::make_batch_read_words_request;
 using mcprotocol::serial::highlevel::make_batch_write_bits_request;
 using mcprotocol::serial::highlevel::make_c4_binary_protocol;
+using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 using mcprotocol::serial::highlevel::make_monitor_registration;
-using mcprotocol::serial::highlevel::make_random_read_item;
+using mcprotocol::serial::highlevel::make_random_read_dword_item;
+using mcprotocol::serial::highlevel::make_random_read_word_item;
 using mcprotocol::serial::highlevel::make_random_read_request;
 using mcprotocol::serial::highlevel::make_random_write_bit_item;
 using mcprotocol::serial::highlevel::make_random_write_bit_items;
+using mcprotocol::serial::highlevel::make_random_write_dword_item;
+using mcprotocol::serial::highlevel::make_random_write_dword_items;
 using mcprotocol::serial::highlevel::make_random_write_word_item;
 using mcprotocol::serial::highlevel::make_random_write_word_items;
 using mcprotocol::serial::highlevel::parse_device_address;
@@ -124,8 +180,10 @@ using mcprotocol::serial::highlevel::get_long_state_read_spec;
 using mcprotocol::serial::highlevel::LongStateReadKind;
 using mcprotocol::serial::highlevel::LongStateReadRoute;
 using mcprotocol::serial::highlevel::LongStateReadSpec;
-using mcprotocol::serial::highlevel::RandomReadSpec;
+using mcprotocol::serial::highlevel::RandomReadDWordSpec;
+using mcprotocol::serial::highlevel::RandomReadWordSpec;
 using mcprotocol::serial::highlevel::RandomWriteBitSpec;
+using mcprotocol::serial::highlevel::RandomWriteDWordSpec;
 using mcprotocol::serial::highlevel::RandomWriteWordSpec;
 using mcprotocol::serial::make_qualified_buffer_read_words_request;
 using mcprotocol::serial::make_qualified_buffer_write_words_request;
@@ -159,35 +217,92 @@ namespace module_io = mcprotocol::serial::module_io;
   }
 }
 
+[[nodiscard]] constexpr C4DestinationModule c4_destination_module(
+    std::uint32_t io_number,
+    std::uint32_t station_number) noexcept {
+  if (station_number == 0U) {
+    switch (io_number) {
+      case module_io::OwnStation:
+        return C4DestinationModule::own_station();
+      case module_io::MultipleCpu1:
+        return C4DestinationModule::multiple_cpu(1U);
+      case module_io::MultipleCpu2:
+        return C4DestinationModule::multiple_cpu(2U);
+      case module_io::MultipleCpu3:
+        return C4DestinationModule::multiple_cpu(3U);
+      case module_io::MultipleCpu4:
+        return C4DestinationModule::multiple_cpu(4U);
+      case module_io::ControlSystemCpu:
+        return C4DestinationModule::redundant_control_system_cpu();
+      case module_io::StandbySystemCpu:
+        return C4DestinationModule::redundant_standby_system_cpu();
+      case module_io::SystemACpu:
+        return C4DestinationModule::redundant_system_a_cpu();
+      case module_io::SystemBCpu:
+        return C4DestinationModule::redundant_system_b_cpu();
+      default:
+        break;
+    }
+  }
+  return C4DestinationModule::explicit_target(io_number, station_number);
+}
+
 [[nodiscard]] constexpr RouteConfig multidrop_route(
     FrameKind frame_kind,
     std::uint8_t station_no,
     std::uint8_t network_no = 0x00U,
     std::uint8_t pc_no = 0xFFU,
     std::uint16_t module_io_no = module_io::OwnStation,
-    std::uint8_t module_station_no = 0x00U,
-    bool self_station_enabled = false,
-    std::uint8_t self_station_no = 0x00U) noexcept {
+    std::uint8_t module_station_no = 0x00U) noexcept {
   switch (frame_kind) {
     case FrameKind::C1:
       return RouteConfig {C1MultidropRoute {station_no}};
     case FrameKind::C2:
-      return RouteConfig {C2MultidropRoute {station_no, self_station_enabled, self_station_no}};
+      return RouteConfig {C2StandardMultidropRoute {station_no}};
     case FrameKind::C3:
-      return RouteConfig {C3MultidropRoute {
-          station_no, network_no, c34_pc_target(pc_no), self_station_enabled, self_station_no}};
+      return RouteConfig {C3StandardMultidropRoute {
+          station_no, network_no, c34_pc_target(pc_no)}};
     case FrameKind::C4:
-      return RouteConfig {C4MultidropRoute {
+      return RouteConfig {C4StandardMultidropRoute {
           station_no,
           network_no,
           c34_pc_target(pc_no),
-          module_io_no,
-          module_station_no,
-          self_station_enabled,
-          self_station_no}};
+          c4_destination_module(module_io_no, module_station_no)}};
     case FrameKind::E1:
       return RouteConfig {E1Route {
           pc_no == 0xFFU ? E1PcTarget::connected_station() : E1PcTarget::number(pc_no)}};
+  }
+  return RouteConfig {};
+}
+
+[[nodiscard]] constexpr RouteConfig mn_multidrop_route(
+    FrameKind frame_kind,
+    std::uint8_t station_no,
+    std::uint8_t network_no,
+    std::uint8_t pc_no,
+    std::uint16_t module_io_no,
+    std::uint8_t module_station_no,
+    std::uint32_t self_station_no) noexcept {
+  switch (frame_kind) {
+    case FrameKind::C2:
+      return RouteConfig {C2MnMultidropRoute {
+          station_no, SelfStationNo::number(self_station_no)}};
+    case FrameKind::C3:
+      return RouteConfig {C3MnMultidropRoute {
+          station_no,
+          network_no,
+          c34_pc_target(pc_no),
+          SelfStationNo::number(self_station_no)}};
+    case FrameKind::C4:
+      return RouteConfig {C4MnMultidropRoute {
+          station_no,
+          network_no,
+          c34_pc_target(pc_no),
+          c4_destination_module(module_io_no, module_station_no),
+          SelfStationNo::number(self_station_no)}};
+    case FrameKind::C1:
+    case FrameKind::E1:
+      return RouteConfig {};
   }
   return RouteConfig {};
 }
@@ -197,9 +312,9 @@ void test_module_io_constants() {
   static_assert(!HasStationNumberMember<HostStationRoute>);
   static_assert(std::is_constructible_v<RouteConfig, HostStationRoute>);
   static_assert(std::is_constructible_v<RouteConfig, C1MultidropRoute>);
-  static_assert(std::is_constructible_v<RouteConfig, C2MultidropRoute>);
-  static_assert(std::is_constructible_v<RouteConfig, C3MultidropRoute>);
-  static_assert(std::is_constructible_v<RouteConfig, C4MultidropRoute>);
+  static_assert(std::is_constructible_v<RouteConfig, C2StandardMultidropRoute>);
+  static_assert(std::is_constructible_v<RouteConfig, C3StandardMultidropRoute>);
+  static_assert(std::is_constructible_v<RouteConfig, C4StandardMultidropRoute>);
   static_assert(!std::is_constructible_v<RouteConfig, mcprotocol::serial::RouteKind>);
   assert(module_io::ControlSystemCpu == 0x03D0U);
   assert(module_io::StandbySystemCpu == 0x03D1U);
@@ -222,7 +337,7 @@ void test_module_io_constants() {
   assert(host_route.pc_no() == 0xFFU);
   assert(host_route.request_destination_module_io_no() == module_io::OwnStation);
   assert(host_route.request_destination_module_station_no() == 0x00U);
-  assert(!host_route.self_station_enabled());
+  assert(!host_route.is_mn_multidrop());
   assert(host_route.self_station_no() == 0x00U);
 }
 
@@ -309,7 +424,7 @@ ProtocolConfig make_ascii_c4_format4_config() {
 ProtocolConfig make_ascii_c2_format4_config() {
   ProtocolConfig config = make_ascii_c4_format4_config();
   config.frame_kind = FrameKind::C2;
-  config.route = RouteConfig {C2MultidropRoute {0x01U}};
+  config.route = RouteConfig {C2StandardMultidropRoute {0x01U}};
   return config;
 }
 
@@ -332,7 +447,6 @@ ProtocolConfig make_ascii_e1_a_config() {
   config.frame_kind = FrameKind::E1;
   config.plc_profile = PlcProfile::MelsecA;
   config.route = host_station_route();
-  config.timeout.response_timeout_ms = 4000;
   return config;
 }
 
@@ -340,7 +454,6 @@ ProtocolConfig make_binary_e1_a_config() {
   ProtocolConfig config = make_binary_c4_config();
   config.frame_kind = FrameKind::E1;
   config.plc_profile = PlcProfile::MelsecA;
-  config.timeout.response_timeout_ms = 4000;
   return config;
 }
 
@@ -447,20 +560,96 @@ void test_encode_remote_reset_binary_request() {
 }
 
 void test_encode_remote_run_binary_request() {
+  static_assert(!CanRemoteRunWithoutPolicies<PosixSyncClient>);
+  static_assert(!CanRemoteRunWithOnlyConflictPolicy<PosixSyncClient>);
+  static_assert(CanRemoteRunWithBothPolicies<PosixSyncClient>);
+
   const auto config = make_binary_c4_config();
   std::array<std::uint8_t, 16> request_data {};
-  std::size_t request_size = 0;
-  const Status status = CommandCodec::encode_remote_run(
+  const std::array<RemoteOperationMode, 2> modes {
+      RemoteOperationMode::DoNotExecuteForcibly,
+      RemoteOperationMode::ExecuteForcibly,
+  };
+  const std::array<RemoteRunClearMode, 3> clear_modes {
+      RemoteRunClearMode::DoNotClear,
+      RemoteRunClearMode::ClearOutsideLatchRange,
+      RemoteRunClearMode::AllClear,
+  };
+
+  for (const RemoteOperationMode mode : modes) {
+    for (const RemoteRunClearMode clear_mode : clear_modes) {
+      std::size_t request_size = 99U;
+      const Status status = CommandCodec::encode_remote_run(
+          config, mode, clear_mode, request_data, request_size);
+      assert(status.ok());
+
+      const std::array<std::uint8_t, 8> expected {
+          0x01,
+          0x10,
+          0x00,
+          0x00,
+          static_cast<std::uint8_t>(static_cast<std::uint16_t>(mode) & 0x00FFU),
+          0x00,
+          static_cast<std::uint8_t>(clear_mode),
+          0x00,
+      };
+      assert(request_size == expected.size());
+      assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+    }
+  }
+
+  auto ascii_config = config;
+  ascii_config.code_mode = CodeMode::Ascii;
+  ascii_config.ascii_format = AsciiFormat::Format3;
+  for (const RemoteOperationMode mode : modes) {
+    for (const RemoteRunClearMode clear_mode : clear_modes) {
+      std::size_t request_size = 0U;
+      const Status status = CommandCodec::encode_remote_run(
+          ascii_config, mode, clear_mode, request_data, request_size);
+      assert(status.ok());
+      const std::string expected =
+          std::string("10010000000") +
+          (mode == RemoteOperationMode::DoNotExecuteForcibly ? "1" : "3") +
+          "0" +
+          static_cast<char>('0' + static_cast<std::uint8_t>(clear_mode)) +
+          "00";
+      assert(request_size == expected.size());
+      assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+    }
+  }
+
+  std::size_t request_size = 99U;
+  Status status = CommandCodec::encode_remote_run(
       config,
-      mcprotocol::serial::RemoteOperationMode::DoNotExecuteForcibly,
-      mcprotocol::serial::RemoteRunClearMode::AllClear,
+      static_cast<RemoteOperationMode>(0xFFFFU),
+      RemoteRunClearMode::DoNotClear,
       request_data,
       request_size);
-  assert(status.ok());
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(request_size == 0U);
 
-  const std::array<std::uint8_t, 8> expected {0x01, 0x10, 0x00, 0x00, 0x01, 0x00, 0x02, 0x00};
-  assert(request_size == expected.size());
-  assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+  request_size = 99U;
+  status = CommandCodec::encode_remote_run(
+      config,
+      RemoteOperationMode::DoNotExecuteForcibly,
+      static_cast<RemoteRunClearMode>(0xFFU),
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(request_size == 0U);
+
+  request_size = 99U;
+  status = CommandCodec::encode_remote_run(
+      make_binary_e1_a_config(),
+      RemoteOperationMode::DoNotExecuteForcibly,
+      RemoteRunClearMode::DoNotClear,
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(request_size == 0U);
 }
 
 void test_encode_remote_stop_binary_request() {
@@ -476,19 +665,66 @@ void test_encode_remote_stop_binary_request() {
 }
 
 void test_encode_remote_pause_binary_request() {
+  static_assert(!CanRemotePauseWithoutPolicy<PosixSyncClient>);
+  static_assert(CanRemotePauseWithPolicy<PosixSyncClient>);
+
   const auto config = make_binary_c4_config();
   std::array<std::uint8_t, 16> request_data {};
-  std::size_t request_size = 0;
-  const Status status = CommandCodec::encode_remote_pause(
+  const std::array<RemoteOperationMode, 2> modes {
+      RemoteOperationMode::DoNotExecuteForcibly,
+      RemoteOperationMode::ExecuteForcibly,
+  };
+  for (const RemoteOperationMode mode : modes) {
+    std::size_t request_size = 99U;
+    const Status status = CommandCodec::encode_remote_pause(
+        config, mode, request_data, request_size);
+    assert(status.ok());
+    const std::array<std::uint8_t, 6> expected {
+        0x03,
+        0x10,
+        0x00,
+        0x00,
+        static_cast<std::uint8_t>(static_cast<std::uint16_t>(mode) & 0x00FFU),
+        0x00,
+    };
+    assert(request_size == expected.size());
+    assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+  }
+
+  auto ascii_config = config;
+  ascii_config.code_mode = CodeMode::Ascii;
+  ascii_config.ascii_format = AsciiFormat::Format3;
+  for (const RemoteOperationMode mode : modes) {
+    std::size_t request_size = 0U;
+    const Status status = CommandCodec::encode_remote_pause(
+        ascii_config, mode, request_data, request_size);
+    assert(status.ok());
+    const std::string expected =
+        std::string("10030000000") +
+        (mode == RemoteOperationMode::DoNotExecuteForcibly ? "1" : "3");
+    assert(request_size == expected.size());
+    assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+  }
+
+  std::size_t request_size = 99U;
+  Status status = CommandCodec::encode_remote_pause(
       config,
-      mcprotocol::serial::RemoteOperationMode::DoNotExecuteForcibly,
+      static_cast<RemoteOperationMode>(0xFFFFU),
       request_data,
       request_size);
-  assert(status.ok());
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(request_size == 0U);
 
-  const std::array<std::uint8_t, 6> expected {0x03, 0x10, 0x00, 0x00, 0x01, 0x00};
-  assert(request_size == expected.size());
-  assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
+  request_size = 99U;
+  status = CommandCodec::encode_remote_pause(
+      make_binary_e1_a_config(),
+      RemoteOperationMode::DoNotExecuteForcibly,
+      request_data,
+      request_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(request_size == 0U);
 }
 
 void test_encode_remote_latch_clear_binary_request() {
@@ -926,54 +1162,200 @@ void test_validate_c4_routed_access_and_connected_station_only_commands() {
 
 void test_route_types_require_frame_specific_station_and_network() {
   static_assert(!std::is_default_constructible_v<C1MultidropRoute>);
-  static_assert(!std::is_default_constructible_v<C2MultidropRoute>);
-  static_assert(!std::is_default_constructible_v<C3MultidropRoute>);
-  static_assert(!std::is_default_constructible_v<C4MultidropRoute>);
+  static_assert(!std::is_default_constructible_v<C2StandardMultidropRoute>);
+  static_assert(!std::is_default_constructible_v<C3StandardMultidropRoute>);
+  static_assert(!std::is_default_constructible_v<C4StandardMultidropRoute>);
   static_assert(std::is_constructible_v<C1MultidropRoute, std::uint8_t>);
-  static_assert(std::is_constructible_v<C2MultidropRoute, std::uint8_t>);
-  static_assert(!std::is_constructible_v<C3MultidropRoute, std::uint8_t>);
-  static_assert(!std::is_constructible_v<C3MultidropRoute, std::uint8_t, std::uint8_t>);
+  static_assert(std::is_constructible_v<C2StandardMultidropRoute, std::uint8_t>);
+  static_assert(!std::is_constructible_v<C3StandardMultidropRoute, std::uint8_t>);
+  static_assert(!std::is_constructible_v<C3StandardMultidropRoute, std::uint8_t, std::uint8_t>);
   static_assert(std::is_constructible_v<
-                C3MultidropRoute,
+                C3StandardMultidropRoute,
                 std::uint8_t,
                 std::uint8_t,
                 C34PcTarget>);
-  static_assert(!std::is_constructible_v<C4MultidropRoute, std::uint8_t>);
-  static_assert(!std::is_constructible_v<C4MultidropRoute, std::uint8_t, std::uint8_t>);
+  static_assert(!std::is_constructible_v<C4StandardMultidropRoute, std::uint8_t>);
+  static_assert(!std::is_constructible_v<C4StandardMultidropRoute, std::uint8_t, std::uint8_t>);
   static_assert(std::is_constructible_v<
-                C4MultidropRoute,
+                C4StandardMultidropRoute,
                 std::uint8_t,
                 std::uint8_t,
-                C34PcTarget>);
+                C34PcTarget,
+                C4DestinationModule>);
 
   ProtocolConfig config = make_binary_c4_config();
-  config.route = RouteConfig {C2MultidropRoute {0x00U}};
+  config.route = RouteConfig {C2StandardMultidropRoute {0x00U}};
   Status status = FrameCodec::validate_config(config);
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
 
-  config.route = RouteConfig {C4MultidropRoute {
-      0x00U, 0x00U, C34PcTarget::connected_station()}};
+  config.route = RouteConfig {C4StandardMultidropRoute {
+      0x00U, 0x00U, C34PcTarget::connected_station(), C4DestinationModule::own_station()}};
   status = FrameCodec::validate_config(config);
   assert(status.ok());
 
-  config.route = RouteConfig {C4MultidropRoute {
-      0x1FU, 0xEFU, C34PcTarget::connected_station()}};
+  config.route = RouteConfig {C4StandardMultidropRoute {
+      0x1FU, 0xEFU, C34PcTarget::connected_station(), C4DestinationModule::own_station()}};
   assert(FrameCodec::validate_config(config).ok());
   for (const std::uint32_t invalid_station : {0x20U, 0xFFU, 0x100U}) {
-    config.route = RouteConfig {C4MultidropRoute {
-        invalid_station, 0x00U, C34PcTarget::connected_station()}};
+    config.route = RouteConfig {C4StandardMultidropRoute {
+        invalid_station, 0x00U, C34PcTarget::connected_station(), C4DestinationModule::own_station()}};
     status = FrameCodec::validate_config(config);
     assert(!status.ok());
     assert(status.code == StatusCode::InvalidArgument);
   }
   for (const std::uint32_t invalid_network : {0xF0U, 0xFEU, 0x100U}) {
-    config.route = RouteConfig {C4MultidropRoute {
-        0x00U, invalid_network, C34PcTarget::connected_station()}};
+    config.route = RouteConfig {C4StandardMultidropRoute {
+        0x00U, invalid_network, C34PcTarget::connected_station(), C4DestinationModule::own_station()}};
     status = FrameCodec::validate_config(config);
     assert(!status.ok());
     assert(status.code == StatusCode::InvalidArgument);
   }
+}
+
+void test_self_station_topology_is_typed_required_and_strict() {
+  static_assert(!std::is_default_constructible_v<SelfStationNo>);
+  static_assert(!std::is_default_constructible_v<C2MnMultidropRoute>);
+  static_assert(!std::is_default_constructible_v<C3MnMultidropRoute>);
+  static_assert(!std::is_default_constructible_v<C4MnMultidropRoute>);
+  static_assert(!std::is_constructible_v<C2MnMultidropRoute, std::uint32_t>);
+  static_assert(std::is_constructible_v<
+                C2MnMultidropRoute,
+                std::uint32_t,
+                SelfStationNo>);
+  static_assert(!HasSelfStationNumberMethod<C1MultidropRoute>);
+  static_assert(!HasSelfStationNumberMethod<C2StandardMultidropRoute>);
+  static_assert(HasSelfStationNumberMethod<C2MnMultidropRoute>);
+  static_assert(!HasSelfStationNumberMethod<E1Route>);
+
+  const RouteConfig standard {C2StandardMultidropRoute {0x01U}};
+  assert(!standard.is_mn_multidrop());
+  assert(standard.self_station_no() == 0U);
+  assert(standard.self_station_valid());
+
+  const RouteConfig explicit_zero {C2MnMultidropRoute {
+      0x01U, SelfStationNo::number(0U)}};
+  assert(explicit_zero.is_mn_multidrop());
+  assert(explicit_zero.self_station_no() == 0U);
+  assert(explicit_zero.self_station_valid());
+
+  const RouteConfig upper_bound {C2MnMultidropRoute {
+      0x01U, SelfStationNo::number(0x1FU)}};
+  assert(upper_bound.is_mn_multidrop());
+  assert(upper_bound.self_station_no() == 0x1FU);
+  assert(upper_bound.self_station_valid());
+
+  auto invalid_config = make_ascii_c2_format3_config();
+  invalid_config.route = RouteConfig {C2MnMultidropRoute {
+      0x01U, SelfStationNo::number(0x20U)}};
+  Status status = FrameCodec::validate_config(invalid_config);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(invalid_config.route.self_station_no() == 0x20U);
+
+  const BatchReadWordsRequest request {
+      .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100U},
+      .points = 1U,
+  };
+  const auto encode_request = [&](
+                                  const ProtocolConfig& config,
+                                  std::array<std::uint8_t, 128>& frame,
+                                  std::size_t& frame_size) {
+    std::array<std::uint8_t, 64> command {};
+    std::size_t command_size = 0U;
+    Status encode_status = CommandCodec::encode_batch_read_words(
+        config, request, command, command_size);
+    assert(encode_status.ok());
+    frame_size = 0U;
+    encode_status = FrameCodec::encode_request(
+        config,
+        std::span<const std::uint8_t>(command.data(), command_size),
+        frame,
+        frame_size);
+    assert(encode_status.ok());
+  };
+
+  auto c2_standard = make_ascii_c2_format3_config();
+  c2_standard.route = RouteConfig {C2StandardMultidropRoute {0x11U}};
+  auto c2_zero = c2_standard;
+  c2_zero.route = RouteConfig {C2MnMultidropRoute {
+      0x11U, SelfStationNo::number(0U)}};
+  auto c2_upper = c2_standard;
+  c2_upper.route = RouteConfig {C2MnMultidropRoute {
+      0x11U, SelfStationNo::number(0x1FU)}};
+  std::array<std::uint8_t, 128> standard_frame {};
+  std::array<std::uint8_t, 128> zero_frame {};
+  std::array<std::uint8_t, 128> upper_frame {};
+  std::size_t standard_size = 0U;
+  std::size_t zero_size = 0U;
+  std::size_t upper_size = 0U;
+  encode_request(c2_standard, standard_frame, standard_size);
+  encode_request(c2_zero, zero_frame, zero_size);
+  encode_request(c2_upper, upper_frame, upper_size);
+  assert(standard_size == zero_size);
+  assert(std::equal(
+      standard_frame.begin(), standard_frame.begin() + standard_size, zero_frame.begin()));
+  assert(upper_frame[5] == '1');
+  assert(upper_frame[6] == 'F');
+
+  auto c3_upper = make_ascii_c3_format3_config();
+  c3_upper.route = RouteConfig {C3MnMultidropRoute {
+      0x11U,
+      0x01U,
+      C34PcTarget::connected_station(),
+      SelfStationNo::number(0x1FU)}};
+  encode_request(c3_upper, upper_frame, upper_size);
+  assert(upper_frame[9] == '1');
+  assert(upper_frame[10] == 'F');
+
+  auto c4_standard = make_binary_c4_config();
+  c4_standard.route = RouteConfig {C4StandardMultidropRoute {
+      0x11U,
+      0x01U,
+      C34PcTarget::connected_station(),
+      C4DestinationModule::own_station()}};
+  auto c4_zero = c4_standard;
+  c4_zero.route = RouteConfig {C4MnMultidropRoute {
+      0x11U,
+      0x01U,
+      C34PcTarget::connected_station(),
+      C4DestinationModule::own_station(),
+      SelfStationNo::number(0U)}};
+  auto c4_upper = c4_standard;
+  c4_upper.route = RouteConfig {C4MnMultidropRoute {
+      0x11U,
+      0x01U,
+      C34PcTarget::connected_station(),
+      C4DestinationModule::own_station(),
+      SelfStationNo::number(0x1FU)}};
+  encode_request(c4_standard, standard_frame, standard_size);
+  encode_request(c4_zero, zero_frame, zero_size);
+  encode_request(c4_upper, upper_frame, upper_size);
+  assert(standard_size == zero_size);
+  assert(std::equal(
+      standard_frame.begin(), standard_frame.begin() + standard_size, zero_frame.begin()));
+  assert(upper_frame[11] == 0x1FU);
+
+  auto foreign_response = c4_upper;
+  foreign_response.route = RouteConfig {C4MnMultidropRoute {
+      0x11U,
+      0x01U,
+      C34PcTarget::connected_station(),
+      C4DestinationModule::own_station(),
+      SelfStationNo::number(0x1EU)}};
+  std::size_t response_size = 0U;
+  status = FrameCodec::encode_success_response(
+      foreign_response,
+      std::span<const std::uint8_t> {},
+      upper_frame,
+      response_size);
+  assert(status.ok());
+  const auto decode = FrameCodec::decode_response(
+      c4_upper,
+      std::span<const std::uint8_t>(upper_frame.data(), response_size));
+  assert(decode.status == DecodeStatus::Complete);
+  assert(decode.response_identity_mismatch);
+  assert(decode.bytes_consumed == response_size);
 }
 
 void test_response_route_identity_is_strict() {
@@ -981,8 +1363,8 @@ void test_response_route_identity_is_strict() {
 
   auto expected_ascii = make_ascii_c4_format4_config();
   auto foreign_ascii = expected_ascii;
-  foreign_ascii.route = RouteConfig {C4MultidropRoute {
-      0x02U, 0x01U, C34PcTarget::connected_station()}};
+  foreign_ascii.route = RouteConfig {C4StandardMultidropRoute {
+      0x02U, 0x01U, C34PcTarget::connected_station(), C4DestinationModule::own_station()}};
   std::array<std::uint8_t, 128> frame {};
   std::size_t frame_size = 0U;
   Status status = FrameCodec::encode_success_response(
@@ -999,11 +1381,40 @@ void test_response_route_identity_is_strict() {
   assert(decode.response_identity_mismatch);
   assert(decode.bytes_consumed == frame_size);
 
-  auto foreign_pc_ascii = expected_ascii;
-  foreign_pc_ascii.route = RouteConfig {C4MultidropRoute {
+  auto foreign_module_ascii = expected_ascii;
+  foreign_module_ascii.route = RouteConfig {C4StandardMultidropRoute {
       expected_ascii.route.station_no(),
       expected_ascii.route.network_no(),
-      C34PcTarget::control_system()}};
+      C34PcTarget::connected_station(),
+      C4DestinationModule::multiple_cpu(1U)}};
+  frame_size = 0U;
+  status = FrameCodec::encode_success_response(
+      foreign_module_ascii,
+      response_data,
+      frame,
+      frame_size);
+  assert(status.ok());
+  decode = FrameCodec::decode_response(
+      expected_ascii,
+      std::span<const std::uint8_t>(frame.data(), frame_size));
+  assert(decode.status == DecodeStatus::Complete);
+  assert(decode.response_identity_mismatch);
+  assert(decode.bytes_consumed == frame_size);
+
+  frame[9] = static_cast<std::uint8_t>('Z');
+  decode = FrameCodec::decode_response(
+      foreign_module_ascii,
+      std::span<const std::uint8_t>(frame.data(), frame_size));
+  assert(decode.status == DecodeStatus::Error);
+  assert(decode.error.code == StatusCode::Parse);
+  assert(!decode.response_identity_mismatch);
+
+  auto foreign_pc_ascii = expected_ascii;
+  foreign_pc_ascii.route = RouteConfig {C4StandardMultidropRoute {
+      expected_ascii.route.station_no(),
+      expected_ascii.route.network_no(),
+      C34PcTarget::control_system(),
+      C4DestinationModule::own_station()}};
   frame_size = 0U;
   status = FrameCodec::encode_success_response(
       foreign_pc_ascii,
@@ -1028,8 +1439,8 @@ void test_response_route_identity_is_strict() {
 
   const auto expected_binary = make_binary_c4_config();
   auto foreign_binary = expected_binary;
-  foreign_binary.route = RouteConfig {C4MultidropRoute {
-      0x02U, 0x01U, C34PcTarget::connected_station()}};
+  foreign_binary.route = RouteConfig {C4StandardMultidropRoute {
+      0x02U, 0x01U, C34PcTarget::connected_station(), C4DestinationModule::own_station()}};
   frame_size = 0U;
   status = FrameCodec::encode_success_response(
       foreign_binary,
@@ -1045,13 +1456,34 @@ void test_response_route_identity_is_strict() {
   assert(decode.bytes_consumed == frame_size);
 
   auto foreign_pc_binary = expected_binary;
-  foreign_pc_binary.route = RouteConfig {C4MultidropRoute {
+  foreign_pc_binary.route = RouteConfig {C4StandardMultidropRoute {
       expected_binary.route.station_no(),
       expected_binary.route.network_no(),
-      C34PcTarget::control_system()}};
+      C34PcTarget::control_system(),
+      C4DestinationModule::own_station()}};
   frame_size = 0U;
   status = FrameCodec::encode_success_response(
       foreign_pc_binary,
+      std::span<const std::uint8_t> {},
+      frame,
+      frame_size);
+  assert(status.ok());
+  decode = FrameCodec::decode_response(
+      expected_binary,
+      std::span<const std::uint8_t>(frame.data(), frame_size));
+  assert(decode.status == DecodeStatus::Complete);
+  assert(decode.response_identity_mismatch);
+  assert(decode.bytes_consumed == frame_size);
+
+  auto foreign_module_binary = expected_binary;
+  foreign_module_binary.route = RouteConfig {C4StandardMultidropRoute {
+      expected_binary.route.station_no(),
+      expected_binary.route.network_no(),
+      C34PcTarget::connected_station(),
+      C4DestinationModule::multiple_cpu(1U)}};
+  frame_size = 0U;
+  status = FrameCodec::encode_success_response(
+      foreign_module_binary,
       std::span<const std::uint8_t> {},
       frame,
       frame_size);
@@ -1068,11 +1500,11 @@ void test_pc_targets_are_required_typed_and_frame_specific() {
   static_assert(!std::is_default_constructible_v<C34PcTarget>);
   static_assert(!std::is_default_constructible_v<E1PcTarget>);
   static_assert(!std::is_constructible_v<
-                C3MultidropRoute,
+                C3StandardMultidropRoute,
                 std::uint32_t,
                 std::uint32_t>);
   static_assert(!std::is_constructible_v<
-                C4MultidropRoute,
+                C4StandardMultidropRoute,
                 std::uint32_t,
                 std::uint32_t>);
   static_assert(!std::is_constructible_v<E1Route, std::uint32_t>);
@@ -1095,8 +1527,8 @@ void test_pc_targets_are_required_typed_and_frame_specific() {
   }
 
   ProtocolConfig config = make_binary_c4_config();
-  config.route = RouteConfig {C4MultidropRoute {
-      0x00U, 0x00U, C34PcTarget::number(0x00U)}};
+  config.route = RouteConfig {C4StandardMultidropRoute {
+      0x00U, 0x00U, C34PcTarget::number(0x00U), C4DestinationModule::own_station()}};
   Status status = FrameCodec::validate_config(config);
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
@@ -1108,8 +1540,8 @@ void test_pc_targets_are_required_typed_and_frame_specific() {
   assert(!status.ok());
   assert(frame_size == 0U);
 
-  config.route = RouteConfig {C4MultidropRoute {
-      0x00U, 0x00U, C34PcTarget::control_system()}};
+  config.route = RouteConfig {C4StandardMultidropRoute {
+      0x00U, 0x00U, C34PcTarget::control_system(), C4DestinationModule::own_station()}};
   assert(FrameCodec::validate_config(config).ok());
   assert(config.route.pc_no() == 0x7DU);
 
@@ -1120,8 +1552,8 @@ void test_pc_targets_are_required_typed_and_frame_specific() {
   assert(state_change_size != 0U);
 
   ProtocolConfig invalid_state_change_config = config;
-  invalid_state_change_config.route = RouteConfig {C4MultidropRoute {
-      0x00U, 0x00U, C34PcTarget::number(0x00U)}};
+  invalid_state_change_config.route = RouteConfig {C4StandardMultidropRoute {
+      0x00U, 0x00U, C34PcTarget::number(0x00U), C4DestinationModule::own_station()}};
   frame_size = 99U;
   status = FrameCodec::encode_request(
       invalid_state_change_config,
@@ -1141,22 +1573,191 @@ void test_pc_targets_are_required_typed_and_frame_specific() {
   assert(FrameCodec::validate_config(e1_config).ok());
 
   ProtocolConfig invalid_client_config = make_binary_c4_config();
-  invalid_client_config.route = RouteConfig {C4MultidropRoute {
-      0x00U, 0x00U, C34PcTarget::number(0x100U)}};
+  invalid_client_config.route = RouteConfig {C4StandardMultidropRoute {
+      0x00U, 0x00U, C34PcTarget::number(0x100U), C4DestinationModule::own_station()}};
   MelsecSerialClient client;
   status = client.configure(invalid_client_config);
   assert(!status.ok());
   assert(client.pending_tx_frame().empty());
 
   const RouteConfig c1_route {C1MultidropRoute {0x00U}};
-  const RouteConfig c2_route {C2MultidropRoute {0x00U}};
+  const RouteConfig c2_route {C2StandardMultidropRoute {0x00U}};
   assert(c1_route.pc_no() == 0xFFU);
   assert(c2_route.pc_no() == 0xFFU);
 }
 
+void test_c4_destination_module_is_required_typed_and_validated() {
+  static_assert(!std::is_default_constructible_v<C4DestinationModule>);
+  static_assert(!std::is_constructible_v<
+                C4StandardMultidropRoute,
+                std::uint32_t,
+                std::uint32_t,
+                C34PcTarget>);
+  static_assert(std::is_constructible_v<
+                C4StandardMultidropRoute,
+                std::uint32_t,
+                std::uint32_t,
+                C34PcTarget,
+                C4DestinationModule>);
+
+  const auto own = C4DestinationModule::own_station();
+  assert(own.is_valid());
+  assert(own.is_own_station_selector());
+  assert(own.io_number() == module_io::OwnStation);
+  assert(own.station_number() == 0U);
+
+  for (std::uint32_t cpu = 1U; cpu <= 4U; ++cpu) {
+    const auto target = C4DestinationModule::multiple_cpu(cpu);
+    assert(target.is_valid());
+    assert(!target.is_own_station_selector());
+    assert(target.io_number() == module_io::MultipleCpu1 + cpu - 1U);
+    assert(target.station_number() == 0U);
+  }
+  assert(!C4DestinationModule::multiple_cpu(0U).is_valid());
+  assert(!C4DestinationModule::multiple_cpu(5U).is_valid());
+
+  assert(C4DestinationModule::redundant_control_system_cpu().io_number() ==
+         module_io::ControlSystemCpu);
+  assert(C4DestinationModule::redundant_standby_system_cpu().io_number() ==
+         module_io::StandbySystemCpu);
+  assert(C4DestinationModule::redundant_system_a_cpu().io_number() == module_io::SystemACpu);
+  assert(C4DestinationModule::redundant_system_b_cpu().io_number() == module_io::SystemBCpu);
+  assert(C4DestinationModule::redundant_control_system_cpu().is_valid());
+  assert(C4DestinationModule::redundant_standby_system_cpu().is_valid());
+  assert(C4DestinationModule::redundant_system_a_cpu().is_valid());
+  assert(C4DestinationModule::redundant_system_b_cpu().is_valid());
+
+  assert(C4DestinationModule::explicit_target(0x0000U, 0x00U).is_valid());
+  assert(C4DestinationModule::explicit_target(0xFFFFU, 0xFFU).is_valid());
+  assert(!C4DestinationModule::explicit_target(0x10000U, 0x00U).is_valid());
+  assert(!C4DestinationModule::explicit_target(0x0000U, 0x100U).is_valid());
+
+  ProtocolConfig invalid_config = make_binary_c4_config();
+  invalid_config.route = RouteConfig {C4StandardMultidropRoute {
+      0x00U,
+      0x00U,
+      C34PcTarget::connected_station(),
+      C4DestinationModule::explicit_target(0x10000U, 0x00U)}};
+  Status status = FrameCodec::validate_config(invalid_config);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  std::array<std::uint8_t, 32> frame {};
+  const std::array<std::uint8_t, 1> request_data {0x00U};
+  std::size_t frame_size = 99U;
+  status = FrameCodec::encode_request(invalid_config, request_data, frame, frame_size);
+  assert(!status.ok());
+  assert(frame_size == 0U);
+
+  MelsecSerialClient invalid_client;
+  status = invalid_client.configure(invalid_config);
+  assert(!status.ok());
+  assert(invalid_client.pending_tx_frame().empty());
+
+  ProtocolConfig own_config = make_binary_c4_config();
+  own_config.route = RouteConfig {C4StandardMultidropRoute {
+      0x00U,
+      0x00U,
+      C34PcTarget::connected_station(),
+      C4DestinationModule::own_station()}};
+  std::array<std::uint8_t, 64> command_data {};
+  std::size_t command_size = 0U;
+  const std::array<std::uint16_t, 1> host_words {0x1234U};
+  status = CommandCodec::encode_read_host_buffer(
+      own_config,
+      HostBufferReadRequest {.start_address = 0U, .word_length = 1U},
+      command_data,
+      command_size);
+  assert(status.ok());
+  command_size = 0U;
+  status = CommandCodec::encode_write_host_buffer(
+      own_config,
+      HostBufferWriteRequest {.start_address = 0U, .words = host_words},
+      command_data,
+      command_size);
+  assert(status.ok());
+
+  ProtocolConfig cpu_config = own_config;
+  cpu_config.route = RouteConfig {C4StandardMultidropRoute {
+      0x00U,
+      0x00U,
+      C34PcTarget::connected_station(),
+      C4DestinationModule::multiple_cpu(1U)}};
+  command_size = 99U;
+  status = CommandCodec::encode_read_host_buffer(
+      cpu_config,
+      HostBufferReadRequest {.start_address = 0U, .word_length = 1U},
+      command_data,
+      command_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+  command_size = 99U;
+  status = CommandCodec::encode_write_host_buffer(
+      cpu_config,
+      HostBufferWriteRequest {.start_address = 0U, .words = host_words},
+      command_data,
+      command_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  ProtocolConfig explicit_own_config = own_config;
+  explicit_own_config.route = RouteConfig {C4StandardMultidropRoute {
+      0x00U,
+      0x00U,
+      C34PcTarget::connected_station(),
+      C4DestinationModule::explicit_target(module_io::OwnStation, 0x00U)}};
+  command_size = 99U;
+  status = CommandCodec::encode_read_host_buffer(
+      explicit_own_config,
+      HostBufferReadRequest {.start_address = 0U, .word_length = 1U},
+      command_data,
+      command_size);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+
+  command_size = 0U;
+  status = CommandCodec::encode_batch_read_words(
+      cpu_config,
+      BatchReadWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100U},
+          .points = 1U,
+      },
+      command_data,
+      command_size);
+  assert(status.ok());
+  frame_size = 0U;
+  status = FrameCodec::encode_request(
+      cpu_config,
+      std::span<const std::uint8_t>(command_data.data(), command_size),
+      frame,
+      frame_size);
+  assert(status.ok());
+  assert(frame_size != 0U);
+
+  const std::array<std::uint16_t, 2> words {0x1234U, 0x5678U};
+  command_size = 0U;
+  status = CommandCodec::encode_batch_write_words(
+      cpu_config,
+      BatchWriteWordsRequest {
+          .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100U},
+          .words = words,
+      },
+      command_data,
+      command_size);
+  assert(status.ok());
+  frame_size = 0U;
+  status = FrameCodec::encode_request(
+      cpu_config,
+      std::span<const std::uint8_t>(command_data.data(), command_size),
+      frame,
+      frame_size);
+  assert(status.ok());
+  assert(frame_size != 0U);
+}
+
 void test_encode_ascii_c2_format3_request_uses_fb_frame_id_and_short_command() {
   auto config = make_ascii_c2_format3_config();
-  config.route = multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, true, 0x05U);
+  config.route = mn_multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, 0x05U);
 
   const BatchReadWordsRequest request {
       .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100},
@@ -1186,7 +1787,7 @@ void test_encode_ascii_c2_format3_request_uses_fb_frame_id_and_short_command() {
 
 void test_decode_ascii_c2_format3_data_response() {
   auto config = make_ascii_c2_format3_config();
-  config.route = multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, true, 0x05U);
+  config.route = mn_multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, 0x05U);
   const std::array<std::uint8_t, 4> response_data {'1', '2', '3', '4'};
 
   std::array<std::uint8_t, 64> frame {};
@@ -1209,7 +1810,7 @@ void test_decode_ascii_c2_format3_data_response() {
 
 void test_decode_ascii_c2_format3_four_digit_error_response() {
   auto config = make_ascii_c2_format3_config();
-  config.route = multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, true, 0x05U);
+  config.route = mn_multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, 0x05U);
   config.sum_check_mode = SumCheckMode::Disabled;
 
   constexpr std::string_view frame = "\x02""FB1105QNAK0006\x03";
@@ -1226,7 +1827,7 @@ void test_decode_ascii_c2_format3_four_digit_error_response() {
 
 void test_encode_ascii_c2_format3_error_preserves_four_digit_code() {
   auto config = make_ascii_c2_format3_config();
-  config.route = multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, true, 0x05U);
+  config.route = mn_multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, 0x05U);
   config.sum_check_mode = SumCheckMode::Disabled;
 
   std::array<std::uint8_t, 32> frame {};
@@ -1396,7 +1997,7 @@ void test_decode_response_prefix_sweep_reports_incomplete() {
 void test_encode_ascii_c2_format2_request_uses_fb_frame_id_and_short_command() {
   auto config = make_ascii_c2_format2_config();
   config.sum_check_mode = SumCheckMode::Disabled;
-  config.route = multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, true, 0x05U);
+  config.route = mn_multidrop_route(FrameKind::C2, 0x11U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, 0x05U);
 
   const BatchReadWordsRequest request {
       .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100},
@@ -1681,9 +2282,9 @@ void test_encode_ascii_c1_rejects_unsupported_series() {
 void test_encode_ascii_c1_random_write_bits_qna_request_shape() {
   const auto config = make_ascii_c1_format4_qna_config();
   const std::array<RandomWriteBitItem, 3> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 50}, .value = BitValue::On},
-      {.device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0x31AU}, .value = BitValue::Off},
-      {.device = {.code = mcprotocol::serial::DeviceCode::Y, .number = 0x2FU}, .value = BitValue::On},
+      RandomWriteBitItem({.code = mcprotocol::serial::DeviceCode::M, .number = 50}, BitValue::On),
+      RandomWriteBitItem({.code = mcprotocol::serial::DeviceCode::B, .number = 0x31AU}, BitValue::Off),
+      RandomWriteBitItem({.code = mcprotocol::serial::DeviceCode::Y, .number = 0x2FU}, BitValue::On),
   }};
   std::array<std::uint8_t, 96> request_data {};
   std::size_t request_size = 0;
@@ -1702,15 +2303,16 @@ void test_encode_ascii_c1_random_write_bits_qna_request_shape() {
 void test_encode_ascii_c1_random_write_words_qna_request_shape() {
   const auto config = make_ascii_c1_format4_qna_config();
   const std::array<RandomWriteWordItem, 3> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 500}, .value = 0x1234U},
-      {.device = {.code = mcprotocol::serial::DeviceCode::Y, .number = 0x100U}, .value = 0xBCA9U},
-      {.device = {.code = mcprotocol::serial::DeviceCode::CN, .number = 100}, .value = 0x0064U},
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::D, .number = 500}, 0x1234U),
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::Y, .number = 0x100U}, 0xBCA9U),
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::CN, .number = 100}, 0x0064U),
   }};
   std::array<std::uint8_t, 128> request_data {};
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_random_write_words(
       config,
       std::span<const RandomWriteWordItem>(items.data(), items.size()),
+      {},
       request_data,
       request_size);
   assert(status.ok());
@@ -1722,7 +2324,7 @@ void test_encode_ascii_c1_random_write_words_qna_request_shape() {
 
 void test_encode_ascii_c1_register_monitor_bits_and_read_request_shape() {
   const auto config = make_ascii_c1_format4_qna_config();
-  const std::array<RandomReadItem, 3> items {{
+  const std::array<RandomReadWordItem, 3> items {{
       {.device = {.code = mcprotocol::serial::DeviceCode::X, .number = 0x40U}},
       {.device = {.code = mcprotocol::serial::DeviceCode::Y, .number = 0x60U}},
       {.device = {.code = mcprotocol::serial::DeviceCode::TS, .number = 123U}},
@@ -1731,7 +2333,7 @@ void test_encode_ascii_c1_register_monitor_bits_and_read_request_shape() {
   std::size_t request_size = 0;
   Status status = CommandCodec::encode_register_monitor(
       config,
-      MonitorRegistration {.items = std::span<const RandomReadItem>(items.data(), items.size())},
+      MonitorRegistration {.word_items = std::span<const RandomReadWordItem>(items.data(), items.size())},
       request_data,
       request_size);
   assert(status.ok());
@@ -1743,7 +2345,7 @@ void test_encode_ascii_c1_register_monitor_bits_and_read_request_shape() {
   request_size = 0;
   status = CommandCodec::encode_read_monitor(
       config,
-      std::span<const RandomReadItem>(items.data(), items.size()),
+      MonitorRegistration {.word_items = items},
       request_data,
       request_size);
   assert(status.ok());
@@ -1751,14 +2353,15 @@ void test_encode_ascii_c1_register_monitor_bits_and_read_request_shape() {
   assert(request_size == expected_read.size());
   assert(std::memcmp(request_data.data(), expected_read.data(), expected_read.size()) == 0);
 
-  std::array<std::uint32_t, 3> values {};
+  std::array<std::uint16_t, 3> values {};
   status = CommandCodec::parse_read_monitor_response(
       config,
-      std::span<const RandomReadItem>(items.data(), items.size()),
+      MonitorRegistration {.word_items = items},
       std::span<const std::uint8_t>(
           reinterpret_cast<const std::uint8_t*>("101"),
           3U),
-      values);
+      values,
+      {});
   assert(status.ok());
   assert(values[0] == 1U);
   assert(values[1] == 0U);
@@ -1767,7 +2370,7 @@ void test_encode_ascii_c1_register_monitor_bits_and_read_request_shape() {
 
 void test_encode_ascii_c1_register_monitor_words_and_read_request_shape() {
   const auto config = make_ascii_c1_format4_qna_config();
-  const std::array<RandomReadItem, 4> items {{
+  const std::array<RandomReadWordItem, 4> items {{
       {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 15U}},
       {.device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x11EU}},
       {.device = {.code = mcprotocol::serial::DeviceCode::TN, .number = 123U}},
@@ -1777,7 +2380,7 @@ void test_encode_ascii_c1_register_monitor_words_and_read_request_shape() {
   std::size_t request_size = 0;
   Status status = CommandCodec::encode_register_monitor(
       config,
-      MonitorRegistration {.items = std::span<const RandomReadItem>(items.data(), items.size())},
+      MonitorRegistration {.word_items = std::span<const RandomReadWordItem>(items.data(), items.size())},
       request_data,
       request_size);
   assert(status.ok());
@@ -1789,7 +2392,7 @@ void test_encode_ascii_c1_register_monitor_words_and_read_request_shape() {
   request_size = 0;
   status = CommandCodec::encode_read_monitor(
       config,
-      std::span<const RandomReadItem>(items.data(), items.size()),
+      MonitorRegistration {.word_items = items},
       request_data,
       request_size);
   assert(status.ok());
@@ -1814,7 +2417,7 @@ void test_client_ascii_c1_register_monitor_roundtrip() {
   Status status = client.configure(config);
   assert(status.ok());
 
-  const std::array<RandomReadItem, 3> items {{
+  const std::array<RandomReadWordItem, 3> items {{
       {.device = {.code = mcprotocol::serial::DeviceCode::X, .number = 0x40U}},
       {.device = {.code = mcprotocol::serial::DeviceCode::Y, .number = 0x60U}},
       {.device = {.code = mcprotocol::serial::DeviceCode::TS, .number = 123U}},
@@ -1822,7 +2425,7 @@ void test_client_ascii_c1_register_monitor_roundtrip() {
   LocalCapture register_capture;
   status = client.async_register_monitor(
       0,
-      MonitorRegistration {.items = std::span<const RandomReadItem>(items.data(), items.size())},
+      MonitorRegistration {.word_items = std::span<const RandomReadWordItem>(items.data(), items.size())},
       local_callback,
       &register_capture);
   assert(status.ok());
@@ -1841,9 +2444,9 @@ void test_client_ascii_c1_register_monitor_roundtrip() {
   assert(register_capture.called);
   assert(register_capture.status.ok());
 
-  std::array<std::uint32_t, 3> values {};
+  std::array<std::uint16_t, 3> values {};
   LocalCapture read_capture;
-  status = client.async_read_monitor(10, values, local_callback, &read_capture);
+  status = client.async_read_monitor(10, values, {}, local_callback, &read_capture);
   assert(status.ok());
   status = client.notify_tx_complete(11);
   assert(status.ok());
@@ -2293,9 +2896,9 @@ void test_decode_binary_e1_error_response_with_abnormal_code() {
 void test_encode_binary_e1_random_write_words_request_shape() {
   const auto config = make_binary_e1_a_config();
   const std::array<RandomWriteWordItem, 3> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::Y, .number = 0x80U}, .value = 0x7B29U},
-      {.device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x26U}, .value = 0x1234U},
-      {.device = {.code = mcprotocol::serial::DeviceCode::CN, .number = 0x12U}, .value = 0x0050U},
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::Y, .number = 0x80U}, 0x7B29U),
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::W, .number = 0x26U}, 0x1234U),
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::CN, .number = 0x12U}, 0x0050U),
   }};
 
   std::array<std::uint8_t, 128> request_data {};
@@ -2303,6 +2906,7 @@ void test_encode_binary_e1_random_write_words_request_shape() {
   Status status = CommandCodec::encode_random_write_words(
       config,
       std::span<const RandomWriteWordItem>(items.data(), items.size()),
+      {},
       request_data,
       request_size);
   assert(status.ok());
@@ -2507,7 +3111,7 @@ void test_encode_ascii_format4_request_appends_crlf() {
 
 void test_decode_ascii_c2_format4_ack_response() {
   auto config = make_ascii_c2_format4_config();
-  config.route = multidrop_route(FrameKind::C2, 0x01U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, true, 0x02U);
+  config.route = mn_multidrop_route(FrameKind::C2, 0x01U, 0x00U, 0xFFU, module_io::OwnStation, 0x00U, 0x02U);
   std::array<std::uint8_t, 32> frame {};
   std::size_t frame_size = 0;
   Status status = FrameCodec::encode_success_response(config, {}, frame, frame_size);
@@ -2758,6 +3362,104 @@ void test_high_level_protocol_presets() {
   assert(ascii_config.sum_check_mode == SumCheckMode::Enabled);
 }
 
+void test_response_timeout_and_e1_monitoring_timer_are_independent() {
+  static_assert(mcprotocol::serial::TimeoutConfig {}.response_timeout_ms == 3000U);
+  static_assert(E1MonitoringTimer {}.value_ms() == 4000U);
+  static_assert(E1MonitoringTimer {}.ticks() == 0x0010U);
+  static_assert(E1MonitoringTimer {}.is_valid());
+  static_assert(
+      make_c4_binary_protocol(
+          PlcProfile::MelsecQ,
+          SumCheckMode::Enabled,
+          RouteConfig {HostStationRoute {}})
+          .timeout.response_timeout_ms == 3000U);
+  static_assert(
+      make_c4_ascii_format4_protocol(
+          PlcProfile::MelsecQ,
+          SumCheckMode::Disabled,
+          RouteConfig {HostStationRoute {}})
+          .timeout.response_timeout_ms == 3000U);
+
+  auto config = make_binary_c4_config();
+  for (const std::uint32_t valid_timeout : {1U, 3000U, 0x7FFFFFFFU}) {
+    config.timeout.response_timeout_ms = valid_timeout;
+    assert(FrameCodec::validate_config(config).ok());
+  }
+  for (const std::uint32_t invalid_timeout : {0U, 0x80000000U, 0xFFFFFFFFU}) {
+    config.timeout.response_timeout_ms = invalid_timeout;
+    const Status status = FrameCodec::validate_config(config);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+    std::array<std::uint8_t, 32> frame {};
+    std::size_t frame_size = 99U;
+    const Status encode_status = FrameCodec::encode_request(
+        config,
+        std::span<const std::uint8_t> {},
+        frame,
+        frame_size);
+    assert(!encode_status.ok());
+    assert(frame_size == 0U);
+  }
+
+  auto e1_config = make_ascii_e1_a_config();
+  assert(e1_config.timeout.response_timeout_ms == 3000U);
+  assert(e1_config.e1_monitoring_timer.value_ms() == 4000U);
+
+  const BatchReadWordsRequest request {
+      .head_device = {.code = mcprotocol::serial::DeviceCode::Y, .number = 0x40U},
+      .points = 2U,
+  };
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0U;
+  Status status = CommandCodec::encode_batch_read_words(
+      e1_config, request, request_data, request_size);
+  assert(status.ok());
+
+  const auto encode_e1 = [&](
+                             const ProtocolConfig& selected_config,
+                             std::array<std::uint8_t, 64>& frame,
+                             std::size_t& frame_size) {
+    frame_size = 0U;
+    const Status encode_status = FrameCodec::encode_request(
+        selected_config,
+        std::span<const std::uint8_t>(request_data.data(), request_size),
+        frame,
+        frame_size);
+    assert(encode_status.ok());
+  };
+
+  std::array<std::uint8_t, 64> default_frame {};
+  std::array<std::uint8_t, 64> independent_frame {};
+  std::size_t default_size = 0U;
+  std::size_t independent_size = 0U;
+  encode_e1(e1_config, default_frame, default_size);
+  assert(default_frame[4] == '0' && default_frame[5] == '0');
+  assert(default_frame[6] == '1' && default_frame[7] == '0');
+
+  e1_config.timeout.response_timeout_ms = 1000U;
+  encode_e1(e1_config, independent_frame, independent_size);
+  assert(default_size == independent_size);
+  assert(std::equal(
+      default_frame.begin(), default_frame.begin() + default_size, independent_frame.begin()));
+
+  e1_config.e1_monitoring_timer = E1MonitoringTimer::milliseconds(0U);
+  encode_e1(e1_config, independent_frame, independent_size);
+  assert(independent_frame[4] == '0' && independent_frame[5] == '0');
+  assert(independent_frame[6] == '0' && independent_frame[7] == '0');
+
+  e1_config.e1_monitoring_timer = E1MonitoringTimer::milliseconds(16383750U);
+  encode_e1(e1_config, independent_frame, independent_size);
+  assert(independent_frame[4] == 'F' && independent_frame[5] == 'F');
+  assert(independent_frame[6] == 'F' && independent_frame[7] == 'F');
+
+  for (const std::uint32_t invalid_timer : {1U, 249U, 251U, 16384000U}) {
+    e1_config.e1_monitoring_timer = E1MonitoringTimer::milliseconds(invalid_timer);
+    status = FrameCodec::validate_config(e1_config);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+  }
+}
+
 void test_plc_profile_names_and_internal_grouping() {
   PlcProfile profile = PlcProfile::MelsecQ;
   assert(std::string_view(plc_profile_name(PlcProfile::Unspecified)).empty());
@@ -2857,94 +3559,105 @@ void test_plc_profile_is_required_for_encoding() {
 }
 
 void test_high_level_make_random_bit_item() {
-  RandomWriteBitItem item {};
+  RandomWriteBitItem item(
+      DeviceAddress {mcprotocol::serial::DeviceCode::M, 0U}, BitValue::Off);
   Status status = make_random_write_bit_item("M105", BitValue::On, item);
   assert(status.ok());
+  assert(item.device.code == mcprotocol::serial::DeviceCode::M);
+  assert(item.device.number == 105U);
+  assert(item.value == BitValue::On);
+  status = make_random_write_bit_item("M106", static_cast<BitValue>(0xFFU), item);
+  assert(status.code == StatusCode::InvalidArgument);
   assert(item.device.code == mcprotocol::serial::DeviceCode::M);
   assert(item.device.number == 105U);
   assert(item.value == BitValue::On);
 }
 
 void test_high_level_make_random_dword_item_defaults() {
-  RandomReadItem read_item {};
-  Status status = make_random_read_item("LZ1", read_item);
+  RandomReadDWordItem read_item {};
+  Status status = make_random_read_dword_item("LZ1", read_item);
   assert(status.ok());
   assert(read_item.device.code == mcprotocol::serial::DeviceCode::LZ);
   assert(read_item.device.number == 1U);
-  assert(read_item.double_word);
 
-  RandomWriteWordItem write_item {};
-  status = make_random_write_word_item("LZ0", 0x12345678U, write_item);
+  RandomWriteDWordItem write_item(
+      DeviceAddress {mcprotocol::serial::DeviceCode::D, 0U}, 0U);
+  status = make_random_write_dword_item("LZ0", 0x12345678U, write_item);
   assert(status.ok());
   assert(write_item.device.code == mcprotocol::serial::DeviceCode::LZ);
   assert(write_item.device.number == 0U);
-  assert(write_item.double_word);
+  assert(write_item.value == 0x12345678U);
 
-  status = make_random_read_item("LTN1", read_item);
+  status = make_random_read_dword_item("LTN1", read_item);
   assert(status.ok());
   assert(read_item.device.code == mcprotocol::serial::DeviceCode::LTN);
   assert(read_item.device.number == 1U);
-  assert(read_item.double_word);
 
-  status = make_random_read_item("LSTN2", read_item);
+  status = make_random_read_dword_item("LSTN2", read_item);
   assert(status.ok());
   assert(read_item.device.code == mcprotocol::serial::DeviceCode::LSTN);
   assert(read_item.device.number == 2U);
-  assert(read_item.double_word);
 
-  status = make_random_write_word_item("LCN3", 0x12345678U, write_item);
+  status = make_random_write_dword_item("LCN3", 0x12345678U, write_item);
   assert(status.ok());
   assert(write_item.device.code == mcprotocol::serial::DeviceCode::LCN);
   assert(write_item.device.number == 3U);
-  assert(write_item.double_word);
 }
 
 void test_high_level_make_random_request_from_specs() {
-  const std::array<RandomReadSpec, 3> specs {{
-      {.device = "D100"},
+  const std::array<RandomReadWordSpec, 1> word_specs {{{.device = "D100"}}};
+  const std::array<RandomReadDWordSpec, 2> dword_specs {{
       {.device = "LZ0"},
       {.device = "LTN1"},
   }};
-  std::array<RandomReadItem, 3> items {};
+  std::array<RandomReadWordItem, 1> word_items {};
+  std::array<RandomReadDWordItem, 2> dword_items {};
   RandomReadRequest request {};
-  Status status = make_random_read_request(specs, items, request);
+  Status status = make_random_read_request(
+      word_specs, dword_specs, word_items, dword_items, request);
   assert(status.ok());
-  assert(request.items.size() == specs.size());
-  assert(request.items[0].device.code == mcprotocol::serial::DeviceCode::D);
-  assert(!request.items[0].double_word);
-  assert(request.items[1].device.code == mcprotocol::serial::DeviceCode::LZ);
-  assert(request.items[1].double_word);
-  assert(request.items[2].device.code == mcprotocol::serial::DeviceCode::LTN);
-  assert(request.items[2].double_word);
+  assert(request.word_items.size() == 1U);
+  assert(request.dword_items.size() == 2U);
+  assert(request.word_items[0].device.code == mcprotocol::serial::DeviceCode::D);
+  assert(request.dword_items[0].device.code == mcprotocol::serial::DeviceCode::LZ);
+  assert(request.dword_items[1].device.code == mcprotocol::serial::DeviceCode::LTN);
 
-  std::array<RandomReadItem, 2> too_small {};
-  status = make_random_read_request(specs, too_small, request);
+  std::array<RandomReadDWordItem, 1> too_small {};
+  status = make_random_read_request(word_specs, dword_specs, word_items, too_small, request);
   assert(!status.ok());
   assert(status.code == StatusCode::BufferTooSmall);
 }
 
 void test_high_level_make_random_write_items_from_specs() {
-  const std::array<RandomWriteWordSpec, 2> word_specs {{
-      {.device = "D100", .value = 0x1234U},
-      {.device = "LZ0", .value = 0x12345678U},
+  const std::array<RandomWriteWordSpec, 1> word_specs {{
+      RandomWriteWordSpec("D100", 0x1234U),
   }};
-  std::array<RandomWriteWordItem, 2> word_items {};
+  auto word_items = mcprotocol::serial::detail::make_filled_array<RandomWriteWordItem, 1>(
+      RandomWriteWordItem(DeviceAddress {mcprotocol::serial::DeviceCode::D, 0U}, 0U));
   std::span<const RandomWriteWordItem> word_view {};
   Status status = make_random_write_word_items(word_specs, word_items, word_view);
   assert(status.ok());
-  assert(word_view.size() == word_specs.size());
+  assert(word_view.size() == 1U);
   assert(word_view[0].device.code == mcprotocol::serial::DeviceCode::D);
   assert(word_view[0].value == 0x1234U);
-  assert(!word_view[0].double_word);
-  assert(word_view[1].device.code == mcprotocol::serial::DeviceCode::LZ);
-  assert(word_view[1].value == 0x12345678U);
-  assert(word_view[1].double_word);
+
+  const std::array<RandomWriteDWordSpec, 1> dword_specs {{
+      RandomWriteDWordSpec("LZ0", 0x12345678U),
+  }};
+  auto dword_items = mcprotocol::serial::detail::make_filled_array<RandomWriteDWordItem, 1>(
+      RandomWriteDWordItem(DeviceAddress {mcprotocol::serial::DeviceCode::D, 0U}, 0U));
+  std::span<const RandomWriteDWordItem> dword_view {};
+  status = make_random_write_dword_items(dword_specs, dword_items, dword_view);
+  assert(status.ok());
+  assert(dword_view[0].device.code == mcprotocol::serial::DeviceCode::LZ);
+  assert(dword_view[0].value == 0x12345678U);
 
   const std::array<RandomWriteBitSpec, 2> bit_specs {{
-      {.device = "M100", .value = BitValue::On},
-      {.device = "Y2F", .value = BitValue::Off},
+      RandomWriteBitSpec("M100", BitValue::On),
+      RandomWriteBitSpec("Y2F", BitValue::Off),
   }};
-  std::array<RandomWriteBitItem, 2> bit_items {};
+  auto bit_items = mcprotocol::serial::detail::make_filled_array<RandomWriteBitItem, 2>(
+      RandomWriteBitItem(DeviceAddress {mcprotocol::serial::DeviceCode::M, 0U}, BitValue::Off));
   std::span<const RandomWriteBitItem> bit_view {};
   status = make_random_write_bit_items(bit_specs, bit_items, bit_view);
   assert(status.ok());
@@ -2957,19 +3670,16 @@ void test_high_level_make_random_write_items_from_specs() {
 }
 
 void test_high_level_make_monitor_registration_from_specs() {
-  const std::array<RandomReadSpec, 2> specs {{
-      {.device = "D100"},
-      {.device = "LZ0"},
-  }};
-  std::array<RandomReadItem, 2> items {};
+  const std::array<RandomReadWordSpec, 1> word_specs {{{.device = "D100"}}};
+  const std::array<RandomReadDWordSpec, 1> dword_specs {{{.device = "LZ0"}}};
+  std::array<RandomReadWordItem, 1> word_items {};
+  std::array<RandomReadDWordItem, 1> dword_items {};
   MonitorRegistration request {};
-  Status status = make_monitor_registration(specs, items, request);
+  Status status = make_monitor_registration(
+      word_specs, dword_specs, word_items, dword_items, request);
   assert(status.ok());
-  assert(request.items.size() == specs.size());
-  assert(request.items[0].device.code == mcprotocol::serial::DeviceCode::D);
-  assert(!request.items[0].double_word);
-  assert(request.items[1].device.code == mcprotocol::serial::DeviceCode::LZ);
-  assert(request.items[1].double_word);
+  assert(request.word_items[0].device.code == mcprotocol::serial::DeviceCode::D);
+  assert(request.dword_items[0].device.code == mcprotocol::serial::DeviceCode::LZ);
 }
 
 void test_high_level_long_state_read_spec_and_decode() {
@@ -3091,10 +3801,10 @@ void test_encode_sm_sd_and_lz_device_codes() {
   }
 
   {
-    const std::array<RandomReadItem, 1> items {{
-        {.device = {.code = mcprotocol::serial::DeviceCode::LZ, .number = 10}, .double_word = true},
+    const std::array<RandomReadDWordItem, 1> items {{
+        {.device = {.code = mcprotocol::serial::DeviceCode::LZ, .number = 10}},
     }};
-    const RandomReadRequest request {.items = items};
+    const RandomReadRequest request {.dword_items = items};
     std::array<std::uint8_t, 32> request_data {};
     std::size_t request_data_size = 0;
     Status status = CommandCodec::encode_random_read(make_binary_c4_iqr_config(), request, request_data, request_data_size);
@@ -3119,10 +3829,10 @@ void test_encode_sm_sd_and_lz_device_codes() {
   }
 
   {
-    const std::array<RandomReadItem, 1> items {{
-        {.device = {.code = mcprotocol::serial::DeviceCode::LTN, .number = 0}, .double_word = true},
+    const std::array<RandomReadDWordItem, 1> items {{
+        {.device = {.code = mcprotocol::serial::DeviceCode::LTN, .number = 0}},
     }};
-    const RandomReadRequest request {.items = items};
+    const RandomReadRequest request {.dword_items = items};
     std::array<std::uint8_t, 32> request_data {};
     std::size_t request_data_size = 0;
     Status status = CommandCodec::encode_random_read(make_binary_c4_iqr_config(), request, request_data, request_data_size);
@@ -3134,10 +3844,10 @@ void test_encode_sm_sd_and_lz_device_codes() {
   }
 
   {
-    const std::array<RandomReadItem, 1> items {{
-        {.device = {.code = mcprotocol::serial::DeviceCode::LCN, .number = 3}, .double_word = true},
+    const std::array<RandomReadDWordItem, 1> items {{
+        {.device = {.code = mcprotocol::serial::DeviceCode::LCN, .number = 3}},
     }};
-    const RandomReadRequest request {.items = items};
+    const RandomReadRequest request {.dword_items = items};
     std::array<std::uint8_t, 32> request_data {};
     std::size_t request_data_size = 0;
     Status status = CommandCodec::encode_random_read(make_binary_c4_iqr_config(), request, request_data, request_data_size);
@@ -3273,38 +3983,31 @@ void test_all_profiles_reject_standalone_g_hg_plain_access() {
       assert(!status.ok());
       assert(status.code == StatusCode::InvalidArgument);
 
-      const bool double_word_modes[] = {false, true};
-      for (const bool double_word : double_word_modes) {
-        const RandomReadItem read_item {
-            .device = {.code = code, .number = 10},
-            .double_word = double_word,
-        };
-        status = CommandCodec::encode_random_read(
-            config,
-            RandomReadRequest {.items = std::span<const RandomReadItem>(&read_item, 1)},
-            request_data,
-            request_size);
-        assert(!status.ok());
-        assert(status.code == StatusCode::InvalidArgument);
+      const RandomReadWordItem read_word {.device = {.code = code, .number = 10}};
+      const RandomReadDWordItem read_dword {.device = {.code = code, .number = 10}};
+      status = CommandCodec::encode_random_read(
+          config,
+          RandomReadRequest {
+              .word_items = std::span<const RandomReadWordItem>(&read_word, 1),
+              .dword_items = std::span<const RandomReadDWordItem>(&read_dword, 1),
+          },
+          request_data,
+          request_size);
+      assert(!status.ok());
+      assert(status.code == StatusCode::InvalidArgument);
 
-        const RandomWriteWordItem write_item {
-            .device = {.code = code, .number = 10},
-            .value = 0x1234U,
-            .double_word = double_word,
-        };
-        status = CommandCodec::encode_random_write_words(
-            config,
-            std::span<const RandomWriteWordItem>(&write_item, 1),
-            request_data,
-            request_size);
-        assert(!status.ok());
-        assert(status.code == StatusCode::InvalidArgument);
-      }
+      const RandomWriteWordItem write_word({.code = code, .number = 10}, 0x1234U);
+      const RandomWriteDWordItem write_dword({.code = code, .number = 10}, 0x12345678U);
+      status = CommandCodec::encode_random_write_words(
+          config,
+          std::span<const RandomWriteWordItem>(&write_word, 1),
+          std::span<const RandomWriteDWordItem>(&write_dword, 1),
+          request_data,
+          request_size);
+      assert(!status.ok());
+      assert(status.code == StatusCode::InvalidArgument);
 
-      const RandomWriteBitItem write_bit {
-          .device = {.code = code, .number = 10},
-          .value = BitValue::On,
-      };
+      const RandomWriteBitItem write_bit({.code = code, .number = 10}, BitValue::On);
       status = CommandCodec::encode_random_write_bits(
           config,
           std::span<const RandomWriteBitItem>(&write_bit, 1),
@@ -3788,7 +4491,7 @@ void test_encode_link_direct_batch_write_bits_ascii_iqr_shape() {
 
 void test_encode_link_direct_random_read_binary_iqr_shape() {
   const auto config = make_binary_c4_iqr_config();
-  const std::array<LinkDirectRandomReadItem, 2> items {{
+  const std::array<LinkDirectRandomReadWordItem, 2> items {{
       {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U}}},
       {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::SW, .number = 0x0000U}}},
   }};
@@ -3797,7 +4500,7 @@ void test_encode_link_direct_random_read_binary_iqr_shape() {
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_link_direct_random_read(
       config,
-      std::span<const LinkDirectRandomReadItem>(items.data(), items.size()),
+      std::span<const LinkDirectRandomReadWordItem>(items.data(), items.size()),
       request_data,
       request_size);
   assert(status.ok());
@@ -3815,10 +4518,8 @@ void test_encode_link_direct_random_read_binary_iqr_shape() {
 void test_encode_link_direct_random_write_words_binary_iqr_shape() {
   const auto config = make_binary_c4_iqr_config();
   const std::array<LinkDirectRandomWriteWordItem, 2> items {{
-      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U}},
-       .value = 0x1234U},
-      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::SW, .number = 0x0000U}},
-       .value = 0xABCDU},
+      LinkDirectRandomWriteWordItem({.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U}}, 0x1234U),
+      LinkDirectRandomWriteWordItem({.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::SW, .number = 0x0000U}}, 0xABCDU),
   }};
 
   std::array<std::uint8_t, 64> request_data {};
@@ -3843,10 +4544,8 @@ void test_encode_link_direct_random_write_words_binary_iqr_shape() {
 void test_encode_link_direct_random_write_bits_binary_iqr_shape() {
   const auto config = make_binary_c4_iqr_config();
   const std::array<LinkDirectRandomWriteBitItem, 2> items {{
-      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0x0010U}},
-       .value = BitValue::On},
-      {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::SB, .number = 0x0010U}},
-       .value = BitValue::Off},
+      LinkDirectRandomWriteBitItem({.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0x0010U}}, BitValue::On),
+      LinkDirectRandomWriteBitItem({.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::SB, .number = 0x0010U}}, BitValue::Off),
   }};
 
   std::array<std::uint8_t, 64> request_data {};
@@ -3973,7 +4672,7 @@ void test_encode_link_direct_multi_block_write_binary_bit_order() {
 
 void test_encode_link_direct_register_monitor_binary_iqr_shape() {
   const auto config = make_binary_c4_iqr_config();
-  const std::array<LinkDirectRandomReadItem, 2> items {{
+  const std::array<LinkDirectRandomReadWordItem, 2> items {{
       {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U}}},
       {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::SW, .number = 0x0000U}}},
   }};
@@ -3983,7 +4682,7 @@ void test_encode_link_direct_register_monitor_binary_iqr_shape() {
   const Status status = CommandCodec::encode_link_direct_register_monitor(
       config,
       LinkDirectMonitorRegistration {
-          .items = std::span<const LinkDirectRandomReadItem>(items.data(), items.size()),
+          .word_items = std::span<const LinkDirectRandomReadWordItem>(items.data(), items.size()),
       },
       request_data,
       request_size);
@@ -4348,21 +5047,24 @@ void test_encode_ascii_e1_l_device_uses_internal_relay_code_and_s_is_rejected() 
 
 void test_encode_random_write_words_ascii_matches_manual() {
   const auto config = make_ascii_c4_format4_config();
-  const std::array<RandomWriteWordItem, 7> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 0}, .value = 0x0550U, .double_word = false},
-      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 1}, .value = 0x0575U, .double_word = false},
-      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 100}, .value = 0x0540U, .double_word = false},
-      {.device = {.code = mcprotocol::serial::DeviceCode::X, .number = 0x20}, .value = 0x0583U, .double_word = false},
-      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 1500}, .value = 0x12024391U, .double_word = true},
-      {.device = {.code = mcprotocol::serial::DeviceCode::Y, .number = 0x160}, .value = 0x23752607U, .double_word = true},
-      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 1111}, .value = 0x04250475U, .double_word = true},
+  const std::array<RandomWriteWordItem, 4> word_items {{
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::D, .number = 0}, 0x0550U),
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::D, .number = 1}, 0x0575U),
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::M, .number = 100}, 0x0540U),
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::X, .number = 0x20}, 0x0583U),
+  }};
+  const std::array<RandomWriteDWordItem, 3> dword_items {{
+      RandomWriteDWordItem({.code = mcprotocol::serial::DeviceCode::D, .number = 1500}, 0x12024391U),
+      RandomWriteDWordItem({.code = mcprotocol::serial::DeviceCode::Y, .number = 0x160}, 0x23752607U),
+      RandomWriteDWordItem({.code = mcprotocol::serial::DeviceCode::M, .number = 1111}, 0x04250475U),
   }};
 
   std::array<std::uint8_t, 256> request_data {};
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_random_write_words(
       config,
-      std::span<const RandomWriteWordItem>(items.data(), items.size()),
+      word_items,
+      dword_items,
       request_data,
       request_size);
   assert(status.ok());
@@ -4380,11 +5082,335 @@ void test_encode_random_write_words_ascii_matches_manual() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
+void test_explicit_random_width_contract_and_boundaries() {
+  static_assert(!std::is_default_constructible_v<RandomWriteWordItem>);
+  static_assert(!std::is_default_constructible_v<RandomWriteDWordItem>);
+  static_assert(!std::is_default_constructible_v<RandomWriteBitItem>);
+  static_assert(!std::is_default_constructible_v<RandomWriteWordSpec>);
+  static_assert(!std::is_default_constructible_v<RandomWriteDWordSpec>);
+  static_assert(!std::is_default_constructible_v<RandomWriteBitSpec>);
+  static_assert(!std::is_default_constructible_v<LinkDirectRandomWriteWordItem>);
+  static_assert(!std::is_default_constructible_v<LinkDirectRandomWriteBitItem>);
+  static_assert(std::is_constructible_v<RandomWriteWordItem, DeviceAddress, std::uint16_t>);
+  static_assert(std::is_constructible_v<RandomWriteDWordItem, DeviceAddress, std::uint32_t>);
+  static_assert(std::is_constructible_v<RandomWriteBitItem, DeviceAddress, BitValue>);
+  static_assert(!HasDoubleWordMember<RandomReadWordItem>);
+  static_assert(!HasDoubleWordMember<RandomReadDWordItem>);
+  static_assert(!HasDoubleWordMember<RandomWriteWordItem>);
+  static_assert(!HasDoubleWordMember<RandomWriteDWordItem>);
+  static_assert(!HasDoubleWordMember<LinkDirectRandomReadWordItem>);
+  static_assert(!HasDoubleWordMember<LinkDirectRandomWriteWordItem>);
+  static_assert(std::is_same_v<decltype(std::declval<RandomWriteWordItem>().value), std::uint16_t>);
+  static_assert(std::is_same_v<decltype(std::declval<RandomWriteDWordItem>().value), std::uint32_t>);
+  static_assert(std::is_same_v<
+                decltype(std::declval<LinkDirectRandomWriteWordItem>().value),
+                std::uint16_t>);
+
+  const auto config = make_binary_c4_iqr_config();
+  const std::array<RandomWriteWordItem, 2> word_writes {{
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::D, .number = 0}, 0x0000U),
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::D, .number = 1}, 0xFFFFU),
+  }};
+  const std::array<RandomWriteDWordItem, 2> dword_writes {{
+      RandomWriteDWordItem({.code = mcprotocol::serial::DeviceCode::D, .number = 2}, 0x00010000U),
+      RandomWriteDWordItem({.code = mcprotocol::serial::DeviceCode::D, .number = 4}, 0xFFFFFFFFU),
+  }};
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+  Status status = CommandCodec::encode_random_write_words(
+      config, word_writes, dword_writes, request_data, request_size);
+  assert(status.ok());
+  assert(request_size == 42U);
+  assert(request_data[4] == 2U && request_data[5] == 2U);
+  assert(request_data[12] == 0x00U && request_data[13] == 0x00U);
+  assert(request_data[20] == 0xFFU && request_data[21] == 0xFFU);
+  assert(request_data[28] == 0x00U && request_data[29] == 0x00U &&
+         request_data[30] == 0x01U && request_data[31] == 0x00U);
+  assert(request_data[38] == 0xFFU && request_data[39] == 0xFFU &&
+         request_data[40] == 0xFFU && request_data[41] == 0xFFU);
+
+  auto overflow_weight_items =
+      mcprotocol::serial::detail::make_filled_array<RandomWriteWordItem, 5462>(
+          RandomWriteWordItem(DeviceAddress {mcprotocol::serial::DeviceCode::D, 0U}, 0U));
+  for (RandomWriteWordItem& item : overflow_weight_items) {
+    item = RandomWriteWordItem(
+        DeviceAddress {.code = mcprotocol::serial::DeviceCode::D, .number = 0}, 0U);
+  }
+  status = CommandCodec::encode_random_write_words(
+      config, overflow_weight_items, {}, request_data, request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+
+  const std::array<RandomReadWordItem, 2> word_reads {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 0}},
+      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 1}},
+  }};
+  const std::array<RandomReadDWordItem, 2> dword_reads {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 2}},
+      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 4}},
+  }};
+  const RandomReadRequest mixed_request {
+      .word_items = word_reads,
+      .dword_items = dword_reads,
+  };
+  const std::array<std::uint8_t, 12> response_data {
+      0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF};
+  std::array<std::uint16_t, 2> out_words {};
+  std::array<std::uint32_t, 2> out_dwords {};
+  status = CommandCodec::parse_random_read_response(
+      config, mixed_request, response_data, out_words, out_dwords);
+  assert(status.ok());
+  assert(out_words[0] == 0x0000U && out_words[1] == 0xFFFFU);
+  assert(out_dwords[0] == 0x00010000U && out_dwords[1] == 0xFFFFFFFFU);
+
+  const MonitorRegistration mixed_monitor {
+      .word_items = word_reads,
+      .dword_items = dword_reads,
+  };
+  status = CommandCodec::encode_register_monitor(
+      config, mixed_monitor, request_data, request_size);
+  assert(status.ok());
+  out_words.fill(0U);
+  out_dwords.fill(0U);
+  status = CommandCodec::parse_read_monitor_response(
+      config, mixed_monitor, response_data, out_words, out_dwords);
+  assert(status.ok());
+  assert(out_words[0] == 0x0000U && out_words[1] == 0xFFFFU);
+  assert(out_dwords[0] == 0x00010000U && out_dwords[1] == 0xFFFFFFFFU);
+
+  const RandomReadWordItem lz_word {
+      .device = {.code = mcprotocol::serial::DeviceCode::LZ, .number = 0}};
+  status = CommandCodec::encode_random_read(
+      config, RandomReadRequest {.word_items = std::span<const RandomReadWordItem>(&lz_word, 1)},
+      request_data, request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+  const RandomReadDWordItem lz_dword {
+      .device = {.code = mcprotocol::serial::DeviceCode::LZ, .number = 0}};
+  status = CommandCodec::encode_random_read(
+      config, RandomReadRequest {.dword_items = std::span<const RandomReadDWordItem>(&lz_dword, 1)},
+      request_data, request_size);
+  assert(status.ok());
+
+  MelsecSerialClient output_guard_client;
+  status = output_guard_client.configure(config);
+  assert(status.ok());
+  std::array<std::uint16_t, 1> too_few_words {};
+  status = output_guard_client.async_random_read(
+      0U, mixed_request, too_few_words, out_dwords, nullptr, nullptr);
+  assert(status.code == StatusCode::BufferTooSmall);
+  assert(!output_guard_client.busy());
+  assert(output_guard_client.pending_tx_frame().empty());
+
+  const std::array<LinkDirectRandomReadWordItem, 2> link_items {{
+      {.device = {.network_number = 1U,
+                  .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0U}}},
+      {.device = {.network_number = 1U,
+                  .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 1U}}},
+  }};
+  status = output_guard_client.async_link_direct_random_read(
+      0U, link_items, too_few_words, nullptr, nullptr);
+  assert(status.code == StatusCode::BufferTooSmall);
+  assert(!output_guard_client.busy());
+  assert(output_guard_client.pending_tx_frame().empty());
+
+  const RandomWriteDWordItem dword_item({.code = mcprotocol::serial::DeviceCode::D, .number = 0}, 0x00010000U);
+  for (const ProtocolConfig restricted_config : {
+           make_ascii_c1_format4_qna_config(), make_binary_e1_a_config()}) {
+    MelsecSerialClient client;
+    status = client.configure(restricted_config);
+    assert(status.ok());
+    status = client.async_random_write_words(
+        0U, {}, std::span<const RandomWriteDWordItem>(&dword_item, 1), nullptr, nullptr);
+    assert(!status.ok());
+    assert(!client.busy());
+    assert(client.pending_tx_frame().empty());
+
+    status = client.async_register_monitor(
+        0U,
+        MonitorRegistration {
+            .dword_items = std::span<const RandomReadDWordItem>(&dword_reads[0], 1),
+        },
+        nullptr,
+        nullptr);
+    assert(!status.ok());
+    assert(!client.busy());
+    assert(client.pending_tx_frame().empty());
+  }
+
+  struct WriteCapture {
+    bool called = false;
+    Status status {};
+  };
+  const auto write_callback = +[](void* user, Status completion_status) {
+    auto* capture = static_cast<WriteCapture*>(user);
+    capture->called = true;
+    capture->status = completion_status;
+  };
+
+  const RandomWriteWordItem explicit_zero(
+      {.code = mcprotocol::serial::DeviceCode::D, .number = 100U}, 0U);
+  MelsecSerialClient write_client;
+  status = write_client.configure(config);
+  assert(status.ok());
+  WriteCapture timeout_capture;
+  status = write_client.async_random_write_words(
+      0U,
+      std::span<const RandomWriteWordItem>(&explicit_zero, 1),
+      {},
+      write_callback,
+      &timeout_capture);
+  assert(status.ok());
+  assert(!write_client.pending_tx_frame().empty());
+  status = write_client.notify_tx_complete(1U);
+  assert(status.ok());
+  write_client.poll(1U + config.timeout.response_timeout_ms);
+  assert(timeout_capture.called);
+  assert(timeout_capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(!write_client.busy());
+  assert(write_client.pending_tx_frame().empty());
+  assert(write_client.requires_transport_reset());
+
+  MelsecSerialClient pre_tx_cancel_client;
+  status = pre_tx_cancel_client.configure(config);
+  assert(status.ok());
+  WriteCapture pre_tx_cancel_capture;
+  status = pre_tx_cancel_client.async_random_write_words(
+      0U,
+      std::span<const RandomWriteWordItem>(&explicit_zero, 1),
+      {},
+      write_callback,
+      &pre_tx_cancel_capture);
+  assert(status.ok());
+  pre_tx_cancel_client.cancel();
+  assert(pre_tx_cancel_capture.called);
+  assert(pre_tx_cancel_capture.status.code == StatusCode::Cancelled);
+  assert(!pre_tx_cancel_client.requires_transport_reset());
+
+  const RandomWriteDWordItem explicit_dword_zero(
+      {.code = mcprotocol::serial::DeviceCode::D, .number = 102U}, 0U);
+  MelsecSerialClient transport_failure_client;
+  status = transport_failure_client.configure(config);
+  assert(status.ok());
+  WriteCapture transport_failure_capture;
+  status = transport_failure_client.async_random_write_words(
+      10U,
+      {},
+      std::span<const RandomWriteDWordItem>(&explicit_dword_zero, 1),
+      write_callback,
+      &transport_failure_capture);
+  assert(status.ok());
+  status = transport_failure_client.notify_tx_complete(
+      11U,
+      mcprotocol::serial::make_status(StatusCode::Transport, "simulated TX failure"));
+  assert(status.ok());
+  assert(transport_failure_capture.called);
+  assert(transport_failure_capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(transport_failure_client.requires_transport_reset());
+  assert(transport_failure_client.pending_tx_frame().empty());
+
+  const RandomWriteBitItem explicit_off(
+      {.code = mcprotocol::serial::DeviceCode::M, .number = 100U}, BitValue::Off);
+  MelsecSerialClient post_tx_cancel_client;
+  status = post_tx_cancel_client.configure(config);
+  assert(status.ok());
+  WriteCapture post_tx_cancel_capture;
+  status = post_tx_cancel_client.async_random_write_bits(
+      20U,
+      std::span<const RandomWriteBitItem>(&explicit_off, 1),
+      write_callback,
+      &post_tx_cancel_capture);
+  assert(status.ok());
+  assert(post_tx_cancel_client.notify_tx_complete(21U).ok());
+  post_tx_cancel_client.cancel();
+  assert(post_tx_cancel_capture.called);
+  assert(post_tx_cancel_capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(post_tx_cancel_client.requires_transport_reset());
+
+  const LinkDirectRandomWriteWordItem link_explicit_zero(
+      {.network_number = 1U,
+       .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 100U}},
+      0U);
+  MelsecSerialClient link_write_client;
+  status = link_write_client.configure(config);
+  assert(status.ok());
+  WriteCapture link_timeout_capture;
+  status = link_write_client.async_link_direct_random_write_words(
+      30U,
+      std::span<const LinkDirectRandomWriteWordItem>(&link_explicit_zero, 1),
+      write_callback,
+      &link_timeout_capture);
+  assert(status.ok());
+  assert(link_write_client.notify_tx_complete(31U).ok());
+  link_write_client.poll(31U + config.timeout.response_timeout_ms);
+  assert(link_timeout_capture.called);
+  assert(link_timeout_capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(link_write_client.requires_transport_reset());
+
+  MelsecSerialClient plc_error_client;
+  status = plc_error_client.configure(config);
+  assert(status.ok());
+  WriteCapture plc_error_capture;
+  status = plc_error_client.async_random_write_words(
+      40U,
+      std::span<const RandomWriteWordItem>(&explicit_zero, 1),
+      {},
+      write_callback,
+      &plc_error_capture);
+  assert(status.ok());
+  assert(plc_error_client.notify_tx_complete(41U).ok());
+  std::array<std::uint8_t, 64> error_frame {};
+  std::size_t error_frame_size = 0U;
+  status = FrameCodec::encode_error_response(config, 0x7151U, error_frame, error_frame_size);
+  assert(status.ok());
+  plc_error_client.on_rx_bytes(
+      42U,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(error_frame.data()), error_frame_size));
+  assert(plc_error_capture.called);
+  assert(plc_error_capture.status.code == StatusCode::PlcError);
+  assert(plc_error_capture.status.plc_error_code == 0x7151U);
+  assert(!plc_error_client.requires_transport_reset());
+
+  const std::array<RandomWriteBitItem, 2> invalid_bit_items {{
+      RandomWriteBitItem(
+          {.code = mcprotocol::serial::DeviceCode::M, .number = 99U}, BitValue::On),
+      RandomWriteBitItem(
+          {.code = mcprotocol::serial::DeviceCode::M, .number = 100U},
+          static_cast<BitValue>(0xFFU)),
+  }};
+  MelsecSerialClient invalid_bit_client;
+  status = invalid_bit_client.configure(config);
+  assert(status.ok());
+  WriteCapture invalid_capture;
+  status = invalid_bit_client.async_random_write_bits(
+      0U,
+      invalid_bit_items,
+      write_callback,
+      &invalid_capture);
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(!invalid_capture.called);
+  assert(!invalid_bit_client.busy());
+  assert(invalid_bit_client.pending_tx_frame().empty());
+
+  const LinkDirectRandomWriteBitItem invalid_link_bit(
+      {.network_number = 1U,
+       .device = {.code = mcprotocol::serial::DeviceCode::B, .number = 100U}},
+      static_cast<BitValue>(0xFFU));
+  std::array<std::uint8_t, 128> invalid_request {};
+  std::size_t invalid_request_size = 0U;
+  status = CommandCodec::encode_link_direct_random_write_bits(
+      config,
+      std::span<const LinkDirectRandomWriteBitItem>(&invalid_link_bit, 1),
+      invalid_request,
+      invalid_request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(invalid_request_size == 0U);
+}
+
 void test_encode_random_read_binary_iqr_layout() {
   const auto config = make_binary_c4_iqr_config();
-  const std::array<mcprotocol::serial::RandomReadItem, 2> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}, .double_word = false},
-      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 100}, .double_word = false},
+  const std::array<mcprotocol::serial::RandomReadWordItem, 2> items {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}},
+      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 100}},
   }};
 
   std::array<std::uint8_t, 64> request_data {};
@@ -4392,7 +5418,7 @@ void test_encode_random_read_binary_iqr_layout() {
   const Status status = CommandCodec::encode_random_read(
       config,
       mcprotocol::serial::RandomReadRequest {
-          .items = std::span<const mcprotocol::serial::RandomReadItem>(items.data(), items.size()),
+          .word_items = std::span<const mcprotocol::serial::RandomReadWordItem>(items.data(), items.size()),
       },
       request_data,
       request_size);
@@ -4410,9 +5436,9 @@ void test_encode_random_read_binary_iqr_layout() {
 
 void test_encode_random_read_binary_ql_layout() {
   const auto config = make_binary_c4_config();
-  const std::array<mcprotocol::serial::RandomReadItem, 2> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}, .double_word = false},
-      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 100}, .double_word = false},
+  const std::array<mcprotocol::serial::RandomReadWordItem, 2> items {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}},
+      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 100}},
   }};
 
   std::array<std::uint8_t, 64> request_data {};
@@ -4420,7 +5446,7 @@ void test_encode_random_read_binary_ql_layout() {
   const Status status = CommandCodec::encode_random_read(
       config,
       mcprotocol::serial::RandomReadRequest {
-          .items = std::span<const mcprotocol::serial::RandomReadItem>(items.data(), items.size()),
+          .word_items = std::span<const mcprotocol::serial::RandomReadWordItem>(items.data(), items.size()),
       },
       request_data,
       request_size);
@@ -4439,8 +5465,8 @@ void test_encode_random_read_binary_ql_layout() {
 void test_encode_random_write_words_binary_ql_layout() {
   const auto config = make_binary_c4_config();
   const std::array<RandomWriteWordItem, 2> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}, .value = 0x0001U, .double_word = false},
-      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 101}, .value = 0x0002U, .double_word = false},
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::D, .number = 100}, 0x0001U),
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::D, .number = 101}, 0x0002U),
   }};
 
   std::array<std::uint8_t, 64> request_data {};
@@ -4448,6 +5474,7 @@ void test_encode_random_write_words_binary_ql_layout() {
   const Status status = CommandCodec::encode_random_write_words(
       config,
       std::span<const RandomWriteWordItem>(items.data(), items.size()),
+      {},
       request_data,
       request_size);
   assert(status.ok());
@@ -4465,8 +5492,8 @@ void test_encode_random_write_words_binary_ql_layout() {
 void test_encode_random_write_words_binary_iqr_layout() {
   const auto config = make_binary_c4_iqr_config();
   const std::array<RandomWriteWordItem, 2> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}, .value = 0x0001U, .double_word = false},
-      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 101}, .value = 0x0002U, .double_word = false},
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::D, .number = 100}, 0x0001U),
+      RandomWriteWordItem({.code = mcprotocol::serial::DeviceCode::D, .number = 101}, 0x0002U),
   }};
 
   std::array<std::uint8_t, 64> request_data {};
@@ -4474,6 +5501,7 @@ void test_encode_random_write_words_binary_iqr_layout() {
   const Status status = CommandCodec::encode_random_write_words(
       config,
       std::span<const RandomWriteWordItem>(items.data(), items.size()),
+      {},
       request_data,
       request_size);
   assert(status.ok());
@@ -4491,8 +5519,8 @@ void test_encode_random_write_words_binary_iqr_layout() {
 void test_encode_random_write_bits_ascii_matches_manual() {
   const auto config = make_ascii_c4_format4_config();
   const std::array<RandomWriteBitItem, 2> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 50}, .value = BitValue::Off},
-      {.device = {.code = mcprotocol::serial::DeviceCode::Y, .number = 0x2F}, .value = BitValue::On},
+      RandomWriteBitItem({.code = mcprotocol::serial::DeviceCode::M, .number = 50}, BitValue::Off),
+      RandomWriteBitItem({.code = mcprotocol::serial::DeviceCode::Y, .number = 0x2F}, BitValue::On),
   }};
 
   std::array<std::uint8_t, 64> request_data {};
@@ -4512,8 +5540,8 @@ void test_encode_random_write_bits_ascii_matches_manual() {
 void test_encode_random_write_bits_ascii_iqr_shape() {
   const auto config = make_ascii_c4_format4_iqr_config();
   const std::array<RandomWriteBitItem, 2> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 50}, .value = BitValue::Off},
-      {.device = {.code = mcprotocol::serial::DeviceCode::Y, .number = 0x2F}, .value = BitValue::On},
+      RandomWriteBitItem({.code = mcprotocol::serial::DeviceCode::M, .number = 50}, BitValue::Off),
+      RandomWriteBitItem({.code = mcprotocol::serial::DeviceCode::Y, .number = 0x2F}, BitValue::On),
   }};
 
   std::array<std::uint8_t, 96> request_data {};
@@ -4533,8 +5561,8 @@ void test_encode_random_write_bits_ascii_iqr_shape() {
 void test_encode_random_write_bits_binary_iqr_layout() {
   const auto config = make_binary_c4_iqr_config();
   const std::array<RandomWriteBitItem, 2> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 50}, .value = BitValue::Off},
-      {.device = {.code = mcprotocol::serial::DeviceCode::Y, .number = 0x2F}, .value = BitValue::On},
+      RandomWriteBitItem({.code = mcprotocol::serial::DeviceCode::M, .number = 50}, BitValue::Off),
+      RandomWriteBitItem({.code = mcprotocol::serial::DeviceCode::Y, .number = 0x2F}, BitValue::On),
   }};
 
   std::array<std::uint8_t, 64> request_data {};
@@ -4558,8 +5586,8 @@ void test_encode_random_write_bits_binary_iqr_layout() {
 void test_encode_random_write_bits_binary_ql_keeps_device_numbers() {
   const auto config = make_binary_c4_config();
   const std::array<RandomWriteBitItem, 2> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 50}, .value = BitValue::Off},
-      {.device = {.code = mcprotocol::serial::DeviceCode::Y, .number = 0x2F}, .value = BitValue::On},
+      RandomWriteBitItem({.code = mcprotocol::serial::DeviceCode::M, .number = 50}, BitValue::Off),
+      RandomWriteBitItem({.code = mcprotocol::serial::DeviceCode::Y, .number = 0x2F}, BitValue::On),
   }};
 
   std::array<std::uint8_t, 64> request_data {};
@@ -4587,17 +5615,16 @@ void test_qna_family_random_access_uses_smaller_limits() {
   std::array<std::uint8_t, 2048> request_data {};
   std::size_t request_size = 0;
 
-  std::array<RandomReadItem, 97> read_items {};
+  std::array<RandomReadWordItem, 97> read_items {};
   for (std::size_t index = 0; index < read_items.size(); ++index) {
-    read_items[index] = RandomReadItem {
+    read_items[index] = RandomReadWordItem {
         .device = {.code = mcprotocol::serial::DeviceCode::D, .number = static_cast<std::uint32_t>(index)},
-        .double_word = false,
-    };
+      };
   }
   Status status = CommandCodec::encode_random_read(
       config,
       RandomReadRequest {
-          .items = std::span<const RandomReadItem>(read_items.data(), 96U),
+          .word_items = std::span<const RandomReadWordItem>(read_items.data(), 96U),
       },
       request_data,
       request_size);
@@ -4606,18 +5633,20 @@ void test_qna_family_random_access_uses_smaller_limits() {
   status = CommandCodec::encode_random_read(
       config,
       RandomReadRequest {
-          .items = std::span<const RandomReadItem>(read_items.data(), read_items.size()),
+          .word_items = std::span<const RandomReadWordItem>(read_items.data(), read_items.size()),
       },
       request_data,
       request_size);
   assert(status.code == StatusCode::InvalidArgument);
 
-  std::array<RandomWriteBitItem, 95> bit_items {};
+  auto bit_items = mcprotocol::serial::detail::make_filled_array<RandomWriteBitItem, 95>(
+      RandomWriteBitItem(DeviceAddress {mcprotocol::serial::DeviceCode::M, 0U}, BitValue::Off));
   for (std::size_t index = 0; index < bit_items.size(); ++index) {
-    bit_items[index] = RandomWriteBitItem {
-        .device = {.code = mcprotocol::serial::DeviceCode::M, .number = static_cast<std::uint32_t>(index)},
-        .value = BitValue::On,
-    };
+    bit_items[index] = RandomWriteBitItem(
+        DeviceAddress {
+            .code = mcprotocol::serial::DeviceCode::M,
+            .number = static_cast<std::uint32_t>(index)},
+        BitValue::On);
   }
   status = CommandCodec::encode_random_write_bits(
       config,
@@ -4633,17 +5662,19 @@ void test_qna_family_random_access_uses_smaller_limits() {
       request_size);
   assert(status.code == StatusCode::InvalidArgument);
 
-  std::array<RandomWriteWordItem, 81> word_items {};
+  auto word_items = mcprotocol::serial::detail::make_filled_array<RandomWriteWordItem, 81>(
+      RandomWriteWordItem(DeviceAddress {mcprotocol::serial::DeviceCode::D, 0U}, 0U));
   for (std::size_t index = 0; index < word_items.size(); ++index) {
-    word_items[index] = RandomWriteWordItem {
-        .device = {.code = mcprotocol::serial::DeviceCode::D, .number = static_cast<std::uint32_t>(index)},
-        .value = static_cast<std::uint16_t>(index),
-        .double_word = false,
-    };
+    word_items[index] = RandomWriteWordItem(
+        DeviceAddress {
+            .code = mcprotocol::serial::DeviceCode::D,
+            .number = static_cast<std::uint32_t>(index)},
+        static_cast<std::uint16_t>(index));
   }
   status = CommandCodec::encode_random_write_words(
       config,
       std::span<const RandomWriteWordItem>(word_items.data(), 80U),
+      {},
       request_data,
       request_size);
   assert(status.ok());
@@ -4651,6 +5682,7 @@ void test_qna_family_random_access_uses_smaller_limits() {
   status = CommandCodec::encode_random_write_words(
       config,
       std::span<const RandomWriteWordItem>(word_items.data(), word_items.size()),
+      {},
       request_data,
       request_size);
   assert(status.code == StatusCode::InvalidArgument);
@@ -4908,11 +5940,11 @@ void test_encode_multi_block_write_ascii_bit_blocks_use_lsb_first_word_packing()
 
 void test_encode_register_monitor_ascii_reuses_random_read_layout() {
   const auto config = make_ascii_c4_format4_config();
-  const std::array<mcprotocol::serial::RandomReadItem, 4> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}, .double_word = false},
-      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 105}, .double_word = false},
-      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 100}, .double_word = false},
-      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 105}, .double_word = false},
+  const std::array<mcprotocol::serial::RandomReadWordItem, 4> items {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}},
+      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 105}},
+      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 100}},
+      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 105}},
   }};
 
   std::array<std::uint8_t, 128> random_read_request {};
@@ -4920,7 +5952,7 @@ void test_encode_register_monitor_ascii_reuses_random_read_layout() {
   Status status = CommandCodec::encode_random_read(
       config,
       mcprotocol::serial::RandomReadRequest {
-          .items = std::span<const mcprotocol::serial::RandomReadItem>(items.data(), items.size()),
+          .word_items = std::span<const mcprotocol::serial::RandomReadWordItem>(items.data(), items.size()),
       },
       random_read_request,
       random_read_size);
@@ -4931,7 +5963,7 @@ void test_encode_register_monitor_ascii_reuses_random_read_layout() {
   status = CommandCodec::encode_register_monitor(
       config,
       mcprotocol::serial::MonitorRegistration {
-          .items = std::span<const mcprotocol::serial::RandomReadItem>(items.data(), items.size()),
+          .word_items = std::span<const mcprotocol::serial::RandomReadWordItem>(items.data(), items.size()),
       },
       monitor_request,
       monitor_size);
@@ -4948,9 +5980,9 @@ void test_encode_register_monitor_ascii_reuses_random_read_layout() {
 
 void test_encode_register_monitor_binary_iqr_layout() {
   const auto config = make_binary_c4_iqr_config();
-  const std::array<mcprotocol::serial::RandomReadItem, 2> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}, .double_word = false},
-      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 100}, .double_word = false},
+  const std::array<mcprotocol::serial::RandomReadWordItem, 2> items {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}},
+      {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 100}},
   }};
 
   std::array<std::uint8_t, 64> random_read_request {};
@@ -4958,7 +5990,7 @@ void test_encode_register_monitor_binary_iqr_layout() {
   Status status = CommandCodec::encode_random_read(
       config,
       mcprotocol::serial::RandomReadRequest {
-          .items = std::span<const mcprotocol::serial::RandomReadItem>(items.data(), items.size()),
+          .word_items = std::span<const mcprotocol::serial::RandomReadWordItem>(items.data(), items.size()),
       },
       random_read_request,
       random_read_size);
@@ -4969,7 +6001,7 @@ void test_encode_register_monitor_binary_iqr_layout() {
   status = CommandCodec::encode_register_monitor(
       config,
       mcprotocol::serial::MonitorRegistration {
-          .items = std::span<const mcprotocol::serial::RandomReadItem>(items.data(), items.size()),
+          .word_items = std::span<const mcprotocol::serial::RandomReadWordItem>(items.data(), items.size()),
       },
       monitor_request,
       monitor_size);
@@ -4986,8 +6018,8 @@ void test_encode_register_monitor_binary_iqr_layout() {
 
 void test_encode_register_monitor_binary_iqr_allows_lz_shape() {
   const auto config = make_binary_c4_iqr_config();
-  const std::array<mcprotocol::serial::RandomReadItem, 1> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::LZ, .number = 1}, .double_word = true},
+  const std::array<mcprotocol::serial::RandomReadDWordItem, 1> items {{
+      {.device = {.code = mcprotocol::serial::DeviceCode::LZ, .number = 1}},
   }};
 
   std::array<std::uint8_t, 64> monitor_request {};
@@ -4995,7 +6027,7 @@ void test_encode_register_monitor_binary_iqr_allows_lz_shape() {
   Status status = CommandCodec::encode_register_monitor(
       config,
       mcprotocol::serial::MonitorRegistration {
-          .items = std::span<const mcprotocol::serial::RandomReadItem>(items.data(), items.size()),
+          .dword_items = items,
       },
       monitor_request,
       monitor_size);
@@ -5250,6 +6282,12 @@ void completion_callback(void* user, Status status) {
 
 void test_client_discards_foreign_route_then_accepts_current_route() {
   auto config = make_ascii_c4_format4_config();
+  config.route = RouteConfig {C4MnMultidropRoute {
+      0x01U,
+      0x00U,
+      C34PcTarget::connected_station(),
+      C4DestinationModule::own_station(),
+      SelfStationNo::number(0x01U)}};
   config.timeout.response_timeout_ms = 10U;
   MelsecSerialClient client;
   Status status = client.configure(config);
@@ -5267,8 +6305,12 @@ void test_client_discards_foreign_route_then_accepts_current_route() {
   assert(status.ok());
 
   auto foreign_config = config;
-  foreign_config.route = RouteConfig {C4MultidropRoute {
-      0x02U, 0x01U, C34PcTarget::connected_station()}};
+  foreign_config.route = RouteConfig {C4MnMultidropRoute {
+      0x01U,
+      0x00U,
+      C34PcTarget::connected_station(),
+      C4DestinationModule::own_station(),
+      SelfStationNo::number(0x02U)}};
   const std::array<std::uint8_t, 4> response_data {'1', '2', '3', '4'};
   std::array<std::uint8_t, 128> frame {};
   std::size_t frame_size = 0U;
@@ -5316,8 +6358,8 @@ void test_client_discards_foreign_route_then_accepts_current_route() {
   assert(timed_out_capture.status.code == StatusCode::Timeout);
 
   auto next_config = config;
-  next_config.route = RouteConfig {C4MultidropRoute {
-      0x02U, 0x01U, C34PcTarget::connected_station()}};
+  next_config.route = RouteConfig {C4StandardMultidropRoute {
+      0x02U, 0x01U, C34PcTarget::connected_station(), C4DestinationModule::own_station()}};
   status = reconfigured_client.configure(next_config);
   assert(status.ok());
   std::array<std::uint16_t, 1> next_words {};
@@ -5471,6 +6513,7 @@ void test_client_format2_auto_sequence_wrap_and_stale_response_isolation() {
   client.poll(4001U + config.timeout.response_timeout_ms);
   assert(timeout_capture.called);
   assert(timeout_capture.status.code == StatusCode::Timeout);
+  assert(!client.requires_transport_reset());
 
   std::array<std::uint16_t, 1> after_timeout_words {};
   CallbackCapture after_timeout_capture {};
@@ -5854,7 +6897,7 @@ void test_client_binary_e1_extended_file_register_monitor_roundtrip() {
   assert(!client.busy());
 }
 
-void test_client_remote_reset_roundtrip() {
+void test_client_remote_reset_completes_when_transmission_completes() {
   const auto config = make_binary_c4_config();
   MelsecSerialClient client;
   Status status = client.configure(config);
@@ -5867,6 +6910,12 @@ void test_client_remote_reset_roundtrip() {
 
   status = client.notify_tx_complete(10);
   assert(status.ok());
+  assert(capture.called);
+  assert(capture.status.ok());
+  assert(
+      std::string_view(capture.status.message) ==
+      "Remote RESET request transmission completed; PLC reset state is not confirmed");
+  assert(!client.busy());
 
   std::array<std::uint8_t, 64> response_frame {};
   std::size_t response_frame_size = 0;
@@ -5880,8 +6929,222 @@ void test_client_remote_reset_roundtrip() {
           response_frame_size));
   assert(capture.called);
   assert(capture.status.ok());
-  assert(std::string_view(capture.status.message) == "ok");
+  assert(
+      std::string_view(capture.status.message) ==
+      "Remote RESET request transmission completed; PLC reset state is not confirmed");
   assert(!client.busy());
+}
+
+void test_client_remote_run_validation_and_unknown_outcome() {
+  auto config = make_binary_c4_iqr_config();
+  config.timeout.response_timeout_ms = 10U;
+  MelsecSerialClient client;
+  Status status = client.configure(config);
+  assert(status.ok());
+
+  CallbackCapture invalid_capture;
+  status = client.async_remote_run(
+      0U,
+      static_cast<RemoteOperationMode>(0xFFFFU),
+      RemoteRunClearMode::DoNotClear,
+      completion_callback,
+      &invalid_capture);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(!invalid_capture.called);
+  assert(!client.busy());
+  assert(client.pending_tx_frame().empty());
+
+  status = client.async_remote_run(
+      0U,
+      RemoteOperationMode::DoNotExecuteForcibly,
+      static_cast<RemoteRunClearMode>(0xFFU),
+      completion_callback,
+      &invalid_capture);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(!invalid_capture.called);
+  assert(!client.busy());
+  assert(client.pending_tx_frame().empty());
+
+  CallbackCapture transport_failure_capture;
+  status = client.async_remote_run(
+      0U,
+      RemoteOperationMode::ExecuteForcibly,
+      RemoteRunClearMode::AllClear,
+      completion_callback,
+      &transport_failure_capture);
+  assert(status.ok());
+  assert(client.busy());
+  assert(!client.pending_tx_frame().empty());
+  status = client.notify_tx_complete(
+      1U,
+      mcprotocol::serial::make_status(StatusCode::Transport, "simulated TX failure"));
+  assert(status.ok());
+  assert(transport_failure_capture.called);
+  assert(transport_failure_capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(!client.busy());
+  assert(client.requires_transport_reset());
+  assert(client.pending_tx_frame().empty());
+
+  status = client.configure(config);
+  assert(status.ok());
+  CallbackCapture timeout_capture;
+  status = client.async_remote_run(
+      20U,
+      RemoteOperationMode::DoNotExecuteForcibly,
+      RemoteRunClearMode::ClearOutsideLatchRange,
+      completion_callback,
+      &timeout_capture);
+  assert(status.ok());
+  const std::size_t transmitted_frame_size = client.pending_tx_frame().size();
+  assert(transmitted_frame_size != 0U);
+  status = client.notify_tx_complete(21U);
+  assert(status.ok());
+  client.poll(31U);
+  assert(timeout_capture.called);
+  assert(timeout_capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(!client.busy());
+  assert(client.requires_transport_reset());
+  assert(client.pending_tx_frame().empty());
+
+  CallbackCapture retry_capture;
+  status = client.async_remote_run(
+      32U,
+      RemoteOperationMode::DoNotExecuteForcibly,
+      RemoteRunClearMode::DoNotClear,
+      completion_callback,
+      &retry_capture);
+  assert(!status.ok());
+  assert(status.code == StatusCode::Transport);
+  assert(!retry_capture.called);
+  assert(!client.busy());
+  assert(client.pending_tx_frame().empty());
+
+  status = client.configure(config);
+  assert(status.ok());
+  CallbackCapture cancelled_after_send_capture;
+  status = client.async_remote_run(
+      40U,
+      RemoteOperationMode::DoNotExecuteForcibly,
+      RemoteRunClearMode::DoNotClear,
+      completion_callback,
+      &cancelled_after_send_capture);
+  assert(status.ok());
+  status = client.notify_tx_complete(41U);
+  assert(status.ok());
+  client.cancel();
+  assert(cancelled_after_send_capture.called);
+  assert(
+      cancelled_after_send_capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(!client.busy());
+  assert(client.requires_transport_reset());
+}
+
+void test_client_remote_pause_validation_and_unknown_outcome() {
+  auto config = make_binary_c4_iqr_config();
+  config.timeout.response_timeout_ms = 10U;
+  MelsecSerialClient client;
+  Status status = client.configure(config);
+  assert(status.ok());
+
+  CallbackCapture invalid_capture;
+  status = client.async_remote_pause(
+      0U,
+      static_cast<RemoteOperationMode>(0xFFFFU),
+      completion_callback,
+      &invalid_capture);
+  assert(!status.ok());
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(!invalid_capture.called);
+  assert(!client.busy());
+  assert(client.pending_tx_frame().empty());
+
+  CallbackCapture transport_failure_capture;
+  status = client.async_remote_pause(
+      0U,
+      RemoteOperationMode::ExecuteForcibly,
+      completion_callback,
+      &transport_failure_capture);
+  assert(status.ok());
+  assert(!client.pending_tx_frame().empty());
+  status = client.notify_tx_complete(
+      1U,
+      mcprotocol::serial::make_status(StatusCode::Transport, "simulated TX failure"));
+  assert(status.ok());
+  assert(transport_failure_capture.called);
+  assert(transport_failure_capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(!client.busy());
+  assert(client.requires_transport_reset());
+
+  status = client.configure(config);
+  assert(status.ok());
+  CallbackCapture timeout_capture;
+  status = client.async_remote_pause(
+      20U,
+      RemoteOperationMode::DoNotExecuteForcibly,
+      completion_callback,
+      &timeout_capture);
+  assert(status.ok());
+  assert(client.notify_tx_complete(21U).ok());
+  client.poll(31U);
+  assert(timeout_capture.called);
+  assert(timeout_capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(!client.busy());
+  assert(client.requires_transport_reset());
+  assert(client.pending_tx_frame().empty());
+
+  CallbackCapture retry_capture;
+  status = client.async_remote_pause(
+      32U,
+      RemoteOperationMode::ExecuteForcibly,
+      completion_callback,
+      &retry_capture);
+  assert(!status.ok());
+  assert(status.code == StatusCode::Transport);
+  assert(!retry_capture.called);
+  assert(!client.busy());
+  assert(client.pending_tx_frame().empty());
+
+  status = client.configure(config);
+  assert(status.ok());
+  CallbackCapture plc_error_capture;
+  status = client.async_remote_pause(
+      40U,
+      RemoteOperationMode::DoNotExecuteForcibly,
+      completion_callback,
+      &plc_error_capture);
+  assert(status.ok());
+  assert(client.notify_tx_complete(41U).ok());
+  std::array<std::uint8_t, 64> error_frame {};
+  std::size_t error_frame_size = 0U;
+  status = FrameCodec::encode_error_response(
+      config, 0x7151U, error_frame, error_frame_size);
+  assert(status.ok());
+  client.on_rx_bytes(
+      42U,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(error_frame.data()),
+          error_frame_size));
+  assert(plc_error_capture.called);
+  assert(plc_error_capture.status.code == StatusCode::PlcError);
+  assert(plc_error_capture.status.plc_error_code == 0x7151U);
+  assert(!client.busy());
+  assert(client.pending_tx_frame().empty());
+
+  CallbackCapture cancel_capture;
+  status = client.async_remote_pause(
+      50U,
+      RemoteOperationMode::DoNotExecuteForcibly,
+      completion_callback,
+      &cancel_capture);
+  assert(status.ok());
+  assert(client.notify_tx_complete(51U).ok());
+  client.cancel();
+  assert(cancel_capture.called);
+  assert(cancel_capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(!client.busy());
+  assert(client.requires_transport_reset());
 }
 
 void test_client_remote_control_and_password_roundtrips() {
@@ -6113,7 +7376,7 @@ void test_client_c24_small_command_roundtrips() {
   }
 }
 
-void test_client_remote_reset_timeout_without_response_is_success() {
+void test_client_remote_reset_does_not_wait_for_response_timeout() {
   auto config = make_binary_c4_config();
   config.timeout.response_timeout_ms = 5;
 
@@ -6127,15 +7390,28 @@ void test_client_remote_reset_timeout_without_response_is_success() {
 
   status = client.notify_tx_complete(0);
   assert(status.ok());
-
-  client.poll(6);
   assert(capture.called);
   assert(capture.status.ok());
-  assert(std::string_view(capture.status.message) == "Remote RESET completed without a response");
+  assert(
+      std::string_view(capture.status.message) ==
+      "Remote RESET request transmission completed; PLC reset state is not confirmed");
   assert(!client.busy());
+
+  MelsecSerialClient failed_client;
+  status = failed_client.configure(config);
+  assert(status.ok());
+  CallbackCapture failed_capture;
+  status = failed_client.async_remote_reset(0U, completion_callback, &failed_capture);
+  assert(status.ok());
+  status = failed_client.notify_tx_complete(
+      0U,
+      mcprotocol::serial::make_status(StatusCode::Transport, "test transport failure"));
+  assert(status.ok());
+  assert(failed_capture.called);
+  assert(failed_capture.status.code == StatusCode::Transport);
 }
 
-void test_client_init_sequence_timeout_without_response_is_success() {
+void test_client_init_sequence_timeout_is_not_success() {
   auto config = make_binary_c4_config();
   config.timeout.response_timeout_ms = 5;
 
@@ -6153,14 +7429,11 @@ void test_client_init_sequence_timeout_without_response_is_success() {
 
   client.poll(10);
   assert(capture.called);
-  assert(capture.status.ok());
-  assert(
-      std::string_view(capture.status.message) ==
-      "Transmission-sequence initialization completed without a response");
+  assert(capture.status.code == StatusCode::Timeout);
   assert(!client.busy());
 }
 
-void test_client_global_signal_timeout_without_response_is_success() {
+void test_client_global_signal_timeout_is_not_success() {
   auto config = make_binary_c4_config();
   config.timeout.response_timeout_ms = 5;
 
@@ -6185,8 +7458,7 @@ void test_client_global_signal_timeout_without_response_is_success() {
 
   client.poll(10);
   assert(capture.called);
-  assert(capture.status.ok());
-  assert(std::string_view(capture.status.message) == "Global signal control completed without a response");
+  assert(capture.status.code == StatusCode::Timeout);
   assert(!client.busy());
 }
 
@@ -6207,6 +7479,207 @@ void test_client_timeout() {
   client.poll(config.timeout.response_timeout_ms + 1);
   assert(capture.called);
   assert(capture.status.code == StatusCode::Timeout);
+  assert(client.requires_transport_reset());
+
+  CallbackCapture blocked_capture;
+  status = client.async_read_cpu_model(4000U, info, completion_callback, &blocked_capture);
+  assert(!status.ok());
+  assert(status.code == StatusCode::Transport);
+  assert(!blocked_capture.called);
+
+  status = client.configure(config);
+  assert(status.ok());
+  assert(!client.requires_transport_reset());
+}
+
+void test_client_response_timeout_is_wrap_safe_and_not_extended_by_rx() {
+  auto config = make_binary_c4_config();
+  config.timeout.response_timeout_ms = 10U;
+
+  {
+    MelsecSerialClient client;
+    Status status = client.configure(config);
+    assert(status.ok());
+    CpuModelInfo info;
+    CallbackCapture capture;
+    status = client.async_read_cpu_model(0U, info, completion_callback, &capture);
+    assert(status.ok());
+    status = client.notify_tx_complete(0xFFFFFFFAU);
+    assert(status.ok());
+    client.poll(3U);
+    assert(!capture.called);
+    client.poll(4U);
+    assert(capture.called);
+    assert(capture.status.code == StatusCode::Timeout);
+    assert(client.requires_transport_reset());
+  }
+
+  {
+    MelsecSerialClient client;
+    Status status = client.configure(config);
+    assert(status.ok());
+    CpuModelInfo info;
+    CallbackCapture capture;
+    status = client.async_read_cpu_model(100U, info, completion_callback, &capture);
+    assert(status.ok());
+    status = client.notify_tx_complete(100U);
+    assert(status.ok());
+
+    const std::array<std::byte, 1> incomplete_response {std::byte {0x10U}};
+    client.on_rx_bytes(109U, incomplete_response);
+    assert(!capture.called);
+    client.poll(110U);
+    assert(capture.called);
+    assert(capture.status.code == StatusCode::Timeout);
+    assert(client.requires_transport_reset());
+  }
+}
+
+void test_inter_byte_timeout_contract_and_chunk_boundaries() {
+  static_assert(mcprotocol::serial::TimeoutConfig {}.inter_byte_timeout_ms == 250U);
+  static_assert(
+      make_c4_binary_protocol(
+          PlcProfile::MelsecQ,
+          SumCheckMode::Enabled,
+          RouteConfig {HostStationRoute {}})
+          .timeout.inter_byte_timeout_ms == 250U);
+  static_assert(
+      make_c4_ascii_format4_protocol(
+          PlcProfile::MelsecQ,
+          SumCheckMode::Disabled,
+          RouteConfig {HostStationRoute {}})
+          .timeout.inter_byte_timeout_ms == 250U);
+
+  auto config = make_binary_c4_config();
+  for (const std::uint32_t valid_timeout : {1U, 250U, 0x7FFFFFFFU}) {
+    config.timeout.inter_byte_timeout_ms = valid_timeout;
+    assert(FrameCodec::validate_config(config).ok());
+  }
+  for (const std::uint32_t invalid_timeout : {0U, 0x80000000U, 0xFFFFFFFFU}) {
+    config.timeout.inter_byte_timeout_ms = invalid_timeout;
+    const Status status = FrameCodec::validate_config(config);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
+    std::array<std::uint8_t, 32> frame {};
+    std::size_t frame_size = 99U;
+    const Status encode_status = FrameCodec::encode_request(
+        config,
+        std::span<const std::uint8_t> {},
+        frame,
+        frame_size);
+    assert(!encode_status.ok());
+    assert(frame_size == 0U);
+  }
+
+  config = make_binary_c4_config();
+  config.timeout.response_timeout_ms = 1000U;
+  config.timeout.inter_byte_timeout_ms = 250U;
+  const BatchReadWordsRequest request {
+      .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100U},
+      .points = 1U,
+  };
+  const std::array<std::uint8_t, 2> response_data {0x34U, 0x12U};
+  std::array<std::uint8_t, 64> response_frame {};
+  std::size_t response_frame_size = 0U;
+  Status status = FrameCodec::encode_success_response(
+      config, response_data, response_frame, response_frame_size);
+  assert(status.ok());
+  assert(response_frame_size > 2U);
+
+  {
+    MelsecSerialClient client;
+    status = client.configure(config);
+    assert(status.ok());
+    std::array<std::uint16_t, 1> words {};
+    CallbackCapture capture;
+    status = client.async_batch_read_words(
+        0U, request, words, completion_callback, &capture);
+    assert(status.ok());
+    assert(client.notify_tx_complete(0U).ok());
+    client.poll(250U);
+    assert(!capture.called);
+
+    client.on_rx_bytes(
+        300U,
+        std::span<const std::byte>(
+            reinterpret_cast<const std::byte*>(response_frame.data()), 1U));
+    client.on_rx_bytes(
+        549U,
+        std::span<const std::byte>(
+            reinterpret_cast<const std::byte*>(response_frame.data() + 1U), 1U));
+    client.poll(798U);
+    assert(!capture.called);
+    client.on_rx_bytes(
+        799U,
+        std::span<const std::byte>(
+            reinterpret_cast<const std::byte*>(response_frame.data() + 2U),
+            response_frame_size - 2U));
+    assert(capture.called);
+    assert(capture.status.code == StatusCode::Timeout);
+    assert(client.requires_transport_reset());
+
+    CallbackCapture blocked_capture;
+    status = client.async_batch_read_words(
+        800U, request, words, completion_callback, &blocked_capture);
+    assert(!status.ok());
+    assert(status.code == StatusCode::Transport);
+    assert(!blocked_capture.called);
+  }
+
+  {
+    MelsecSerialClient client;
+    status = client.configure(config);
+    assert(status.ok());
+    std::array<std::uint16_t, 1> words {};
+    CallbackCapture capture;
+    status = client.async_batch_read_words(
+        0U, request, words, completion_callback, &capture);
+    assert(status.ok());
+    assert(client.notify_tx_complete(0U).ok());
+    client.on_rx_bytes(
+        100U,
+        std::span<const std::byte>(
+            reinterpret_cast<const std::byte*>(response_frame.data()), 1U));
+    client.on_rx_bytes(
+        349U,
+        std::span<const std::byte>(
+            reinterpret_cast<const std::byte*>(response_frame.data() + 1U), 1U));
+    client.on_rx_bytes(
+        598U,
+        std::span<const std::byte>(
+            reinterpret_cast<const std::byte*>(response_frame.data() + 2U),
+            response_frame_size - 2U));
+    assert(capture.called);
+    assert(capture.status.ok());
+    assert(words[0] == 0x1234U);
+    assert(!client.requires_transport_reset());
+  }
+
+  {
+    config.timeout.inter_byte_timeout_ms = 10U;
+    MelsecSerialClient client;
+    status = client.configure(config);
+    assert(status.ok());
+    std::array<std::uint16_t, 1> words {};
+    CallbackCapture capture;
+    status = client.async_batch_read_words(
+        0U, request, words, completion_callback, &capture);
+    assert(status.ok());
+    assert(client.notify_tx_complete(0xFFFFFF00U).ok());
+    client.on_rx_bytes(
+        0xFFFFFFFAU,
+        std::span<const std::byte>(
+            reinterpret_cast<const std::byte*>(response_frame.data()), 1U));
+    client.poll(3U);
+    assert(!capture.called);
+    client.on_rx_bytes(
+        4U,
+        std::span<const std::byte>(
+            reinterpret_cast<const std::byte*>(response_frame.data() + 1U),
+            response_frame_size - 1U));
+    assert(capture.called);
+    assert(capture.status.code == StatusCode::Timeout);
+  }
 }
 
 void test_client_ascii_format4_resynchronizes_on_stale_ack() {
@@ -6294,16 +7767,16 @@ void test_client_link_direct_random_read_roundtrip() {
   Status status = client.configure(config);
   assert(status.ok());
 
-  const std::array<LinkDirectRandomReadItem, 2> items {{
+  const std::array<LinkDirectRandomReadWordItem, 2> items {{
       {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U}}},
       {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0x0010U}}},
   }};
-  std::array<std::uint32_t, 2> values {};
+  std::array<std::uint16_t, 2> values {};
   CallbackCapture capture;
 
   status = client.async_link_direct_random_read(
       0,
-      std::span<const LinkDirectRandomReadItem>(items.data(), items.size()),
+      std::span<const LinkDirectRandomReadWordItem>(items.data(), items.size()),
       values,
       completion_callback,
       &capture);
@@ -6335,7 +7808,7 @@ void test_client_link_direct_register_monitor_roundtrip() {
   Status status = client.configure(config);
   assert(status.ok());
 
-  const std::array<LinkDirectRandomReadItem, 2> items {{
+  const std::array<LinkDirectRandomReadWordItem, 2> items {{
       {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::W, .number = 0x0100U}}},
       {.device = {.network_number = 0x0001U, .device = {.code = mcprotocol::serial::DeviceCode::B, .number = 0x0010U}}},
   }};
@@ -6343,7 +7816,7 @@ void test_client_link_direct_register_monitor_roundtrip() {
   status = client.async_link_direct_register_monitor(
       0,
       LinkDirectMonitorRegistration {
-          .items = std::span<const LinkDirectRandomReadItem>(items.data(), items.size()),
+          .word_items = std::span<const LinkDirectRandomReadWordItem>(items.data(), items.size()),
       },
       completion_callback,
       &register_capture);
@@ -6363,9 +7836,9 @@ void test_client_link_direct_register_monitor_roundtrip() {
   assert(register_capture.called);
   assert(register_capture.status.ok());
 
-  std::array<std::uint32_t, 2> values {};
+  std::array<std::uint16_t, 2> values {};
   CallbackCapture read_capture;
-  status = client.async_read_monitor(10, values, completion_callback, &read_capture);
+  status = client.async_read_monitor(10, values, {}, completion_callback, &read_capture);
   assert(status.ok());
   status = client.notify_tx_complete(11);
   assert(status.ok());
@@ -6443,11 +7916,11 @@ void test_encode_random_read_rejects_long_contact_coil_devices() {
       mcprotocol::serial::DeviceCode::LCC,
   };
   for (const auto code : excluded) {
-    const RandomReadItem item {.device = {.code = code, .number = 0}, .double_word = false};
+    const RandomReadWordItem item {.device = {.code = code, .number = 0}};
     const Status status = CommandCodec::encode_random_read(
         config,
         mcprotocol::serial::RandomReadRequest {
-            .items = std::span<const mcprotocol::serial::RandomReadItem>(&item, 1),
+            .word_items = std::span<const mcprotocol::serial::RandomReadWordItem>(&item, 1),
         },
         request_data,
         request_size);
@@ -6465,20 +7938,19 @@ void test_encode_random_read_rejects_standalone_qualified_only_devices() {
       mcprotocol::serial::DeviceCode::G,
       mcprotocol::serial::DeviceCode::HG,
   };
-  const bool double_word_modes[] = {false, true};
   for (const auto code : rejected) {
-    for (const bool double_word : double_word_modes) {
-      const RandomReadItem item {.device = {.code = code, .number = 10}, .double_word = double_word};
-      const Status status = CommandCodec::encode_random_read(
-          config,
-          mcprotocol::serial::RandomReadRequest {
-              .items = std::span<const mcprotocol::serial::RandomReadItem>(&item, 1),
-          },
-          request_data,
-          request_size);
-      assert(!status.ok());
-      assert(status.code == StatusCode::InvalidArgument);
-    }
+    const RandomReadWordItem word_item {.device = {.code = code, .number = 10}};
+    const RandomReadDWordItem dword_item {.device = {.code = code, .number = 10}};
+    const Status status = CommandCodec::encode_random_read(
+        config,
+        mcprotocol::serial::RandomReadRequest {
+            .word_items = std::span<const RandomReadWordItem>(&word_item, 1),
+            .dword_items = std::span<const RandomReadDWordItem>(&dword_item, 1),
+        },
+        request_data,
+        request_size);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
   }
 }
 
@@ -6499,14 +7971,13 @@ void test_encode_random_write_words_allows_ltn_and_lstn() {
        .expected = {0x02, 0x14, 0x02, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x5A, 0x00, 0x47, 0x94, 0x03, 0x00}},
   }};
   for (const auto& entry : cases) {
-    const RandomWriteWordItem item {
-        .device = {.code = entry.code, .number = 0},
-        .value = entry.code == mcprotocol::serial::DeviceCode::LTN ? 123456U : 234567U,
-        .double_word = true,
-    };
+    const RandomWriteDWordItem item(
+        {.code = entry.code, .number = 0},
+        entry.code == mcprotocol::serial::DeviceCode::LTN ? 123456U : 234567U);
     const Status status = CommandCodec::encode_random_write_words(
         config,
-        std::span<const RandomWriteWordItem>(&item, 1),
+        {},
+        std::span<const RandomWriteDWordItem>(&item, 1),
         request_data,
         request_size);
     assert(status.ok());
@@ -6520,14 +7991,12 @@ void test_encode_random_write_words_allows_lz_on_iq_f() {
   std::array<std::uint8_t, 32> request_data {};
   std::size_t request_size = 0;
 
-  const RandomWriteWordItem item {
-      .device = {.code = mcprotocol::serial::DeviceCode::LZ, .number = 0},
-      .value = 0x12345678U,
-      .double_word = true,
-  };
+  const RandomWriteDWordItem item(
+      {.code = mcprotocol::serial::DeviceCode::LZ, .number = 0}, 0x12345678U);
   const Status status = CommandCodec::encode_random_write_words(
       config,
-      std::span<const RandomWriteWordItem>(&item, 1),
+      {},
+      std::span<const RandomWriteDWordItem>(&item, 1),
       request_data,
       request_size);
   assert(status.ok());
@@ -6547,22 +8016,17 @@ void test_encode_random_write_words_rejects_standalone_qualified_only_devices() 
       mcprotocol::serial::DeviceCode::G,
       mcprotocol::serial::DeviceCode::HG,
   };
-  const bool double_word_modes[] = {false, true};
   for (const auto code : rejected) {
-    for (const bool double_word : double_word_modes) {
-      const RandomWriteWordItem item {
-          .device = {.code = code, .number = 10},
-          .value = 0x1234U,
-          .double_word = double_word,
-      };
-      const Status status = CommandCodec::encode_random_write_words(
-          config,
-          std::span<const RandomWriteWordItem>(&item, 1),
-          request_data,
-          request_size);
-      assert(!status.ok());
-      assert(status.code == StatusCode::InvalidArgument);
-    }
+    const RandomWriteWordItem word_item({.code = code, .number = 10}, 0x1234U);
+    const RandomWriteDWordItem dword_item({.code = code, .number = 10}, 0x12345678U);
+    const Status status = CommandCodec::encode_random_write_words(
+        config,
+        std::span<const RandomWriteWordItem>(&word_item, 1),
+        std::span<const RandomWriteDWordItem>(&dword_item, 1),
+        request_data,
+        request_size);
+    assert(!status.ok());
+    assert(status.code == StatusCode::InvalidArgument);
   }
 }
 
@@ -6582,10 +8046,11 @@ void test_encode_random_write_words_rejects_long_contact_coil_devices() {
       mcprotocol::serial::DeviceCode::LCC,
   };
   for (const auto code : excluded) {
-    const RandomWriteWordItem item {.device = {.code = code, .number = 0}, .value = 0, .double_word = false};
+    const RandomWriteWordItem item({.code = code, .number = 0}, 0);
     const Status status = CommandCodec::encode_random_write_words(
         config,
         std::span<const RandomWriteWordItem>(&item, 1),
+        {},
         request_data,
         request_size);
     assert(!status.ok());
@@ -6609,7 +8074,7 @@ void test_encode_random_write_bits_long_device_rules() {
       mcprotocol::serial::DeviceCode::LCC,
   };
   for (const auto code : allowed) {
-    const RandomWriteBitItem item {.device = {.code = code, .number = 0}, .value = BitValue::Off};
+    const RandomWriteBitItem item({.code = code, .number = 0}, BitValue::Off);
     const Status status = CommandCodec::encode_random_write_bits(
         config,
         std::span<const RandomWriteBitItem>(&item, 1),
@@ -6622,8 +8087,8 @@ void test_encode_random_write_bits_long_device_rules() {
 void test_encode_random_write_bits_binary_iqr_long_counter_layout() {
   const auto config = make_binary_c4_iqr_config();
   const std::array<RandomWriteBitItem, 2> items {{
-      {.device = {.code = mcprotocol::serial::DeviceCode::LCS, .number = 10}, .value = BitValue::On},
-      {.device = {.code = mcprotocol::serial::DeviceCode::LCC, .number = 11}, .value = BitValue::Off},
+      RandomWriteBitItem({.code = mcprotocol::serial::DeviceCode::LCS, .number = 10}, BitValue::On),
+      RandomWriteBitItem({.code = mcprotocol::serial::DeviceCode::LCC, .number = 11}, BitValue::Off),
   }};
 
   std::array<std::uint8_t, 32> request_data {};
@@ -6671,37 +8136,33 @@ void test_iq_l_rejects_unsupported_plain_device_families() {
     assert(status.code == StatusCode::InvalidArgument);
   }
 
-  struct RandomWordCase {
-    mcprotocol::serial::DeviceCode code;
-    bool double_word;
+  const mcprotocol::serial::DeviceCode random_word_devices[] = {
+      mcprotocol::serial::DeviceCode::LTN,
+      mcprotocol::serial::DeviceCode::LSTN,
+      mcprotocol::serial::DeviceCode::LCN,
+      mcprotocol::serial::DeviceCode::LZ,
+      mcprotocol::serial::DeviceCode::RD,
   };
-  const RandomWordCase random_word_devices[] = {
-      {.code = mcprotocol::serial::DeviceCode::LTN, .double_word = true},
-      {.code = mcprotocol::serial::DeviceCode::LSTN, .double_word = true},
-      {.code = mcprotocol::serial::DeviceCode::LCN, .double_word = true},
-      {.code = mcprotocol::serial::DeviceCode::LZ, .double_word = true},
-      {.code = mcprotocol::serial::DeviceCode::RD, .double_word = false},
-  };
-  for (const auto entry : random_word_devices) {
-    const RandomReadItem read_item {.device = {.code = entry.code, .number = 0}, .double_word = entry.double_word};
+  for (const auto code : random_word_devices) {
+    const RandomReadWordItem read_word {.device = {.code = code, .number = 0}};
+    const RandomReadDWordItem read_dword {.device = {.code = code, .number = 0}};
     Status status = CommandCodec::encode_random_read(
         config,
         mcprotocol::serial::RandomReadRequest {
-            .items = std::span<const mcprotocol::serial::RandomReadItem>(&read_item, 1),
+            .word_items = std::span<const RandomReadWordItem>(&read_word, 1),
+            .dword_items = std::span<const RandomReadDWordItem>(&read_dword, 1),
         },
         request_data,
         request_size);
     assert(!status.ok());
     assert(status.code == StatusCode::InvalidArgument);
 
-    const RandomWriteWordItem write_item {
-        .device = {.code = entry.code, .number = 0},
-        .value = entry.double_word ? 0x12345678U : 0x1234U,
-        .double_word = entry.double_word,
-    };
+    const RandomWriteWordItem write_word({.code = code, .number = 0}, 0x1234U);
+    const RandomWriteDWordItem write_dword({.code = code, .number = 0}, 0x12345678U);
     status = CommandCodec::encode_random_write_words(
         config,
-        std::span<const RandomWriteWordItem>(&write_item, 1),
+        std::span<const RandomWriteWordItem>(&write_word, 1),
+        std::span<const RandomWriteDWordItem>(&write_dword, 1),
         request_data,
         request_size);
     assert(!status.ok());
@@ -6731,7 +8192,7 @@ void test_iq_l_rejects_unsupported_plain_device_families() {
     assert(!status.ok());
     assert(status.code == StatusCode::InvalidArgument);
 
-    const RandomWriteBitItem write_bit {.device = {.code = code, .number = 0}, .value = BitValue::On};
+    const RandomWriteBitItem write_bit({.code = code, .number = 0}, BitValue::On);
     status = CommandCodec::encode_random_write_bits(
         config,
         std::span<const RandomWriteBitItem>(&write_bit, 1),
@@ -6757,8 +8218,7 @@ void test_iq_l_rejects_unsupported_plain_device_families() {
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
 
-  const RandomWriteBitItem s_random_write {.device = {.code = mcprotocol::serial::DeviceCode::S, .number = 10},
-                                           .value = BitValue::On};
+  const RandomWriteBitItem s_random_write({.code = mcprotocol::serial::DeviceCode::S, .number = 10}, BitValue::On);
   status = CommandCodec::encode_random_write_bits(
       config,
       std::span<const RandomWriteBitItem>(&s_random_write, 1),
@@ -6807,10 +8267,8 @@ void test_melsec_l_rejects_s_device_access() {
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
 
-  const RandomWriteBitItem s_random_write {
-      .device = {.code = mcprotocol::serial::DeviceCode::S, .number = 10},
-      .value = BitValue::On,
-  };
+  const RandomWriteBitItem s_random_write(
+      {.code = mcprotocol::serial::DeviceCode::S, .number = 10}, BitValue::On);
   status = CommandCodec::encode_random_write_bits(
       config,
       std::span<const RandomWriteBitItem>(&s_random_write, 1),
@@ -6859,22 +8317,19 @@ void assert_s_device_rejected_for_profile(const ProtocolConfig& config) {
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
 
-  const RandomReadItem random_read {
+  const RandomReadWordItem random_read {
       .device = {.code = mcprotocol::serial::DeviceCode::S, .number = 10},
-      .double_word = false,
   };
   status = CommandCodec::encode_random_read(
       config,
-      RandomReadRequest {.items = std::span<const RandomReadItem>(&random_read, 1)},
+      RandomReadRequest {.word_items = std::span<const RandomReadWordItem>(&random_read, 1)},
       request_data,
       request_size);
   assert(!status.ok());
   assert(status.code == StatusCode::InvalidArgument);
 
-  const RandomWriteBitItem random_write {
-      .device = {.code = mcprotocol::serial::DeviceCode::S, .number = 10},
-      .value = BitValue::On,
-  };
+  const RandomWriteBitItem random_write(
+      {.code = mcprotocol::serial::DeviceCode::S, .number = 10}, BitValue::On);
   status = CommandCodec::encode_random_write_bits(
       config,
       std::span<const RandomWriteBitItem>(&random_write, 1),
@@ -6915,7 +8370,7 @@ void assert_s_device_rejected_for_profile(const ProtocolConfig& config) {
   assert(status.code == StatusCode::InvalidArgument);
 
   const MonitorRegistration monitor {
-      .items = std::span<const RandomReadItem>(&random_read, 1),
+      .word_items = std::span<const RandomReadWordItem>(&random_read, 1),
   };
   status = CommandCodec::encode_register_monitor(config, monitor, request_data, request_size);
   assert(!status.ok());
@@ -6968,25 +8423,25 @@ void test_iq_f_rejects_unsupported_plain_device_families() {
     assert(!status.ok());
     assert(status.code == StatusCode::InvalidArgument);
 
-    const bool double_word = code == mcprotocol::serial::DeviceCode::LTN ||
-                             code == mcprotocol::serial::DeviceCode::LSTN;
-    const RandomReadItem read_item {.device = {.code = code, .number = 0}, .double_word = double_word};
+    const RandomReadWordItem read_word {.device = {.code = code, .number = 0}};
+    const RandomReadDWordItem read_dword {.device = {.code = code, .number = 0}};
     status = CommandCodec::encode_random_read(
         config,
-        RandomReadRequest {.items = std::span<const RandomReadItem>(&read_item, 1)},
+        RandomReadRequest {
+            .word_items = std::span<const RandomReadWordItem>(&read_word, 1),
+            .dword_items = std::span<const RandomReadDWordItem>(&read_dword, 1),
+        },
         request_data,
         request_size);
     assert(!status.ok());
     assert(status.code == StatusCode::InvalidArgument);
 
-    const RandomWriteWordItem write_item {
-        .device = {.code = code, .number = 0},
-        .value = double_word ? 0x12345678U : 0x1234U,
-        .double_word = double_word,
-    };
+    const RandomWriteWordItem write_word({.code = code, .number = 0}, 0x1234U);
+    const RandomWriteDWordItem write_dword({.code = code, .number = 0}, 0x12345678U);
     status = CommandCodec::encode_random_write_words(
         config,
-        std::span<const RandomWriteWordItem>(&write_item, 1),
+        std::span<const RandomWriteWordItem>(&write_word, 1),
+        std::span<const RandomWriteDWordItem>(&write_dword, 1),
         request_data,
         request_size);
     assert(!status.ok());
@@ -7031,7 +8486,7 @@ void test_iq_f_rejects_unsupported_plain_device_families() {
     assert(!status.ok());
     assert(status.code == StatusCode::InvalidArgument);
 
-    const RandomWriteBitItem write_bit {.device = {.code = code, .number = 0}, .value = BitValue::On};
+    const RandomWriteBitItem write_bit({.code = code, .number = 0}, BitValue::On);
     status = CommandCodec::encode_random_write_bits(
         config,
         std::span<const RandomWriteBitItem>(&write_bit, 1),
@@ -7141,12 +8596,12 @@ void test_iq_f_rejects_unsupported_special_routes() {
   assert(!status.ok());
   assert(status.code == StatusCode::UnsupportedConfiguration);
 
-  const RandomReadItem monitor_item {
+  const RandomReadWordItem monitor_item {
       .device = {.code = mcprotocol::serial::DeviceCode::D, .number = 0},
   };
   status = CommandCodec::encode_register_monitor(
       config,
-      MonitorRegistration {.items = std::span<const RandomReadItem>(&monitor_item, 1)},
+      MonitorRegistration {.word_items = std::span<const RandomReadWordItem>(&monitor_item, 1)},
       request_data,
       request_size);
   assert(!status.ok());
@@ -7158,7 +8613,9 @@ void test_iq_f_rejects_unsupported_special_routes() {
 
   status = CommandCodec::encode_read_monitor(
       config,
-      std::span<const RandomReadItem>(&monitor_item, 1),
+      MonitorRegistration {
+          .word_items = std::span<const RandomReadWordItem>(&monitor_item, 1),
+      },
       request_data,
       request_size);
   assert(!status.ok());
@@ -7420,8 +8877,10 @@ int main() {
   test_validate_ascii_c1_config_and_reject_binary();
   test_validate_c4_routed_access_and_connected_station_only_commands();
   test_route_types_require_frame_specific_station_and_network();
+  test_self_station_topology_is_typed_required_and_strict();
   test_response_route_identity_is_strict();
   test_pc_targets_are_required_typed_and_frame_specific();
+  test_c4_destination_module_is_required_typed_and_validated();
   test_encode_ascii_format2_request_inserts_block_number();
   test_decode_ascii_format2_partial_header_returns_incomplete();
   test_decode_ascii_format1_partial_header_returns_incomplete();
@@ -7458,6 +8917,7 @@ int main() {
   test_encode_ascii_c1_extended_file_register_random_write_a_request_shape();
   test_encode_ascii_c1_extended_file_register_monitor_a_request_shape();
   test_validate_e1_config_and_route_constraints();
+  test_response_timeout_and_e1_monitoring_timer_are_independent();
   test_encode_ascii_e1_batch_read_words_request_shape();
   test_encode_binary_e1_batch_read_bits_request_shape();
   test_encode_ascii_e1_l_device_uses_internal_relay_code_and_s_is_rejected();
@@ -7526,6 +8986,7 @@ int main() {
   test_encode_batch_read_bits_binary_c24_limit_is_7904_points();
   test_c1_e1_word_unit_bit_device_limits_and_alignment();
   test_encode_random_write_words_ascii_matches_manual();
+  test_explicit_random_width_contract_and_boundaries();
   test_encode_random_read_binary_iqr_layout();
   test_encode_random_read_binary_ql_layout();
   test_encode_random_write_words_binary_iqr_layout();
@@ -7566,17 +9027,21 @@ int main() {
   test_client_ascii_c1_loopback_roundtrip();
   test_client_binary_e1_extended_file_register_monitor_roundtrip();
   test_client_remote_control_and_password_roundtrips();
+  test_client_remote_run_validation_and_unknown_outcome();
+  test_client_remote_pause_validation_and_unknown_outcome();
   test_client_clear_error_information_roundtrip();
   test_client_c24_small_command_roundtrips();
-  test_client_remote_reset_roundtrip();
-  test_client_remote_reset_timeout_without_response_is_success();
-  test_client_init_sequence_timeout_without_response_is_success();
-  test_client_global_signal_timeout_without_response_is_success();
+  test_client_remote_reset_completes_when_transmission_completes();
+  test_client_remote_reset_does_not_wait_for_response_timeout();
+  test_client_init_sequence_timeout_is_not_success();
+  test_client_global_signal_timeout_is_not_success();
   test_client_link_direct_random_read_roundtrip();
   test_client_link_direct_register_monitor_roundtrip();
   test_client_ascii_c1_register_monitor_roundtrip();
   test_client_ascii_c1_extended_file_register_monitor_roundtrip();
   test_client_timeout();
+  test_client_response_timeout_is_wrap_safe_and_not_extended_by_rx();
+  test_inter_byte_timeout_contract_and_chunk_boundaries();
   test_client_ascii_format4_resynchronizes_on_stale_ack();
   test_client_write_rejects_unexpected_success_data();
   test_encode_random_read_rejects_long_contact_coil_devices();

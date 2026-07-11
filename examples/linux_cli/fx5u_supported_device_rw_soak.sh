@@ -26,10 +26,26 @@ fi
 if [[ -n "${MCPROTOCOL_PC_TARGET:-}" ]]; then
   export MCPROTOCOL_PC_TARGET
 fi
+if [[ -n "${MCPROTOCOL_MODULE_TARGET:-}" ]]; then
+  export MCPROTOCOL_MODULE_TARGET
+fi
+if [[ -n "${MCPROTOCOL_TOPOLOGY:-}" ]]; then
+  export MCPROTOCOL_TOPOLOGY
+fi
+if [[ -n "${MCPROTOCOL_SELF_STATION:-}" ]]; then
+  export MCPROTOCOL_SELF_STATION
+fi
+if [[ -n "${MCPROTOCOL_E1_MONITORING_TIMER_MS:-}" ]]; then
+  export MCPROTOCOL_E1_MONITORING_TIMER_MS
+fi
 : "${MCPROTOCOL_PLC_PROFILE:?set MCPROTOCOL_PLC_PROFILE explicitly, e.g. melsec:iq-f}"
 export MCPROTOCOL_PLC_PROFILE
-export MCPROTOCOL_RESPONSE_TIMEOUT_MS="${MCPROTOCOL_RESPONSE_TIMEOUT_MS:-8000}"
-export MCPROTOCOL_INTER_BYTE_TIMEOUT_MS="${MCPROTOCOL_INTER_BYTE_TIMEOUT_MS:-1000}"
+if [[ -n "${MCPROTOCOL_RESPONSE_TIMEOUT_MS:-}" ]]; then
+  export MCPROTOCOL_RESPONSE_TIMEOUT_MS
+fi
+if [[ -n "${MCPROTOCOL_INTER_BYTE_TIMEOUT_MS:-}" ]]; then
+  export MCPROTOCOL_INTER_BYTE_TIMEOUT_MS
+fi
 export MCPROTOCOL_TARGETS="${MCPROTOCOL_TARGETS:-bit:STS10 bit:STC10 word:STN10 bit:TS10 bit:TC10 word:TN10 bit:CS10 bit:CC10 word:CN10 bit:SB10 word:SW10 bit:X10 bit:Y10 bit:M100 bit:L100 bit:F100 bit:B10 word:D100 word:W10 word:Z10 word:R100}"
 
 exec "${script_dir}/supported_device_rw_soak.sh"

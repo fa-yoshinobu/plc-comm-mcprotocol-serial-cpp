@@ -18,22 +18,36 @@ struct LinkDirectDevice {
 };
 
 /// \brief One sparse `Jn\\...` item used by native random-read and monitor registration.
-struct LinkDirectRandomReadItem {
+struct LinkDirectRandomReadWordItem {
   LinkDirectDevice device {};
-  bool double_word = false;
 };
 
 /// \brief One sparse `Jn\\...` word item used by native random word-write.
+///
+/// Device and value must be supplied together. Explicit zero is valid.
 struct LinkDirectRandomWriteWordItem {
-  LinkDirectDevice device {};
-  std::uint32_t value = 0;
-  bool double_word = false;
+  LinkDirectRandomWriteWordItem() = delete;
+  constexpr LinkDirectRandomWriteWordItem(
+      LinkDirectDevice target_device,
+      std::uint16_t write_value) noexcept
+      : device(target_device), value(write_value) {}
+
+  LinkDirectDevice device;
+  std::uint16_t value;
 };
 
 /// \brief One sparse `Jn\\...` bit item used by native random bit-write.
+///
+/// Device and value must be supplied together. Explicit `Off` is valid.
 struct LinkDirectRandomWriteBitItem {
-  LinkDirectDevice device {};
-  BitValue value = BitValue::Off;
+  LinkDirectRandomWriteBitItem() = delete;
+  constexpr LinkDirectRandomWriteBitItem(
+      LinkDirectDevice target_device,
+      BitValue write_value) noexcept
+      : device(target_device), value(write_value) {}
+
+  LinkDirectDevice device;
+  BitValue value;
 };
 
 /// \brief One `Jn\\...` block used by native multi-block read.
@@ -64,7 +78,7 @@ struct LinkDirectMultiBlockWriteRequest {
 
 /// \brief `Jn\\...` monitor registration payload (`0801` + device extension specification).
 struct LinkDirectMonitorRegistration {
-  std::span<const LinkDirectRandomReadItem> items {};
+  std::span<const LinkDirectRandomReadWordItem> word_items {};
 };
 
 namespace link_direct_detail {
