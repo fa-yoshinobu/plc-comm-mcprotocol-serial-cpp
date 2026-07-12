@@ -50,10 +50,11 @@
 | --- | --- | --- |
 | Some response bytes arrive, then the request fails with an inter-byte timeout. | No RX data chunk reached the library for the configured inactivity interval. This is separate from the fixed total response deadline. | Keep the 250 ms default unless the actual serial/adapter delivery gaps require an explicit positive value. After an unsequenced timeout, reset/drain the transport and reconfigure before another request; do not reuse partial response bytes. |
 
-## Remote RUN or PAUSE result is unknown
+## A state-changing result is unknown
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
+| A write, remote-control, password, user-frame, signal, mode-switch, or initialization command returns `StatusCode::OperationOutcomeUnknown`. | Transmission may have begun, but the PLC result could not be confirmed. The requested state change may already have occurred. | Do not resend automatically. Inspect the affected PLC state and reset/reopen the transport when required before deciding the next operation. |
 | Remote RUN returns `StatusCode::OperationOutcomeUnknown`. | Transmission started, but transport failure, timeout, cancellation, or an invalid response prevented confirmation. The PLC may already have applied the requested RUN and clear policies. | Do not resend automatically. Inspect the PLC state, reset/reopen the transport when required, and decide the next action explicitly. |
 | `remote_run()` does not compile, or CLI `remote-run` exits with usage. | Conflict and clear policies are mandatory. | Pass `RemoteOperationMode::{DoNotExecuteForcibly, ExecuteForcibly}` and one `RemoteRunClearMode`, or CLI `no-force|force` plus `no-clear|outside-latch|all-clear`. |
 | Remote PAUSE returns `StatusCode::OperationOutcomeUnknown`. | PAUSE transmission started, but its result was not confirmed. The library does not retry or escalate to forced execution. | Inspect the PLC state before deciding the next operation. Reopen/reset the transport when required. |

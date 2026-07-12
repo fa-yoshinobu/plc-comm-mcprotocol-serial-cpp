@@ -385,6 +385,13 @@ The CLI follows the same rule: use `random-write-words D100=0`, `random-write-dw
 After transmission begins, an unconfirmed random-write result is `OperationOutcomeUnknown`, because
 the PLC may already have changed. The library clears the pending frame and never retries the write.
 
+This unknown-outcome rule applies to every state-changing command, including contiguous and block
+writes, buffer and file-register writes, remote control, password lock state, user-frame changes,
+global signal control, mode switching, and transmission-sequence initialization. A timeout,
+transport failure, cancellation, malformed response, or other result that cannot confirm the PLC
+state is not reported as a definite pre-send failure. Inspect the target state before deciding what
+to do next; the library does not resend automatically.
+
 Remote RUN always requires two explicit decisions. `RemoteOperationMode` selects whether a RUN
 conflict is handled forcibly. `RemoteRunClearMode` selects whether device state is retained,
 cleared outside the latch range, or cleared completely. There is no overload that infers either

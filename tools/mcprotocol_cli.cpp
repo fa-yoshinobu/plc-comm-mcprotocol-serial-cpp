@@ -513,7 +513,7 @@ void print_usage() {
       "  mcprotocol_cli [options] remote-reset\n"
       "  mcprotocol_cli [options] global-signal on|off current|x1a|x1b [STATION]\n"
       "  mcprotocol_cli [options] init-sequence\n"
-      "  mcprotocol_cli [options] recover-c24 [eot|cl]\n"
+      "  mcprotocol_cli [options] recover-c24 eot|cl\n"
       "\n"
       "  User Frame and File Register:\n"
       "  mcprotocol_cli [options] read-user-frame FRAME_NO\n"
@@ -598,8 +598,8 @@ void print_usage() {
       "  error-clear sends C24 clear-error-information (1617); it is not the E71 COM.ERR-only variant.\n"
       "  remote-reset completes when request transmission finishes; it does not wait for a response or confirm PLC state.\n"
       "  global-signal maps to C24 command 1618 on 2C/3C/4C; STATION defaults to 0.\n"
-      "  init-sequence maps to 1615 and is binary 4C format-5 only; a missing response is a timeout.\n"
-      "  recover-c24 sends ASCII EOT CRLF by default; pass cl to send CL CRLF.\n"
+      "  init-sequence maps to 1615 and is binary 4C format-5 only; an unconfirmed result is outcome-unknown.\n"
+      "  recover-c24 requires eot or cl explicitly; no recovery control code is inferred.\n"
       "  Use recover-c24 after timeout or mixed-response states on C24 ASCII links; no reply is expected.\n"
       "  read-native-qualified-words / write-native-qualified-words use the native 0401/1401 Un\\G/Un\\HG route when the selected profile supports it.\n"
       "  read-qualified-words / write-qualified-words expose the 0601/1601 helper route; profiles that require native-qualified access reject it.\n"
@@ -1820,7 +1820,7 @@ void print_usage() {
     case CommandKind::LockRemotePassword:
       return options.command_argc == 1;
     case CommandKind::RecoverC24:
-      return options.command_argc <= 1;
+      return options.command_argc == 1;
     case CommandKind::Loopback:
       return options.command_argc == 1;
     case CommandKind::ReadUserFrame:
@@ -2008,7 +2008,7 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
     std::string_view arg,
     std::byte& out_control_code,
     std::string_view& out_name) {
-  if (arg.empty() || equals_ignore_case(arg, "eot")) {
+  if (equals_ignore_case(arg, "eot")) {
     out_control_code = std::byte {0x04U};
     out_name = "EOT";
     return true;
@@ -3662,8 +3662,7 @@ int main(int argc, char** argv) {
     case CommandKind::RecoverC24: {
       std::byte control_code {};
       std::string_view control_name;
-      const std::string_view requested_kind =
-          options.command_argc == 0 ? std::string_view {} : std::string_view(options.command_argv[0]);
+      const std::string_view requested_kind(options.command_argv[0]);
       if (!parse_c24_recovery_kind(requested_kind, control_code, control_name)) {
         std::fprintf(stderr, "recover-c24 mode must be 'eot' or 'cl'\n");
         return 1;

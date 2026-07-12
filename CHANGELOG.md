@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - Docs: Removed references to the independently maintained cross-repository verification run from library-owned profile records and terminology.
+- Library: A rejected concurrent `async_*` call now returns `Busy` before mutating the active
+  request's output spans, copied request items, monitor metadata, or response-size expectations.
+- Library: Every transmitted state-changing command now reports `OperationOutcomeUnknown` when its
+  result cannot be confirmed. This includes contiguous, extended, block, buffer, remote-control,
+  password, user-frame, signal, mode-switch, and initialization operations; host-sync wrappers use
+  the same contract and never retry automatically.
+- Library: Unsequenced receive overflow and decode errors now require transport reset and client
+  reconfiguration before reuse, preventing stale response tails from completing a later request.
+- Tooling: `recover-c24` now requires an explicit `eot` or `cl` argument; omission is rejected
+  before the serial device is opened.
 ### BREAKING
 
 - Library: `notify_tx_complete` now requires an explicit transport status. RS-485 TX begin/end

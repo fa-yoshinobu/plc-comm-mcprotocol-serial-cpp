@@ -368,6 +368,11 @@ Status MelsecSerialClient::notify_tx_complete(
     return ok_status();
   }
 
+  if (operation_ == OperationKind::RemoteReset) {
+    complete(remote_reset_request_sent_status());
+    return ok_status();
+  }
+
   if (cancel_requested_during_tx_) {
     transport_reset_required_ = !active_format2_block_number_valid_;
     if (active_operation_outcome_can_be_unknown()) {
@@ -375,11 +380,6 @@ Status MelsecSerialClient::notify_tx_complete(
     } else {
       complete(cancelled_status());
     }
-    return ok_status();
-  }
-
-  if (operation_ == OperationKind::RemoteReset) {
-    complete(remote_reset_request_sent_status());
     return ok_status();
   }
 
@@ -408,9 +408,7 @@ void MelsecSerialClient::on_rx_bytes(
 
   const auto incoming = as_u8_span(bytes);
   if ((rx_frame_size_ + incoming.size()) > rx_frame_.size()) {
-    if (active_operation_outcome_can_be_unknown()) {
-      transport_reset_required_ = !active_format2_block_number_valid_;
-    }
+    transport_reset_required_ = !active_format2_block_number_valid_;
     complete(active_unconfirmed_failure_status(
         make_status(StatusCode::BufferTooSmall, "Receive frame buffer overflow")));
     return;
@@ -442,9 +440,7 @@ void MelsecSerialClient::on_rx_bytes(
     }
 
     if (stream_decode.status == DecodeStatus::Error) {
-      if (active_operation_outcome_can_be_unknown()) {
-        transport_reset_required_ = !active_format2_block_number_valid_;
-      }
+      transport_reset_required_ = !active_format2_block_number_valid_;
       complete(active_unconfirmed_failure_status(stream_decode.decode.error));
       return;
     }
@@ -461,6 +457,9 @@ void MelsecSerialClient::on_rx_bytes(
         std::span<const std::uint8_t>(
             stream_decode.decode.frame.response_data.data(),
             stream_decode.decode.frame.response_size));
+    if (!parse_status.ok() && active_operation_outcome_can_be_unknown()) {
+      transport_reset_required_ = !active_format2_block_number_valid_;
+    }
     complete(active_unconfirmed_failure_status(parse_status));
     return;
   }
@@ -515,7 +514,7 @@ void MelsecSerialClient::cancel() noexcept {
       default:
         complete(make_status(
             StatusCode::OperationOutcomeUnknown,
-            "Random write was transmitted but response waiting was cancelled; PLC data state is unknown"));
+            "A state-changing request was transmitted but response waiting was cancelled; PLC state is unknown"));
         break;
     }
     return;
@@ -531,16 +530,9 @@ Status MelsecSerialClient::start_request(
     void* user) noexcept {
   (void)now_ms;
 
-  if (!configured_) {
-    return make_status(StatusCode::InvalidArgument, "Client must be configured before use");
-  }
-  if (busy_) {
-    return make_status(StatusCode::Busy, "Only one request can be in flight at a time");
-  }
-  if (transport_reset_required_) {
-    return make_status(
-        StatusCode::Transport,
-        "Transport reset and client reconfiguration are required after a timeout");
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
   }
   if (callback == nullptr) {
     return make_status(StatusCode::InvalidArgument, "Completion callback must not be null");
@@ -915,80 +907,87 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
   return make_status(StatusCode::Parse, "Unknown operation kind");
 }
 
+Status MelsecSerialClient::validate_request_admission() const noexcept {
+  if (!configured_) {
+    return make_status(StatusCode::InvalidArgument, "Client must be configured before use");
+  }
+  if (busy_) {
+    return make_status(StatusCode::Busy, "Only one request can be in flight at a time");
+  }
+  if (transport_reset_required_) {
+    return make_status(
+        StatusCode::Transport,
+        "Transport reset and client reconfiguration are required after an ambiguous unsequenced response or transport failure");
+  }
+  return ok_status();
+}
+
 Status MelsecSerialClient::active_timeout_status(const char* timeout_message) const noexcept {
-  if (operation_ == OperationKind::RemoteRun) {
+  if (active_operation_outcome_can_be_unknown()) {
     return make_status(
         StatusCode::OperationOutcomeUnknown,
-        "Remote RUN was transmitted but no confirmed response was received; PLC RUN state is unknown");
+        "A state-changing request was transmitted but no confirmed response was received; PLC state is unknown");
   }
-  if (operation_ == OperationKind::RemotePause) {
-    return make_status(
-        StatusCode::OperationOutcomeUnknown,
-        "Remote PAUSE was transmitted but no confirmed response was received; PLC PAUSE state is unknown");
-  }
-#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
-  if (operation_ == OperationKind::RandomWriteWords ||
-      operation_ == OperationKind::RandomWriteBits) {
-    return make_status(
-        StatusCode::OperationOutcomeUnknown,
-        "Random write was transmitted but no confirmed response was received; PLC data state is unknown");
-  }
-#endif
   return make_status(StatusCode::Timeout, timeout_message);
 }
 
 Status MelsecSerialClient::active_transport_failure_status(Status transport_status) const noexcept {
-  if (operation_ == OperationKind::RemoteRun) {
+  if (active_operation_outcome_can_be_unknown()) {
     return make_status(
         StatusCode::OperationOutcomeUnknown,
-        "Remote RUN transmission may have started before transport failure; PLC RUN state is unknown");
+        "A state-changing request may have started before transport failure; PLC state is unknown");
   }
-  if (operation_ == OperationKind::RemotePause) {
-    return make_status(
-        StatusCode::OperationOutcomeUnknown,
-        "Remote PAUSE transmission may have started before transport failure; PLC PAUSE state is unknown");
-  }
-#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
-  if (operation_ == OperationKind::RandomWriteWords ||
-      operation_ == OperationKind::RandomWriteBits) {
-    return make_status(
-        StatusCode::OperationOutcomeUnknown,
-        "Random write transmission may have started before transport failure; PLC data state is unknown");
-  }
-#endif
   return transport_status;
 }
 
 Status MelsecSerialClient::active_unconfirmed_failure_status(Status failure_status) const noexcept {
   if (active_operation_outcome_can_be_unknown() && !failure_status.ok() &&
       failure_status.code != StatusCode::PlcError) {
-    if (operation_ == OperationKind::RemoteRun) {
-      return make_status(
-          StatusCode::OperationOutcomeUnknown,
-          "Remote RUN response could not be confirmed; PLC RUN state is unknown");
-    }
-    if (operation_ == OperationKind::RemotePause) {
-      return make_status(
-          StatusCode::OperationOutcomeUnknown,
-          "Remote PAUSE response could not be confirmed; PLC PAUSE state is unknown");
-    }
     return make_status(
         StatusCode::OperationOutcomeUnknown,
-        "Random write response could not be confirmed; PLC data state is unknown");
+        "The response to a state-changing request could not be confirmed; PLC state is unknown");
   }
   return failure_status;
 }
 
 bool MelsecSerialClient::active_operation_outcome_can_be_unknown() const noexcept {
-  if (operation_ == OperationKind::RemoteRun || operation_ == OperationKind::RemotePause) {
-    return true;
-  }
+  switch (operation_) {
+    case OperationKind::BatchWriteWords:
+    case OperationKind::WriteExtendedFileRegisterWords:
+    case OperationKind::DirectWriteExtendedFileRegisterWords:
+    case OperationKind::BatchWriteBits:
+    case OperationKind::ExtendedBatchWriteWords:
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
-  return operation_ == OperationKind::RandomWriteWords ||
-         operation_ == OperationKind::RandomWriteBits;
-#else
-  return false;
+    case OperationKind::RandomWriteWords:
+    case OperationKind::RandomWriteExtendedFileRegisterWords:
+    case OperationKind::RandomWriteBits:
 #endif
+#if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
+    case OperationKind::MultiBlockWrite:
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
+    case OperationKind::WriteHostBuffer:
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
+    case OperationKind::WriteModuleBuffer:
+#endif
+    case OperationKind::RemoteRun:
+    case OperationKind::RemoteStop:
+    case OperationKind::RemotePause:
+    case OperationKind::RemoteLatchClear:
+    case OperationKind::UnlockRemotePassword:
+    case OperationKind::LockRemotePassword:
+    case OperationKind::ClearErrorInformation:
+    case OperationKind::RemoteReset:
+    case OperationKind::WriteUserFrame:
+    case OperationKind::DeleteUserFrame:
+    case OperationKind::ControlGlobalSignal:
+    case OperationKind::SwitchSerialModuleMode:
+    case OperationKind::InitializeTransmissionSequence:
+      return true;
+    default:
+      return false;
+  }
 }
 
 void MelsecSerialClient::complete(Status status) noexcept {
@@ -1073,6 +1072,10 @@ Status MelsecSerialClient::async_batch_read_words(
     std::span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   batch_read_words_request_ = request;
   out_words_ = out_words;
   std::size_t request_size = 0;
@@ -1090,6 +1093,10 @@ Status MelsecSerialClient::async_read_extended_file_register_words(
     std::span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   extended_file_register_read_request_ = request;
   out_words_ = out_words;
   std::size_t request_size = 0;
@@ -1116,6 +1123,10 @@ Status MelsecSerialClient::async_direct_read_extended_file_register_words(
     std::span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   direct_extended_file_register_read_request_ = request;
   out_words_ = out_words;
   std::size_t request_size = 0;
@@ -1143,6 +1154,10 @@ Status MelsecSerialClient::async_link_direct_batch_read_words(
     std::span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   batch_read_words_request_ = BatchReadWordsRequest(device.device, points);
   out_words_ = out_words;
   std::size_t request_size = 0;
@@ -1165,6 +1180,10 @@ Status MelsecSerialClient::async_batch_read_bits(
     std::span<BitValue> out_bits,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   batch_read_bits_request_ = request;
   out_bits_ = out_bits;
   std::size_t request_size = 0;
@@ -1183,6 +1202,10 @@ Status MelsecSerialClient::async_link_direct_batch_read_bits(
     std::span<BitValue> out_bits,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   batch_read_bits_request_ = BatchReadBitsRequest(device.device, points);
   out_bits_ = out_bits;
   std::size_t request_size = 0;
@@ -1314,6 +1337,10 @@ Status MelsecSerialClient::async_extended_batch_read_words(
     std::span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   extended_batch_words_device_ = device;
   extended_batch_words_points_ = points;
   out_words_ = out_words;
@@ -1337,6 +1364,10 @@ Status MelsecSerialClient::async_extended_batch_write_words(
     std::span<const std::uint16_t> words,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   extended_batch_words_device_ = device;
   extended_batch_words_points_ = static_cast<std::uint16_t>(words.size());
   std::size_t request_size = 0;
@@ -1361,6 +1392,10 @@ Status MelsecSerialClient::async_random_read(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   if (request.word_items.size() > pending_random_word_items_.size() ||
       request.dword_items.size() > pending_random_dword_items_.size() ||
       request.word_items.size() + request.dword_items.size() > kMaxRandomAccessItems) {
@@ -1403,6 +1438,10 @@ Status MelsecSerialClient::async_link_direct_random_read(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   if (word_items.size() > pending_random_word_items_.size()) {
     return make_status(StatusCode::InvalidArgument, "Link direct random read item count exceeds the client limit");
   }
@@ -1563,6 +1602,10 @@ Status MelsecSerialClient::async_multi_block_read(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   if (request.blocks.size() > pending_multi_blocks_.size()) {
     return make_status(StatusCode::InvalidArgument, "Multi-block read block count exceeds the client limit");
   }
@@ -1601,6 +1644,10 @@ Status MelsecSerialClient::async_link_direct_multi_block_read(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   if (request.blocks.size() > pending_multi_blocks_.size()) {
     return make_status(StatusCode::InvalidArgument, "Link direct multi-block read block count exceeds the client limit");
   }
@@ -1691,6 +1738,10 @@ Status MelsecSerialClient::async_register_monitor(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   if (request.word_items.size() > pending_random_word_items_.size() ||
       request.dword_items.size() > pending_random_dword_items_.size() ||
       request.word_items.size() + request.dword_items.size() > kMaxMonitorItems) {
@@ -1723,6 +1774,10 @@ Status MelsecSerialClient::async_register_extended_file_register_monitor(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   if (request.items.size() > pending_extended_file_register_items_.size()) {
     return make_status(
         StatusCode::InvalidArgument,
@@ -1765,6 +1820,10 @@ Status MelsecSerialClient::async_link_direct_register_monitor(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   if (request.word_items.size() > pending_random_word_items_.size()) {
     return make_status(StatusCode::InvalidArgument, "Link direct monitor item count exceeds the client limit");
   }
@@ -1798,6 +1857,10 @@ Status MelsecSerialClient::async_read_monitor(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   if (!monitor_registered_) {
     return make_status(StatusCode::InvalidArgument, "Monitor data has not been registered");
   }
@@ -1839,6 +1902,10 @@ Status MelsecSerialClient::async_read_extended_file_register_monitor(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   if (!extended_file_register_monitor_registered_) {
     return make_status(
         StatusCode::InvalidArgument,
@@ -1885,6 +1952,10 @@ Status MelsecSerialClient::async_read_host_buffer(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   host_buffer_read_request_ = request;
   out_words_ = out_words;
 
@@ -1933,6 +2004,10 @@ Status MelsecSerialClient::async_read_module_buffer(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   module_buffer_read_request_ = request;
   out_bytes_ = out_bytes;
 
@@ -1980,6 +2055,10 @@ Status MelsecSerialClient::async_read_cpu_model(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   out_cpu_model_ = &out_info;
 
   std::size_t request_size = 0;
@@ -2116,6 +2195,10 @@ Status MelsecSerialClient::async_read_user_frame(
     UserFrameRegistrationData& out_data,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   user_frame_read_request_ = request;
   out_user_frame_data_ = &out_data;
   std::size_t request_size = 0;
@@ -2221,6 +2304,10 @@ Status MelsecSerialClient::async_loopback(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   if (hex_ascii.size() > pending_loopback_.size()) {
     return make_status(StatusCode::InvalidArgument, "Loopback request exceeds the client limit");
   }

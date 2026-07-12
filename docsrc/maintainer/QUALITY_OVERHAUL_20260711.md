@@ -31,8 +31,8 @@ Acceptance criteria:
 - [x] Tests added or updated for the acceptance criteria that do not require hardware.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; path lifetime, NUL validation, and pre-open ordering are deterministic API/backend properties and make no claim about a physical serial device).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
 - [ ] Final acceptance criteria verified and the item marked complete.
@@ -56,8 +56,8 @@ Acceptance criteria:
 - [x] Tests added or updated for the acceptance criteria that do not require hardware.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; required-value parsing, zero rejection, and absence of baud fallback are deterministic pre-open properties).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
 - [ ] Final acceptance criteria verified and the item marked complete.
@@ -83,8 +83,8 @@ Acceptance criteria:
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; public type shape, mode/width validation, and Windows/POSIX branch removal are covered before OS handle access and make no signal-quality claim).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
 - [ ] Final acceptance criteria verified and the item marked complete.
@@ -108,8 +108,8 @@ Acceptance criteria:
 - [x] Tests added or updated for the acceptance criteria that do not require hardware.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; accepted widths, invalid-width rejection, and backend mapping are deterministic configuration properties).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
 - [ ] Final acceptance criteria verified and the item marked complete.
@@ -134,8 +134,8 @@ Acceptance criteria:
 - [x] Tests added or updated for the public API acceptance criteria.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; enum membership, Windows DCB/POSIX termios mapping, CLI normalization, and no-fallback behavior are deterministic; actual PLC parity compatibility is outside this API decision).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
 - [ ] Final acceptance criteria verified and the item marked complete.
@@ -161,8 +161,8 @@ Acceptance criteria:
 - [x] Tests added or updated for the public API acceptance criteria.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; enum membership, DCB/termios mapping, and separation from RS-485 direction control are deterministic; this disposition does not claim that a particular adapter is wired for RTS/CTS).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
 - [ ] Final acceptance criteria verified and the item marked complete.
@@ -192,8 +192,8 @@ timeouts and decode failures do not mutate the configuration.
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   constructor shape, validation ordering, encoded-byte absence, and immutable session state are
   deterministic and covered without claiming a physical PLC result).
@@ -222,8 +222,8 @@ bits for Binary, and no error path changes mode or retries in another mode.
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   tagged API shape, serial validation, and no-fallback state are deterministic testable behavior).
 - [x] Documentation and final acceptance agree with the completed implementation.
@@ -252,8 +252,8 @@ to the selected format.
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   public input absence and frame/format decoder selection are compile-time/codec properties).
 - [x] Documentation and final acceptance agree with the completed implementation.
@@ -285,8 +285,8 @@ clean. Raw codec use is explicit through `FrameCodecContext::format2(number)`.
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   deterministic frame identity and state isolation are fully covered by codec/client tests, while
   existing Format2 hardware evidence remains unchanged).
@@ -317,8 +317,8 @@ values, and all codec/client entry points validate before producing bytes or ope
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   canonical membership and pre-transport rejection are deterministic validation behavior).
 - [x] Documentation and final acceptance agree with the completed implementation.
@@ -350,8 +350,8 @@ responses do not generate it or consume trailing checksum bytes as part of the c
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   checksum generation/parsing and no-retry state are deterministic codec/client behavior; existing
   hardware checksum evidence remains unchanged).
@@ -390,8 +390,8 @@ contract with mandatory typed PC, destination-module, topology, and self-station
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   construction, pre-transport validation, fixed HostStation bytes, and no-fallback behavior are
   deterministic API/codec/client contracts).
@@ -431,8 +431,8 @@ client discards complete mismatches while waiting. CLI/scripts require the same 
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   frame layout, strict parsing, identity comparison, and client stream isolation are covered by
   deterministic vectors and simulated client state; existing hardware support evidence is not
@@ -483,8 +483,8 @@ universally valid topology meaning.
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   mandatory construction, range validation, request bytes, response identity, and no-fallback
   behavior are deterministic contracts; existing hardware support evidence is unchanged).
@@ -534,8 +534,8 @@ constants and do not acquire a convenient typed selector without configuration e
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   selector construction, wire-width validation, request bytes, response identity, command routing,
   and no-fallback behavior are deterministic contracts; configuration-dependent module support
@@ -588,8 +588,8 @@ infer C24 station assignment or configuration-wide station-count constraints.
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   type construction, width validation, frame bytes, response identity, stream isolation, and
   no-fallback behavior are deterministic contracts; PLC topology assignment is documented without
@@ -648,8 +648,8 @@ policy, and Format2 identity-based reuse are covered.
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   defaults, validation, deadline math, request fields, and TX-completion state are deterministic;
   no existing hardware compatibility evidence is changed or promoted).
@@ -701,8 +701,8 @@ and Format2 late-response identity are covered.
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   defaults, value validation, clock math, chunk state, and timeout state transitions are
   deterministic; physical adapter gap characteristics remain user configuration).
@@ -750,8 +750,8 @@ unknown outcome, no retry, reset gating, and existing success roundtrips are cov
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   argument presence, enum validation, command bytes, retry absence, result classification, and
   state transitions are deterministic; no claim is made about a particular PLC's resulting state).
@@ -798,8 +798,8 @@ cancel, unknown outcome, no retry/escalation, and reset gating are covered.
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   argument presence, enum validation, command bytes, retry/escalation absence, result
   classification, and state transitions are deterministic; no PLC resulting state is claimed).
@@ -849,8 +849,8 @@ are covered. All repository verification below passed.
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   type separation, exact command bytes, response decoding, validation order, and no-TX behavior are
   deterministic, and no target PLC value or capability is claimed).
@@ -905,8 +905,8 @@ disabled builds, generated documentation, and packaged consumers are covered.
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   constructor availability, parser validation, exact wire values, no-TX behavior, outcome
   classification, reset gating, and retry absence are deterministic, and no PLC resulting state is
@@ -962,8 +962,8 @@ unknown control enums, and a no-change mode switch are covered with no-TX assert
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   constructor availability, compile-time traits, validation order, exact request bytes, and no-TX
   behavior are deterministic, and no PLC capability or resulting device state is claimed).
@@ -1017,16 +1017,63 @@ host tests, and all 12 PlatformIO environments are covered.
 - [x] Tests added or updated for every acceptance criterion.
 - [x] Relevant checks passed and evidence recorded.
 - [x] Codex self-review completed.
-- [ ] Claude source review completed (`pending user authorization`).
-- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   callback pairing, busy-state transitions, compile-time API shape, cancellation deferral, explicit
   status propagation, and transport-reset state are deterministic and claim no physical bus result).
 - [x] Documentation and final acceptance agree with the completed implementation.
 
+## MCS-CR-001: independent-review request-state and error-contract hardening
+
+Scope: async request admission, all state-changing async and host-sync operations, receive failure
+isolation, C24 recovery CLI input, tests, generated API reference, migration notes, and changelog.
+
+Target contract: a rejected concurrent request cannot alter the active request. Once transmission
+of any state-changing operation may have begun, an unconfirmed result is
+`OperationOutcomeUnknown`, never a definite pre-send failure and never an automatic retry.
+Unsequenced receive overflow or decode failure requires transport reset before reuse. C24 recovery
+always requires the operator to select EOT or CL explicitly.
+
+Compatibility impact: applications that previously treated timeouts, transport errors, or
+cancellation from write/control operations as definite non-execution must handle
+`OperationOutcomeUnknown`. `recover-c24` without `eot` or `cl` is rejected before serial open.
+
+Acceptance criteria:
+
+1. Every async wrapper that stores output spans, copied request items, request metadata, monitor
+   metadata, or loopback state checks configured/busy/reset admission before mutating that state.
+   A rejected second call returns `Busy`; the first request retains its exact frame, destination
+   storage, point count, and callback result.
+2. Every operation that can change PLC, module, password, frame-registration, signal, mode, or
+   transmission state returns `OperationOutcomeUnknown` after an unconfirmed post-transmission
+   timeout, transport failure, cancellation, decode failure, or response parse failure. Confirmed
+   PLC errors remain `PlcError`; Remote RESET with confirmed physical TX completion retains its
+   documented request-sent status even when cancellation was requested during TX.
+3. Host-sync state-changing wrappers apply the same unknown-outcome contract, close ambiguous
+   transport sessions as required, and never retry automatically.
+4. Receive overflow and decoder error set the unsequenced transport-reset gate for reads as well as
+   writes. Format2 retains block-identity isolation.
+5. CLI `recover-c24` accepts exactly one explicit case-insensitive `eot` or `cl` argument. Omission,
+   unknown values, and extra arguments fail before the serial device is opened.
+6. Full/reduced/ultra host builds, CTest, generated API drift, Markdown links, package consumers,
+   and the configured PlatformIO release matrix pass after the corrections.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
+- [x] Claude source review completed (`CLAUDE-MCS-20260712-01`; reviewed through `ec7f6b9`).
+- [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required;
+  request admission, error classification, reset gating, and CLI pre-open validation are
+  deterministic host/codec contracts and make no new hardware-support claim).
+- [x] Documentation and final acceptance agree with the completed implementation.
+
 ## Verification evidence
 
-- Build/test command: `run_ci.bat --build-dir build_win --with-platformio`, last passed 2026-07-12.
+- Build/test commands: `run_ci.bat --build-dir build_review --with-platformio` and
+  `release_check.bat`, last passed 2026-07-13 after MCS-CR-001.
 - Automated results: CMake/Ninja full host build passed; `codec_tests`,
   `standard_header_consumer`, and `cli_serial_config_tests` all passed (3/3); Markdown links and the
   generated API-reference drift check passed.
@@ -1043,6 +1090,13 @@ host tests, and all 12 PlatformIO environments are covered.
   CLI omission and unknown-value behavior, RS-485 separation, examples, scripts, docs, and generated
   API reference. It found and corrected uint8 truncation, stale CLI wrappers, POSIX string-view path
   termination, and invalid-reconfiguration state loss before this evidence was marked complete.
+- MCS-CR-001 evidence covers Busy-first admission before all shared in-flight state mutation;
+  preservation of the first request frame, output span, and callback; exhaustive classification of
+  every state-changing `OperationKind`; host-sync propagation; Remote RESET cancellation after
+  confirmed physical TX; read-side checksum/decode failure and RX overflow reset gating; exact CLI
+  argument count and pre-open rejection for `recover-c24`; updated public and generated docs; host
+  CTest 3/3; nine configured PlatformIO environments; packed PlatformIO consumers; release archive
+  verification; Markdown links; generated API drift; and `git diff --check`.
 - D-093/D-094/D-095/D-097 evidence covers deleted default/two-step construction; immutable tagged
   `c4_binary`, C-family `ascii(AsciiFrameKind, AsciiFormat, ...)`, and `e1(CodeMode, ...)` paths;
   required profile/route inputs; unknown enum and unsupported combination rejection; Binary
@@ -1146,5 +1200,8 @@ host tests, and all 12 PlatformIO environments are covered.
   outcome classification. Host CI passed 3/3 and all 12 PlatformIO environments passed. Generated
   API-reference, packaged consumers, Markdown links, scripts, and final diff checks are recorded
   after their final runs below.
-- Physical serial/PLC communication: not executed in this implementation batch.
-- Claude review: not executed; explicit user authorization is required for a future review batch.
+- Physical serial/PLC communication: not executed in this correction batch; no new hardware claim
+  was introduced and MCS-CR-001 records the deterministic-test disposition.
+- Claude review: `CLAUDE-MCS-20260712-01` was executed against `ec7f6b9`. All four findings were
+  accepted, corrected, self-reviewed, and reverified. The later `a403a4f` commit changed only
+  archived review-document references and did not alter runtime, tests, or the public API.

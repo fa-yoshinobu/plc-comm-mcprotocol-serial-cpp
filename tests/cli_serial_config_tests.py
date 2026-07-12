@@ -94,7 +94,17 @@ def main() -> int:
         "--hardware-flow",
         "none",
         "recover-c24",
+        "eot",
     ]
+    require_parse_error(
+        cli,
+        explicit_serial[:-1],
+        "recover-c24 without explicit recovery code",
+    )
+    require_open_error(cli, explicit_serial, "explicit recover-c24 eot")
+    explicit_cl = explicit_serial.copy()
+    explicit_cl[-1] = "cl"
+    require_open_error(cli, explicit_cl, "explicit recover-c24 cl")
     for option in (
         "--device",
         "--baud",
@@ -126,7 +136,7 @@ def main() -> int:
         invalid[invalid.index(option) + 1] = value
         require_validation_error(cli, invalid, label)
 
-    binary_seven = explicit_serial[:-1] + [
+    binary_seven = explicit_serial[:-2] + [
         "--frame",
         "c4-binary",
         "--plc-profile",
@@ -243,7 +253,7 @@ def main() -> int:
         require_parse_error(cli, invalid_inter_byte_text, label)
 
     remote_run = [
-        *explicit_serial[:-1],
+        *explicit_serial[:-2],
         "--frame",
         "c4-binary",
         "--plc-profile",
@@ -320,7 +330,7 @@ def main() -> int:
         )
 
     missing_sum_check = [
-        *explicit_serial[:-1],
+        *explicit_serial[:-2],
         "--frame",
         "c4-binary",
         "--plc-profile",
@@ -332,7 +342,7 @@ def main() -> int:
     require_parse_error(cli, missing_sum_check, "missing sum-check mode")
 
     missing_route = [
-        *explicit_serial[:-1],
+        *explicit_serial[:-2],
         "--frame",
         "c4-binary",
         "--plc-profile",
@@ -344,7 +354,7 @@ def main() -> int:
     require_parse_error(cli, missing_route, "missing route")
 
     host_with_station = [
-        *explicit_serial[:-1],
+        *explicit_serial[:-2],
         "--frame",
         "c4-binary",
         "--plc-profile",
@@ -360,7 +370,7 @@ def main() -> int:
     require_parse_error(cli, host_with_station, "host route with mutable station")
 
     multidrop_missing_station = [
-        *explicit_serial[:-1],
+        *explicit_serial[:-2],
         "--frame",
         "c4-binary",
         "--plc-profile",
@@ -382,7 +392,7 @@ def main() -> int:
     require_parse_error(cli, multidrop_missing_station, "multidrop missing station")
 
     multidrop_missing_network = [
-        *explicit_serial[:-1],
+        *explicit_serial[:-2],
         "--frame",
         "c4-binary",
         "--plc-profile",
@@ -404,7 +414,7 @@ def main() -> int:
     require_parse_error(cli, multidrop_missing_network, "4C multidrop missing network")
 
     explicit_zero_multidrop = [
-        *explicit_serial[:-1],
+        *explicit_serial[:-2],
         "--frame",
         "c4-binary",
         "--plc-profile",
@@ -429,7 +439,7 @@ def main() -> int:
     require_validation_error(cli, explicit_zero_multidrop, "explicit zero station and network")
 
     multidrop_missing_pc_target = [
-        *explicit_serial[:-1],
+        *explicit_serial[:-2],
         "--frame",
         "c4-binary",
         "--plc-profile",
@@ -550,7 +560,7 @@ def main() -> int:
         require_validation_error(cli, canonical_special, label)
 
     e1_raw_connected = [
-        *explicit_serial[:-1],
+        *explicit_serial[:-2],
         "--frame",
         "e1-binary",
         "--plc-profile",

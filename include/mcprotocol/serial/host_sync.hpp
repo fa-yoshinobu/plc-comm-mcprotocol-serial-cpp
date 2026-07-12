@@ -29,6 +29,8 @@ namespace mcprotocol::serial {
 ///
 /// Use it on Windows or POSIX hosts when you want a simpler bring-up path than manually driving
 /// `pending_tx_frame()`, `notify_tx_complete()`, `on_rx_bytes()`, and `poll()`.
+/// State-changing methods return `OperationOutcomeUnknown` whenever transmission may have begun
+/// but the PLC result cannot be confirmed. They are not retried automatically.
 class PosixSyncClient {
  public:
   PosixSyncClient() = default;

@@ -221,7 +221,7 @@ Status PosixSyncClient::remote_stop() noexcept {
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::remote_pause(RemoteOperationMode mode) noexcept {
@@ -244,7 +244,7 @@ Status PosixSyncClient::remote_latch_clear() noexcept {
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::unlock_remote_password(std::string_view remote_password) noexcept {
@@ -256,7 +256,7 @@ Status PosixSyncClient::unlock_remote_password(std::string_view remote_password)
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::lock_remote_password(std::string_view remote_password) noexcept {
@@ -268,7 +268,7 @@ Status PosixSyncClient::lock_remote_password(std::string_view remote_password) n
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::clear_error_information() noexcept {
@@ -279,7 +279,7 @@ Status PosixSyncClient::clear_error_information() noexcept {
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::remote_reset() noexcept {
@@ -290,7 +290,7 @@ Status PosixSyncClient::remote_reset() noexcept {
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::read_user_frame(
@@ -317,7 +317,7 @@ Status PosixSyncClient::write_user_frame(const UserFrameWriteRequest& request) n
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::delete_user_frame(const UserFrameDeleteRequest& request) noexcept {
@@ -329,7 +329,7 @@ Status PosixSyncClient::delete_user_frame(const UserFrameDeleteRequest& request)
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::control_global_signal(
@@ -342,7 +342,7 @@ Status PosixSyncClient::control_global_signal(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::switch_serial_module_mode(
@@ -355,7 +355,7 @@ Status PosixSyncClient::switch_serial_module_mode(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::initialize_c24_transmission_sequence() noexcept {
@@ -366,7 +366,7 @@ Status PosixSyncClient::initialize_c24_transmission_sequence() noexcept {
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::read_words(
@@ -665,7 +665,7 @@ Status PosixSyncClient::write_words(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::write_link_direct_words(
@@ -686,7 +686,7 @@ Status PosixSyncClient::write_link_direct_words(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::write_link_direct_bits(
@@ -707,7 +707,7 @@ Status PosixSyncClient::write_link_direct_bits(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::write_native_qualified_words(
@@ -728,7 +728,7 @@ Status PosixSyncClient::write_native_qualified_words(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::write_extended_file_register_words(
@@ -741,7 +741,7 @@ Status PosixSyncClient::write_extended_file_register_words(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::direct_write_extended_file_register_words(
@@ -754,7 +754,7 @@ Status PosixSyncClient::direct_write_extended_file_register_words(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::random_read(
@@ -853,7 +853,7 @@ Status PosixSyncClient::random_write_extended_file_register_words(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 Status PosixSyncClient::random_write_word(
@@ -1001,7 +1001,7 @@ Status PosixSyncClient::write_bits(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete();
+  return run_until_complete(true);
 }
 
 }  // namespace mcprotocol::serial

@@ -34,8 +34,12 @@ namespace mcprotocol::serial {
 /// 6. call `poll()` from the main loop or scheduler for timeout handling
 ///
 /// Output spans passed to `async_*` requests must remain valid until the completion callback fires.
+/// Only one request may be active. A second enabled `async_*` request returns `Busy` before
+/// changing the active request's output storage, request metadata, or monitor state.
 /// Cancelling during TX records the cancellation but does not complete the request until the UART
 /// reports physical TX completion or abort through `notify_tx_complete()`.
+/// After transmission may have begun, any unconfirmed state-changing command completes as
+/// `OperationOutcomeUnknown`; the client never retries it automatically.
 class MelsecSerialClient {
  public:
   MelsecSerialClient() = default;
@@ -55,7 +59,8 @@ class MelsecSerialClient {
 
   /// \brief Returns whether a request is currently in flight.
   [[nodiscard]] bool busy() const noexcept;
-  /// \brief Returns true after an unsequenced timeout until reset plus reconfiguration.
+  /// \brief Returns true after an unsequenced ambiguous receive/transport failure until reset plus
+  /// reconfiguration.
   ///
   /// Format2 has a per-request block identity and can discard its own late response. Other frame
   /// families cannot safely distinguish a same-route late response from the next request.
@@ -546,6 +551,7 @@ class MelsecSerialClient {
       std::size_t request_data_size,
       CompletionHandler callback,
       void* user) noexcept;
+  [[nodiscard]] Status validate_request_admission() const noexcept;
 
   [[nodiscard]] std::uint8_t expected_e1_response_subheader() const noexcept;
   [[nodiscard]] std::size_t expected_e1_success_response_data_size() const noexcept;

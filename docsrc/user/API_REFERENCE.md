@@ -1543,7 +1543,7 @@ Asynchronous MC protocol client for UART / serial integrations.
 
 The intended MCU-side workflow is: call configure() start an async_* request transmit pending_tx_frame() with the board UART layer call notify_tx_complete(now_ms, transport_status) when TX finishes or aborts feed received bytes with on_rx_bytes() call poll() from the main loop or scheduler for timeout handling
 
-Output spans passed to async_* requests must remain valid until the completion callback fires. Cancelling during TX records the cancellation but does not complete the request until the UART reports physical TX completion or abort through notify_tx_complete().
+Output spans passed to async_* requests must remain valid until the completion callback fires. Only one request may be active. A second enabled async_* request returns Busy before changing the active request's output storage, request metadata, or monitor state. Cancelling during TX records the cancellation but does not complete the request until the UART reports physical TX completion or abort through notify_tx_complete(). After transmission may have begun, any unconfirmed state-changing command completes as OperationOutcomeUnknown; the client never retries it automatically.
 
 #### Member Functions
 
@@ -1589,7 +1589,7 @@ Returns whether a request is currently in flight.
 bool mcprotocol::serial::MelsecSerialClient::requires_transport_reset() const noexcept
 ```
 
-Returns true after an unsequenced timeout until reset plus reconfiguration.
+Returns true after an unsequenced ambiguous receive/transport failure until reset plus reconfiguration.
 
 Format2 has a per-request block identity and can discard its own late response. Other frame families cannot safely distinguish a same-route late response from the next request.
 
@@ -2177,7 +2177,7 @@ This class is intentionally small:
 
 - it keeps the existing low-level client unchanged - it opens a host-side serial port - it runs one request synchronously from TX to completion - it exposes string-address helpers for common contiguous, sparse random, and monitor operations
 
-Use it on Windows or POSIX hosts when you want a simpler bring-up path than manually driving pending_tx_frame(), notify_tx_complete(), on_rx_bytes(), and poll().
+Use it on Windows or POSIX hosts when you want a simpler bring-up path than manually driving pending_tx_frame(), notify_tx_complete(), on_rx_bytes(), and poll(). State-changing methods return OperationOutcomeUnknown whenever transmission may have begun but the PLC result cannot be confirmed. They are not retried automatically.
 
 #### Member Functions
 

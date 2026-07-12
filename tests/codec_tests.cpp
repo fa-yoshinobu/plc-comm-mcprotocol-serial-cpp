@@ -6,6 +6,7 @@
 #include <cstring>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 #include "mcprotocol/serial/client.hpp"
 #include "mcprotocol/serial/high_level.hpp"
@@ -6279,6 +6280,153 @@ void completion_callback(void* user, Status status) {
   capture->status = status;
 }
 
+void test_client_busy_rejection_preserves_active_request_state() {
+  const auto config = make_binary_c4_config();
+  MelsecSerialClient client;
+  Status status = client.configure(config);
+  assert(status.ok());
+
+  const BatchReadWordsRequest active_request(
+      DeviceAddress {mcprotocol::serial::DeviceCode::D, 100U}, 1U);
+  const BatchReadWordsRequest rejected_request(
+      DeviceAddress {mcprotocol::serial::DeviceCode::D, 200U}, 1U);
+  std::array<std::uint16_t, 1> active_words {0xAAAAU};
+  std::array<std::uint16_t, 1> rejected_words {0xBBBBU};
+  CallbackCapture active_capture {};
+  CallbackCapture rejected_capture {};
+
+  status = client.async_batch_read_words(
+      0U, active_request, active_words, completion_callback, &active_capture);
+  assert(status.ok());
+  const std::vector<std::byte> active_tx(
+      client.pending_tx_frame().begin(), client.pending_tx_frame().end());
+
+  status = client.async_batch_read_words(
+      1U, rejected_request, rejected_words, completion_callback, &rejected_capture);
+  assert(status.code == StatusCode::Busy);
+  assert(!rejected_capture.called);
+  assert(std::equal(
+      active_tx.begin(), active_tx.end(), client.pending_tx_frame().begin(), client.pending_tx_frame().end()));
+
+  CpuModelInfo rejected_model {};
+  status = client.async_read_cpu_model(
+      2U, rejected_model, completion_callback, &rejected_capture);
+  assert(status.code == StatusCode::Busy);
+  assert(!rejected_capture.called);
+
+  status = client.notify_tx_complete(3U, mcprotocol::serial::ok_status());
+  assert(status.ok());
+  const std::array<std::uint8_t, 2> response_data {0x34U, 0x12U};
+  std::array<std::uint8_t, 64> response_frame {};
+  std::size_t response_size = 0U;
+  status = FrameCodec::encode_success_response(
+      config, response_data, response_frame, response_size);
+  assert(status.ok());
+  client.on_rx_bytes(
+      4U,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(response_frame.data()), response_size));
+  assert(active_capture.called);
+  assert(active_capture.status.ok());
+  assert(active_words[0] == 0x1234U);
+  assert(rejected_words[0] == 0xBBBBU);
+  assert(!rejected_capture.called);
+}
+
+void test_client_all_state_changes_report_ambiguous_outcomes() {
+  auto config = make_binary_c4_config();
+  config = config.with_response_timeout_ms(10U);
+  MelsecSerialClient client;
+  Status status = client.configure(config);
+  assert(status.ok());
+
+  const std::array<std::uint16_t, 1> values {0x1234U};
+  CallbackCapture write_capture {};
+  status = client.async_batch_write_words(
+      0U,
+      BatchWriteWordsRequest(
+          DeviceAddress {mcprotocol::serial::DeviceCode::D, 100U}, values),
+      completion_callback,
+      &write_capture);
+  assert(status.ok());
+  assert(client.notify_tx_complete(1U, mcprotocol::serial::ok_status()).ok());
+  client.poll(11U);
+  assert(write_capture.called);
+  assert(write_capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(client.requires_transport_reset());
+
+  status = client.configure(config);
+  assert(status.ok());
+  CallbackCapture stop_capture {};
+  status = client.async_remote_stop(20U, completion_callback, &stop_capture);
+  assert(status.ok());
+  status = client.notify_tx_complete(
+      21U,
+      mcprotocol::serial::make_status(StatusCode::Transport, "simulated TX failure"));
+  assert(status.ok());
+  assert(stop_capture.called);
+  assert(stop_capture.status.code == StatusCode::OperationOutcomeUnknown);
+
+  status = client.configure(config);
+  assert(status.ok());
+  CallbackCapture reset_capture {};
+  status = client.async_remote_reset(30U, completion_callback, &reset_capture);
+  assert(status.ok());
+  client.cancel();
+  assert(!reset_capture.called);
+  assert(client.notify_tx_complete(31U, mcprotocol::serial::ok_status()).ok());
+  assert(reset_capture.called);
+  assert(reset_capture.status.ok());
+  assert(!client.requires_transport_reset());
+}
+
+void test_client_unsequenced_decode_failures_require_transport_reset() {
+  auto config = test_config_with_sum_check(
+      make_ascii_c4_format4_config(), SumCheckMode::Enabled);
+  MelsecSerialClient client;
+  Status status = client.configure(config);
+  assert(status.ok());
+
+  const BatchReadWordsRequest request(
+      DeviceAddress {mcprotocol::serial::DeviceCode::D, 100U}, 1U);
+  std::array<std::uint16_t, 1> words {};
+  CallbackCapture decode_capture {};
+  status = client.async_batch_read_words(
+      0U, request, words, completion_callback, &decode_capture);
+  assert(status.ok());
+  assert(client.notify_tx_complete(1U, mcprotocol::serial::ok_status()).ok());
+
+  const std::array<std::uint8_t, 4> response_data {'1', '2', '3', '4'};
+  std::array<std::uint8_t, 64> response_frame {};
+  std::size_t response_size = 0U;
+  status = FrameCodec::encode_success_response(
+      config, response_data, response_frame, response_size);
+  assert(status.ok());
+  assert(response_size > 4U);
+  response_frame[response_size - 4U] =
+      response_frame[response_size - 4U] == '0' ? '1' : '0';
+  client.on_rx_bytes(
+      2U,
+      std::span<const std::byte>(
+          reinterpret_cast<const std::byte*>(response_frame.data()), response_size));
+  assert(decode_capture.called);
+  assert(!decode_capture.status.ok());
+  assert(client.requires_transport_reset());
+
+  status = client.configure(config);
+  assert(status.ok());
+  CallbackCapture overflow_capture {};
+  status = client.async_batch_read_words(
+      10U, request, words, completion_callback, &overflow_capture);
+  assert(status.ok());
+  assert(client.notify_tx_complete(11U, mcprotocol::serial::ok_status()).ok());
+  std::array<std::byte, mcprotocol::serial::kMaxResponseFrameBytes + 1U> overflow {};
+  client.on_rx_bytes(12U, overflow);
+  assert(overflow_capture.called);
+  assert(overflow_capture.status.code == StatusCode::BufferTooSmall);
+  assert(client.requires_transport_reset());
+}
+
 struct Rs485HookCapture {
   std::size_t begin_count = 0U;
   std::size_t end_count = 0U;
@@ -7494,7 +7642,7 @@ void test_client_remote_reset_does_not_wait_for_response_timeout() {
       mcprotocol::serial::make_status(StatusCode::Transport, "test transport failure"));
   assert(status.ok());
   assert(failed_capture.called);
-  assert(failed_capture.status.code == StatusCode::Transport);
+  assert(failed_capture.status.code == StatusCode::OperationOutcomeUnknown);
 }
 
 void test_client_init_sequence_timeout_is_not_success() {
@@ -7515,7 +7663,8 @@ void test_client_init_sequence_timeout_is_not_success() {
 
   client.poll(10);
   assert(capture.called);
-  assert(capture.status.code == StatusCode::Timeout);
+  assert(capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(client.requires_transport_reset());
   assert(!client.busy());
 }
 
@@ -7541,7 +7690,8 @@ void test_client_global_signal_timeout_is_not_success() {
 
   client.poll(10);
   assert(capture.called);
-  assert(capture.status.code == StatusCode::Timeout);
+  assert(capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(client.requires_transport_reset());
   assert(!client.busy());
 }
 
@@ -7830,8 +7980,8 @@ void test_client_write_rejects_unexpected_success_data() {
           response_size));
 
   assert(capture.called);
-  assert(capture.status.code == StatusCode::Parse);
-  assert(std::string_view(capture.status.message) == "Write response must not contain response data");
+  assert(capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(client.requires_transport_reset());
   assert(!client.busy());
 }
 
@@ -9040,6 +9190,9 @@ int main() {
   test_validate_qualified_buffer_helper_route_rejects_q_l_equivalent_profiles();
   test_make_qualified_buffer_write_words_request_encodes_little_endian_bytes();
   test_decode_qualified_buffer_word_values_decodes_little_endian_bytes();
+  test_client_busy_rejection_preserves_active_request_state();
+  test_client_all_state_changes_report_ambiguous_outcomes();
+  test_client_unsequenced_decode_failures_require_transport_reset();
   test_client_rs485_hooks_and_tx_completion_lifecycle();
   test_client_binary_cpu_model_roundtrip();
   test_client_discards_foreign_route_then_accepts_current_route();
