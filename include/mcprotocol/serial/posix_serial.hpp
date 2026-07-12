@@ -94,10 +94,10 @@ struct PosixSerialConfig {
   if (!serial_status.ok()) {
     return serial_status;
   }
-  if (protocol_config.code_mode == CodeMode::Binary && serial_config.data_bits != 8U) {
+  if (protocol_config.code_mode() == CodeMode::Binary && serial_config.data_bits != 8U) {
     return make_status(StatusCode::InvalidArgument, "Binary MC protocol requires 8 data bits");
   }
-  if (protocol_config.code_mode == CodeMode::Ascii &&
+  if (protocol_config.code_mode() == CodeMode::Ascii &&
       serial_config.data_bits != 7U &&
       serial_config.data_bits != 8U) {
     return make_status(StatusCode::InvalidArgument, "ASCII MC protocol requires 7 or 8 data bits");

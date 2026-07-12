@@ -60,11 +60,13 @@ auto protocol = mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(
     mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
 ```
 
-Or assign the field directly when you build a custom `ProtocolConfig`:
+For a custom C4 Binary session, use the tagged factory and pass every active selector:
 
 ```cpp
-mcprotocol::serial::ProtocolConfig protocol {};
-protocol.plc_profile = mcprotocol::serial::PlcProfile::MelsecQ;
+auto protocol = mcprotocol::serial::ProtocolConfig::c4_binary(
+    mcprotocol::serial::PlcProfile::MelsecQ,
+    mcprotocol::serial::SumCheckMode::Enabled,
+    mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
 ```
 
 Use the display-name helper only for UI labels:
@@ -75,7 +77,9 @@ const char* saved_name = mcprotocol::serial::plc_profile_name(profile); // "mels
 const char* label = mcprotocol::serial::plc_profile_display_name(profile); // "MELSEC-Q"
 ```
 
-`PlcProfile::Unspecified` is a configuration error. It is useful only as the default internal value before your application selects a real profile.
+`PlcProfile::Unspecified` and unknown enum values are configuration errors. Public protocol
+factories require a profile argument and every encode/client boundary rejects a noncanonical value
+before transport is opened or request bytes are produced.
 
 ## Profile-specific cautions
 

@@ -873,6 +873,19 @@ MC protocol frame family used on the serial link.
 | `C1` | Legacy ASCII serial frame with its own command naming and routing rules. |
 | `E1` | Legacy frame family used by chapter-18 style command layouts. |
 
+#### `AsciiFrameKind`
+
+Frame families whose public configuration includes an explicit ASCII format.
+
+1E is intentionally absent because its ASCII representation has no Format1/2/3/4 selector.
+
+| Value | Description |
+| --- | --- |
+| `C4 = static_cast<std::uint8_t>(FrameKind::C4)` |  |
+| `C3 = static_cast<std::uint8_t>(FrameKind::C3)` |  |
+| `C2 = static_cast<std::uint8_t>(FrameKind::C2)` |  |
+| `C1 = static_cast<std::uint8_t>(FrameKind::C1)` |  |
+
 #### `CodeMode`
 
 Request/response payload encoding.
@@ -1208,14 +1221,6 @@ const char * mcprotocol::serial::qualified_buffer_kind_name(QualifiedBufferDevic
 
 Returns "G" or "HG" for the helper device kind.
 
-#### `qualified_buffer_word_to_byte_address`
-
-```cpp
-std::uint32_t mcprotocol::serial::qualified_buffer_word_to_byte_address(std::uint32_t word_address) noexcept
-```
-
-Converts a qualified word address to the corresponding module-buffer byte address.
-
 #### `ok_status`
 
 ```cpp
@@ -1231,6 +1236,14 @@ Status mcprotocol::serial::make_status(StatusCode code, const char *message, std
 ```
 
 Builds a status value with an optional PLC end code.
+
+#### `qualified_buffer_word_to_byte_address`
+
+```cpp
+std::uint32_t mcprotocol::serial::qualified_buffer_word_to_byte_address(std::uint32_t word_address) noexcept
+```
+
+Converts a qualified word address to the corresponding module-buffer byte address.
 
 #### `validate_qualified_buffer_helper_route`
 
@@ -1264,14 +1277,6 @@ Returns the requested-point value from a sparse native bit result word.
 
 On 2C/3C/4C, native sparse bit reads (0403) and monitor reads (0802) return the addressed point inside a 16-point mask word. The requested head device is represented by bit 0 of that returned word.
 
-#### `parse_qualified_buffer_word_device`
-
-```cpp
-Status mcprotocol::serial::parse_qualified_buffer_word_device(std::string_view text, QualifiedBufferWordDevice &out_device) noexcept
-```
-
-Parses a helper qualified device string such as U3E0\\G10 or U3E0\\HG20.
-
 #### `sparse_native_mask_word`
 
 ```cpp
@@ -1282,13 +1287,13 @@ Returns the raw 16-point mask word from a sparse native bit result.
 
 Keep this raw word visible for diagnostics when the target-specific offset pattern matters.
 
-#### `parse_link_direct_device`
+#### `parse_qualified_buffer_word_device`
 
 ```cpp
-Status mcprotocol::serial::parse_link_direct_device(std::string_view text, LinkDirectDevice &out_device) noexcept
+Status mcprotocol::serial::parse_qualified_buffer_word_device(std::string_view text, QualifiedBufferWordDevice &out_device) noexcept
 ```
 
-Parses a Jn\\... link-direct device string such as J1\\W100 or J1\\X10.
+Parses a helper qualified device string such as U3E0\\G10 or U3E0\\HG20.
 
 #### `make_qualified_buffer_read_words_request`
 
@@ -1298,13 +1303,19 @@ Status mcprotocol::serial::make_qualified_buffer_read_words_request(const Qualif
 
 Builds a module-buffer read request for a helper qualified word range.
 
-#### `is_valid_frame_kind`
+#### `parse_link_direct_device`
 
 ```cpp
-bool mcprotocol::serial::is_valid_frame_kind(FrameKind frame_kind) noexcept
+Status mcprotocol::serial::parse_link_direct_device(std::string_view text, LinkDirectDevice &out_device) noexcept
 ```
 
-Returns whether frame_kind is a defined public frame-family value.
+Parses a Jn\\... link-direct device string such as J1\\W100 or J1\\X10.
+
+#### `frame_kind`
+
+```cpp
+FrameKind mcprotocol::serial::frame_kind(AsciiFrameKind value) noexcept
+```
 
 #### `encode_qualified_buffer_word_values`
 
@@ -1313,6 +1324,14 @@ Status mcprotocol::serial::encode_qualified_buffer_word_values(std::span< const 
 ```
 
 Encodes helper qualified word values into little-endian module-buffer bytes.
+
+#### `is_valid_frame_kind`
+
+```cpp
+bool mcprotocol::serial::is_valid_frame_kind(FrameKind frame_kind) noexcept
+```
+
+Returns whether frame_kind is a defined public frame-family value.
 
 #### `is_valid_code_mode`
 
@@ -1338,14 +1357,6 @@ bool mcprotocol::serial::is_valid_sum_check_mode(SumCheckMode mode) noexcept
 
 Returns whether mode is a defined public sum-check value.
 
-#### `is_valid_ascii_format`
-
-```cpp
-bool mcprotocol::serial::is_valid_ascii_format(AsciiFormat format) noexcept
-```
-
-Returns whether format is a defined public ASCII framing value.
-
 #### `decode_qualified_buffer_word_values`
 
 ```cpp
@@ -1353,6 +1364,14 @@ Status mcprotocol::serial::decode_qualified_buffer_word_values(std::span< const 
 ```
 
 Decodes little-endian module-buffer bytes into helper qualified word values.
+
+#### `is_valid_ascii_format`
+
+```cpp
+bool mcprotocol::serial::is_valid_ascii_format(AsciiFormat format) noexcept
+```
+
+Returns whether format is a defined public ASCII framing value.
 
 #### `plc_profile_name`
 
@@ -1522,9 +1541,9 @@ Connected own-station route.
 
 Asynchronous MC protocol client for UART / serial integrations.
 
-The intended MCU-side workflow is: call configure() start an async_* request transmit pending_tx_frame() with the board UART layer call notify_tx_complete() when TX finishes feed received bytes with on_rx_bytes() call poll() from the main loop or scheduler for timeout handling
+The intended MCU-side workflow is: call configure() start an async_* request transmit pending_tx_frame() with the board UART layer call notify_tx_complete(now_ms, transport_status) when TX finishes or aborts feed received bytes with on_rx_bytes() call poll() from the main loop or scheduler for timeout handling
 
-Output spans passed to async_* requests must remain valid until the completion callback fires or until the request is cancelled.
+Output spans passed to async_* requests must remain valid until the completion callback fires. Cancelling during TX records the cancellation but does not complete the request until the UART reports physical TX completion or abort through notify_tx_complete().
 
 #### Member Functions
 
@@ -1549,10 +1568,12 @@ When requires_transport_reset() is true, drain/close/reopen the UART transport b
 #### `set_rs485_hooks`
 
 ```cpp
-void mcprotocol::serial::MelsecSerialClient::set_rs485_hooks(const Rs485Hooks &hooks) noexcept
+Status mcprotocol::serial::MelsecSerialClient::set_rs485_hooks(const Rs485Hooks &hooks) noexcept
 ```
 
 Installs optional RS-485 TX begin/end hooks used by the async workflow.
+
+Both callbacks must be supplied together or both omitted. Hooks cannot be changed while a request is in flight, which guarantees that each TX begin callback is paired with the matching TX end callback and user pointer.
 
 #### `busy`
 
@@ -1583,10 +1604,12 @@ Returns the encoded frame that should be sent to the UART layer.
 #### `notify_tx_complete`
 
 ```cpp
-Status mcprotocol::serial::MelsecSerialClient::notify_tx_complete(std::uint32_t now_ms, Status transport_status=ok_status()) noexcept
+Status mcprotocol::serial::MelsecSerialClient::notify_tx_complete(std::uint32_t now_ms, Status transport_status) noexcept
 ```
 
-Advances the state machine after the transport finished sending the pending frame.
+Advances the state machine after the transport finished or aborted the pending TX.
+
+transport_status is mandatory. Pass ok_status() only after confirmed physical TX completion; otherwise pass the actual transport failure or cancellation status.
 
 #### `on_rx_bytes`
 
@@ -1610,7 +1633,9 @@ Checks timeouts for the current in-flight request.
 void mcprotocol::serial::MelsecSerialClient::cancel() noexcept
 ```
 
-Cancels the in-flight request and clears transient state.
+Requests cancellation of the in-flight request.
+
+During TX, completion is deferred until notify_tx_complete() confirms that physical TX has completed or stopped, so an active RS-485 direction hook can always be released exactly once.
 
 #### `async_batch_read_words`
 
@@ -3334,6 +3359,136 @@ std::uint32_t mcprotocol::serial::RouteConfig::self_station_no() const noexcept
 bool mcprotocol::serial::RouteConfig::self_station_valid() const noexcept
 ```
 
+### Class `mcprotocol::serial::ProtocolConfig`
+
+Immutable tagged protocol configuration shared by codecs and client requests.
+
+Treat this as the immutable session configuration for one serial link. The same object is used by:
+
+- FrameCodec for frame wrapping and response decoding - CommandCodec for command subcommand/device-layout differences - MelsecSerialClient and PosixSyncClient for runtime request execution
+
+#### Member Functions
+
+#### `ProtocolConfig`
+
+```cpp
+mcprotocol::serial::ProtocolConfig::ProtocolConfig()=delete
+```
+
+#### `c4_binary`
+
+```cpp
+static ProtocolConfig mcprotocol::serial::ProtocolConfig::c4_binary(PlcProfile plc_profile, SumCheckMode sum_check_mode, RouteConfig route, TimeoutConfig timeout={}) noexcept
+```
+
+Constructs an explicit C4 Binary/Format5 session.
+
+#### `ascii`
+
+```cpp
+static ProtocolConfig mcprotocol::serial::ProtocolConfig::ascii(AsciiFrameKind ascii_frame_kind, AsciiFormat ascii_format, PlcProfile plc_profile, SumCheckMode sum_check_mode, RouteConfig route, TimeoutConfig timeout={}) noexcept
+```
+
+Constructs an explicit ASCII session with a mandatory framing format.
+
+#### `e1`
+
+```cpp
+static ProtocolConfig mcprotocol::serial::ProtocolConfig::e1(CodeMode code_mode, PlcProfile plc_profile, RouteConfig route, TimeoutConfig timeout={}, E1MonitoringTimer e1_monitoring_timer={}) noexcept
+```
+
+Constructs an explicit 1E session; 1E has no public ASCII-format input.
+
+#### `frame_kind`
+
+```cpp
+FrameKind mcprotocol::serial::ProtocolConfig::frame_kind() const noexcept
+```
+
+#### `code_mode`
+
+```cpp
+CodeMode mcprotocol::serial::ProtocolConfig::code_mode() const noexcept
+```
+
+#### `has_ascii_format`
+
+```cpp
+bool mcprotocol::serial::ProtocolConfig::has_ascii_format() const noexcept
+```
+
+#### `ascii_format`
+
+```cpp
+AsciiFormat mcprotocol::serial::ProtocolConfig::ascii_format() const noexcept
+```
+
+#### `plc_profile`
+
+```cpp
+PlcProfile mcprotocol::serial::ProtocolConfig::plc_profile() const noexcept
+```
+
+#### `sum_check_mode`
+
+```cpp
+SumCheckMode mcprotocol::serial::ProtocolConfig::sum_check_mode() const noexcept
+```
+
+#### `route`
+
+```cpp
+const RouteConfig & mcprotocol::serial::ProtocolConfig::route() const noexcept
+```
+
+#### `timeout`
+
+```cpp
+const TimeoutConfig & mcprotocol::serial::ProtocolConfig::timeout() const noexcept
+```
+
+#### `e1_monitoring_timer`
+
+```cpp
+const E1MonitoringTimer & mcprotocol::serial::ProtocolConfig::e1_monitoring_timer() const noexcept
+```
+
+#### `with_plc_profile`
+
+```cpp
+ProtocolConfig mcprotocol::serial::ProtocolConfig::with_plc_profile(PlcProfile value) const noexcept
+```
+
+Returns a new immutable session configuration with a different explicit profile.
+
+#### `with_route`
+
+```cpp
+ProtocolConfig mcprotocol::serial::ProtocolConfig::with_route(RouteConfig value) const noexcept
+```
+
+Returns a new immutable session configuration with a different typed route.
+
+#### `with_timeout`
+
+```cpp
+ProtocolConfig mcprotocol::serial::ProtocolConfig::with_timeout(TimeoutConfig value) const noexcept
+```
+
+Returns a new immutable session configuration with different host timeout settings.
+
+#### `with_response_timeout_ms`
+
+```cpp
+ProtocolConfig mcprotocol::serial::ProtocolConfig::with_response_timeout_ms(std::uint32_t value) const noexcept
+```
+
+#### `with_inter_byte_timeout_ms`
+
+```cpp
+ProtocolConfig mcprotocol::serial::ProtocolConfig::with_inter_byte_timeout_ms(std::uint32_t value) const noexcept
+```
+
 ## Structs
 
 ### Struct `mcprotocol::serial::RawResponseFrame`
@@ -3429,10 +3584,24 @@ String-address spec used to build sparse random-read or monitor requests.
 #### `device`
 
 ```cpp
-std::string_view mcprotocol::serial::highlevel::RandomReadWordSpec::device {}
+std::string_view mcprotocol::serial::highlevel::RandomReadWordSpec::device
 ```
 
 Plain device string such as D100 selected explicitly as 16-bit.
+
+#### Member Functions
+
+#### `RandomReadWordSpec`
+
+```cpp
+mcprotocol::serial::highlevel::RandomReadWordSpec::RandomReadWordSpec()=delete
+```
+
+#### `RandomReadWordSpec`
+
+```cpp
+mcprotocol::serial::highlevel::RandomReadWordSpec::RandomReadWordSpec(std::string_view target_device) noexcept
+```
 
 ### Struct `mcprotocol::serial::highlevel::RandomReadDWordSpec`
 
@@ -3443,10 +3612,24 @@ String-address spec selected explicitly for 32-bit sparse read/monitor access.
 #### `device`
 
 ```cpp
-std::string_view mcprotocol::serial::highlevel::RandomReadDWordSpec::device {}
+std::string_view mcprotocol::serial::highlevel::RandomReadDWordSpec::device
 ```
 
 Plain device string such as D100, LZ0, or LCN10 selected explicitly as 32-bit.
+
+#### Member Functions
+
+#### `RandomReadDWordSpec`
+
+```cpp
+mcprotocol::serial::highlevel::RandomReadDWordSpec::RandomReadDWordSpec()=delete
+```
+
+#### `RandomReadDWordSpec`
+
+```cpp
+mcprotocol::serial::highlevel::RandomReadDWordSpec::RandomReadDWordSpec(std::string_view target_device) noexcept
+```
 
 ### Struct `mcprotocol::serial::highlevel::RandomWriteWordSpec`
 
@@ -3571,7 +3754,7 @@ Mapping from a long-family state device to the helper's internal read route.
 #### `route`
 
 ```cpp
-LongStateReadRoute mcprotocol::serial::highlevel::LongStateReadSpec::route = LongStateReadRoute::StatusBlock
+LongStateReadRoute mcprotocol::serial::highlevel::LongStateReadSpec::route
 ```
 
 Read route used internally by the long-state helper.
@@ -3579,7 +3762,7 @@ Read route used internally by the long-state helper.
 #### `base_code`
 
 ```cpp
-DeviceCode mcprotocol::serial::highlevel::LongStateReadSpec::base_code = DeviceCode::LTN
+DeviceCode mcprotocol::serial::highlevel::LongStateReadSpec::base_code
 ```
 
 Base current-value device read with 0401 word access, or direct bit device for DirectBits.
@@ -3587,10 +3770,24 @@ Base current-value device read with 0401 word access, or direct bit device for D
 #### `kind`
 
 ```cpp
-LongStateReadKind mcprotocol::serial::highlevel::LongStateReadSpec::kind = LongStateReadKind::Contact
+LongStateReadKind mcprotocol::serial::highlevel::LongStateReadSpec::kind
 ```
 
 Status bit selected from the third word of the block.
+
+#### Member Functions
+
+#### `LongStateReadSpec`
+
+```cpp
+mcprotocol::serial::highlevel::LongStateReadSpec::LongStateReadSpec()=delete
+```
+
+#### `LongStateReadSpec`
+
+```cpp
+mcprotocol::serial::highlevel::LongStateReadSpec::LongStateReadSpec(LongStateReadRoute read_route, DeviceCode target_base_code, LongStateReadKind state_kind) noexcept
+```
 
 ### Struct `mcprotocol::serial::PosixSyncClient::CompletionState`
 
@@ -3617,13 +3814,27 @@ Parsed Jn\\... link-direct device reference such as J1\\W100.
 #### `network_number`
 
 ```cpp
-std::uint16_t mcprotocol::serial::LinkDirectDevice::network_number = 0
+std::uint16_t mcprotocol::serial::LinkDirectDevice::network_number
 ```
 
 #### `device`
 
 ```cpp
-DeviceAddress mcprotocol::serial::LinkDirectDevice::device {}
+DeviceAddress mcprotocol::serial::LinkDirectDevice::device
+```
+
+#### Member Functions
+
+#### `LinkDirectDevice`
+
+```cpp
+mcprotocol::serial::LinkDirectDevice::LinkDirectDevice()=delete
+```
+
+#### `LinkDirectDevice`
+
+```cpp
+mcprotocol::serial::LinkDirectDevice::LinkDirectDevice(std::uint16_t target_network_number, DeviceAddress target_device) noexcept
 ```
 
 ### Struct `mcprotocol::serial::LinkDirectRandomReadWordItem`
@@ -3635,7 +3846,7 @@ One sparse Jn\\... item used by native random-read and monitor registration.
 #### `device`
 
 ```cpp
-LinkDirectDevice mcprotocol::serial::LinkDirectRandomReadWordItem::device {}
+LinkDirectDevice mcprotocol::serial::LinkDirectRandomReadWordItem::device
 ```
 
 ### Struct `mcprotocol::serial::LinkDirectRandomWriteWordItem`
@@ -3715,19 +3926,33 @@ One Jn\\... block used by native multi-block read.
 #### `head_device`
 
 ```cpp
-LinkDirectDevice mcprotocol::serial::LinkDirectMultiBlockReadBlock::head_device {}
+LinkDirectDevice mcprotocol::serial::LinkDirectMultiBlockReadBlock::head_device
 ```
 
 #### `points`
 
 ```cpp
-std::uint16_t mcprotocol::serial::LinkDirectMultiBlockReadBlock::points = 0
+std::uint16_t mcprotocol::serial::LinkDirectMultiBlockReadBlock::points
 ```
 
 #### `bit_block`
 
 ```cpp
-bool mcprotocol::serial::LinkDirectMultiBlockReadBlock::bit_block = false
+bool mcprotocol::serial::LinkDirectMultiBlockReadBlock::bit_block
+```
+
+#### Member Functions
+
+#### `LinkDirectMultiBlockReadBlock`
+
+```cpp
+mcprotocol::serial::LinkDirectMultiBlockReadBlock::LinkDirectMultiBlockReadBlock()=delete
+```
+
+#### `LinkDirectMultiBlockReadBlock`
+
+```cpp
+mcprotocol::serial::LinkDirectMultiBlockReadBlock::LinkDirectMultiBlockReadBlock(LinkDirectDevice first_device, std::uint16_t point_count, bool use_bit_block) noexcept
 ```
 
 ### Struct `mcprotocol::serial::LinkDirectMultiBlockReadRequest`
@@ -3739,7 +3964,21 @@ Jn\\... native multi-block read request.
 #### `blocks`
 
 ```cpp
-std::span<const LinkDirectMultiBlockReadBlock> mcprotocol::serial::LinkDirectMultiBlockReadRequest::blocks {}
+std::span<const LinkDirectMultiBlockReadBlock> mcprotocol::serial::LinkDirectMultiBlockReadRequest::blocks
+```
+
+#### Member Functions
+
+#### `LinkDirectMultiBlockReadRequest`
+
+```cpp
+mcprotocol::serial::LinkDirectMultiBlockReadRequest::LinkDirectMultiBlockReadRequest()=delete
+```
+
+#### `LinkDirectMultiBlockReadRequest`
+
+```cpp
+mcprotocol::serial::LinkDirectMultiBlockReadRequest::LinkDirectMultiBlockReadRequest(std::span< const LinkDirectMultiBlockReadBlock > request_blocks) noexcept
 ```
 
 ### Struct `mcprotocol::serial::LinkDirectMultiBlockWriteBlock`
@@ -3751,31 +3990,57 @@ One Jn\\... block used by native multi-block write.
 #### `head_device`
 
 ```cpp
-LinkDirectDevice mcprotocol::serial::LinkDirectMultiBlockWriteBlock::head_device {}
+LinkDirectDevice mcprotocol::serial::LinkDirectMultiBlockWriteBlock::head_device
 ```
 
 #### `points`
 
 ```cpp
-std::uint16_t mcprotocol::serial::LinkDirectMultiBlockWriteBlock::points = 0
+std::uint16_t mcprotocol::serial::LinkDirectMultiBlockWriteBlock::points
 ```
 
 #### `bit_block`
 
 ```cpp
-bool mcprotocol::serial::LinkDirectMultiBlockWriteBlock::bit_block = false
+bool mcprotocol::serial::LinkDirectMultiBlockWriteBlock::bit_block
 ```
 
 #### `words`
 
 ```cpp
-std::span<const std::uint16_t> mcprotocol::serial::LinkDirectMultiBlockWriteBlock::words {}
+std::span<const std::uint16_t> mcprotocol::serial::LinkDirectMultiBlockWriteBlock::words
 ```
 
 #### `bits`
 
 ```cpp
-std::span<const BitValue> mcprotocol::serial::LinkDirectMultiBlockWriteBlock::bits {}
+std::span<const BitValue> mcprotocol::serial::LinkDirectMultiBlockWriteBlock::bits
+```
+
+#### Member Functions
+
+#### `LinkDirectMultiBlockWriteBlock`
+
+```cpp
+mcprotocol::serial::LinkDirectMultiBlockWriteBlock::LinkDirectMultiBlockWriteBlock()=delete
+```
+
+#### `LinkDirectMultiBlockWriteBlock`
+
+```cpp
+mcprotocol::serial::LinkDirectMultiBlockWriteBlock::LinkDirectMultiBlockWriteBlock(LinkDirectDevice first_device, std::uint16_t point_count, bool use_bit_block, std::span< const std::uint16_t > write_words, std::span< const BitValue > write_bits) noexcept
+```
+
+#### `LinkDirectMultiBlockWriteBlock`
+
+```cpp
+mcprotocol::serial::LinkDirectMultiBlockWriteBlock::LinkDirectMultiBlockWriteBlock(LinkDirectDevice first_device, std::uint16_t point_count, std::span< const std::uint16_t > write_words) noexcept
+```
+
+#### `LinkDirectMultiBlockWriteBlock`
+
+```cpp
+mcprotocol::serial::LinkDirectMultiBlockWriteBlock::LinkDirectMultiBlockWriteBlock(LinkDirectDevice first_device, std::uint16_t point_count, std::span< const BitValue > write_bits) noexcept
 ```
 
 ### Struct `mcprotocol::serial::LinkDirectMultiBlockWriteRequest`
@@ -3787,7 +4052,21 @@ Jn\\... native multi-block write request.
 #### `blocks`
 
 ```cpp
-std::span<const LinkDirectMultiBlockWriteBlock> mcprotocol::serial::LinkDirectMultiBlockWriteRequest::blocks {}
+std::span<const LinkDirectMultiBlockWriteBlock> mcprotocol::serial::LinkDirectMultiBlockWriteRequest::blocks
+```
+
+#### Member Functions
+
+#### `LinkDirectMultiBlockWriteRequest`
+
+```cpp
+mcprotocol::serial::LinkDirectMultiBlockWriteRequest::LinkDirectMultiBlockWriteRequest()=delete
+```
+
+#### `LinkDirectMultiBlockWriteRequest`
+
+```cpp
+mcprotocol::serial::LinkDirectMultiBlockWriteRequest::LinkDirectMultiBlockWriteRequest(std::span< const LinkDirectMultiBlockWriteBlock > request_blocks) noexcept
 ```
 
 ### Struct `mcprotocol::serial::LinkDirectMonitorRegistration`
@@ -3799,7 +4078,21 @@ Jn\\... monitor registration payload (0801 + device extension specification).
 #### `word_items`
 
 ```cpp
-std::span<const LinkDirectRandomReadWordItem> mcprotocol::serial::LinkDirectMonitorRegistration::word_items {}
+std::span<const LinkDirectRandomReadWordItem> mcprotocol::serial::LinkDirectMonitorRegistration::word_items
+```
+
+#### Member Functions
+
+#### `LinkDirectMonitorRegistration`
+
+```cpp
+mcprotocol::serial::LinkDirectMonitorRegistration::LinkDirectMonitorRegistration()=delete
+```
+
+#### `LinkDirectMonitorRegistration`
+
+```cpp
+mcprotocol::serial::LinkDirectMonitorRegistration::LinkDirectMonitorRegistration(std::span< const LinkDirectRandomReadWordItem > monitor_items) noexcept
 ```
 
 ### Struct `mcprotocol::serial::PosixSerialConfig`
@@ -3869,19 +4162,33 @@ Parsed U...\\G... or U...\\HG... qualified word device.
 #### `kind`
 
 ```cpp
-QualifiedBufferDeviceKind mcprotocol::serial::QualifiedBufferWordDevice::kind = QualifiedBufferDeviceKind::G
+QualifiedBufferDeviceKind mcprotocol::serial::QualifiedBufferWordDevice::kind
 ```
 
 #### `module_number`
 
 ```cpp
-std::uint16_t mcprotocol::serial::QualifiedBufferWordDevice::module_number = 0
+std::uint16_t mcprotocol::serial::QualifiedBufferWordDevice::module_number
 ```
 
 #### `word_address`
 
 ```cpp
-std::uint32_t mcprotocol::serial::QualifiedBufferWordDevice::word_address = 0
+std::uint32_t mcprotocol::serial::QualifiedBufferWordDevice::word_address
+```
+
+#### Member Functions
+
+#### `QualifiedBufferWordDevice`
+
+```cpp
+mcprotocol::serial::QualifiedBufferWordDevice::QualifiedBufferWordDevice()=delete
+```
+
+#### `QualifiedBufferWordDevice`
+
+```cpp
+mcprotocol::serial::QualifiedBufferWordDevice::QualifiedBufferWordDevice(QualifiedBufferDeviceKind device_kind, std::uint16_t target_module_number, std::uint32_t target_word_address) noexcept
 ```
 
 ### Struct `mcprotocol::serial::Status`
@@ -3950,84 +4257,6 @@ Connected host-station route.
 
 The connected-station header values are protocol constants and therefore are intentionally not exposed as mutable inputs.
 
-### Struct `mcprotocol::serial::ProtocolConfig`
-
-Top-level protocol configuration shared by codecs and client requests.
-
-Treat this as the immutable session configuration for one serial link. The same object is used by:
-
-- FrameCodec for frame wrapping and response decoding - CommandCodec for command subcommand/device-layout differences - MelsecSerialClient and PosixSyncClient for runtime request execution
-
-#### Fields
-
-#### `frame_kind`
-
-```cpp
-FrameKind mcprotocol::serial::ProtocolConfig::frame_kind = static_cast<FrameKind>(0xFF)
-```
-
-Selected serial frame family. A named preset or caller must assign a defined value.
-
-#### `code_mode`
-
-```cpp
-CodeMode mcprotocol::serial::ProtocolConfig::code_mode = static_cast<CodeMode>(0xFF)
-```
-
-Selected payload encoding. A named preset or caller must assign a defined value.
-
-#### `ascii_format`
-
-```cpp
-AsciiFormat mcprotocol::serial::ProtocolConfig::ascii_format = static_cast<AsciiFormat>(0xFF)
-```
-
-Selected ASCII framing flavor. ASCII callers must assign a defined value.
-
-#### `plc_profile`
-
-```cpp
-PlcProfile mcprotocol::serial::ProtocolConfig::plc_profile = PlcProfile::Unspecified
-```
-
-Public PLC profile used to derive frame-family compatibility and device/subcommand layout.
-
-Applications must set this explicitly before encoding requests or running a client.
-
-#### `sum_check_mode`
-
-```cpp
-SumCheckMode mcprotocol::serial::ProtocolConfig::sum_check_mode = static_cast<SumCheckMode>(0xFF)
-```
-
-Explicit ASCII/binary sum-check policy where the selected frame family supports it.
-
-The invalid initial value ensures generic aggregate construction cannot silently enable a checksum. Use a named protocol preset or assign Enabled/Disabled explicitly.
-
-#### `route`
-
-```cpp
-RouteConfig mcprotocol::serial::ProtocolConfig::route {}
-```
-
-Route header fields used for every encoded request.
-
-#### `timeout`
-
-```cpp
-TimeoutConfig mcprotocol::serial::ProtocolConfig::timeout {}
-```
-
-Request timeout policy used by the async client and stream decoder.
-
-#### `e1_monitoring_timer`
-
-```cpp
-E1MonitoringTimer mcprotocol::serial::ProtocolConfig::e1_monitoring_timer {}
-```
-
-PLC-side processing timer used only by 1E request frames; defaults to 4 seconds.
-
 ### Struct `mcprotocol::serial::DeviceAddress`
 
 Device code plus numeric address.
@@ -4039,7 +4268,7 @@ This is the normalized address form used throughout the library after string-add
 #### `code`
 
 ```cpp
-DeviceCode mcprotocol::serial::DeviceAddress::code = DeviceCode::D
+DeviceCode mcprotocol::serial::DeviceAddress::code
 ```
 
 Device family such as D, M, X, LTN, or LZ.
@@ -4047,10 +4276,24 @@ Device family such as D, M, X, LTN, or LZ.
 #### `number`
 
 ```cpp
-std::uint32_t mcprotocol::serial::DeviceAddress::number = 0
+std::uint32_t mcprotocol::serial::DeviceAddress::number
 ```
 
 Numeric index inside the selected device family.
+
+#### Member Functions
+
+#### `DeviceAddress`
+
+```cpp
+mcprotocol::serial::DeviceAddress::DeviceAddress()=delete
+```
+
+#### `DeviceAddress`
+
+```cpp
+mcprotocol::serial::DeviceAddress::DeviceAddress(DeviceCode device_code, std::uint32_t device_number) noexcept
+```
 
 ### Struct `mcprotocol::serial::ExtendedFileRegisterAddress`
 
@@ -4063,7 +4306,7 @@ This is the block-addressed form used by 1C ACPU-common and by the chapter-18 bl
 #### `block_number`
 
 ```cpp
-std::uint16_t mcprotocol::serial::ExtendedFileRegisterAddress::block_number = 1
+std::uint16_t mcprotocol::serial::ExtendedFileRegisterAddress::block_number
 ```
 
 Extended file-register block number.
@@ -4071,10 +4314,24 @@ Extended file-register block number.
 #### `word_number`
 
 ```cpp
-std::uint16_t mcprotocol::serial::ExtendedFileRegisterAddress::word_number = 0
+std::uint16_t mcprotocol::serial::ExtendedFileRegisterAddress::word_number
 ```
 
 Word number inside the selected block.
+
+#### Member Functions
+
+#### `ExtendedFileRegisterAddress`
+
+```cpp
+mcprotocol::serial::ExtendedFileRegisterAddress::ExtendedFileRegisterAddress()=delete
+```
+
+#### `ExtendedFileRegisterAddress`
+
+```cpp
+mcprotocol::serial::ExtendedFileRegisterAddress::ExtendedFileRegisterAddress(std::uint16_t target_block_number, std::uint16_t target_word_number) noexcept
+```
 
 ### Struct `mcprotocol::serial::BatchReadWordsRequest`
 
@@ -4083,7 +4340,7 @@ Word number inside the selected block.
 #### `head_device`
 
 ```cpp
-DeviceAddress mcprotocol::serial::BatchReadWordsRequest::head_device {}
+DeviceAddress mcprotocol::serial::BatchReadWordsRequest::head_device
 ```
 
 First device in the contiguous range.
@@ -4091,10 +4348,24 @@ First device in the contiguous range.
 #### `points`
 
 ```cpp
-std::uint16_t mcprotocol::serial::BatchReadWordsRequest::points = 0
+std::uint16_t mcprotocol::serial::BatchReadWordsRequest::points
 ```
 
 Number of points to read starting at head_device.
+
+#### Member Functions
+
+#### `BatchReadWordsRequest`
+
+```cpp
+mcprotocol::serial::BatchReadWordsRequest::BatchReadWordsRequest()=delete
+```
+
+#### `BatchReadWordsRequest`
+
+```cpp
+mcprotocol::serial::BatchReadWordsRequest::BatchReadWordsRequest(DeviceAddress first_device, std::uint16_t point_count) noexcept
+```
 
 ### Struct `mcprotocol::serial::BatchReadBitsRequest`
 
@@ -4105,7 +4376,7 @@ Contiguous bit-read request (0401 bit path).
 #### `head_device`
 
 ```cpp
-DeviceAddress mcprotocol::serial::BatchReadBitsRequest::head_device {}
+DeviceAddress mcprotocol::serial::BatchReadBitsRequest::head_device
 ```
 
 First bit device in the contiguous range.
@@ -4113,10 +4384,24 @@ First bit device in the contiguous range.
 #### `points`
 
 ```cpp
-std::uint16_t mcprotocol::serial::BatchReadBitsRequest::points = 0
+std::uint16_t mcprotocol::serial::BatchReadBitsRequest::points
 ```
 
 Number of bit points to read starting at head_device.
+
+#### Member Functions
+
+#### `BatchReadBitsRequest`
+
+```cpp
+mcprotocol::serial::BatchReadBitsRequest::BatchReadBitsRequest()=delete
+```
+
+#### `BatchReadBitsRequest`
+
+```cpp
+mcprotocol::serial::BatchReadBitsRequest::BatchReadBitsRequest(DeviceAddress first_device, std::uint16_t point_count) noexcept
+```
 
 ### Struct `mcprotocol::serial::BatchWriteWordsRequest`
 
@@ -4127,7 +4412,7 @@ Contiguous word-write request (1401).
 #### `head_device`
 
 ```cpp
-DeviceAddress mcprotocol::serial::BatchWriteWordsRequest::head_device {}
+DeviceAddress mcprotocol::serial::BatchWriteWordsRequest::head_device
 ```
 
 First device in the contiguous write range.
@@ -4135,10 +4420,24 @@ First device in the contiguous write range.
 #### `words`
 
 ```cpp
-std::span<const std::uint16_t> mcprotocol::serial::BatchWriteWordsRequest::words {}
+std::span<const std::uint16_t> mcprotocol::serial::BatchWriteWordsRequest::words
 ```
 
 Caller-owned word data to write starting at head_device.
+
+#### Member Functions
+
+#### `BatchWriteWordsRequest`
+
+```cpp
+mcprotocol::serial::BatchWriteWordsRequest::BatchWriteWordsRequest()=delete
+```
+
+#### `BatchWriteWordsRequest`
+
+```cpp
+mcprotocol::serial::BatchWriteWordsRequest::BatchWriteWordsRequest(DeviceAddress first_device, std::span< const std::uint16_t > write_words) noexcept
+```
 
 ### Struct `mcprotocol::serial::BatchWriteBitsRequest`
 
@@ -4149,7 +4448,7 @@ Contiguous bit-write request (1401 bit path).
 #### `head_device`
 
 ```cpp
-DeviceAddress mcprotocol::serial::BatchWriteBitsRequest::head_device {}
+DeviceAddress mcprotocol::serial::BatchWriteBitsRequest::head_device
 ```
 
 First bit device in the contiguous write range.
@@ -4157,10 +4456,24 @@ First bit device in the contiguous write range.
 #### `bits`
 
 ```cpp
-std::span<const BitValue> mcprotocol::serial::BatchWriteBitsRequest::bits {}
+std::span<const BitValue> mcprotocol::serial::BatchWriteBitsRequest::bits
 ```
 
 Caller-owned bit data to write starting at head_device.
+
+#### Member Functions
+
+#### `BatchWriteBitsRequest`
+
+```cpp
+mcprotocol::serial::BatchWriteBitsRequest::BatchWriteBitsRequest()=delete
+```
+
+#### `BatchWriteBitsRequest`
+
+```cpp
+mcprotocol::serial::BatchWriteBitsRequest::BatchWriteBitsRequest(DeviceAddress first_device, std::span< const BitValue > write_bits) noexcept
+```
 
 ### Struct `mcprotocol::serial::ExtendedFileRegisterBatchReadWordsRequest`
 
@@ -4169,7 +4482,7 @@ Caller-owned bit data to write starting at head_device.
 #### `head_device`
 
 ```cpp
-ExtendedFileRegisterAddress mcprotocol::serial::ExtendedFileRegisterBatchReadWordsRequest::head_device {}
+ExtendedFileRegisterAddress mcprotocol::serial::ExtendedFileRegisterBatchReadWordsRequest::head_device
 ```
 
 First block-addressed file-register word to read.
@@ -4177,10 +4490,24 @@ First block-addressed file-register word to read.
 #### `points`
 
 ```cpp
-std::uint16_t mcprotocol::serial::ExtendedFileRegisterBatchReadWordsRequest::points = 0
+std::uint16_t mcprotocol::serial::ExtendedFileRegisterBatchReadWordsRequest::points
 ```
 
 Number of words to read from the file-register range.
+
+#### Member Functions
+
+#### `ExtendedFileRegisterBatchReadWordsRequest`
+
+```cpp
+mcprotocol::serial::ExtendedFileRegisterBatchReadWordsRequest::ExtendedFileRegisterBatchReadWordsRequest()=delete
+```
+
+#### `ExtendedFileRegisterBatchReadWordsRequest`
+
+```cpp
+mcprotocol::serial::ExtendedFileRegisterBatchReadWordsRequest::ExtendedFileRegisterBatchReadWordsRequest(ExtendedFileRegisterAddress first_device, std::uint16_t point_count) noexcept
+```
 
 ### Struct `mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest`
 
@@ -4191,7 +4518,7 @@ Direct extended file-register batch read (NR on 1C AnA/AnUCPU common, chapter-18
 #### `head_device_number`
 
 ```cpp
-std::uint32_t mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest::head_device_number = 0
+std::uint32_t mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest::head_device_number
 ```
 
 NR/NW direct address on 1C or the chapter-18 direct R address on 1E.
@@ -4199,10 +4526,24 @@ NR/NW direct address on 1C or the chapter-18 direct R address on 1E.
 #### `points`
 
 ```cpp
-std::uint16_t mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest::points = 0
+std::uint16_t mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest::points
 ```
 
 Number of words to read from the direct file-register range.
+
+#### Member Functions
+
+#### `ExtendedFileRegisterDirectBatchReadWordsRequest`
+
+```cpp
+mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest::ExtendedFileRegisterDirectBatchReadWordsRequest()=delete
+```
+
+#### `ExtendedFileRegisterDirectBatchReadWordsRequest`
+
+```cpp
+mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest::ExtendedFileRegisterDirectBatchReadWordsRequest(std::uint32_t first_device_number, std::uint16_t point_count) noexcept
+```
 
 ### Struct `mcprotocol::serial::ExtendedFileRegisterBatchWriteWordsRequest`
 
@@ -4213,7 +4554,7 @@ Extended file-register batch write (EW on 1C ACPU-common, chapter-18 block path 
 #### `head_device`
 
 ```cpp
-ExtendedFileRegisterAddress mcprotocol::serial::ExtendedFileRegisterBatchWriteWordsRequest::head_device {}
+ExtendedFileRegisterAddress mcprotocol::serial::ExtendedFileRegisterBatchWriteWordsRequest::head_device
 ```
 
 First block-addressed file-register word to write.
@@ -4221,10 +4562,24 @@ First block-addressed file-register word to write.
 #### `words`
 
 ```cpp
-std::span<const std::uint16_t> mcprotocol::serial::ExtendedFileRegisterBatchWriteWordsRequest::words {}
+std::span<const std::uint16_t> mcprotocol::serial::ExtendedFileRegisterBatchWriteWordsRequest::words
 ```
 
 Caller-owned word data to write starting at head_device.
+
+#### Member Functions
+
+#### `ExtendedFileRegisterBatchWriteWordsRequest`
+
+```cpp
+mcprotocol::serial::ExtendedFileRegisterBatchWriteWordsRequest::ExtendedFileRegisterBatchWriteWordsRequest()=delete
+```
+
+#### `ExtendedFileRegisterBatchWriteWordsRequest`
+
+```cpp
+mcprotocol::serial::ExtendedFileRegisterBatchWriteWordsRequest::ExtendedFileRegisterBatchWriteWordsRequest(ExtendedFileRegisterAddress first_device, std::span< const std::uint16_t > write_words) noexcept
+```
 
 ### Struct `mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest`
 
@@ -4235,7 +4590,7 @@ Direct extended file-register batch write (NW on 1C AnA/AnUCPU common, chapter-1
 #### `head_device_number`
 
 ```cpp
-std::uint32_t mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest::head_device_number = 0
+std::uint32_t mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest::head_device_number
 ```
 
 NR/NW direct address on 1C or the chapter-18 direct R address on 1E.
@@ -4243,10 +4598,24 @@ NR/NW direct address on 1C or the chapter-18 direct R address on 1E.
 #### `words`
 
 ```cpp
-std::span<const std::uint16_t> mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest::words {}
+std::span<const std::uint16_t> mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest::words
 ```
 
 Caller-owned word data to write starting at head_device_number.
+
+#### Member Functions
+
+#### `ExtendedFileRegisterDirectBatchWriteWordsRequest`
+
+```cpp
+mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest::ExtendedFileRegisterDirectBatchWriteWordsRequest()=delete
+```
+
+#### `ExtendedFileRegisterDirectBatchWriteWordsRequest`
+
+```cpp
+mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest::ExtendedFileRegisterDirectBatchWriteWordsRequest(std::uint32_t first_device_number, std::span< const std::uint16_t > write_words) noexcept
+```
 
 ### Struct `mcprotocol::serial::ExtendedFileRegisterRandomWriteWordItem`
 
@@ -4257,7 +4626,7 @@ One item inside extended file-register random write (ET on 1C, chapter-18 on 1E)
 #### `device`
 
 ```cpp
-ExtendedFileRegisterAddress mcprotocol::serial::ExtendedFileRegisterRandomWriteWordItem::device {}
+ExtendedFileRegisterAddress mcprotocol::serial::ExtendedFileRegisterRandomWriteWordItem::device
 ```
 
 Target extended file-register address.
@@ -4265,10 +4634,24 @@ Target extended file-register address.
 #### `value`
 
 ```cpp
-std::uint16_t mcprotocol::serial::ExtendedFileRegisterRandomWriteWordItem::value = 0
+std::uint16_t mcprotocol::serial::ExtendedFileRegisterRandomWriteWordItem::value
 ```
 
 One word written to device.
+
+#### Member Functions
+
+#### `ExtendedFileRegisterRandomWriteWordItem`
+
+```cpp
+mcprotocol::serial::ExtendedFileRegisterRandomWriteWordItem::ExtendedFileRegisterRandomWriteWordItem()=delete
+```
+
+#### `ExtendedFileRegisterRandomWriteWordItem`
+
+```cpp
+mcprotocol::serial::ExtendedFileRegisterRandomWriteWordItem::ExtendedFileRegisterRandomWriteWordItem(ExtendedFileRegisterAddress target_device, std::uint16_t write_value) noexcept
+```
 
 ### Struct `mcprotocol::serial::ExtendedFileRegisterMonitorRegistration`
 
@@ -4279,10 +4662,24 @@ Extended file-register monitor registration (EM on 1C, chapter-18 on 1E).
 #### `items`
 
 ```cpp
-std::span<const ExtendedFileRegisterAddress> mcprotocol::serial::ExtendedFileRegisterMonitorRegistration::items {}
+std::span<const ExtendedFileRegisterAddress> mcprotocol::serial::ExtendedFileRegisterMonitorRegistration::items
 ```
 
 Sparse list of block-addressed file-register items to register for monitoring.
+
+#### Member Functions
+
+#### `ExtendedFileRegisterMonitorRegistration`
+
+```cpp
+mcprotocol::serial::ExtendedFileRegisterMonitorRegistration::ExtendedFileRegisterMonitorRegistration()=delete
+```
+
+#### `ExtendedFileRegisterMonitorRegistration`
+
+```cpp
+mcprotocol::serial::ExtendedFileRegisterMonitorRegistration::ExtendedFileRegisterMonitorRegistration(std::span< const ExtendedFileRegisterAddress > monitor_items) noexcept
+```
 
 ### Struct `mcprotocol::serial::RandomReadWordItem`
 
@@ -4291,7 +4688,7 @@ Sparse list of block-addressed file-register items to register for monitoring.
 #### `device`
 
 ```cpp
-DeviceAddress mcprotocol::serial::RandomReadWordItem::device {}
+DeviceAddress mcprotocol::serial::RandomReadWordItem::device
 ```
 
 Target device address read as one 16-bit word (bit devices return a 16-point mask word).
@@ -4305,7 +4702,7 @@ One explicitly double-word-width item in a native random-read or monitor request
 #### `device`
 
 ```cpp
-DeviceAddress mcprotocol::serial::RandomReadDWordItem::device {}
+DeviceAddress mcprotocol::serial::RandomReadDWordItem::device
 ```
 
 Target device address read as one 32-bit double word.
@@ -4319,7 +4716,7 @@ Native random-read request with separate word and double-word domains.
 #### `word_items`
 
 ```cpp
-std::span<const RandomReadWordItem> mcprotocol::serial::RandomReadRequest::word_items {}
+std::span<const RandomReadWordItem> mcprotocol::serial::RandomReadRequest::word_items
 ```
 
 Sparse 16-bit items, encoded first and returned through the word output span.
@@ -4327,10 +4724,24 @@ Sparse 16-bit items, encoded first and returned through the word output span.
 #### `dword_items`
 
 ```cpp
-std::span<const RandomReadDWordItem> mcprotocol::serial::RandomReadRequest::dword_items {}
+std::span<const RandomReadDWordItem> mcprotocol::serial::RandomReadRequest::dword_items
 ```
 
 Sparse 32-bit items, encoded second and returned through the dword output span.
+
+#### Member Functions
+
+#### `RandomReadRequest`
+
+```cpp
+mcprotocol::serial::RandomReadRequest::RandomReadRequest()=delete
+```
+
+#### `RandomReadRequest`
+
+```cpp
+mcprotocol::serial::RandomReadRequest::RandomReadRequest(std::span< const RandomReadWordItem > words, std::span< const RandomReadDWordItem > dwords) noexcept
+```
 
 ### Struct `mcprotocol::serial::RandomWriteWordItem`
 
@@ -4455,7 +4866,7 @@ One block inside native multi-block read (0406).
 #### `head_device`
 
 ```cpp
-DeviceAddress mcprotocol::serial::MultiBlockReadBlock::head_device {}
+DeviceAddress mcprotocol::serial::MultiBlockReadBlock::head_device
 ```
 
 First device in this contiguous block.
@@ -4463,7 +4874,7 @@ First device in this contiguous block.
 #### `points`
 
 ```cpp
-std::uint16_t mcprotocol::serial::MultiBlockReadBlock::points = 0
+std::uint16_t mcprotocol::serial::MultiBlockReadBlock::points
 ```
 
 Number of points in this block.
@@ -4471,10 +4882,24 @@ Number of points in this block.
 #### `bit_block`
 
 ```cpp
-bool mcprotocol::serial::MultiBlockReadBlock::bit_block = false
+bool mcprotocol::serial::MultiBlockReadBlock::bit_block
 ```
 
 true for bit blocks, false for word blocks.
+
+#### Member Functions
+
+#### `MultiBlockReadBlock`
+
+```cpp
+mcprotocol::serial::MultiBlockReadBlock::MultiBlockReadBlock()=delete
+```
+
+#### `MultiBlockReadBlock`
+
+```cpp
+mcprotocol::serial::MultiBlockReadBlock::MultiBlockReadBlock(DeviceAddress first_device, std::uint16_t point_count, bool use_bit_block) noexcept
+```
 
 ### Struct `mcprotocol::serial::MultiBlockReadRequest`
 
@@ -4485,10 +4910,24 @@ Native multi-block read request composed of multiple contiguous blocks.
 #### `blocks`
 
 ```cpp
-std::span<const MultiBlockReadBlock> mcprotocol::serial::MultiBlockReadRequest::blocks {}
+std::span<const MultiBlockReadBlock> mcprotocol::serial::MultiBlockReadRequest::blocks
 ```
 
 Ordered block list encoded into the native multi-block read request.
+
+#### Member Functions
+
+#### `MultiBlockReadRequest`
+
+```cpp
+mcprotocol::serial::MultiBlockReadRequest::MultiBlockReadRequest()=delete
+```
+
+#### `MultiBlockReadRequest`
+
+```cpp
+mcprotocol::serial::MultiBlockReadRequest::MultiBlockReadRequest(std::span< const MultiBlockReadBlock > request_blocks) noexcept
+```
 
 ### Struct `mcprotocol::serial::MultiBlockWriteBlock`
 
@@ -4499,7 +4938,7 @@ One block inside native multi-block write (1406).
 #### `head_device`
 
 ```cpp
-DeviceAddress mcprotocol::serial::MultiBlockWriteBlock::head_device {}
+DeviceAddress mcprotocol::serial::MultiBlockWriteBlock::head_device
 ```
 
 First device in this contiguous block.
@@ -4507,7 +4946,7 @@ First device in this contiguous block.
 #### `points`
 
 ```cpp
-std::uint16_t mcprotocol::serial::MultiBlockWriteBlock::points = 0
+std::uint16_t mcprotocol::serial::MultiBlockWriteBlock::points
 ```
 
 Point count for this block.
@@ -4515,7 +4954,7 @@ Point count for this block.
 #### `bit_block`
 
 ```cpp
-bool mcprotocol::serial::MultiBlockWriteBlock::bit_block = false
+bool mcprotocol::serial::MultiBlockWriteBlock::bit_block
 ```
 
 true when bits is used, false when words is used.
@@ -4523,7 +4962,7 @@ true when bits is used, false when words is used.
 #### `words`
 
 ```cpp
-std::span<const std::uint16_t> mcprotocol::serial::MultiBlockWriteBlock::words {}
+std::span<const std::uint16_t> mcprotocol::serial::MultiBlockWriteBlock::words
 ```
 
 Caller-owned word data for word blocks.
@@ -4531,10 +4970,36 @@ Caller-owned word data for word blocks.
 #### `bits`
 
 ```cpp
-std::span<const BitValue> mcprotocol::serial::MultiBlockWriteBlock::bits {}
+std::span<const BitValue> mcprotocol::serial::MultiBlockWriteBlock::bits
 ```
 
 Caller-owned bit data for bit blocks.
+
+#### Member Functions
+
+#### `MultiBlockWriteBlock`
+
+```cpp
+mcprotocol::serial::MultiBlockWriteBlock::MultiBlockWriteBlock()=delete
+```
+
+#### `MultiBlockWriteBlock`
+
+```cpp
+mcprotocol::serial::MultiBlockWriteBlock::MultiBlockWriteBlock(DeviceAddress first_device, std::uint16_t point_count, bool use_bit_block, std::span< const std::uint16_t > write_words, std::span< const BitValue > write_bits) noexcept
+```
+
+#### `MultiBlockWriteBlock`
+
+```cpp
+mcprotocol::serial::MultiBlockWriteBlock::MultiBlockWriteBlock(DeviceAddress first_device, std::uint16_t point_count, std::span< const std::uint16_t > write_words) noexcept
+```
+
+#### `MultiBlockWriteBlock`
+
+```cpp
+mcprotocol::serial::MultiBlockWriteBlock::MultiBlockWriteBlock(DeviceAddress first_device, std::uint16_t point_count, std::span< const BitValue > write_bits) noexcept
+```
 
 ### Struct `mcprotocol::serial::MultiBlockWriteRequest`
 
@@ -4545,10 +5010,24 @@ Native multi-block write request composed of multiple contiguous blocks.
 #### `blocks`
 
 ```cpp
-std::span<const MultiBlockWriteBlock> mcprotocol::serial::MultiBlockWriteRequest::blocks {}
+std::span<const MultiBlockWriteBlock> mcprotocol::serial::MultiBlockWriteRequest::blocks
 ```
 
 Ordered block list encoded into the native multi-block write request.
+
+#### Member Functions
+
+#### `MultiBlockWriteRequest`
+
+```cpp
+mcprotocol::serial::MultiBlockWriteRequest::MultiBlockWriteRequest()=delete
+```
+
+#### `MultiBlockWriteRequest`
+
+```cpp
+mcprotocol::serial::MultiBlockWriteRequest::MultiBlockWriteRequest(std::span< const MultiBlockWriteBlock > request_blocks) noexcept
+```
 
 ### Struct `mcprotocol::serial::MultiBlockReadBlockResult`
 
@@ -4567,7 +5046,7 @@ Block kind copied from the original request.
 #### `head_device`
 
 ```cpp
-DeviceAddress mcprotocol::serial::MultiBlockReadBlockResult::head_device {}
+DeviceAddress mcprotocol::serial::MultiBlockReadBlockResult::head_device {DeviceCode::D, 0U}
 ```
 
 Block head device copied from the original request.
@@ -4603,7 +5082,7 @@ Number of entries contributed by this block to the aggregate output storage.
 #### `word_items`
 
 ```cpp
-std::span<const RandomReadWordItem> mcprotocol::serial::MonitorRegistration::word_items {}
+std::span<const RandomReadWordItem> mcprotocol::serial::MonitorRegistration::word_items
 ```
 
 Sparse 16-bit items registered first.
@@ -4611,10 +5090,24 @@ Sparse 16-bit items registered first.
 #### `dword_items`
 
 ```cpp
-std::span<const RandomReadDWordItem> mcprotocol::serial::MonitorRegistration::dword_items {}
+std::span<const RandomReadDWordItem> mcprotocol::serial::MonitorRegistration::dword_items
 ```
 
 Sparse 32-bit items registered second. Unsupported for 1C and 1E monitor commands.
+
+#### Member Functions
+
+#### `MonitorRegistration`
+
+```cpp
+mcprotocol::serial::MonitorRegistration::MonitorRegistration()=delete
+```
+
+#### `MonitorRegistration`
+
+```cpp
+mcprotocol::serial::MonitorRegistration::MonitorRegistration(std::span< const RandomReadWordItem > words, std::span< const RandomReadDWordItem > dwords) noexcept
+```
 
 ### Struct `mcprotocol::serial::UserFrameReadRequest`
 
@@ -4623,10 +5116,24 @@ Sparse 32-bit items registered second. Unsupported for 1C and 1E monitor command
 #### `frame_no`
 
 ```cpp
-std::uint16_t mcprotocol::serial::UserFrameReadRequest::frame_no = 0
+std::uint16_t mcprotocol::serial::UserFrameReadRequest::frame_no
 ```
 
 User-frame number to read, typically in the documented 0x0000..0x03FF or 0x8001..0x801F ranges.
+
+#### Member Functions
+
+#### `UserFrameReadRequest`
+
+```cpp
+mcprotocol::serial::UserFrameReadRequest::UserFrameReadRequest()=delete
+```
+
+#### `UserFrameReadRequest`
+
+```cpp
+mcprotocol::serial::UserFrameReadRequest::UserFrameReadRequest(std::uint16_t target_frame_no) noexcept
+```
 
 ### Struct `mcprotocol::serial::UserFrameRegistrationData`
 
@@ -4667,7 +5174,7 @@ User-frame registration-data write request (1610, subcommand 0000).
 #### `frame_no`
 
 ```cpp
-std::uint16_t mcprotocol::serial::UserFrameWriteRequest::frame_no = 0
+std::uint16_t mcprotocol::serial::UserFrameWriteRequest::frame_no
 ```
 
 User-frame number to overwrite.
@@ -4675,7 +5182,7 @@ User-frame number to overwrite.
 #### `frame_bytes`
 
 ```cpp
-std::uint16_t mcprotocol::serial::UserFrameWriteRequest::frame_bytes = 0
+std::uint16_t mcprotocol::serial::UserFrameWriteRequest::frame_bytes
 ```
 
 Frame-byte count encoded into the 1610 payload.
@@ -4683,10 +5190,24 @@ Frame-byte count encoded into the 1610 payload.
 #### `registration_data`
 
 ```cpp
-std::span<const std::byte> mcprotocol::serial::UserFrameWriteRequest::registration_data {}
+std::span<const std::byte> mcprotocol::serial::UserFrameWriteRequest::registration_data
 ```
 
 Raw user-frame registration bytes to store.
+
+#### Member Functions
+
+#### `UserFrameWriteRequest`
+
+```cpp
+mcprotocol::serial::UserFrameWriteRequest::UserFrameWriteRequest()=delete
+```
+
+#### `UserFrameWriteRequest`
+
+```cpp
+mcprotocol::serial::UserFrameWriteRequest::UserFrameWriteRequest(std::uint16_t target_frame_no, std::uint16_t target_frame_bytes, std::span< const std::byte > target_registration_data) noexcept
+```
 
 ### Struct `mcprotocol::serial::UserFrameDeleteRequest`
 
@@ -4697,10 +5218,24 @@ User-frame registration-data delete request (1610, subcommand 0001).
 #### `frame_no`
 
 ```cpp
-std::uint16_t mcprotocol::serial::UserFrameDeleteRequest::frame_no = 0
+std::uint16_t mcprotocol::serial::UserFrameDeleteRequest::frame_no
 ```
 
 User-frame number to clear.
+
+#### Member Functions
+
+#### `UserFrameDeleteRequest`
+
+```cpp
+mcprotocol::serial::UserFrameDeleteRequest::UserFrameDeleteRequest()=delete
+```
+
+#### `UserFrameDeleteRequest`
+
+```cpp
+mcprotocol::serial::UserFrameDeleteRequest::UserFrameDeleteRequest(std::uint16_t target_frame_no) noexcept
+```
 
 ### Struct `mcprotocol::serial::GlobalSignalControlRequest`
 
@@ -4711,18 +5246,32 @@ C24 global-signal ON/OFF request (1618).
 #### `target`
 
 ```cpp
-GlobalSignalTarget mcprotocol::serial::GlobalSignalControlRequest::target = GlobalSignalTarget::ReceivedSide
+GlobalSignalTarget mcprotocol::serial::GlobalSignalControlRequest::target
 ```
 
 Which global signal destination should be controlled.
 
-#### `turn_on`
+#### `value`
 
 ```cpp
-bool mcprotocol::serial::GlobalSignalControlRequest::turn_on = false
+BitValue mcprotocol::serial::GlobalSignalControlRequest::value
 ```
 
-true for ON, false for OFF.
+Explicit ON/OFF state.
+
+#### Member Functions
+
+#### `GlobalSignalControlRequest`
+
+```cpp
+mcprotocol::serial::GlobalSignalControlRequest::GlobalSignalControlRequest()=delete
+```
+
+#### `GlobalSignalControlRequest`
+
+```cpp
+mcprotocol::serial::GlobalSignalControlRequest::GlobalSignalControlRequest(GlobalSignalTarget signal_target, BitValue signal_value) noexcept
+```
 
 ### Struct `mcprotocol::serial::SerialModuleModeSwitchRequest`
 
@@ -4735,7 +5284,7 @@ The three switch_* flags form the documented switching instruction byte: bit0 = 
 #### `channel`
 
 ```cpp
-SerialModuleChannel mcprotocol::serial::SerialModuleModeSwitchRequest::channel = SerialModuleChannel::Ch1
+SerialModuleChannel mcprotocol::serial::SerialModuleModeSwitchRequest::channel
 ```
 
 Target interface.
@@ -4743,7 +5292,7 @@ Target interface.
 #### `switch_mode_no`
 
 ```cpp
-bool mcprotocol::serial::SerialModuleModeSwitchRequest::switch_mode_no = false
+bool mcprotocol::serial::SerialModuleModeSwitchRequest::switch_mode_no
 ```
 
 true to use mode_no from this command.
@@ -4751,7 +5300,7 @@ true to use mode_no from this command.
 #### `switch_transmission_setting`
 
 ```cpp
-bool mcprotocol::serial::SerialModuleModeSwitchRequest::switch_transmission_setting = false
+bool mcprotocol::serial::SerialModuleModeSwitchRequest::switch_transmission_setting
 ```
 
 true to use transmission_setting from this command.
@@ -4759,7 +5308,7 @@ true to use transmission_setting from this command.
 #### `switch_communication_speed`
 
 ```cpp
-bool mcprotocol::serial::SerialModuleModeSwitchRequest::switch_communication_speed = false
+bool mcprotocol::serial::SerialModuleModeSwitchRequest::switch_communication_speed
 ```
 
 true to use communication_speed from this command.
@@ -4767,7 +5316,7 @@ true to use communication_speed from this command.
 #### `mode_no`
 
 ```cpp
-SerialModuleModeNo mcprotocol::serial::SerialModuleModeSwitchRequest::mode_no = SerialModuleModeNo::McProtocolFormat1
+SerialModuleModeNo mcprotocol::serial::SerialModuleModeSwitchRequest::mode_no
 ```
 
 Operation mode number. The manual requires a valid non-zero value even when switch_mode_no is false.
@@ -4775,7 +5324,7 @@ Operation mode number. The manual requires a valid non-zero value even when swit
 #### `transmission_setting`
 
 ```cpp
-std::uint8_t mcprotocol::serial::SerialModuleModeSwitchRequest::transmission_setting = 0
+std::uint8_t mcprotocol::serial::SerialModuleModeSwitchRequest::transmission_setting
 ```
 
 Raw transmission-setting bit field used when switch_transmission_setting is true.
@@ -4783,10 +5332,24 @@ Raw transmission-setting bit field used when switch_transmission_setting is true
 #### `communication_speed`
 
 ```cpp
-SerialModuleCommunicationSpeed mcprotocol::serial::SerialModuleModeSwitchRequest::communication_speed = SerialModuleCommunicationSpeed::Bps300
+SerialModuleCommunicationSpeed mcprotocol::serial::SerialModuleModeSwitchRequest::communication_speed
 ```
 
 Communication speed used when switch_communication_speed is true.
+
+#### Member Functions
+
+#### `SerialModuleModeSwitchRequest`
+
+```cpp
+mcprotocol::serial::SerialModuleModeSwitchRequest::SerialModuleModeSwitchRequest()=delete
+```
+
+#### `SerialModuleModeSwitchRequest`
+
+```cpp
+mcprotocol::serial::SerialModuleModeSwitchRequest::SerialModuleModeSwitchRequest(SerialModuleChannel target_channel, bool use_mode_no, bool use_transmission_setting, bool use_communication_speed, SerialModuleModeNo target_mode_no, std::uint8_t target_transmission_setting, SerialModuleCommunicationSpeed target_communication_speed) noexcept
+```
 
 ### Struct `mcprotocol::serial::HostBufferReadRequest`
 
@@ -4795,7 +5358,7 @@ Communication speed used when switch_communication_speed is true.
 #### `start_address`
 
 ```cpp
-std::uint32_t mcprotocol::serial::HostBufferReadRequest::start_address = 0
+std::uint32_t mcprotocol::serial::HostBufferReadRequest::start_address
 ```
 
 Starting host-buffer word address.
@@ -4803,10 +5366,24 @@ Starting host-buffer word address.
 #### `word_length`
 
 ```cpp
-std::uint16_t mcprotocol::serial::HostBufferReadRequest::word_length = 0
+std::uint16_t mcprotocol::serial::HostBufferReadRequest::word_length
 ```
 
 Number of words to read.
+
+#### Member Functions
+
+#### `HostBufferReadRequest`
+
+```cpp
+mcprotocol::serial::HostBufferReadRequest::HostBufferReadRequest()=delete
+```
+
+#### `HostBufferReadRequest`
+
+```cpp
+mcprotocol::serial::HostBufferReadRequest::HostBufferReadRequest(std::uint32_t first_address, std::uint16_t length_words) noexcept
+```
 
 ### Struct `mcprotocol::serial::HostBufferWriteRequest`
 
@@ -4817,7 +5394,7 @@ Host-buffer write request (1613).
 #### `start_address`
 
 ```cpp
-std::uint32_t mcprotocol::serial::HostBufferWriteRequest::start_address = 0
+std::uint32_t mcprotocol::serial::HostBufferWriteRequest::start_address
 ```
 
 Starting host-buffer word address.
@@ -4825,10 +5402,24 @@ Starting host-buffer word address.
 #### `words`
 
 ```cpp
-std::span<const std::uint16_t> mcprotocol::serial::HostBufferWriteRequest::words {}
+std::span<const std::uint16_t> mcprotocol::serial::HostBufferWriteRequest::words
 ```
 
 Caller-owned words written sequentially from start_address.
+
+#### Member Functions
+
+#### `HostBufferWriteRequest`
+
+```cpp
+mcprotocol::serial::HostBufferWriteRequest::HostBufferWriteRequest()=delete
+```
+
+#### `HostBufferWriteRequest`
+
+```cpp
+mcprotocol::serial::HostBufferWriteRequest::HostBufferWriteRequest(std::uint32_t first_address, std::span< const std::uint16_t > write_words) noexcept
+```
 
 ### Struct `mcprotocol::serial::ModuleBufferReadRequest`
 
@@ -4839,7 +5430,7 @@ Module-buffer byte read request (0601 helper path).
 #### `start_address`
 
 ```cpp
-std::uint32_t mcprotocol::serial::ModuleBufferReadRequest::start_address = 0
+std::uint32_t mcprotocol::serial::ModuleBufferReadRequest::start_address
 ```
 
 Starting module-buffer byte address.
@@ -4847,7 +5438,7 @@ Starting module-buffer byte address.
 #### `bytes`
 
 ```cpp
-std::uint16_t mcprotocol::serial::ModuleBufferReadRequest::bytes = 0
+std::uint16_t mcprotocol::serial::ModuleBufferReadRequest::bytes
 ```
 
 Number of bytes to read.
@@ -4855,10 +5446,24 @@ Number of bytes to read.
 #### `module_number`
 
 ```cpp
-std::uint16_t mcprotocol::serial::ModuleBufferReadRequest::module_number = 0
+std::uint16_t mcprotocol::serial::ModuleBufferReadRequest::module_number
 ```
 
 Module number used by the addressed special-function module.
+
+#### Member Functions
+
+#### `ModuleBufferReadRequest`
+
+```cpp
+mcprotocol::serial::ModuleBufferReadRequest::ModuleBufferReadRequest()=delete
+```
+
+#### `ModuleBufferReadRequest`
+
+```cpp
+mcprotocol::serial::ModuleBufferReadRequest::ModuleBufferReadRequest(std::uint32_t first_address, std::uint16_t byte_count, std::uint16_t target_module_number) noexcept
+```
 
 ### Struct `mcprotocol::serial::ModuleBufferWriteRequest`
 
@@ -4869,7 +5474,7 @@ Module-buffer byte write request (1601 helper path).
 #### `start_address`
 
 ```cpp
-std::uint32_t mcprotocol::serial::ModuleBufferWriteRequest::start_address = 0
+std::uint32_t mcprotocol::serial::ModuleBufferWriteRequest::start_address
 ```
 
 Starting module-buffer byte address.
@@ -4877,7 +5482,7 @@ Starting module-buffer byte address.
 #### `module_number`
 
 ```cpp
-std::uint16_t mcprotocol::serial::ModuleBufferWriteRequest::module_number = 0
+std::uint16_t mcprotocol::serial::ModuleBufferWriteRequest::module_number
 ```
 
 Module number used by the addressed special-function module.
@@ -4885,10 +5490,24 @@ Module number used by the addressed special-function module.
 #### `bytes`
 
 ```cpp
-std::span<const std::byte> mcprotocol::serial::ModuleBufferWriteRequest::bytes {}
+std::span<const std::byte> mcprotocol::serial::ModuleBufferWriteRequest::bytes
 ```
 
 Caller-owned raw bytes written starting at start_address.
+
+#### Member Functions
+
+#### `ModuleBufferWriteRequest`
+
+```cpp
+mcprotocol::serial::ModuleBufferWriteRequest::ModuleBufferWriteRequest()=delete
+```
+
+#### `ModuleBufferWriteRequest`
+
+```cpp
+mcprotocol::serial::ModuleBufferWriteRequest::ModuleBufferWriteRequest(std::uint32_t first_address, std::uint16_t target_module_number, std::span< const std::byte > write_bytes) noexcept
+```
 
 ### Struct `mcprotocol::serial::CpuModelInfo`
 
@@ -4914,6 +5533,8 @@ Raw model code returned by the target.
 
 Optional RS-485 callbacks used by the async client around TX start/end.
 
+on_tx_begin and on_tx_end are installed as a pair. Leaving both null disables library-side direction control; user may remain null even when the callback pair is installed.
+
 #### Fields
 
 #### `on_tx_begin`
@@ -4922,7 +5543,7 @@ Optional RS-485 callbacks used by the async client around TX start/end.
 void(* mcprotocol::serial::Rs485Hooks::on_tx_begin) (void *user) = nullptr
 ```
 
-Optional callback fired immediately before the client expects TX to start.
+Callback fired immediately before the client expects TX to start.
 
 #### `on_tx_end`
 
@@ -4930,7 +5551,7 @@ Optional callback fired immediately before the client expects TX to start.
 void(* mcprotocol::serial::Rs485Hooks::on_tx_end) (void *user) = nullptr
 ```
 
-Optional callback fired after TX completion or after cleanup on failure/cancel.
+Matching callback fired after physical TX completion or abort is reported.
 
 #### `user`
 

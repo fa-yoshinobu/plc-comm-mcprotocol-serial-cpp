@@ -13,13 +13,19 @@ namespace mcprotocol::serial {
 
 /// \brief Parsed `Jn\\...` link-direct device reference such as `J1\\W100`.
 struct LinkDirectDevice {
-  std::uint16_t network_number = 0;
-  DeviceAddress device {};
+  LinkDirectDevice() = delete;
+  constexpr LinkDirectDevice(
+      std::uint16_t target_network_number,
+      DeviceAddress target_device) noexcept
+      : network_number(target_network_number), device(target_device) {}
+
+  std::uint16_t network_number;
+  DeviceAddress device;
 };
 
 /// \brief One sparse `Jn\\...` item used by native random-read and monitor registration.
 struct LinkDirectRandomReadWordItem {
-  LinkDirectDevice device {};
+  LinkDirectDevice device;
 };
 
 /// \brief One sparse `Jn\\...` word item used by native random word-write.
@@ -52,33 +58,78 @@ struct LinkDirectRandomWriteBitItem {
 
 /// \brief One `Jn\\...` block used by native multi-block read.
 struct LinkDirectMultiBlockReadBlock {
-  LinkDirectDevice head_device {};
-  std::uint16_t points = 0;
-  bool bit_block = false;
+  LinkDirectMultiBlockReadBlock() = delete;
+  constexpr LinkDirectMultiBlockReadBlock(
+      LinkDirectDevice first_device,
+      std::uint16_t point_count,
+      bool use_bit_block) noexcept
+      : head_device(first_device), points(point_count), bit_block(use_bit_block) {}
+
+  LinkDirectDevice head_device;
+  std::uint16_t points;
+  bool bit_block;
 };
 
 /// \brief `Jn\\...` native multi-block read request.
 struct LinkDirectMultiBlockReadRequest {
-  std::span<const LinkDirectMultiBlockReadBlock> blocks {};
+  LinkDirectMultiBlockReadRequest() = delete;
+  constexpr explicit LinkDirectMultiBlockReadRequest(
+      std::span<const LinkDirectMultiBlockReadBlock> request_blocks) noexcept
+      : blocks(request_blocks) {}
+
+  std::span<const LinkDirectMultiBlockReadBlock> blocks;
 };
 
 /// \brief One `Jn\\...` block used by native multi-block write.
 struct LinkDirectMultiBlockWriteBlock {
-  LinkDirectDevice head_device {};
-  std::uint16_t points = 0;
-  bool bit_block = false;
-  std::span<const std::uint16_t> words {};
-  std::span<const BitValue> bits {};
+  LinkDirectMultiBlockWriteBlock() = delete;
+  constexpr LinkDirectMultiBlockWriteBlock(
+      LinkDirectDevice first_device,
+      std::uint16_t point_count,
+      bool use_bit_block,
+      std::span<const std::uint16_t> write_words,
+      std::span<const BitValue> write_bits) noexcept
+      : head_device(first_device),
+        points(point_count),
+        bit_block(use_bit_block),
+        words(write_words),
+        bits(write_bits) {}
+  constexpr LinkDirectMultiBlockWriteBlock(
+      LinkDirectDevice first_device,
+      std::uint16_t point_count,
+      std::span<const std::uint16_t> write_words) noexcept
+      : LinkDirectMultiBlockWriteBlock(first_device, point_count, false, write_words, {}) {}
+  constexpr LinkDirectMultiBlockWriteBlock(
+      LinkDirectDevice first_device,
+      std::uint16_t point_count,
+      std::span<const BitValue> write_bits) noexcept
+      : LinkDirectMultiBlockWriteBlock(first_device, point_count, true, {}, write_bits) {}
+
+  LinkDirectDevice head_device;
+  std::uint16_t points;
+  bool bit_block;
+  std::span<const std::uint16_t> words;
+  std::span<const BitValue> bits;
 };
 
 /// \brief `Jn\\...` native multi-block write request.
 struct LinkDirectMultiBlockWriteRequest {
-  std::span<const LinkDirectMultiBlockWriteBlock> blocks {};
+  LinkDirectMultiBlockWriteRequest() = delete;
+  constexpr explicit LinkDirectMultiBlockWriteRequest(
+      std::span<const LinkDirectMultiBlockWriteBlock> request_blocks) noexcept
+      : blocks(request_blocks) {}
+
+  std::span<const LinkDirectMultiBlockWriteBlock> blocks;
 };
 
 /// \brief `Jn\\...` monitor registration payload (`0801` + device extension specification).
 struct LinkDirectMonitorRegistration {
-  std::span<const LinkDirectRandomReadWordItem> word_items {};
+  LinkDirectMonitorRegistration() = delete;
+  constexpr explicit LinkDirectMonitorRegistration(
+      std::span<const LinkDirectRandomReadWordItem> monitor_items) noexcept
+      : word_items(monitor_items) {}
+
+  std::span<const LinkDirectRandomReadWordItem> word_items;
 };
 
 namespace link_direct_detail {
@@ -127,10 +178,7 @@ constexpr LinkDirectParseSpec kLinkDirectParseSpecs[] = {
       return false;
     }
 
-    out_device = DeviceAddress {
-        .code = spec.code,
-        .number = number,
-    };
+    out_device = DeviceAddress(spec.code, number);
     return true;
   }
 
@@ -170,17 +218,14 @@ constexpr LinkDirectParseSpec kLinkDirectParseSpecs[] = {
         "Link direct network number must be a hexadecimal value in range 0x0000..0xFFFF");
   }
 
-  DeviceAddress device {};
+  DeviceAddress device(DeviceCode::D, 0U);
   if (!link_direct_detail::parse_link_direct_inner_device(text.substr(separator + 1U), device)) {
     return make_status(
         StatusCode::InvalidArgument,
         "Link direct device must be X, Y, B, W, SB, or SW");
   }
 
-  out_device = LinkDirectDevice {
-      .network_number = static_cast<std::uint16_t>(network_number),
-      .device = device,
-  };
+  out_device = LinkDirectDevice(static_cast<std::uint16_t>(network_number), device);
   return ok_status();
 }
 

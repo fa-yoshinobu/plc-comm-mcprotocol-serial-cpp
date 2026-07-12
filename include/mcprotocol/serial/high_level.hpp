@@ -86,16 +86,7 @@ using mcprotocol::serial::detail::parse_u32;
     PlcProfile profile,
     SumCheckMode sum_check_mode,
     RouteConfig route) noexcept {
-  ProtocolConfig config {};
-  config.frame_kind = FrameKind::C4;
-  config.code_mode = CodeMode::Binary;
-  config.ascii_format = AsciiFormat::Format3;
-  config.plc_profile = profile;
-  config.sum_check_mode = sum_check_mode;
-  config.route = route;
-  config.timeout.response_timeout_ms = 3000;
-  config.timeout.inter_byte_timeout_ms = 250;
-  return config;
+  return ProtocolConfig::c4_binary(profile, sum_check_mode, route);
 }
 
 /// \brief Returns a practical `Format4 / ASCII / C4` configuration for an explicit PLC profile.
@@ -103,16 +94,8 @@ using mcprotocol::serial::detail::parse_u32;
     PlcProfile profile,
     SumCheckMode sum_check_mode,
     RouteConfig route) noexcept {
-  ProtocolConfig config {};
-  config.frame_kind = FrameKind::C4;
-  config.code_mode = CodeMode::Ascii;
-  config.ascii_format = AsciiFormat::Format4;
-  config.plc_profile = profile;
-  config.sum_check_mode = sum_check_mode;
-  config.route = route;
-  config.timeout.response_timeout_ms = 3000;
-  config.timeout.inter_byte_timeout_ms = 250;
-  return config;
+  return ProtocolConfig::ascii(
+      mcprotocol::serial::AsciiFrameKind::C4, AsciiFormat::Format4, profile, sum_check_mode, route);
 }
 
 /// \brief Returns a `Format2 / ASCII / C4` configuration with explicit profile and sum-check mode.
@@ -123,21 +106,28 @@ using mcprotocol::serial::detail::parse_u32;
     PlcProfile profile,
     SumCheckMode sum_check_mode,
     RouteConfig route) noexcept {
-  ProtocolConfig config = make_c4_ascii_format4_protocol(profile, sum_check_mode, route);
-  config.ascii_format = AsciiFormat::Format2;
-  return config;
+  return ProtocolConfig::ascii(
+      mcprotocol::serial::AsciiFrameKind::C4, AsciiFormat::Format2, profile, sum_check_mode, route);
 }
 
 /// \brief String-address spec used to build sparse random-read or monitor requests.
 struct RandomReadWordSpec {
+  RandomReadWordSpec() = delete;
+  constexpr explicit RandomReadWordSpec(std::string_view target_device) noexcept
+      : device(target_device) {}
+
   /// Plain device string such as `D100` selected explicitly as 16-bit.
-  std::string_view device {};
+  std::string_view device;
 };
 
 /// \brief String-address spec selected explicitly for 32-bit sparse read/monitor access.
 struct RandomReadDWordSpec {
+  RandomReadDWordSpec() = delete;
+  constexpr explicit RandomReadDWordSpec(std::string_view target_device) noexcept
+      : device(target_device) {}
+
   /// Plain device string such as `D100`, `LZ0`, or `LCN10` selected explicitly as 32-bit.
-  std::string_view device {};
+  std::string_view device;
 };
 
 /// \brief String-address spec used to build sparse random word-write items.
@@ -195,12 +185,19 @@ enum class LongStateReadRoute : std::uint8_t {
 
 /// \brief Mapping from a long-family state device to the helper's internal read route.
 struct LongStateReadSpec {
+  LongStateReadSpec() = delete;
+  constexpr LongStateReadSpec(
+      LongStateReadRoute read_route,
+      DeviceCode target_base_code,
+      LongStateReadKind state_kind) noexcept
+      : route(read_route), base_code(target_base_code), kind(state_kind) {}
+
   /// Read route used internally by the long-state helper.
-  LongStateReadRoute route = LongStateReadRoute::StatusBlock;
+  LongStateReadRoute route;
   /// Base current-value device read with `0401` word access, or direct bit device for DirectBits.
-  DeviceCode base_code = DeviceCode::LTN;
+  DeviceCode base_code;
   /// Status bit selected from the third word of the block.
-  LongStateReadKind kind = LongStateReadKind::Contact;
+  LongStateReadKind kind;
 };
 
 /// \brief Parses a plain MC device string such as `D100`, `M100`, `X10`, or `B20`.
@@ -232,10 +229,7 @@ struct LongStateReadSpec {
       return make_status(StatusCode::InvalidArgument, "Device address number is invalid");
     }
 
-    out_device = DeviceAddress {
-        .code = spec.code,
-        .number = number,
-    };
+    out_device = DeviceAddress(spec.code, number);
     return ok_status();
   }
 
@@ -251,40 +245,28 @@ struct LongStateReadSpec {
     LongStateReadSpec& out_spec) noexcept {
   switch (code) {
     case DeviceCode::LTS:
-      out_spec = LongStateReadSpec {
-          .route = LongStateReadRoute::StatusBlock,
-          .base_code = DeviceCode::LTN,
-          .kind = LongStateReadKind::Contact};
+      out_spec = LongStateReadSpec(
+          LongStateReadRoute::StatusBlock, DeviceCode::LTN, LongStateReadKind::Contact);
       return ok_status();
     case DeviceCode::LTC:
-      out_spec = LongStateReadSpec {
-          .route = LongStateReadRoute::StatusBlock,
-          .base_code = DeviceCode::LTN,
-          .kind = LongStateReadKind::Coil};
+      out_spec = LongStateReadSpec(
+          LongStateReadRoute::StatusBlock, DeviceCode::LTN, LongStateReadKind::Coil);
       return ok_status();
     case DeviceCode::LSTS:
-      out_spec = LongStateReadSpec {
-          .route = LongStateReadRoute::StatusBlock,
-          .base_code = DeviceCode::LSTN,
-          .kind = LongStateReadKind::Contact};
+      out_spec = LongStateReadSpec(
+          LongStateReadRoute::StatusBlock, DeviceCode::LSTN, LongStateReadKind::Contact);
       return ok_status();
     case DeviceCode::LSTC:
-      out_spec = LongStateReadSpec {
-          .route = LongStateReadRoute::StatusBlock,
-          .base_code = DeviceCode::LSTN,
-          .kind = LongStateReadKind::Coil};
+      out_spec = LongStateReadSpec(
+          LongStateReadRoute::StatusBlock, DeviceCode::LSTN, LongStateReadKind::Coil);
       return ok_status();
     case DeviceCode::LCS:
-      out_spec = LongStateReadSpec {
-          .route = LongStateReadRoute::DirectBits,
-          .base_code = DeviceCode::LCS,
-          .kind = LongStateReadKind::Contact};
+      out_spec = LongStateReadSpec(
+          LongStateReadRoute::DirectBits, DeviceCode::LCS, LongStateReadKind::Contact);
       return ok_status();
     case DeviceCode::LCC:
-      out_spec = LongStateReadSpec {
-          .route = LongStateReadRoute::DirectBits,
-          .base_code = DeviceCode::LCC,
-          .kind = LongStateReadKind::Coil};
+      out_spec = LongStateReadSpec(
+          LongStateReadRoute::DirectBits, DeviceCode::LCC, LongStateReadKind::Coil);
       return ok_status();
     default:
       return make_status(StatusCode::InvalidArgument, "Device is not a long timer/counter state device");
@@ -313,15 +295,12 @@ struct LongStateReadSpec {
     std::string_view head_device,
     std::uint16_t points,
     BatchReadWordsRequest& out_request) noexcept {
-  DeviceAddress parsed {};
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(head_device, parsed);
   if (!status.ok()) {
     return status;
   }
-  out_request = BatchReadWordsRequest {
-      .head_device = parsed,
-      .points = points,
-  };
+  out_request = BatchReadWordsRequest(parsed, points);
   return ok_status();
 }
 
@@ -330,15 +309,12 @@ struct LongStateReadSpec {
     std::string_view head_device,
     std::uint16_t points,
     BatchReadBitsRequest& out_request) noexcept {
-  DeviceAddress parsed {};
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(head_device, parsed);
   if (!status.ok()) {
     return status;
   }
-  out_request = BatchReadBitsRequest {
-      .head_device = parsed,
-      .points = points,
-  };
+  out_request = BatchReadBitsRequest(parsed, points);
   return ok_status();
 }
 
@@ -347,15 +323,12 @@ struct LongStateReadSpec {
     std::string_view head_device,
     std::span<const std::uint16_t> words,
     BatchWriteWordsRequest& out_request) noexcept {
-  DeviceAddress parsed {};
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(head_device, parsed);
   if (!status.ok()) {
     return status;
   }
-  out_request = BatchWriteWordsRequest {
-      .head_device = parsed,
-      .words = words,
-  };
+  out_request = BatchWriteWordsRequest(parsed, words);
   return ok_status();
 }
 
@@ -364,15 +337,12 @@ struct LongStateReadSpec {
     std::string_view head_device,
     std::span<const BitValue> bits,
     BatchWriteBitsRequest& out_request) noexcept {
-  DeviceAddress parsed {};
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(head_device, parsed);
   if (!status.ok()) {
     return status;
   }
-  out_request = BatchWriteBitsRequest {
-      .head_device = parsed,
-      .bits = bits,
-  };
+  out_request = BatchWriteBitsRequest(parsed, bits);
   return ok_status();
 }
 
@@ -380,12 +350,12 @@ struct LongStateReadSpec {
 [[nodiscard]] inline Status make_random_read_word_item(
     std::string_view device,
     RandomReadWordItem& out_item) noexcept {
-  DeviceAddress parsed {};
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(device, parsed);
   if (!status.ok()) {
     return status;
   }
-  out_item = RandomReadWordItem {.device = parsed};
+  out_item = RandomReadWordItem {parsed};
   return ok_status();
 }
 
@@ -393,12 +363,12 @@ struct LongStateReadSpec {
 [[nodiscard]] inline Status make_random_read_dword_item(
     std::string_view device,
     RandomReadDWordItem& out_item) noexcept {
-  DeviceAddress parsed {};
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(device, parsed);
   if (!status.ok()) {
     return status;
   }
-  out_item = RandomReadDWordItem {.device = parsed};
+  out_item = RandomReadDWordItem {parsed};
   return ok_status();
 }
 
@@ -407,7 +377,7 @@ struct LongStateReadSpec {
     std::string_view device,
     std::uint16_t value,
     RandomWriteWordItem& out_item) noexcept {
-  DeviceAddress parsed {};
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(device, parsed);
   if (!status.ok()) {
     return status;
@@ -421,7 +391,7 @@ struct LongStateReadSpec {
     std::string_view device,
     std::uint32_t value,
     RandomWriteDWordItem& out_item) noexcept {
-  DeviceAddress parsed {};
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(device, parsed);
   if (!status.ok()) {
     return status;
@@ -440,7 +410,7 @@ struct LongStateReadSpec {
         StatusCode::InvalidArgument,
         "Random write bit value must be BitValue::Off or BitValue::On");
   }
-  DeviceAddress parsed {};
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(device, parsed);
   if (!status.ok()) {
     return status;
@@ -479,12 +449,9 @@ struct LongStateReadSpec {
     }
   }
 
-  out_request = RandomReadRequest {
-      .word_items = std::span<const RandomReadWordItem>(
-          out_word_items.data(), word_specs.size()),
-      .dword_items = std::span<const RandomReadDWordItem>(
-          out_dword_items.data(), dword_specs.size()),
-  };
+  out_request = RandomReadRequest(
+      std::span<const RandomReadWordItem>(out_word_items.data(), word_specs.size()),
+      std::span<const RandomReadDWordItem>(out_dword_items.data(), dword_specs.size()));
   return ok_status();
 }
 
@@ -498,17 +465,14 @@ struct LongStateReadSpec {
     std::span<RandomReadWordItem> out_word_items,
     std::span<RandomReadDWordItem> out_dword_items,
     MonitorRegistration& out_request) noexcept {
-  RandomReadRequest request {};
+  RandomReadRequest request({}, {});
   const Status status = make_random_read_request(
       word_specs, dword_specs, out_word_items, out_dword_items, request);
   if (!status.ok()) {
     return status;
   }
 
-  out_request = MonitorRegistration {
-      .word_items = request.word_items,
-      .dword_items = request.dword_items,
-  };
+  out_request = MonitorRegistration(request.word_items, request.dword_items);
   return ok_status();
 }
 

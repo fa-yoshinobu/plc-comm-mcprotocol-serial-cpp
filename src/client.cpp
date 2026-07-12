@@ -26,7 +26,7 @@ namespace {
 
 [[nodiscard]] constexpr bool is_c1_frame(const ProtocolConfig& config) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_C1
-  return config.frame_kind == FrameKind::C1;
+  return config.frame_kind() == FrameKind::C1;
 #else
   (void)config;
   return false;
@@ -35,7 +35,7 @@ namespace {
 
 [[nodiscard]] constexpr bool is_e1_frame(const ProtocolConfig& config) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
-  return config.frame_kind == FrameKind::E1;
+  return config.frame_kind() == FrameKind::E1;
 #else
   (void)config;
   return false;
@@ -63,7 +63,7 @@ namespace {
     return false;
   }
   if (is_ascii_mode(config)) {
-    if (config.ascii_format == AsciiFormat::Format3) {
+    if (config.ascii_format() == AsciiFormat::Format3) {
       return byte == 0x02U;
     }
     return byte == 0x02U || byte == 0x06U || byte == 0x15U;
@@ -323,8 +323,19 @@ Status MelsecSerialClient::configure(const ProtocolConfig& config) noexcept {
   return ok_status();
 }
 
-void MelsecSerialClient::set_rs485_hooks(const Rs485Hooks& hooks) noexcept {
+Status MelsecSerialClient::set_rs485_hooks(const Rs485Hooks& hooks) noexcept {
+  if (busy_) {
+    return make_status(StatusCode::Busy, "Cannot change RS-485 hooks while a request is in flight");
+  }
+  const bool has_begin = hooks.on_tx_begin != nullptr;
+  const bool has_end = hooks.on_tx_end != nullptr;
+  if (has_begin != has_end) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "RS-485 TX begin and end hooks must be supplied together or both omitted");
+  }
   rs485_hooks_ = hooks;
+  return ok_status();
 }
 
 bool MelsecSerialClient::busy() const noexcept {
@@ -352,10 +363,18 @@ Status MelsecSerialClient::notify_tx_complete(
   }
 
   if (!transport_status.ok()) {
-    if (active_operation_outcome_can_be_unknown()) {
-      transport_reset_required_ = true;
-    }
+    transport_reset_required_ = true;
     complete(active_transport_failure_status(transport_status));
+    return ok_status();
+  }
+
+  if (cancel_requested_during_tx_) {
+    transport_reset_required_ = !active_format2_block_number_valid_;
+    if (active_operation_outcome_can_be_unknown()) {
+      complete(active_unconfirmed_failure_status(cancelled_status()));
+    } else {
+      complete(cancelled_status());
+    }
     return ok_status();
   }
 
@@ -364,8 +383,8 @@ Status MelsecSerialClient::notify_tx_complete(
     return ok_status();
   }
 
-  response_deadline_ms_ = now_ms + config_.timeout.response_timeout_ms;
-  inter_byte_deadline_ms_ = now_ms + config_.timeout.inter_byte_timeout_ms;
+  response_deadline_ms_ = now_ms + config_.timeout().response_timeout_ms;
+  inter_byte_deadline_ms_ = now_ms + config_.timeout().inter_byte_timeout_ms;
   return ok_status();
 }
 
@@ -399,7 +418,7 @@ void MelsecSerialClient::on_rx_bytes(
 
   std::memcpy(rx_frame_.data() + rx_frame_size_, incoming.data(), incoming.size());
   rx_frame_size_ += incoming.size();
-  inter_byte_deadline_ms_ = now_ms + config_.timeout.inter_byte_timeout_ms;
+  inter_byte_deadline_ms_ = now_ms + config_.timeout().inter_byte_timeout_ms;
 
   for (;;) {
     const StreamDecodeResult stream_decode = decode_stream_buffer(
@@ -476,8 +495,12 @@ void MelsecSerialClient::cancel() noexcept {
   if (!busy_) {
     return;
   }
+  if (awaiting_write_complete_) {
+    cancel_requested_during_tx_ = true;
+    return;
+  }
+  transport_reset_required_ = !active_format2_block_number_valid_;
   if (active_operation_outcome_can_be_unknown() && !awaiting_write_complete_) {
-    transport_reset_required_ = !active_format2_block_number_valid_;
     switch (operation_) {
       case OperationKind::RemoteRun:
         complete(make_status(
@@ -527,7 +550,7 @@ Status MelsecSerialClient::start_request(
   const bool format2 = is_ascii_mode(config_) &&
                        !is_c1_frame(config_) &&
                        !is_e1_frame(config_) &&
-                       config_.ascii_format == AsciiFormat::Format2;
+                       config_.ascii_format() == AsciiFormat::Format2;
   const FrameCodecContext frame_context = format2
                                               ? FrameCodecContext::format2(next_format2_block_number_)
                                               : FrameCodecContext::none();
@@ -555,6 +578,7 @@ Status MelsecSerialClient::start_request(
   callback_user_ = user;
   busy_ = true;
   awaiting_write_complete_ = true;
+  cancel_requested_during_tx_ = false;
   operation_ = operation;
 
   if (rs485_hooks_.on_tx_begin != nullptr) {
@@ -627,7 +651,7 @@ std::uint8_t MelsecSerialClient::expected_e1_response_subheader() const noexcept
 }
 
 std::size_t MelsecSerialClient::expected_e1_success_response_data_size() const noexcept {
-  const std::size_t ascii_word_size = config_.code_mode == CodeMode::Ascii ? 4U : 2U;
+  const std::size_t ascii_word_size = config_.code_mode() == CodeMode::Ascii ? 4U : 2U;
   switch (operation_) {
     case OperationKind::BatchReadWords:
       return static_cast<std::size_t>(batch_read_words_request_.points) * ascii_word_size;
@@ -636,7 +660,7 @@ std::size_t MelsecSerialClient::expected_e1_success_response_data_size() const n
     case OperationKind::DirectReadExtendedFileRegisterWords:
       return static_cast<std::size_t>(direct_extended_file_register_read_request_.points) * ascii_word_size;
     case OperationKind::BatchReadBits:
-      if (config_.code_mode == CodeMode::Ascii) {
+      if (config_.code_mode() == CodeMode::Ascii) {
         return static_cast<std::size_t>(batch_read_bits_request_.points) +
                ((batch_read_bits_request_.points % 2U) == 0U ? 0U : 1U);
       }
@@ -674,7 +698,7 @@ std::size_t MelsecSerialClient::expected_e1_success_response_data_size() const n
         }
       }
       if (bit_units) {
-        if (config_.code_mode == CodeMode::Ascii) {
+        if (config_.code_mode() == CodeMode::Ascii) {
           return monitor_word_item_count_ +
                  ((monitor_word_item_count_ % 2U) == 0U ? 0U : 1U);
         }
@@ -772,12 +796,11 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
     case OperationKind::RandomRead:
       return CommandCodec::parse_random_read_response(
           config_,
-          RandomReadRequest {
-              .word_items = std::span<const RandomReadWordItem>(
+          RandomReadRequest(
+              std::span<const RandomReadWordItem>(
                   pending_random_word_items_.data(), pending_random_word_item_count_),
-              .dword_items = std::span<const RandomReadDWordItem>(
-                  pending_random_dword_items_.data(), pending_random_dword_item_count_),
-          },
+              std::span<const RandomReadDWordItem>(
+                  pending_random_dword_items_.data(), pending_random_dword_item_count_)),
           response_data,
           out_random_words_,
           out_random_dwords_);
@@ -825,12 +848,11 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
     case OperationKind::ReadMonitor:
       return CommandCodec::parse_read_monitor_response(
           config_,
-          MonitorRegistration {
-              .word_items = std::span<const RandomReadWordItem>(
+          MonitorRegistration(
+              std::span<const RandomReadWordItem>(
                   monitor_word_items_.data(), monitor_word_item_count_),
-              .dword_items = std::span<const RandomReadDWordItem>(
-                  monitor_dword_items_.data(), monitor_dword_item_count_),
-          },
+              std::span<const RandomReadDWordItem>(
+                  monitor_dword_items_.data(), monitor_dword_item_count_)),
           response_data,
           out_random_words_,
           out_random_dwords_);
@@ -977,6 +999,7 @@ void MelsecSerialClient::complete(Status status) noexcept {
   callback_user_ = nullptr;
   busy_ = false;
   awaiting_write_complete_ = false;
+  cancel_requested_during_tx_ = false;
   operation_ = OperationKind::None;
   tx_frame_size_ = 0;
   rx_frame_size_ = 0;
@@ -1010,18 +1033,21 @@ void MelsecSerialClient::clear_pending_outputs() noexcept {
   out_cpu_model_ = nullptr;
 #endif
   out_user_frame_data_ = nullptr;
-  batch_read_words_request_ = {};
-  extended_file_register_read_request_ = {};
-  direct_extended_file_register_read_request_ = {};
-  batch_read_bits_request_ = {};
-  user_frame_read_request_ = {};
-  extended_batch_words_device_ = {};
+  batch_read_words_request_ = BatchReadWordsRequest(DeviceAddress {DeviceCode::D, 0U}, 0U);
+  extended_file_register_read_request_ = ExtendedFileRegisterBatchReadWordsRequest(
+      ExtendedFileRegisterAddress {1U, 0U}, 0U);
+  direct_extended_file_register_read_request_ =
+      ExtendedFileRegisterDirectBatchReadWordsRequest(0U, 0U);
+  batch_read_bits_request_ = BatchReadBitsRequest(DeviceAddress {DeviceCode::M, 0U}, 0U);
+  user_frame_read_request_ = UserFrameReadRequest(0U);
+  extended_batch_words_device_ =
+      QualifiedBufferWordDevice(QualifiedBufferDeviceKind::G, 0U, 0U);
   extended_batch_words_points_ = 0U;
 #if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
-  host_buffer_read_request_ = {};
+  host_buffer_read_request_ = HostBufferReadRequest(0U, 0U);
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
-  module_buffer_read_request_ = {};
+  module_buffer_read_request_ = ModuleBufferReadRequest(0U, 0U, 0U);
 #endif
 }
 
@@ -1117,10 +1143,7 @@ Status MelsecSerialClient::async_link_direct_batch_read_words(
     std::span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
-  batch_read_words_request_ = BatchReadWordsRequest {
-      .head_device = device.device,
-      .points = points,
-  };
+  batch_read_words_request_ = BatchReadWordsRequest(device.device, points);
   out_words_ = out_words;
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_link_direct_batch_read_words(
@@ -1160,10 +1183,7 @@ Status MelsecSerialClient::async_link_direct_batch_read_bits(
     std::span<BitValue> out_bits,
     CompletionHandler callback,
     void* user) noexcept {
-  batch_read_bits_request_ = BatchReadBitsRequest {
-      .head_device = device.device,
-      .points = points,
-  };
+  batch_read_bits_request_ = BatchReadBitsRequest(device.device, points);
   out_bits_ = out_bits;
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_link_direct_batch_read_bits(
@@ -1392,9 +1412,8 @@ Status MelsecSerialClient::async_link_direct_random_read(
   pending_random_word_item_count_ = word_items.size();
   pending_random_dword_item_count_ = 0U;
   for (std::size_t index = 0; index < word_items.size(); ++index) {
-    pending_random_word_items_[index] = RandomReadWordItem {
-        .device = word_items[index].device.device,
-    };
+    pending_random_word_items_[index] =
+        RandomReadWordItem {word_items[index].device.device};
   }
   out_random_words_ = out_words;
   out_random_dwords_ = {};
@@ -1587,11 +1606,10 @@ Status MelsecSerialClient::async_link_direct_multi_block_read(
   }
   pending_multi_block_count_ = request.blocks.size();
   for (std::size_t index = 0; index < request.blocks.size(); ++index) {
-    pending_multi_blocks_[index] = MultiBlockReadBlock {
-        .head_device = request.blocks[index].head_device.device,
-        .points = request.blocks[index].points,
-        .bit_block = request.blocks[index].bit_block,
-    };
+    pending_multi_blocks_[index] = MultiBlockReadBlock(
+        request.blocks[index].head_device.device,
+        request.blocks[index].points,
+        request.blocks[index].bit_block);
   }
   out_words_ = out_words;
   out_bits_ = out_bits;
@@ -1753,9 +1771,8 @@ Status MelsecSerialClient::async_link_direct_register_monitor(
   pending_random_word_item_count_ = request.word_items.size();
   pending_random_dword_item_count_ = 0U;
   for (std::size_t index = 0; index < request.word_items.size(); ++index) {
-    pending_random_word_items_[index] = RandomReadWordItem {
-        .device = request.word_items[index].device.device,
-    };
+    pending_random_word_items_[index] =
+        RandomReadWordItem {request.word_items[index].device.device};
   }
 
   std::size_t request_size = 0;
@@ -1794,12 +1811,11 @@ Status MelsecSerialClient::async_read_monitor(
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_read_monitor(
       config_,
-      MonitorRegistration {
-          .word_items = std::span<const RandomReadWordItem>(
+      MonitorRegistration(
+          std::span<const RandomReadWordItem>(
               monitor_word_items_.data(), monitor_word_item_count_),
-          .dword_items = std::span<const RandomReadDWordItem>(
-              monitor_dword_items_.data(), monitor_dword_item_count_),
-      },
+          std::span<const RandomReadDWordItem>(
+              monitor_dword_items_.data(), monitor_dword_item_count_)),
       request_data_,
       request_size);
   if (!status.ok()) {

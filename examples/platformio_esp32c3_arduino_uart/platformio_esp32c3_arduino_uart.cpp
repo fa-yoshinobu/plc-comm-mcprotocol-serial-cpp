@@ -38,7 +38,7 @@ constexpr std::uint32_t kPollIntervalMs = MCPROTOCOL_EXAMPLE_POLL_INTERVAL_MS;
 constexpr std::uint32_t kPlcBaud = MCPROTOCOL_EXAMPLE_PLC_BAUD;
 constexpr int kRxPin = 6;
 constexpr int kTxPin = 7;
-constexpr DeviceAddress kHeadDevice {.code = DeviceCode::D, .number = 100};
+constexpr DeviceAddress kHeadDevice {DeviceCode::D, 100};
 
 struct AppState {
   MelsecSerialClient client;
@@ -56,14 +56,12 @@ HardwareSerial& g_plc_serial = Serial1;
 
 ProtocolConfig make_protocol() {
   // Keep frame/profile explicit. See docsrc/user/GOTCHAS.md before changing them.
-  ProtocolConfig config;
-  config.frame_kind = FrameKind::C4;
-  config.code_mode = CodeMode::Ascii;
-  config.ascii_format = AsciiFormat::Format4;
-  config.plc_profile = PlcProfile::MelsecQ;
-  config.sum_check_mode = mcprotocol::serial::SumCheckMode::Disabled;
-  config.route = RouteConfig {HostStationRoute {}};
-  return config;
+  return ProtocolConfig::ascii(
+      mcprotocol::serial::AsciiFrameKind::C4,
+      AsciiFormat::Format4,
+      PlcProfile::MelsecQ,
+      mcprotocol::serial::SumCheckMode::Disabled,
+      RouteConfig {HostStationRoute {}});
 }
 
 void on_request_complete(void* user, Status status) {
@@ -94,7 +92,7 @@ void pump_uart_tx(std::uint32_t now_ms) {
   g_plc_serial.write(reinterpret_cast<const std::uint8_t*>(frame.data()), frame.size());
   g_plc_serial.flush();
   // Notify only after the UART has accepted the frame for transmission.
-  const Status status = g_app.client.notify_tx_complete(now_ms);
+  const Status status = g_app.client.notify_tx_complete(now_ms, mcprotocol::serial::ok_status());
   if (!status.ok()) {
     on_request_complete(&g_app, status);
     return;
@@ -137,10 +135,7 @@ void start_read_if_due(std::uint32_t now_ms) {
   // Start a read-only request. Check GOTCHAS.md before switching to writes.
   const Status status = g_app.client.async_batch_read_words(
       now_ms,
-      BatchReadWordsRequest {
-          .head_device = kHeadDevice,
-          .points = static_cast<std::uint16_t>(g_app.out_words.size()),
-      },
+      BatchReadWordsRequest(kHeadDevice, static_cast<std::uint16_t>(g_app.out_words.size())),
       std::span<std::uint16_t>(g_app.out_words.data(), g_app.out_words.size()),
       on_request_complete,
       &g_app);

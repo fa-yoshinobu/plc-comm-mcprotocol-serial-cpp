@@ -27,12 +27,18 @@ The public API is designed for host tools and MCU firmware:
 `make_batch_read_words_request("D100", count, request)` convert plain device strings into typed
 request structs.
 
-`ProtocolConfig {}` is intentionally not a usable connection preset: frame family, code mode,
-ASCII format (for ASCII), PLC profile, sum-check mode, and route must be selected explicitly. Named presets
-make the frame and code-mode selection visible in the function name, while still requiring the PLC
-profile, `SumCheckMode::Enabled` or `SumCheckMode::Disabled`, and a typed route argument. The
-library never switches frame, code mode, format, profile, sum-check policy, or route after an error
-or timeout.
+`ProtocolConfig` has no public default constructor. Use exactly one tagged construction path:
+
+- `ProtocolConfig::c4_binary(profile, sum_check_mode, route)` fixes C4 Binary/Format5 and exposes
+  no ASCII-format input.
+- `ProtocolConfig::ascii(AsciiFrameKind::C4|C3|C2|C1, format, profile,
+  sum_check_mode, route)` requires an ASCII format and cannot select 1E.
+- `ProtocolConfig::e1(code_mode, profile, route)` fixes the 1E frame and exposes neither an ASCII
+  format nor a sum-check option because those fields do not exist in the 1E wire format.
+
+The C-frame paths require `SumCheckMode::Enabled` or `SumCheckMode::Disabled`; the CLI likewise
+requires `--sum-check` for C1/C2/C3/C4 and rejects it for 1E. The library never switches frame,
+code mode, format, profile, sum-check policy, or route after an error or timeout.
 
 ### Route selection
 
@@ -128,6 +134,13 @@ and protocol investigation where the caller intentionally owns one wire identity
 Format2 context to another format, or using a Format2 raw codec without one, is an error. The CLI
 does not expose a normal `--block-no` connection option.
 
+Public request and item types require their semantic inputs at construction. A missing device,
+address, count/data span, value, target, state, channel, or requested mode change is never replaced
+with D0, address zero, zero/OFF, or another valid operation. Explicit D0, address zero, value zero,
+and `BitValue::Off` remain valid when passed by the caller. Empty request containers and unknown
+enum values are rejected before any transmit frame is made. Receive/output storage types remain
+default constructible.
+
 ```cpp
 #include <cstdint>
 #include <cstdio>
@@ -136,10 +149,10 @@ does not expose a normal `--block-no` connection option.
 
 int main() {
   using mcprotocol::serial::BatchReadWordsRequest;
+  using mcprotocol::serial::DeviceAddress;
+  using mcprotocol::serial::DeviceCode;
   using mcprotocol::serial::PlcProfile;
   using mcprotocol::serial::ProtocolConfig;
-  using mcprotocol::serial::Status;
-  using mcprotocol::serial::highlevel::make_batch_read_words_request;
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   ProtocolConfig protocol = make_c4_ascii_format4_protocol(
@@ -147,12 +160,7 @@ int main() {
       mcprotocol::serial::SumCheckMode::Disabled,
       mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
 
-  BatchReadWordsRequest request {};
-  Status status = make_batch_read_words_request("D100", 2, request);
-  if (!status.ok()) {
-    std::fprintf(stderr, "request build failed: %s\n", status.message);
-    return 1;
-  }
+  const BatchReadWordsRequest request(DeviceAddress {DeviceCode::D, 100U}, 2U);
 
   std::printf("head=%u points=%u\n", request.head_device.number, request.points);
   return 0;
@@ -392,7 +400,14 @@ PAUSE returns `OperationOutcomeUnknown`, so inspect the PLC state and do not res
 
 ## Entry path 3: low-level async client
 
-`MelsecSerialClient` owns the protocol state machine but not the UART. Your code configures the client, starts an async request, sends `pending_tx_frame()`, calls `notify_tx_complete()`, feeds response bytes with `on_rx_bytes()`, and calls `poll()` for timeout handling.
+`MelsecSerialClient` owns the protocol state machine but not the UART. Your code configures the client, starts an async request, sends `pending_tx_frame()`, calls `notify_tx_complete(now, status)`, feeds response bytes with `on_rx_bytes()`, and calls `poll()` for timeout handling. The TX status is always explicit: pass `ok_status()` only after the UART confirms physical transmission completion, or pass the actual transport failure/cancellation status.
+
+RS-485 direction hooks are optional. Leave both callbacks unset for RS-232 or hardware/driver-
+controlled RS-485. When application-controlled direction is needed, install both `on_tx_begin` and
+`on_tx_end` together; a one-sided hook is rejected. Hooks cannot be replaced while a request is
+busy. If cancellation is requested during TX, the request remains busy until the UART reports
+physical completion or abort with `notify_tx_complete`; only then is `on_tx_end` called exactly
+once and the completion callback released.
 
 This is the path used in the PlatformIO examples.
 
@@ -445,10 +460,9 @@ int main() {
   Completion completion {};
   status = client.async_batch_read_words(
       0,
-      BatchReadWordsRequest {
-          .head_device = DeviceAddress {.code = DeviceCode::D, .number = 100},
-          .points = static_cast<std::uint16_t>(words.size()),
-      },
+      BatchReadWordsRequest(
+          DeviceAddress {DeviceCode::D, 100U},
+          static_cast<std::uint16_t>(words.size())),
       std::span<std::uint16_t>(words.data(), words.size()),
       on_complete,
       &completion);
@@ -459,7 +473,7 @@ int main() {
   const std::span<const std::byte> frame = client.pending_tx_frame();
   // Send `frame` through your UART here.
   (void)frame;
-  status = client.notify_tx_complete(1);
+  status = client.notify_tx_complete(1, mcprotocol::serial::ok_status());
   if (!status.ok()) {
     return 1;
   }

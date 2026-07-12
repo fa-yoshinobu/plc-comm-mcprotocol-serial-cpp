@@ -33,7 +33,7 @@ Acceptance criteria:
 - [x] Codex self-review completed.
 - [ ] Claude source review completed (`pending user authorization`).
 - [ ] Claude findings dispositioned and affected checks rerun.
-- [ ] Required live serial/PLC checks passed or explicitly dispositioned.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; path lifetime, NUL validation, and pre-open ordering are deterministic API/backend properties and make no claim about a physical serial device).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
 - [ ] Final acceptance criteria verified and the item marked complete.
 
@@ -58,7 +58,7 @@ Acceptance criteria:
 - [x] Codex self-review completed.
 - [ ] Claude source review completed (`pending user authorization`).
 - [ ] Claude findings dispositioned and affected checks rerun.
-- [ ] Required live serial/PLC checks passed or explicitly dispositioned.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; required-value parsing, zero rejection, and absence of baud fallback are deterministic pre-open properties).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
 - [ ] Final acceptance criteria verified and the item marked complete.
 
@@ -85,7 +85,7 @@ Acceptance criteria:
 - [x] Codex self-review completed.
 - [ ] Claude source review completed (`pending user authorization`).
 - [ ] Claude findings dispositioned and affected checks rerun.
-- [ ] Required live serial/PLC checks passed or explicitly dispositioned.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; public type shape, mode/width validation, and Windows/POSIX branch removal are covered before OS handle access and make no signal-quality claim).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
 - [ ] Final acceptance criteria verified and the item marked complete.
 
@@ -110,7 +110,7 @@ Acceptance criteria:
 - [x] Codex self-review completed.
 - [ ] Claude source review completed (`pending user authorization`).
 - [ ] Claude findings dispositioned and affected checks rerun.
-- [ ] Required live serial/PLC checks passed or explicitly dispositioned.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; accepted widths, invalid-width rejection, and backend mapping are deterministic configuration properties).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
 - [ ] Final acceptance criteria verified and the item marked complete.
 
@@ -136,7 +136,7 @@ Acceptance criteria:
 - [x] Codex self-review completed.
 - [ ] Claude source review completed (`pending user authorization`).
 - [ ] Claude findings dispositioned and affected checks rerun.
-- [ ] Required live serial/PLC checks passed or explicitly dispositioned.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; enum membership, Windows DCB/POSIX termios mapping, CLI normalization, and no-fallback behavior are deterministic; actual PLC parity compatibility is outside this API decision).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
 - [ ] Final acceptance criteria verified and the item marked complete.
 
@@ -163,7 +163,7 @@ Acceptance criteria:
 - [x] Codex self-review completed.
 - [ ] Claude source review completed (`pending user authorization`).
 - [ ] Claude findings dispositioned and affected checks rerun.
-- [ ] Required live serial/PLC checks passed or explicitly dispositioned.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; enum membership, DCB/termios mapping, and separation from RS-485 direction control are deterministic; this disposition does not claim that a particular adapter is wired for RTS/CTS).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
 - [ ] Final acceptance criteria verified and the item marked complete.
 
@@ -174,8 +174,8 @@ Scope: `ProtocolConfig`, frame codec, clients, CLI, examples, tests, and docs.
 Target contract: frame family is a required session choice; no C4 default or runtime fallback to a
 different family exists. Unknown enum values and compiled-out families fail before encoding.
 
-Compatibility impact: generic `ProtocolConfig {}` no longer represents C4. Callers must assign a
-defined frame or use a frame-named preset.
+Compatibility impact: public `ProtocolConfig {}` construction and mutable frame assignment are
+removed. Callers use the frame-tagged `c4_binary`, `ascii(AsciiFrameKind, ...)`, or `e1` factory.
 
 Acceptance criteria:
 
@@ -183,18 +183,21 @@ Acceptance criteria:
 2. Every defined frame is validated only against its supported code/format/profile combinations.
 3. No timeout, PLC error, or decode error changes the configured frame.
 
-Progress: invalid-by-default frame state, exhaustive enum validation, CLI-required `--frame`, and
-zero-size-on-encode-failure are implemented and tested. The final constructor/tagged-type migration
-and D-099 route-type integration remain open.
+Progress: completed. The immutable tagged factories make frame omission impossible, C4 Binary is
+fixed by `c4_binary`, C1/C2/C3/C4 ASCII uses `AsciiFrameKind`, and 1E has its own factory. Unknown
+ASCII frame values, compiled-out selections, and every invalid combination fail before encoding;
+timeouts and decode failures do not mutate the configuration.
 
-- [ ] Implementation completed in this repository.
-- [ ] Tests added or updated for every acceptance criterion.
-- [ ] Relevant checks passed and evidence recorded.
-- [ ] Codex self-review completed.
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
 - [ ] Claude source review completed (`pending user authorization`).
 - [ ] Claude findings dispositioned and affected checks rerun.
-- [ ] Required live serial/PLC checks passed or explicitly dispositioned.
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  constructor shape, validation ordering, encoded-byte absence, and immutable session state are
+  deterministic and covered without claiming a physical PLC result).
+- [x] Documentation and final acceptance agree with the completed implementation.
 
 ## D-094: explicit code mode
 
@@ -211,17 +214,19 @@ Acceptance criteria:
 2. Binary requires eight serial data bits.
 3. Public binary configuration has no ASCII-only settings and no mode fallback occurs.
 
-Progress: invalid-by-default mode, exhaustive validation, named presets, and serial combination
-validation are implemented. Binary/ASCII tagged-type separation remains open with D-095/D-096.
+Progress: completed. C4 Binary and C-family ASCII are separate construction paths, 1E requires an
+explicit `CodeMode`, Binary has no ASCII-format input, serial-data validation still requires eight
+bits for Binary, and no error path changes mode or retries in another mode.
 
-- [ ] Implementation completed in this repository.
-- [ ] Tests added or updated for every acceptance criterion.
-- [ ] Relevant checks passed and evidence recorded.
-- [ ] Codex self-review completed.
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
 - [ ] Claude source review completed (`pending user authorization`).
 - [ ] Claude findings dispositioned and affected checks rerun.
-- [ ] Required live serial/PLC checks passed or explicitly dispositioned.
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  tagged API shape, serial validation, and no-fallback state are deterministic testable behavior).
+- [x] Documentation and final acceptance agree with the completed implementation.
 
 ## D-095: explicit ASCII format
 
@@ -238,17 +243,20 @@ Acceptance criteria:
 2. Frame-specific formats are enforced and the decoder remains fixed to the selected format.
 3. Binary/1E types contain no inactive ASCII-format input.
 
-Progress: invalid-by-default format, exhaustive validation, CLI frame parsing, and fixed decoder
-selection are implemented. Tagged-type field removal remains open.
+Progress: completed. `ProtocolConfig::ascii` requires `AsciiFrameKind` plus `AsciiFormat`;
+`c4_binary` accepts no ASCII input and `e1` accepts neither an ASCII frame/format nor a hidden
+Format1 value. C1 Format2 and unknown formats reject before encoding, and the decoder remains fixed
+to the selected format.
 
-- [ ] Implementation completed in this repository.
-- [ ] Tests added or updated for every acceptance criterion.
-- [ ] Relevant checks passed and evidence recorded.
-- [ ] Codex self-review completed.
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
 - [ ] Claude source review completed (`pending user authorization`).
 - [ ] Claude findings dispositioned and affected checks rerun.
-- [ ] Required live serial/PLC checks passed or explicitly dispositioned.
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  public input absence and frame/format decoder selection are compile-time/codec properties).
+- [x] Documentation and final acceptance agree with the completed implementation.
 
 ## D-096: automatic Format2 block number
 
@@ -292,8 +300,8 @@ tests, and docs.
 Target contract: only one of the eight canonical profiles is accepted; Unspecified and unknown enum
 values never select a generic layout or reach transport.
 
-Compatibility impact: profile omission remains invalid and the final constructor migration will
-remove two-step generic config construction.
+Compatibility impact: profile omission is no longer representable through public default/two-step
+configuration; every tagged factory and preset requires a profile argument.
 
 Acceptance criteria:
 
@@ -301,47 +309,53 @@ Acceptance criteria:
 2. Every canonical profile parses and maps exhaustively.
 3. Presets and all command families do not infer or switch profiles.
 
-Progress: `is_plc_profile_specified()` now performs exhaustive membership instead of `!=`, unknown
-values fail centrally, and CLI already requires canonical profile text. Constructor-level required
-profile and preset error-return design remain open.
+Progress: completed. Every public factory/preset requires the profile argument, canonical text is
+required at the CLI boundary, exhaustive membership rejects `Unspecified` and unknown underlying
+values, and all codec/client entry points validate before producing bytes or opening transport.
 
-- [ ] Implementation completed in this repository.
-- [ ] Tests added or updated for every acceptance criterion.
-- [ ] Relevant checks passed and evidence recorded.
-- [ ] Codex self-review completed.
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
 - [ ] Claude source review completed (`pending user authorization`).
 - [ ] Claude findings dispositioned and affected checks rerun.
-- [ ] Required live serial/PLC checks passed or explicitly dispositioned.
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  canonical membership and pre-transport rejection are deterministic validation behavior).
+- [x] Documentation and final acceptance agree with the completed implementation.
 
 ## D-098: explicit typed sum-check mode
 
 Scope: protocol configuration, ASCII/Binary codecs, presets, clients, CLI/scripts, tests, and docs.
 
-Target contract: configurable frames require `SumCheckMode::Enabled` or `Disabled`; no bool/default,
-format-derived choice, retry, or automatic policy switch exists.
+Target contract: configurable C frames require `SumCheckMode::Enabled` or `Disabled`; no
+bool/default, format-derived choice, retry, or automatic policy switch exists. 1E has no sum-check
+field and therefore exposes no sum-check option.
 
 Compatibility impact: `bool sum_check_enabled`, one-argument named presets, CLI/script defaults, and
 environment fallback are removed.
 
 Acceptance criteria:
 
-1. Omitted/unknown mode fails before encoding and both defined enum values are accepted.
-2. Every named preset and executable configuration boundary requires a mode.
+1. Omitted/unknown mode fails before encoding for configurable frames and both defined enum values
+   are accepted; 1E rejects an inactive sum-check input at the CLI and has none in its C++ factory.
+2. Every C-frame named preset and executable configuration boundary requires a mode.
 3. Enabled/Disabled encode and decode strictly without fallback or state-changing retry.
 
-Progress: enum surface, invalid generic default, required preset argument, required CLI/script input,
-central validation, and omission/unknown tests are implemented. Final typed ProtocolConfig
-constructor and complete checksum negative-vector audit remain open.
+Progress: completed. C-frame factories/presets require the enum; the 1E factory has no sum-check
+parameter and the CLI rejects one. Positive, missing, corrupt, and extra-checksum vectors cover
+Format1/2/3/4, C1, and C4 Binary. Enabled responses require and verify the checksum; Disabled
+responses do not generate it or consume trailing checksum bytes as part of the current frame.
 
-- [ ] Implementation completed in this repository.
-- [ ] Tests added or updated for every acceptance criterion.
-- [ ] Relevant checks passed and evidence recorded.
-- [ ] Codex self-review completed.
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
 - [ ] Claude source review completed (`pending user authorization`).
 - [ ] Claude findings dispositioned and affected checks rerun.
-- [ ] Required live serial/PLC checks passed or explicitly dispositioned.
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  checksum generation/parsing and no-retry state are deterministic codec/client behavior; existing
+  hardware checksum evidence remains unchanged).
+- [x] Documentation and final acceptance agree with the completed implementation.
 
 ## D-099: explicit typed route selection
 
@@ -874,10 +888,10 @@ Acceptance criteria:
    the serial device. Explicit `=0` reaches normal connection handling.
 6. Word `0`/`0xFFFF`, DWord `0`/`0x00010000`/`0xFFFFFFFF`, and Bit OFF/ON retain their exact wire
    values without narrowing, masking, or missing-value substitution.
-7. Cancellation before transmission remains `Cancelled`. Transport failure, timeout,
-   cancellation, or another unconfirmed failure after transmission is
-   `OperationOutcomeUnknown`, clears the pending frame, and never triggers an automatic retry.
-   A confirmed PLC error remains `PlcError`.
+7. Cancellation during TX follows D-122 and waits for explicit physical completion/abort. If a
+   state-changing request may have been transmitted, cancellation, transport failure, timeout, or
+   another unconfirmed failure is `OperationOutcomeUnknown`, clears the pending frame, and never
+   triggers an automatic retry. A confirmed PLC error remains `PlcError`.
 8. Source examples, user guidance, generated API reference, migration notes, and changelog use only
    the mandatory-value contract and explain explicit zero/OFF and outcome-unknown handling.
 
@@ -899,6 +913,117 @@ disabled builds, generated documentation, and packaged consumers are covered.
   claimed).
 - [x] Documentation and final acceptance agree with the completed implementation.
 
+## D-110: mandatory construction of public input types
+
+Scope: public device and extended-file-register addresses; all read, write, control, user-frame,
+buffer, random, monitor, and multi-block request/item types; link-direct and qualified-buffer
+types; high-level specs/builders; codec and client validation; CLI, examples, tests, generated API
+reference, migration notes, and user documentation.
+
+Target contract: every public input object requires its semantic device, address, count/data,
+value, target, state, channel, and requested change at its construction boundary. Omission never
+becomes D0, address zero, zero/OFF, ReceivedSide, Ch1, or another valid command. Caller-supplied
+D0, address zero, numeric zero, and `BitValue::Off` remain valid. Receive/result storage remains
+default constructible.
+
+Compatibility impact: default construction followed by member assignment and designated
+initializers for non-aggregate request types are removed. Callers must use the required-field
+constructors or validated high-level builders. `GlobalSignalControlRequest::turn_on` is replaced by
+typed `BitValue value`. A serial-module mode-switch request must select at least one change.
+
+Acceptance criteria:
+
+1. `DeviceAddress`, extended-file-register addresses, every in-scope input request/item/block,
+   link-direct/qualified input, and high-level request spec are not default constructible. Required
+   values are visible in constructors or a validated builder boundary.
+2. `CpuModelInfo`, `UserFrameRegistrationData`, `MultiBlockReadBlockResult`, and other receive or
+   parse-result storage retain default construction and cannot accidentally become sendable input.
+3. Explicit D0, address/block zero, numeric value zero, and `BitValue::Off` retain their exact
+   meaning and wire representation. No constructor or parser interprets omission as those values.
+4. Empty item/block/data containers, zero/invalid counts, unknown enums, and any invalid member of
+   a multi-item request reject the complete request before transmission; no valid subset is sent.
+5. Global-signal control requires an explicit valid target and `BitValue::Off`/`On`. Unknown target
+   or state leaves the asynchronous client idle with no pending transmit frame.
+6. Serial-module mode switching requires an explicit valid channel and at least one selected mode,
+   transmission-setting, or speed change. All flags false leaves no pending transmit frame.
+7. Internal pending storage uses explicit inert seeds without reintroducing a public default
+   constructor or treating unused capacity as a request item.
+8. The required-construction API compiles under the supported C++17 host, RP2040, ESP32-C3, and AVR
+   profiles, including reduced and ultra-minimal feature configurations.
+9. CLI, examples, user guidance, generated API reference, migration notes, and changelog contain no
+   former default-construction, partial aggregate, `turn_on`, or implicit-D0 usage.
+
+Progress: implementation, deterministic tests, full repository/package verification, generated
+documentation, and final diff self-review are complete. Compile-time traits cover every in-scope
+input and output exception. Empty/invalid containers, mixed valid/invalid items, explicit zero/OFF,
+unknown control enums, and a no-change mode switch are covered with no-TX assertions.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
+- [ ] Claude source review completed (`pending user authorization`).
+- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  constructor availability, compile-time traits, validation order, exact request bytes, and no-TX
+  behavior are deterministic, and no PLC capability or resulting device state is claimed).
+- [x] Documentation and final acceptance agree with the completed implementation.
+
+## D-122: paired RS-485 hooks and explicit TX completion status
+
+Scope: `Rs485Hooks`, `set_rs485_hooks`, asynchronous request start/cancel/completion, host-sync
+transport integration, CLI RTS direction control, MCU examples, tests, generated API reference,
+migration notes, and user documentation.
+
+Target contract: omitting the complete hook set is valid for RS-232 and hardware/driver-controlled
+RS-485. Application-controlled RS-485 requires begin/end as one pair, retained with the same user
+pointer for the request lifetime. TX completion always carries an explicit transport status.
+Cancellation during TX is a request to stop, not proof that the UART is physically idle; completion
+and direction release wait for explicit physical completion or abort notification.
+
+Compatibility impact: one-sided hook sets and hook replacement while busy now fail. The one-argument
+`notify_tx_complete(now_ms)` call no longer compiles. Callers must pass `ok_status()` after confirmed
+physical TX completion or the actual failure/cancellation status after TX abort completes. Code that
+expects `cancel()` during active TX to invoke completion immediately must wait for the explicit TX
+notification.
+
+Acceptance criteria:
+
+1. Both callbacks null is accepted and performs no direction callback. Begin-only and end-only sets
+   return `InvalidArgument`; a complete pair accepts a null or non-null user pointer.
+2. Hook replacement while a request is busy returns `Busy`. Every invoked begin callback has exactly
+   one matching end callback using the same installed pair and user; duplicate TX notification does
+   not invoke end twice.
+3. `notify_tx_complete` has no default status and one-argument use fails at compile time. Success,
+   transport failure, and cancellation are always explicit at every library, CLI, host, example,
+   test, and packaged-consumer call site.
+4. Cancellation during TX leaves the request busy, output/callback storage alive, and end uninvoiced
+   until the transport reports physical completion or abort. The notification invokes end once and
+   then completes as cancelled or outcome-unknown according to whether a transmitted state-changing
+   operation can be confirmed.
+5. Cancellation after successful TX does not invoke end again. Unsequenced cancellation/failure
+   requires transport reset; Format2 retains its block-identity isolation.
+6. Host-sync close and TX failure paths close/abort the serial transport and deliver an explicit TX
+   result so the async client and RS-485 direction lifecycle cannot remain pending.
+7. User guidance states when hooks are omitted, why a complete pair is required, when `ok_status()`
+   is valid, and why `cancel()` alone does not prove that the transceiver left transmit direction.
+
+Progress: implementation and deterministic verification are complete. Pair validation, null user,
+busy replacement, begin/end counts, explicit-status compile surface, TX-time cancellation, duplicate
+notification, hookless transport failure, host-sync cleanup, existing post-TX outcome handling, all
+host tests, and all 12 PlatformIO environments are covered.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added or updated for every acceptance criterion.
+- [x] Relevant checks passed and evidence recorded.
+- [x] Codex self-review completed.
+- [ ] Claude source review completed (`pending user authorization`).
+- [ ] Claude findings dispositioned and affected checks rerun.
+- [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
+  callback pairing, busy-state transitions, compile-time API shape, cancellation deferral, explicit
+  status propagation, and transport-reset state are deterministic and claim no physical bus result).
+- [x] Documentation and final acceptance agree with the completed implementation.
+
 ## Verification evidence
 
 - Build/test command: `run_ci.bat --build-dir build_win --with-platformio`, last passed 2026-07-12.
@@ -906,9 +1031,11 @@ disabled builds, generated documentation, and packaged consumers are covered.
   `standard_header_consumer`, and `cli_serial_config_tests` all passed (3/3); Markdown links and the
   generated API-reference drift check passed.
 - PlatformIO results: after adding the existing
-  `C:\Users\GMKtek\.platformio\penv\Scripts` directory to the process PATH, all nine configured
-  native/RP2040/ESP32-C3/Arduino Mega environments and the packed-package consumers passed. The
-  initial PATH-only lookup failure was an environment discovery issue, not a build failure.
+  `C:\Users\GMKtek\.platformio\penv\Scripts` directory to the process PATH, the nine CI-selected
+  native/RP2040/ESP32-C3/Arduino Mega environments and packed-package consumers passed. A direct
+  full matrix run also passed all 12 configured environments, including native CLI, polling-
+  reconnect, and Mega ultra-minimal. The D-110 review additionally caught and fixed C++17 aggregate
+  parenthesized initialization and AVR's missing `<utility>` header before the final pass.
 - Script checks: all four Linux CLI scripts passed `bash -n`; the PowerShell password recheck script
   parsed successfully; `git diff --check` passed.
 - Codex self-review covered the actual diff, public constructor/enum surface, integer truncation,
@@ -916,10 +1043,16 @@ disabled builds, generated documentation, and packaged consumers are covered.
   CLI omission and unknown-value behavior, RS-485 separation, examples, scripts, docs, and generated
   API reference. It found and corrected uint8 truncation, stale CLI wrappers, POSIX string-view path
   termination, and invalid-reconfiguration state loss before this evidence was marked complete.
-- The D-093 onward partial review additionally covered invalid default state, exhaustive enum
-  membership, sum-check encode/decode call sites, named-preset signatures, CLI/environment omission,
-  MCU/package consumers, and zero output size on frame-encode validation failure. D-096 and final
-  tagged protocol/route types are explicitly still open and were not marked complete.
+- D-093/D-094/D-095/D-097 evidence covers deleted default/two-step construction; immutable tagged
+  `c4_binary`, C-family `ascii(AsciiFrameKind, AsciiFormat, ...)`, and `e1(CodeMode, ...)` paths;
+  required profile/route inputs; unknown enum and unsupported combination rejection; Binary
+  eight-data-bit validation; zero output on encode failure; fixed decoder selection; no fallback;
+  CLI omission/unknown tests; source examples; generated API; all MCU builds; and packed consumers.
+- D-098 evidence covers required typed modes for every configurable C-frame factory/preset/CLI
+  boundary; removal and CLI rejection of the inactive 1E sum-check option; Enabled/Disabled output
+  length; correct/missing/corrupt/extra checksum vectors across Format1/2/3/4, C1, and C4 Binary;
+  `SumCheckMismatch` classification; no mode mutation; and no retry/fallback. Self-review found and
+  corrected the previously ignored 1E sum-check argument before completion was recorded.
 - D-096 evidence covers explicit raw-context rejection/acceptance, strict hexadecimal parsing,
   mismatched metadata, automatic request values 00 through FF and wrap, stale response followed by
   the correct response, cancellation, timeout followed by a late response, single-in-flight state,
@@ -1000,11 +1133,18 @@ disabled builds, generated documentation, and packaged consumers are covered.
   random-write items; device-and-value construction; explicit Word/DWord zero and maxima; explicit
   Bit OFF/ON; high-level and codec unknown-enum rejection; atomic no-TX behavior for a mixed valid
   and invalid item list; generic and link-direct CLI missing/empty/unknown-value rejection before
-  serial open; pre-TX cancellation as `Cancelled`; timeout, transport failure, and post-TX
+  serial open; D-122 TX-cancellation deferral; timeout, transport failure, and post-TX
   cancellation as `OperationOutcomeUnknown`; confirmed PLC error preservation; pending-frame
   clearing; reset gating; and no automatic retry. The first full run detected and corrected a
   feature-disabled `OperationKind` conditional-compilation defect. The final run passed Host CI
   3/3, all nine PlatformIO environments, both packed-package consumers, Markdown links, generated
   API-reference drift, Bash/PowerShell syntax, and `git diff --check`.
+- D-122 evidence covers hookless operation, complete-pair enforcement, null user, busy replacement,
+  stable begin/end user and exact call counts, compile-time rejection of omitted TX status,
+  TX-time cancellation deferral until explicit completion/abort, duplicate-notify rejection,
+  hookless transport failure, host-sync cleanup, transport-reset gating, and existing post-TX
+  outcome classification. Host CI passed 3/3 and all 12 PlatformIO environments passed. Generated
+  API-reference, packaged consumers, Markdown links, scripts, and final diff checks are recorded
+  after their final runs below.
 - Physical serial/PLC communication: not executed in this implementation batch.
 - Claude review: not executed; explicit user authorization is required for a future review batch.

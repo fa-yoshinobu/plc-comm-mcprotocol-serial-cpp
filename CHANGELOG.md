@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### BREAKING
 
+- Library: `notify_tx_complete` now requires an explicit transport status. RS-485 TX begin/end
+  hooks must be installed as a complete pair, cannot change while a request is active, and always
+  retain the same callback user through the matching end notification. Cancellation during TX is
+  deferred until the transport explicitly reports physical completion or abort, preventing the
+  transceiver from being left in transmit direction.
+
 - Library: Replaced `RandomReadItem` and the public `double_word` switches with explicit
   `RandomReadWordItem`/`RandomReadDWordItem`, typed Word/DWord write items, separate request spans,
   and separate `uint16_t`/`uint32_t` response spans. The host-sync API now uses width-specific
@@ -34,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `OperationOutcomeUnknown`, clears the pending frame, and is never retried automatically.
 - Tooling: Random-write CLI items require `DEVICE=VALUE` and validate every item before opening the
   serial device. Missing/empty values and bit values other than `0` or `1` are rejected.
+- Library: Removed default construction from public input request/item/address/spec types. Required
+  devices, addresses, counts/data, values, targets, states, channels, and mode changes must be
+  supplied at construction; explicit D0/address zero/value zero/OFF remain valid.
+- Library: Global-signal control now requires typed target plus `BitValue`, and serial-module mode
+  switching rejects a request that selects no change. Unknown control enums, empty containers, and
+  any invalid item reject the complete request before a transmit frame is created. Receive/result
+  storage remains default constructible.
 
 - Library: Removed default construction and implicit values from `PosixSerialConfig`. Device path,
   baud rate, data bits, stop bits, parity, and hardware flow control are now required constructor
@@ -42,9 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SerialParity` and `HardwareFlowControl` enums.
 - Tooling: Removed the CLI's implicit serial device, 9600 baud, 8N1, and disabled-flow defaults.
   `--device`, `--baud`, `--data-bits`, `--stop-bits`, `--parity`, and `--hardware-flow` are required.
-- Library: `ProtocolConfig {}` no longer silently selects C4, Binary, ASCII Format3, or enabled
-  sum-check. These fields begin invalid and must be explicitly selected or supplied by a named
-  preset before configuration can succeed.
+- Library: Deleted public default construction and mutable selector fields from `ProtocolConfig`.
+  Callers now use the immutable tagged `c4_binary(...)`, `ascii(AsciiFrameKind, AsciiFormat, ...)`,
+  or `e1(CodeMode, ...)` construction path. C4 Binary accepts no ASCII format, C-family ASCII
+  requires one, and 1E accepts neither an ASCII format nor an inactive sum-check option.
 - Library: Replaced `bool sum_check_enabled` with `SumCheckMode::{Enabled, Disabled}`. The C4
   protocol presets now require a `SumCheckMode` argument.
 - Tooling: `mcprotocol_cli --sum-check on|off` and the corresponding validation-script inputs are

@@ -305,7 +305,7 @@ class PosixSyncClient {
 
   PosixSerialPort port_ {};
   MelsecSerialClient client_ {};
-  ProtocolConfig protocol_config_ {};
+  ProtocolConfig protocol_config_ = ProtocolConfig::unconfigured_for_storage();
   std::array<std::byte, kMaxResponseFrameBytes> rx_buffer_ {};
   CompletionState completion_ {};
 };

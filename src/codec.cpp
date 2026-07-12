@@ -132,7 +132,7 @@ class ByteWriter {
 // Protocol feature predicates and frame/device sizing helpers.
 
 [[nodiscard]] constexpr bool is_qna_family_series(const ProtocolConfig& config) noexcept {
-  const PlcSeries series = plc_series_from_profile(config.plc_profile);
+  const PlcSeries series = plc_series_from_profile(config.plc_profile());
   return series == PlcSeries::QnA || series == PlcSeries::AnA_AnU;
 }
 
@@ -165,7 +165,7 @@ class ByteWriter {
 
 [[nodiscard]] constexpr bool is_c4_frame(const ProtocolConfig& config) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_C4
-  return config.frame_kind == FrameKind::C4;
+  return config.frame_kind() == FrameKind::C4;
 #else
   (void)config;
   return false;
@@ -174,7 +174,7 @@ class ByteWriter {
 
 [[nodiscard]] constexpr bool is_c3_frame(const ProtocolConfig& config) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_C3
-  return config.frame_kind == FrameKind::C3;
+  return config.frame_kind() == FrameKind::C3;
 #else
   (void)config;
   return false;
@@ -183,7 +183,7 @@ class ByteWriter {
 
 [[nodiscard]] constexpr bool is_c2_frame(const ProtocolConfig& config) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_C2
-  return config.frame_kind == FrameKind::C2;
+  return config.frame_kind() == FrameKind::C2;
 #else
   (void)config;
   return false;
@@ -192,7 +192,7 @@ class ByteWriter {
 
 [[nodiscard]] constexpr bool is_c1_frame(const ProtocolConfig& config) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_C1
-  return config.frame_kind == FrameKind::C1;
+  return config.frame_kind() == FrameKind::C1;
 #else
   (void)config;
   return false;
@@ -201,7 +201,7 @@ class ByteWriter {
 
 [[nodiscard]] constexpr bool is_e1_frame(const ProtocolConfig& config) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
-  return config.frame_kind == FrameKind::E1;
+  return config.frame_kind() == FrameKind::E1;
 #else
   (void)config;
   return false;
@@ -209,17 +209,17 @@ class ByteWriter {
 }
 
 [[nodiscard]] constexpr bool is_ascii_enq_family(const ProtocolConfig& config) noexcept {
-  return config.ascii_format == AsciiFormat::Format1 ||
-         config.ascii_format == AsciiFormat::Format2 ||
-         config.ascii_format == AsciiFormat::Format4;
+  return config.ascii_format() == AsciiFormat::Format1 ||
+         config.ascii_format() == AsciiFormat::Format2 ||
+         config.ascii_format() == AsciiFormat::Format4;
 }
 
 [[nodiscard]] constexpr bool uses_ascii_crlf(const ProtocolConfig& config) noexcept {
-  return config.ascii_format == AsciiFormat::Format4;
+  return config.ascii_format() == AsciiFormat::Format4;
 }
 
 [[nodiscard]] constexpr std::size_t ascii_block_number_length(const ProtocolConfig& config) noexcept {
-  return (!is_c1_frame(config) && !is_e1_frame(config) && config.ascii_format == AsciiFormat::Format2) ? 2U : 0U;
+  return (!is_c1_frame(config) && !is_e1_frame(config) && config.ascii_format() == AsciiFormat::Format2) ? 2U : 0U;
 }
 
 [[nodiscard]] constexpr bool uses_format2_block_number(const ProtocolConfig& config) noexcept {
@@ -293,8 +293,8 @@ class ByteWriter {
 }
 
 [[nodiscard]] constexpr std::size_t ascii_error_code_width(const ProtocolConfig& config) noexcept {
-  return ((MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && config.frame_kind == FrameKind::C1) ||
-          (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && config.frame_kind == FrameKind::E1))
+  return ((MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && config.frame_kind() == FrameKind::C1) ||
+          (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && config.frame_kind() == FrameKind::E1))
              ? 2U
              : 4U;
 }
@@ -469,7 +469,7 @@ class ByteWriter {
 
 [[nodiscard]] constexpr std::uint16_t e1_acpu_monitoring_timer(
     const ProtocolConfig& config) noexcept {
-  return static_cast<std::uint16_t>(config.e1_monitoring_timer.ticks());
+  return static_cast<std::uint16_t>(config.e1_monitoring_timer().ticks());
 }
 
 [[nodiscard]] constexpr bool is_remote_password_iq_r(const ProtocolConfig& config) noexcept {
@@ -485,18 +485,14 @@ class ByteWriter {
     return config;
   }
 
-  ProtocolConfig wire_config = config;
-  wire_config.plc_profile = PlcProfile::MelsecQ;
-  return wire_config;
+  return config.with_plc_profile(PlcProfile::MelsecQ);
 }
 
 [[nodiscard]] ProtocolConfig qualified_native_wire_config(
     const ProtocolConfig& config,
     const QualifiedBufferWordDevice& device) noexcept {
-  if (config.plc_profile == PlcProfile::MelsecIqL && device.kind == QualifiedBufferDeviceKind::G) {
-    ProtocolConfig wire_config = config;
-    wire_config.plc_profile = PlcProfile::MelsecQ;
-    return wire_config;
+  if (config.plc_profile() == PlcProfile::MelsecIqL && device.kind == QualifiedBufferDeviceKind::G) {
+    return config.with_plc_profile(PlcProfile::MelsecQ);
   }
   return config;
 }
@@ -726,7 +722,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (is_c1_frame(config) && !is_ascii_mode(config)) {
     return make_status(StatusCode::UnsupportedConfiguration, "1C frame supports ASCII only");
   }
-  const PlcSeries series = plc_series_from_profile(config.plc_profile);
+  const PlcSeries series = plc_series_from_profile(config.plc_profile());
   if (!is_c1_supported_series(series)) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
@@ -738,7 +734,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] constexpr C1CommandFamily c1_command_family(const ProtocolConfig& config) noexcept {
-  return plc_series_from_profile(config.plc_profile) == PlcSeries::A
+  return plc_series_from_profile(config.plc_profile()) == PlcSeries::A
       ? C1CommandFamily::AcpuCommon
       : C1CommandFamily::QnaCommon;
 }
@@ -866,6 +862,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     default:
       return invalid_argument("Global signal target must be current, x1a, or x1b");
   }
+  if (request.value != BitValue::Off && request.value != BitValue::On) {
+    return invalid_argument("Global signal value must be BitValue::Off or BitValue::On");
+  }
   return ok_status();
 }
 
@@ -877,6 +876,12 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
       break;
     default:
       return invalid_argument("Serial-module mode switch channel must be ch1 or ch2");
+  }
+
+  if (!request.switch_mode_no &&
+      !request.switch_transmission_setting &&
+      !request.switch_communication_speed) {
+    return invalid_argument("Serial-module mode switch requires at least one explicit change");
   }
 
   switch (request.mode_no) {
@@ -1021,10 +1026,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     const ExtendedFileRegisterAddress& address) noexcept {
-  const DeviceAddress device {
-      .code = DeviceCode::R,
-      .number = address.word_number,
-  };
+  const DeviceAddress device(DeviceCode::R, address.word_number);
   if (!append_e1_device_reference(writer, config, device)) {
     return false;
   }
@@ -1036,10 +1038,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     std::uint32_t head_device_number) noexcept {
-  const DeviceAddress device {
-      .code = DeviceCode::R,
-      .number = head_device_number,
-  };
+  const DeviceAddress device(DeviceCode::R, head_device_number);
   return append_e1_device_reference(writer, config, device);
 }
 
@@ -1246,7 +1245,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_link_direct_word_device(
     const ProtocolConfig& config,
     const LinkDirectDevice& device) noexcept {
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     return invalid_argument("melsec:iq-f does not support link-direct devices");
   }
   if (is_ascii_mode(config) && device.network_number > 0x0FFFU) {
@@ -1261,7 +1260,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_link_direct_bit_device(
     const ProtocolConfig& config,
     const LinkDirectDevice& device) noexcept {
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     return invalid_argument("melsec:iq-f does not support link-direct devices");
   }
   if (is_ascii_mode(config) && device.network_number > 0x0FFFU) {
@@ -1315,7 +1314,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     const QualifiedBufferWordDevice& device) noexcept {
   if (device.kind == QualifiedBufferDeviceKind::HG) {
-    const PlcSeries series = plc_series_from_profile(config.plc_profile);
+    const PlcSeries series = plc_series_from_profile(config.plc_profile());
     if (series == PlcSeries::IQ_F) {
       return invalid_argument("HG device extension access is not available for MELSEC iQ-F");
     }
@@ -1380,10 +1379,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     const QualifiedBufferWordDevice& device) noexcept {
-  const DeviceAddress address {
-      .code = qualified_device_code(device),
-      .number = device.word_address,
-  };
+  const DeviceAddress address(qualified_device_code(device), device.word_address);
   return writer.push(0x00U) &&
          writer.push(0x00U) &&
          append_device_reference_binary(writer, config, address) &&
@@ -1513,27 +1509,27 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] bool encode_ascii_route(ByteWriter& writer, const ProtocolConfig& config) noexcept {
-  if (!append_ascii_hex(writer, config.route.station_no(), 2)) {
+  if (!append_ascii_hex(writer, config.route().station_no(), 2)) {
     return false;
   }
   if (is_c2_frame(config)) {
-    return append_ascii_hex(writer, config.route.self_station_no(), 2);
+    return append_ascii_hex(writer, config.route().self_station_no(), 2);
   }
-  if (!append_ascii_hex(writer, config.route.network_no(), 2)) {
+  if (!append_ascii_hex(writer, config.route().network_no(), 2)) {
     return false;
   }
-  if (!append_ascii_hex(writer, config.route.pc_no(), 2)) {
+  if (!append_ascii_hex(writer, config.route().pc_no(), 2)) {
     return false;
   }
   if (is_c4_frame(config)) {
-    if (!append_ascii_hex(writer, config.route.request_destination_module_io_no(), 4)) {
+    if (!append_ascii_hex(writer, config.route().request_destination_module_io_no(), 4)) {
       return false;
     }
-    if (!append_ascii_hex(writer, config.route.request_destination_module_station_no(), 2)) {
+    if (!append_ascii_hex(writer, config.route().request_destination_module_station_no(), 2)) {
       return false;
     }
   }
-  return append_ascii_hex(writer, config.route.self_station_no(), 2);
+  return append_ascii_hex(writer, config.route().self_station_no(), 2);
 }
 
 [[nodiscard]] bool append_ascii_frame_id(ByteWriter& writer, FrameKind frame_kind) noexcept {
@@ -1544,14 +1540,14 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] bool encode_binary_route(ByteWriter& writer, const ProtocolConfig& config) noexcept {
-  return writer.push(static_cast<std::uint8_t>(config.route.station_no())) &&
-         writer.push(static_cast<std::uint8_t>(config.route.network_no())) &&
-         writer.push(static_cast<std::uint8_t>(config.route.pc_no())) &&
+  return writer.push(static_cast<std::uint8_t>(config.route().station_no())) &&
+         writer.push(static_cast<std::uint8_t>(config.route().network_no())) &&
+         writer.push(static_cast<std::uint8_t>(config.route().pc_no())) &&
          writer.append_le16(static_cast<std::uint16_t>(
-             config.route.request_destination_module_io_no())) &&
+             config.route().request_destination_module_io_no())) &&
          writer.push(static_cast<std::uint8_t>(
-             config.route.request_destination_module_station_no())) &&
-         writer.push(static_cast<std::uint8_t>(config.route.self_station_no()));
+             config.route().request_destination_module_station_no())) &&
+         writer.push(static_cast<std::uint8_t>(config.route().self_station_no()));
 }
 
 [[nodiscard]] Status unsupported(const char* message) noexcept {
@@ -1563,7 +1559,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] Status validate_plc_profile_config(const ProtocolConfig& config) noexcept {
-  if (!is_plc_profile_specified(config.plc_profile)) {
+  if (!is_plc_profile_specified(config.plc_profile())) {
     return invalid_argument("PLC profile is required. Set ProtocolConfig::plc_profile to an explicit canonical profile.");
   }
   return ok_status();
@@ -1605,7 +1601,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] constexpr bool is_connected_station_route(const ProtocolConfig& config) noexcept {
-  return config.route.destination_module_is_own_station();
+  return config.route().destination_module_is_own_station();
 }
 
 [[nodiscard]] Status validate_connected_station_only_command_config(
@@ -1932,7 +1928,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
       return invalid_argument("1E request data must begin with a command subheader");
     }
     if (!payload_writer.append(request_data.first(2U)) ||
-        !append_ascii_hex(payload_writer, config.route.pc_no(), 2U) ||
+        !append_ascii_hex(payload_writer, config.route().pc_no(), 2U) ||
         !append_ascii_hex(payload_writer, e1_acpu_monitoring_timer(config), 4U) ||
         !payload_writer.append(request_data.subspan(2U))) {
       return buffer_too_small("1E ASCII frame payload buffer is too small");
@@ -1941,8 +1937,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     return ok_status();
   }
   if (is_c1_frame(config)) {
-    if (!append_ascii_hex(payload_writer, config.route.station_no(), 2) ||
-        !append_ascii_hex(payload_writer, config.route.pc_no(), 2) ||
+    if (!append_ascii_hex(payload_writer, config.route().station_no(), 2) ||
+        !append_ascii_hex(payload_writer, config.route().pc_no(), 2) ||
         !payload_writer.append(request_data)) {
       return buffer_too_small("ASCII frame payload buffer is too small");
     }
@@ -1954,7 +1950,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
            payload_writer,
            context.format2_block_number(),
            ascii_block_number_length(config))) ||
-      !append_ascii_frame_id(payload_writer, config.frame_kind) ||
+      !append_ascii_frame_id(payload_writer, config.frame_kind()) ||
       !encode_ascii_route(payload_writer, config) ||
       !payload_writer.append(request_data)) {
     return buffer_too_small("ASCII frame payload buffer is too small");
@@ -1974,7 +1970,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
       return invalid_argument("1E request data must begin with a command subheader");
     }
     if (!payload_writer.push(request_data[0]) ||
-        !payload_writer.push(static_cast<std::uint8_t>(config.route.pc_no())) ||
+        !payload_writer.push(static_cast<std::uint8_t>(config.route().pc_no())) ||
         !payload_writer.append_le16(e1_acpu_monitoring_timer(config)) ||
         !payload_writer.append(request_data.subspan(1U))) {
       return buffer_too_small("1E binary frame payload buffer is too small");
@@ -1982,7 +1978,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     out_size = payload_writer.size();
     return ok_status();
   }
-  if (!payload_writer.push(frame_id(config.frame_kind)) ||
+  if (!payload_writer.push(frame_id(config.frame_kind())) ||
       !encode_binary_route(payload_writer, config) ||
       !payload_writer.append(request_data)) {
     return buffer_too_small("Binary frame payload buffer is too small");
@@ -2034,7 +2030,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] constexpr bool supports_random_lz_device(const ProtocolConfig& config) noexcept {
-  const PlcSeries series = plc_series_from_profile(config.plc_profile);
+  const PlcSeries series = plc_series_from_profile(config.plc_profile());
   return series == PlcSeries::IQ_R || series == PlcSeries::IQ_F;
 }
 
@@ -2089,7 +2085,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     DeviceCode code,
     const char* message) noexcept {
-  if (config.plc_profile == PlcProfile::MelsecIqL && is_iq_l_unsupported_plain_device_code(code)) {
+  if (config.plc_profile() == PlcProfile::MelsecIqL && is_iq_l_unsupported_plain_device_code(code)) {
     return invalid_argument(message);
   }
   return ok_status();
@@ -2099,7 +2095,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     DeviceCode code,
     const char* message) noexcept {
-  if (config.plc_profile == PlcProfile::MelsecIqF && is_iq_f_unsupported_plain_device_code(code)) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF && is_iq_f_unsupported_plain_device_code(code)) {
     return invalid_argument(message);
   }
   return ok_status();
@@ -2352,39 +2348,39 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     return plc_profile_status;
   }
 
-  if (!is_valid_frame_kind(config.frame_kind)) {
+  if (!is_valid_frame_kind(config.frame_kind())) {
     return invalid_argument("Unknown frame family");
   }
 
-  if (!is_valid_code_mode(config.code_mode)) {
+  if (!is_valid_code_mode(config.code_mode())) {
     return invalid_argument("Unknown code mode");
   }
 
-  if (!is_wrap_safe_timeout_ms(config.timeout.response_timeout_ms)) {
+  if (!is_wrap_safe_timeout_ms(config.timeout().response_timeout_ms)) {
     return invalid_argument("Response timeout must be in range 1..2147483647 ms");
   }
 
-  if (!is_wrap_safe_timeout_ms(config.timeout.inter_byte_timeout_ms)) {
+  if (!is_wrap_safe_timeout_ms(config.timeout().inter_byte_timeout_ms)) {
     return invalid_argument("Inter-byte timeout must be in range 1..2147483647 ms");
   }
 
-  if (!config.e1_monitoring_timer.is_valid()) {
+  if (!config.e1_monitoring_timer().is_valid()) {
     return invalid_argument(
         "1E monitoring timer must be an exact 250 ms unit in range 0..16383750 ms");
   }
 
-  if (!config.route.is_specified()) {
+  if (!config.route().is_specified()) {
     return invalid_argument("Route selection is required");
   }
-  if (!config.route.supports_frame(config.frame_kind)) {
+  if (!config.route().supports_frame(config.frame_kind())) {
     return invalid_argument("Route type does not match the selected frame family");
   }
 
-  if (!is_valid_sum_check_mode(config.sum_check_mode)) {
+  if (!is_valid_sum_check_mode(config.sum_check_mode())) {
     return invalid_argument("Sum-check mode is required");
   }
 
-  if (!is_frame_kind_enabled(config.frame_kind)) {
+  if (!is_frame_kind_enabled(config.frame_kind())) {
     return unsupported("Selected frame family is compiled out");
   }
 
@@ -2392,8 +2388,8 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     return unsupported("Selected code mode is compiled out");
   }
 
-  if (is_ascii_mode(config)) {
-    if (!is_valid_ascii_format(config.ascii_format)) {
+  if (is_ascii_mode(config) && !is_e1_frame(config)) {
+    if (!is_valid_ascii_format(config.ascii_format())) {
       return invalid_argument("Unknown ASCII format");
     }
   } else if (!is_c4_frame(config) && !is_e1_frame(config)) {
@@ -2404,53 +2400,59 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     if (!is_ascii_mode(config)) {
       return unsupported("1C frames support only ASCII Format1, Format3, and Format4");
     }
-    if (config.ascii_format == AsciiFormat::Format2) {
+    if (config.ascii_format() == AsciiFormat::Format2) {
       return unsupported("1C frames do not support ASCII Format2");
     }
   }
 
   if (is_e1_frame(config)) {
-    if (!config.route.pc_target_valid()) {
+    if (is_valid_ascii_format(config.ascii_format())) {
+      return invalid_argument("1E configuration does not accept an ASCII-format input");
+    }
+    if (config.sum_check_mode() != SumCheckMode::Disabled) {
+      return invalid_argument("1E has no configurable sum-check mode");
+    }
+    if (!config.route().pc_target_valid()) {
       return invalid_argument("1E PC target is invalid");
     }
-    if (config.route.station_no() != 0x00U ||
-        config.route.network_no() != 0x00U ||
-        config.route.request_destination_module_io_no() != module_io::OwnStation ||
-        config.route.request_destination_module_station_no() != 0x00U) {
+    if (config.route().station_no() != 0x00U ||
+        config.route().network_no() != 0x00U ||
+        config.route().request_destination_module_io_no() != module_io::OwnStation ||
+        config.route().request_destination_module_station_no() != 0x00U) {
       return invalid_argument("1E frame uses only route.pc_no; keep the other route fields at defaults");
     }
-    if (config.route.pc_no() != 0xFFU && (config.route.pc_no() == 0x00U || config.route.pc_no() > 0x40U)) {
+    if (config.route().pc_no() != 0xFFU && (config.route().pc_no() == 0x00U || config.route().pc_no() > 0x40U)) {
       return invalid_argument("1E PC No. must be 0xFF or in range 0x01..0x40");
     }
     return ok_status();
   }
 
-  if (!config.route.self_station_valid()) {
+  if (!config.route().self_station_valid()) {
     return invalid_argument("Self-station number must be in range 0x00..0x1F");
   }
 
-  if (config.route.is_multidrop()) {
-    if (!is_valid_multidrop_station_no(config.route.station_no())) {
+  if (config.route().is_multidrop()) {
+    if (!is_valid_multidrop_station_no(config.route().station_no())) {
       return invalid_argument("Multidrop route station must be in range 0x00..0x1F");
     }
     if (!uses_routed_header(config)) {
-      if (config.route.network_no() != 0x00U ||
-          config.route.pc_no() != 0xFFU ||
-          config.route.request_destination_module_io_no() != module_io::OwnStation ||
-          config.route.request_destination_module_station_no() != 0x00U) {
+      if (config.route().network_no() != 0x00U ||
+          config.route().pc_no() != 0xFFU ||
+          config.route().request_destination_module_io_no() != module_io::OwnStation ||
+          config.route().request_destination_module_station_no() != 0x00U) {
         return invalid_argument("1C/2C multidrop route uses only station and self-station fields");
       }
     } else {
-      if (!config.route.pc_target_valid()) {
+      if (!config.route().pc_target_valid()) {
         return invalid_argument("3C/4C PC target is invalid");
       }
-      if (!is_valid_routed_network_no(config.route.network_no())) {
+      if (!is_valid_routed_network_no(config.route().network_no())) {
         return invalid_argument("3C/4C network number must be in range 0x00..0xEF");
       }
-      if (!is_valid_routed_pc_no(config.route.pc_no())) {
+      if (!is_valid_routed_pc_no(config.route().pc_no())) {
         return invalid_argument("3C/4C PC No. must be 0xFF, 0x01..0x78, 0x7D, 0x7E, or 0xFE");
       }
-      if (is_c4_frame(config) && !config.route.destination_module_valid()) {
+      if (is_c4_frame(config) && !config.route().destination_module_valid()) {
         return invalid_argument("4C request-destination module target is invalid");
       }
     }
@@ -2624,7 +2626,7 @@ Status FrameCodec::encode_success_response(
       return payload_status;
     }
 
-    const std::size_t prefix_size = ascii_block_number_length(config) + ascii_header_length(config.frame_kind);
+    const std::size_t prefix_size = ascii_block_number_length(config) + ascii_header_length(config.frame_kind());
     ByteWriter writer(out_frame);
     if (is_ascii_enq_family(config)) {
       if (response_data.empty()) {
@@ -2653,7 +2655,7 @@ Status FrameCodec::encode_success_response(
         }
       }
     } else {
-      const std::string_view end_code = ascii_success_end_code(config.frame_kind);
+      const std::string_view end_code = ascii_success_end_code(config.frame_kind());
       if (!writer.push(kAsciiStx) ||
           !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
           !append_text_bytes(writer, end_code) ||
@@ -2679,7 +2681,7 @@ Status FrameCodec::encode_success_response(
 
   std::array<std::uint8_t, kMaxRequestFrameBytes> body {};
   ByteWriter body_writer(body);
-  if (!body_writer.push(frame_id(config.frame_kind)) ||
+  if (!body_writer.push(frame_id(config.frame_kind())) ||
       !encode_binary_route(body_writer, config) ||
       !body_writer.append_le16(0xFFFFU) ||
       !body_writer.append_le16(0x0000U) ||
@@ -2764,11 +2766,11 @@ Status FrameCodec::encode_error_response(
       return payload_status;
     }
 
-    const std::size_t prefix_size = ascii_block_number_length(config) + ascii_header_length(config.frame_kind);
+    const std::size_t prefix_size = ascii_block_number_length(config) + ascii_header_length(config.frame_kind());
     const std::size_t error_width = ascii_error_code_width(config);
     ByteWriter writer(out_frame);
     if (is_ascii_enq_family(config)) {
-      const std::string_view end_code = ascii_error_end_code(config.frame_kind);
+      const std::string_view end_code = ascii_error_end_code(config.frame_kind());
       if (!writer.push(kAsciiNak) ||
           !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size))) {
         return buffer_too_small("ASCII error response frame buffer is too small");
@@ -2780,7 +2782,7 @@ Status FrameCodec::encode_error_response(
         return buffer_too_small("ASCII error response frame buffer is too small");
       }
     } else {
-      const std::string_view end_code = ascii_error_end_code(config.frame_kind);
+      const std::string_view end_code = ascii_error_end_code(config.frame_kind());
       if (!writer.push(kAsciiStx) ||
           !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
           !append_text_bytes(writer, end_code) ||
@@ -2798,7 +2800,7 @@ Status FrameCodec::encode_error_response(
 
   std::array<std::uint8_t, kMaxRequestFrameBytes> body {};
   ByteWriter body_writer(body);
-  if (!body_writer.push(frame_id(config.frame_kind)) ||
+  if (!body_writer.push(frame_id(config.frame_kind())) ||
       !encode_binary_route(body_writer, config) ||
       !body_writer.append_le16(0xFFFFU) ||
       !body_writer.append_le16(error_code)) {
@@ -2905,8 +2907,8 @@ DecodeResult FrameCodec::decode_response(
   if (is_ascii_mode(config) && !is_e1_frame(config) &&
       (bytes[0] == kAsciiAck || bytes[0] == kAsciiNak || bytes[0] == kAsciiStx)) {
     const std::size_t block_size = ascii_block_number_length(config);
-    const std::size_t frame_id_size = ascii_frame_id_length(config.frame_kind);
-    const std::size_t route_size = ascii_route_length(config.frame_kind);
+    const std::size_t frame_id_size = ascii_frame_id_length(config.frame_kind());
+    const std::size_t route_size = ascii_route_length(config.frame_kind());
     const std::size_t route_offset = 1U + block_size + frame_id_size;
     const std::size_t route_end = route_offset + route_size;
     if (bytes.size() < route_end) {
@@ -2921,7 +2923,7 @@ DecodeResult FrameCodec::decode_response(
     if (frame_id_size != 0U) {
       std::uint32_t parsed_frame_id = 0U;
       if (!parse_ascii_hex(bytes.subspan(1U + block_size, frame_id_size), parsed_frame_id) ||
-          parsed_frame_id != frame_id(config.frame_kind)) {
+          parsed_frame_id != frame_id(config.frame_kind())) {
         return DecodeResult {
             .status = DecodeStatus::Error,
             .frame = RawResponseFrame {},
@@ -2943,7 +2945,7 @@ DecodeResult FrameCodec::decode_response(
     std::uint32_t self_station_no = 0U;
     bool route_parse_ok = false;
     RouteConfig actual_route {};
-    switch (config.frame_kind) {
+    switch (config.frame_kind()) {
       case FrameKind::C1:
         route_parse_ok = parse_route_field(0U, 2U, station) &&
                          parse_route_field(2U, 2U, pc);
@@ -3015,15 +3017,14 @@ DecodeResult FrameCodec::decode_response(
     }
 
     const bool route_mismatch =
-        station != config.route.station_no() ||
-        network != config.route.network_no() ||
-        pc != config.route.pc_no() ||
-        module_io_no != config.route.request_destination_module_io_no() ||
-        module_station_no != config.route.request_destination_module_station_no() ||
-        self_station_no != config.route.self_station_no();
+        station != config.route().station_no() ||
+        network != config.route().network_no() ||
+        pc != config.route().pc_no() ||
+        module_io_no != config.route().request_destination_module_io_no() ||
+        module_station_no != config.route().request_destination_module_station_no() ||
+        self_station_no != config.route().self_station_no();
     if (route_mismatch) {
-      ProtocolConfig foreign_config = config;
-      foreign_config.route = actual_route;
+      const ProtocolConfig foreign_config = config.with_route(actual_route);
       DecodeResult foreign = decode_response(foreign_config, context, bytes);
       if (foreign.status != DecodeStatus::Incomplete) {
         foreign.response_identity_mismatch = true;
@@ -3154,7 +3155,7 @@ DecodeResult FrameCodec::decode_response(
   }
 
   if (is_ascii_mode(config)) {
-    const std::size_t prefix_size = 1U + ascii_block_number_length(config) + ascii_header_length(config.frame_kind);
+    const std::size_t prefix_size = 1U + ascii_block_number_length(config) + ascii_header_length(config.frame_kind());
     const std::size_t terminator_size = uses_ascii_crlf(config) ? 2U : 0U;
     const std::size_t error_width = ascii_error_code_width(config);
     if (is_ascii_enq_family(config)) {
@@ -3174,7 +3175,7 @@ DecodeResult FrameCodec::decode_response(
       }
 
       if (bytes[0] == kAsciiNak) {
-        const std::string_view end_code = ascii_error_end_code(config.frame_kind);
+        const std::string_view end_code = ascii_error_end_code(config.frame_kind());
         std::size_t end_code_width = 0U;
         if (!is_c1_frame(config) &&
             bytes.size() >= (prefix_size + end_code.size()) &&
@@ -3275,8 +3276,8 @@ DecodeResult FrameCodec::decode_response(
       };
     }
 
-    const std::string_view success_end_code = ascii_success_end_code(config.frame_kind);
-    const std::string_view error_end_code = ascii_error_end_code(config.frame_kind);
+    const std::string_view success_end_code = ascii_success_end_code(config.frame_kind());
+    const std::string_view error_end_code = ascii_error_end_code(config.frame_kind());
     const std::string_view alt_success_end_code = ascii_alt_success_end_code(config);
     const std::string_view alt_error_end_code = ascii_alt_error_end_code(config);
     const std::size_t minimum_end_code_width = [=]() noexcept {
@@ -3494,7 +3495,7 @@ DecodeResult FrameCodec::decode_response(
     };
   }
 
-  const std::size_t route_size = binary_route_length(config.frame_kind);
+  const std::size_t route_size = binary_route_length(config.frame_kind());
   const std::size_t minimum_body_size = 2U + 1U + route_size + 2U + 2U;
   if (payload_size < minimum_body_size) {
     return DecodeResult {
@@ -3505,7 +3506,7 @@ DecodeResult FrameCodec::decode_response(
     };
   }
 
-  if (payload[2] != frame_id(config.frame_kind)) {
+  if (payload[2] != frame_id(config.frame_kind())) {
     return DecodeResult {
         .status = DecodeStatus::Error,
         .frame = RawResponseFrame {},
@@ -3523,12 +3524,12 @@ DecodeResult FrameCodec::decode_response(
   const std::uint8_t response_module_station = payload[route_offset + 5U];
   const std::uint8_t response_self_station = payload[route_offset + 6U];
   const bool route_identity_mismatch =
-      response_station != config.route.station_no() ||
-      response_network != config.route.network_no() ||
-      response_pc != config.route.pc_no() ||
-      response_module_io != config.route.request_destination_module_io_no() ||
-      response_module_station != config.route.request_destination_module_station_no() ||
-      response_self_station != config.route.self_station_no();
+      response_station != config.route().station_no() ||
+      response_network != config.route().network_no() ||
+      response_pc != config.route().pc_no() ||
+      response_module_io != config.route().request_destination_module_io_no() ||
+      response_module_station != config.route().request_destination_module_station_no() ||
+      response_self_station != config.route().self_station_no();
 
   const std::size_t response_id_offset = 2U + 1U + route_size;
   const std::uint16_t response_id =
@@ -3688,7 +3689,7 @@ Status encode_read_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Extended file-register ER command requires PlcProfile melsec:a");
@@ -3725,7 +3726,7 @@ Status encode_direct_read_extended_file_register_words(
     if (!series_status.ok()) {
       return series_status;
     }
-    if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
+    if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
       return make_status(
           StatusCode::UnsupportedConfiguration,
           "1E direct extended file-register read requires PlcProfile melsec:a");
@@ -3750,7 +3751,7 @@ Status encode_direct_read_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile) != PlcSeries::QnA) {
+  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::QnA) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Direct extended file-register NR command requires PlcProfile melsec:ana-anu or melsec:qna");
@@ -4175,7 +4176,7 @@ Status encode_write_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Extended file-register EW command requires PlcProfile melsec:a");
@@ -4213,7 +4214,7 @@ Status encode_direct_write_extended_file_register_words(
     if (!series_status.ok()) {
       return series_status;
     }
-    if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
+    if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
       return make_status(
           StatusCode::UnsupportedConfiguration,
           "1E direct extended file-register write requires PlcProfile melsec:a");
@@ -4239,7 +4240,7 @@ Status encode_direct_write_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile) != PlcSeries::QnA) {
+  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::QnA) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Direct extended file-register NW command requires PlcProfile melsec:ana-anu or melsec:qna");
@@ -4455,10 +4456,7 @@ Status encode_link_direct_batch_write_bits(
   }
   const DeviceAddress effective_head =
       effective_batch_write_bits_head_device(config, device.device, bits);
-  const LinkDirectDevice effective_device {
-      .network_number = device.network_number,
-      .device = effective_head,
-  };
+  const LinkDirectDevice effective_device(device.network_number, effective_head);
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x1401U, extended_bit_subcommand(config)) ||
       !append_link_direct_device_reference(writer, config, effective_device) ||
@@ -4933,7 +4931,7 @@ Status encode_random_write_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Extended file-register ET command requires PlcProfile melsec:a");
@@ -5796,7 +5794,7 @@ Status encode_register_monitor(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)request;
     (void)out_request_data;
     (void)out_size;
@@ -5865,10 +5863,7 @@ Status encode_register_monitor(
     out_size = writer.size();
     return ok_status();
   }
-  RandomReadRequest random_request {
-      .word_items = request.word_items,
-      .dword_items = request.dword_items,
-  };
+  RandomReadRequest random_request(request.word_items, request.dword_items);
   std::array<std::uint8_t, kMaxRequestDataBytes> random_request_data {};
   std::size_t inner_size = 0;
   Status status = encode_random_read(config, random_request, random_request_data, inner_size);
@@ -5932,7 +5927,7 @@ Status encode_register_extended_file_register_monitor(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Extended file-register EM command requires PlcProfile melsec:a");
@@ -5973,7 +5968,7 @@ Status encode_read_monitor(
   if (is_c1_frame(config)) {
     return invalid_argument("1C monitor read requires registered item metadata");
   }
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)out_request_data;
     (void)out_size;
     return unsupported("melsec:iq-f does not support monitor read");
@@ -5999,7 +5994,7 @@ Status encode_read_monitor(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)registration;
     (void)out_request_data;
     (void)out_size;
@@ -6091,7 +6086,7 @@ Status encode_read_extended_file_register_monitor(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Extended file-register ME command requires PlcProfile melsec:a");
@@ -6150,10 +6145,7 @@ Status parse_read_monitor_response(
   }
   return parse_random_read_response(
       config,
-      RandomReadRequest {
-          .word_items = registration.word_items,
-          .dword_items = registration.dword_items,
-      },
+      RandomReadRequest(registration.word_items, registration.dword_items),
       response_data,
       out_words,
       out_dwords);
@@ -6469,7 +6461,7 @@ Status encode_control_global_signal(
 
   const std::uint16_t specification =
       static_cast<std::uint16_t>(static_cast<std::uint8_t>(request.target));
-  const std::uint16_t subcommand = request.turn_on ? 0x0001U : 0x0000U;
+  const std::uint16_t subcommand = request.value == BitValue::On ? 0x0001U : 0x0000U;
 
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x1618U, subcommand) ||
@@ -6530,7 +6522,7 @@ Status encode_initialize_transmission_sequence(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (config.frame_kind != FrameKind::C4 || !is_binary_mode(config)) {
+  if (config.frame_kind() != FrameKind::C4 || !is_binary_mode(config)) {
     (void)out_request_data;
     (void)out_size;
     return unsupported(
@@ -6563,7 +6555,7 @@ Status encode_read_host_buffer(
     (void)out_size;
     return unsupported("1E frame does not define host-buffer access");
   }
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)request;
     (void)out_request_data;
     (void)out_size;
@@ -6596,16 +6588,8 @@ Status parse_read_host_buffer_response(
     std::span<const std::uint8_t> response_data,
     std::span<std::uint16_t> out_words) noexcept {
   return parse_batch_read_words_response(
-      ProtocolConfig {
-          .frame_kind = config.frame_kind,
-          .code_mode = config.code_mode,
-          .ascii_format = config.ascii_format,
-          .plc_profile = config.plc_profile,
-          .sum_check_mode = config.sum_check_mode,
-          .route = config.route,
-          .timeout = config.timeout,
-      },
-      BatchReadWordsRequest {.head_device = DeviceAddress {}, .points = request.word_length},
+      config,
+      BatchReadWordsRequest(DeviceAddress {DeviceCode::D, 0U}, request.word_length),
       response_data,
       out_words);
 }
@@ -6625,7 +6609,7 @@ Status encode_write_host_buffer(
     (void)out_size;
     return unsupported("1E frame does not define host-buffer access");
   }
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)request;
     (void)out_request_data;
     (void)out_size;
@@ -6712,7 +6696,7 @@ Status encode_read_module_buffer(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)request;
     (void)out_request_data;
     (void)out_size;
@@ -6811,7 +6795,7 @@ Status encode_write_module_buffer(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)request;
     (void)out_request_data;
     (void)out_size;
@@ -7255,7 +7239,7 @@ Status encode_loopback(
     if (!c1_status.ok()) {
       return c1_status;
     }
-    if (config.route.pc_no() != 0xFFU) {
+    if (config.route().pc_no() != 0xFFU) {
       return invalid_argument("1C loopback requires route.pc_no = 0xFF");
     }
     ByteWriter writer(out_request_data);

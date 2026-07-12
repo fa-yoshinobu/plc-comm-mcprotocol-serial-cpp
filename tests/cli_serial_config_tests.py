@@ -555,8 +555,6 @@ def main() -> int:
         "e1-binary",
         "--plc-profile",
         "melsec:a",
-        "--sum-check",
-        "on",
         "--route",
         "multidrop",
         "--pc-target",
@@ -565,6 +563,10 @@ def main() -> int:
     ]
     e1_raw_connected[e1_raw_connected.index("--data-bits") + 1] = "7"
     require_validation_error(cli, e1_raw_connected, "1E raw connected-station PC target")
+
+    e1_with_sum_check = e1_raw_connected.copy()
+    e1_with_sum_check[-1:-1] = ["--sum-check", "on"]
+    require_parse_error(cli, e1_with_sum_check, "1E rejects inactive sum-check option")
 
     for value, label in (
         ("0", "1E zero monitoring timer"),
@@ -599,6 +601,10 @@ def main() -> int:
     recover_with_e1_timer = explicit_serial.copy()
     recover_with_e1_timer[-1:-1] = ["--e1-monitoring-timer-ms", "4000"]
     require_parse_error(cli, recover_with_e1_timer, "1E monitoring timer on raw C24 recovery")
+
+    recover_with_sum_check = explicit_serial.copy()
+    recover_with_sum_check[-1:-1] = ["--sum-check", "off"]
+    require_parse_error(cli, recover_with_sum_check, "sum-check on raw C24 recovery")
 
     host_with_pc_target = host_with_station.copy()
     station_index = host_with_pc_target.index("--station")
