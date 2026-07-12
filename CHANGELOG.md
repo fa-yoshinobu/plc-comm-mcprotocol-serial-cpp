@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Docs: Removed references to the independently maintained cross-repository verification run from library-owned profile records and terminology.
 ### BREAKING
 
 - Library: `notify_tx_complete` now requires an explicit transport status. RS-485 TX begin/end
@@ -234,7 +235,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.0] - 2026-07-05
 
 ### Added
-- Tests: Added profile-rule and unsupported-device validation coverage for serial cross-verification rules.
+- Tests: Added profile-rule and unsupported-device validation coverage for serial profile rules.
 - Docs: Added generated Doxygen-based API reference for the public C++ headers, with CI freshness validation.
 - Docs: Added shared PLC Setup troubleshooting/code guidance for library status codes, serial MC error-family handling, and observed PLC/module codes.
 - Library: Added a long-state read helper for long timer, long retentive timer, and long counter contact/coil devices.

@@ -19,7 +19,7 @@ modules.
 | Manual family | Manual-derived family name | MC Protocol manuals distinguish Q/L and iQ-R request-shape tables. |
 | Current repository behavior | Q/L request-shape branch | `melsec:qcpu` maps to the Q/L serial request-shape branch while remaining a separate public profile. |
 | Hardware observations | Confirmed for tested target | `Q06UDVCPU` with `QJ71C24N`, tested on 2026-07-01 and rechecked on 2026-07-02. |
-| Normal device support list | Confirmed for tested target | Normal plain devices below passed MC Serial and SLMP cross-checks. |
+| Normal device support list | Confirmed for tested target | Normal plain devices below passed the recorded MC Serial and comparison checks. |
 | Special routes | Confirmed with dedicated routes | Link-direct and native-qualified routes are supported only through their dedicated API routes. |
 
 ## Confirmed test setup
@@ -31,8 +31,8 @@ modules.
 | MC Serial port | `COM3` |
 | MC Serial settings | `19200`, `8E1`, no RTS/CTS, station `0`, sum-check off |
 | SLMP peer | `192.168.250.100:1025` |
-| Validation log | Local cross-verify run, stored outside this repository. |
-| Result summary | Initial pre-fix cross-verify was `total: 91`, `ok: 84`, `ng: 7`; the 7 NG cases were special/native routes. After the ASCII native-extension fix, the special routes passed direct recheck. |
+| Validation evidence | Target observations summarized in this profile record. |
+| Result summary | Initial comparison was `total: 91`, `ok: 84`, `ng: 7`; the 7 NG cases were special/native routes. After the ASCII native-extension fix, the special routes passed direct recheck. |
 
 Because the target is Q-series hardware, this evidence is assigned to the
 explicit `melsec:qcpu` profile.
