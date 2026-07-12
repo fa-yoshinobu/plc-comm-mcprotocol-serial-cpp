@@ -144,11 +144,10 @@ constexpr std::size_t kMaxUserFrameRegistrationBytes = 80U;
 constexpr std::size_t kCpuModelNameLength = 16;
 
 /// \namespace mcprotocol::serial::module_io
-/// \brief Named request-destination module I/O numbers used by `3C` / `4C` serial routing.
+/// \brief Named request-destination module I/O numbers used by `4C` serial routing.
 ///
-/// `RouteConfig::request_destination_module_io_no` defaults to `OwnStation`. The CPU constants
-/// are useful when a `3C` / `4C` request is intentionally routed to a multi-CPU or redundant-CPU
-/// target. The serial request header accepts the documented request-destination module I/O number
+/// The CPU constants are useful when a `4C` request is intentionally routed to a multi-CPU or
+/// redundant-CPU target. The serial request header accepts the documented request-destination module I/O number
 /// field; common CPU values are `0x03D0..0x03D3`, `0x03E0..0x03E3`, and own station `0x03FF`.
 /// Remote-head names are provided as vocabulary aliases for parity with the other plc-comm
 /// implementations; do not assume a remote-head route is valid on serial hardware unless the
@@ -185,6 +184,33 @@ enum class FrameKind : std::uint8_t {
   E1
 };
 
+/// \brief Frame families whose public configuration includes an explicit ASCII format.
+///
+/// 1E is intentionally absent because its ASCII representation has no Format1/2/3/4 selector.
+enum class AsciiFrameKind : std::uint8_t {
+  C4 = static_cast<std::uint8_t>(FrameKind::C4),
+  C3 = static_cast<std::uint8_t>(FrameKind::C3),
+  C2 = static_cast<std::uint8_t>(FrameKind::C2),
+  C1 = static_cast<std::uint8_t>(FrameKind::C1),
+};
+
+[[nodiscard]] constexpr FrameKind frame_kind(AsciiFrameKind value) noexcept {
+  return static_cast<FrameKind>(value);
+}
+
+/// \brief Returns whether `frame_kind` is a defined public frame-family value.
+[[nodiscard]] constexpr bool is_valid_frame_kind(FrameKind frame_kind) noexcept {
+  switch (frame_kind) {
+    case FrameKind::C4:
+    case FrameKind::C3:
+    case FrameKind::C2:
+    case FrameKind::C1:
+    case FrameKind::E1:
+      return true;
+  }
+  return false;
+}
+
 /// \brief Request/response payload encoding.
 enum class CodeMode : std::uint8_t {
   /// Text-encoded command data and response data.
@@ -192,6 +218,16 @@ enum class CodeMode : std::uint8_t {
   /// Compact binary command data and response data.
   Binary
 };
+
+/// \brief Returns whether `code_mode` is a defined public payload-encoding value.
+[[nodiscard]] constexpr bool is_valid_code_mode(CodeMode code_mode) noexcept {
+  switch (code_mode) {
+    case CodeMode::Ascii:
+    case CodeMode::Binary:
+      return true;
+  }
+  return false;
+}
 
 /// \brief ASCII formatting variant for `C4` / `C3` / `C2` serial frames.
 enum class AsciiFormat : std::uint8_t {
@@ -204,6 +240,34 @@ enum class AsciiFormat : std::uint8_t {
   /// CR/LF terminated layout often used by host-facing bring-up tools.
   Format4
 };
+
+/// \brief Explicit sum-check policy for frame families that support configuration.
+enum class SumCheckMode : std::uint8_t {
+  Disabled,
+  Enabled,
+};
+
+/// \brief Returns whether `mode` is a defined public sum-check value.
+[[nodiscard]] constexpr bool is_valid_sum_check_mode(SumCheckMode mode) noexcept {
+  switch (mode) {
+    case SumCheckMode::Disabled:
+    case SumCheckMode::Enabled:
+      return true;
+  }
+  return false;
+}
+
+/// \brief Returns whether `format` is a defined public ASCII framing value.
+[[nodiscard]] constexpr bool is_valid_ascii_format(AsciiFormat format) noexcept {
+  switch (format) {
+    case AsciiFormat::Format1:
+    case AsciiFormat::Format2:
+    case AsciiFormat::Format3:
+    case AsciiFormat::Format4:
+      return true;
+  }
+  return false;
+}
 
 /// \brief PLC family selection used for subcommand and device-layout differences.
 enum class PlcSeries : std::uint8_t {
@@ -376,11 +440,26 @@ enum class PlcProfile : std::uint8_t {
 }
 
 [[nodiscard]] constexpr bool is_plc_profile_specified(PlcProfile profile) noexcept {
-  return profile != PlcProfile::Unspecified;
+  switch (profile) {
+    case PlcProfile::MelsecIqR:
+    case PlcProfile::MelsecIqL:
+    case PlcProfile::MelsecIqF:
+    case PlcProfile::MelsecQ:
+    case PlcProfile::MelsecL:
+    case PlcProfile::MelsecQnA:
+    case PlcProfile::MelsecAnAAnU:
+    case PlcProfile::MelsecA:
+      return true;
+    case PlcProfile::Unspecified:
+      return false;
+  }
+  return false;
 }
 
 /// \brief Route layout inside the request header.
 enum class RouteKind : std::uint8_t {
+  /// No route was selected. This value is observable but cannot encode a request.
+  Unspecified,
   /// Host-station route with fixed `station=0`, `network=0`, `pc=FF`, and local module fields.
   HostStation,
   /// Multidrop/routed route. `1C/2C` use the station fields; `3C/4C` also carry network/PC fields.
@@ -512,39 +591,546 @@ enum class ResponseType : std::uint8_t {
 /// These values are transport-facing rather than command-facing:
 ///
 /// - `response_timeout_ms` is the total request timeout once TX finishes
-/// - `inter_byte_timeout_ms` is the gap timeout while RX is already in progress
+/// - `inter_byte_timeout_ms` is RX inactivity after the library receives a response byte/chunk;
+///   one OS/UART callback may contain multiple physical bytes whose internal spacing is unobservable
 struct TimeoutConfig {
   /// Maximum wait after TX completion before the request is treated as timed out.
-  std::uint32_t response_timeout_ms = 5000;
-  /// Maximum allowed idle gap between RX bytes once a response has started.
+  std::uint32_t response_timeout_ms = 3000;
+  /// Maximum RX inactivity after a response byte/chunk; defaults to 250 ms.
   std::uint32_t inter_byte_timeout_ms = 250;
 };
 
-/// \brief Route header fields for serial MC requests.
+/// \brief PLC-side ACPU monitoring timer encoded in 1E requests.
 ///
-/// The same struct is shared across `2C`/`3C`/`4C`, `1C`, and `1E`, but not every field is active
-/// on every frame family. `FrameCodec::validate_config()` checks the combinations that are legal for
-/// the selected frame.
-struct RouteConfig {
-  /// Route interpretation used by the selected frame family.
-  RouteKind kind = RouteKind::HostStation;
-  /// Target station number on multidrop serial links.
-  std::uint8_t station_no = 0x00;
-  /// Network number used by routed `3C/4C` requests.
-  std::uint8_t network_no = 0x00;
-  /// PLC number field used by `3C/4C` and legacy frame families.
-  std::uint8_t pc_no = 0xFF;
-  /// Destination I/O number for the target CPU/module in `3C/4C` routing.
-  std::uint16_t request_destination_module_io_no = module_io::OwnStation;
-  /// Destination station number for the target CPU/module in `3C/4C` routing.
-  std::uint8_t request_destination_module_station_no = 0x00;
-  /// Enables self-station routing on frame families that support it.
-  bool self_station_enabled = false;
-  /// Self-station number used when `self_station_enabled` is true.
-  std::uint8_t self_station_no = 0x00;
+/// This protocol field is independent of the host communication response timeout. Values are
+/// expressed in milliseconds at the public boundary and must be exact 250 ms units representable
+/// by the 16-bit wire field. Zero is preserved as the protocol's explicit zero value.
+class E1MonitoringTimer {
+ public:
+  constexpr E1MonitoringTimer() noexcept = default;
+
+  [[nodiscard]] static constexpr E1MonitoringTimer milliseconds(
+      std::uint32_t value) noexcept {
+    return E1MonitoringTimer(value);
+  }
+
+  [[nodiscard]] constexpr std::uint32_t value_ms() const noexcept { return value_ms_; }
+  [[nodiscard]] constexpr std::uint32_t ticks() const noexcept { return value_ms_ / 250U; }
+  [[nodiscard]] constexpr bool is_valid() const noexcept {
+    return (value_ms_ % 250U) == 0U && ticks() <= 0xFFFFU;
+  }
+
+ private:
+  constexpr explicit E1MonitoringTimer(std::uint32_t value_ms) noexcept
+      : value_ms_(value_ms) {}
+
+  std::uint32_t value_ms_ = 4000U;
 };
 
-/// \brief Top-level protocol configuration shared by codecs and client requests.
+/// \brief Connected host-station route.
+///
+/// The connected-station header values are protocol constants and therefore are intentionally not
+/// exposed as mutable inputs.
+struct HostStationRoute {};
+
+/// \brief Meaning of a 3C/4C routed PC target.
+enum class C34PcTargetKind : std::uint8_t {
+  Number,
+  ControlSystem,
+  StandbySystem,
+  SpecialFe,
+  ConnectedStation,
+};
+
+/// \brief Mandatory typed PC target for 3C/4C multidrop routes.
+class C34PcTarget {
+ public:
+  [[nodiscard]] static constexpr C34PcTarget number(std::uint32_t value) noexcept {
+    return C34PcTarget(C34PcTargetKind::Number, value);
+  }
+  [[nodiscard]] static constexpr C34PcTarget control_system() noexcept {
+    return C34PcTarget(C34PcTargetKind::ControlSystem, 0x7DU);
+  }
+  [[nodiscard]] static constexpr C34PcTarget standby_system() noexcept {
+    return C34PcTarget(C34PcTargetKind::StandbySystem, 0x7EU);
+  }
+  [[nodiscard]] static constexpr C34PcTarget special_fe() noexcept {
+    return C34PcTarget(C34PcTargetKind::SpecialFe, 0xFEU);
+  }
+  [[nodiscard]] static constexpr C34PcTarget connected_station() noexcept {
+    return C34PcTarget(C34PcTargetKind::ConnectedStation, 0xFFU);
+  }
+
+  [[nodiscard]] constexpr C34PcTargetKind kind() const noexcept { return kind_; }
+  [[nodiscard]] constexpr std::uint32_t value() const noexcept { return value_; }
+  [[nodiscard]] constexpr bool is_valid() const noexcept {
+    switch (kind_) {
+      case C34PcTargetKind::Number:
+        return value_ >= 0x01U && value_ <= 0x78U;
+      case C34PcTargetKind::ControlSystem:
+        return value_ == 0x7DU;
+      case C34PcTargetKind::StandbySystem:
+        return value_ == 0x7EU;
+      case C34PcTargetKind::SpecialFe:
+        return value_ == 0xFEU;
+      case C34PcTargetKind::ConnectedStation:
+        return value_ == 0xFFU;
+    }
+    return false;
+  }
+
+ private:
+  constexpr C34PcTarget(C34PcTargetKind kind, std::uint32_t value) noexcept
+      : kind_(kind), value_(value) {}
+
+  C34PcTargetKind kind_;
+  std::uint32_t value_;
+};
+
+/// \brief Meaning of a 1E PC target.
+enum class E1PcTargetKind : std::uint8_t {
+  Number,
+  ConnectedStation,
+};
+
+/// \brief Mandatory typed PC target for an explicit 1E route.
+class E1PcTarget {
+ public:
+  [[nodiscard]] static constexpr E1PcTarget number(std::uint32_t value) noexcept {
+    return E1PcTarget(E1PcTargetKind::Number, value);
+  }
+  [[nodiscard]] static constexpr E1PcTarget connected_station() noexcept {
+    return E1PcTarget(E1PcTargetKind::ConnectedStation, 0xFFU);
+  }
+
+  [[nodiscard]] constexpr E1PcTargetKind kind() const noexcept { return kind_; }
+  [[nodiscard]] constexpr std::uint32_t value() const noexcept { return value_; }
+  [[nodiscard]] constexpr bool is_valid() const noexcept {
+    switch (kind_) {
+      case E1PcTargetKind::Number:
+        return value_ >= 0x01U && value_ <= 0x40U;
+      case E1PcTargetKind::ConnectedStation:
+        return value_ == 0xFFU;
+    }
+    return false;
+  }
+
+ private:
+  constexpr E1PcTarget(E1PcTargetKind kind, std::uint32_t value) noexcept
+      : kind_(kind), value_(value) {}
+
+  E1PcTargetKind kind_;
+  std::uint32_t value_;
+};
+
+/// \brief Meaning of a mandatory 4C request-destination module target.
+enum class C4DestinationModuleKind : std::uint8_t {
+  OwnStation,
+  MultipleCpu,
+  RedundantControlSystemCpu,
+  RedundantStandbySystemCpu,
+  RedundantSystemACpu,
+  RedundantSystemBCpu,
+  Explicit,
+};
+
+/// \brief Mandatory typed request-destination module for a 4C multidrop route.
+class C4DestinationModule {
+ public:
+  [[nodiscard]] static constexpr C4DestinationModule own_station() noexcept {
+    return C4DestinationModule(
+        C4DestinationModuleKind::OwnStation, module_io::OwnStation, 0x00U, 0U);
+  }
+  [[nodiscard]] static constexpr C4DestinationModule multiple_cpu(
+      std::uint32_t cpu_number) noexcept {
+    const bool valid = cpu_number >= 1U && cpu_number <= 4U;
+    return C4DestinationModule(
+        C4DestinationModuleKind::MultipleCpu,
+        valid ? (module_io::MultipleCpu1 + cpu_number - 1U) : 0U,
+        0x00U,
+        cpu_number);
+  }
+  [[nodiscard]] static constexpr C4DestinationModule redundant_control_system_cpu() noexcept {
+    return C4DestinationModule(
+        C4DestinationModuleKind::RedundantControlSystemCpu,
+        module_io::ControlSystemCpu,
+        0x00U,
+        0U);
+  }
+  [[nodiscard]] static constexpr C4DestinationModule redundant_standby_system_cpu() noexcept {
+    return C4DestinationModule(
+        C4DestinationModuleKind::RedundantStandbySystemCpu,
+        module_io::StandbySystemCpu,
+        0x00U,
+        0U);
+  }
+  [[nodiscard]] static constexpr C4DestinationModule redundant_system_a_cpu() noexcept {
+    return C4DestinationModule(
+        C4DestinationModuleKind::RedundantSystemACpu,
+        module_io::SystemACpu,
+        0x00U,
+        0U);
+  }
+  [[nodiscard]] static constexpr C4DestinationModule redundant_system_b_cpu() noexcept {
+    return C4DestinationModule(
+        C4DestinationModuleKind::RedundantSystemBCpu,
+        module_io::SystemBCpu,
+        0x00U,
+        0U);
+  }
+  [[nodiscard]] static constexpr C4DestinationModule explicit_target(
+      std::uint32_t io_number,
+      std::uint32_t station_number) noexcept {
+    return C4DestinationModule(
+        C4DestinationModuleKind::Explicit, io_number, station_number, 0U);
+  }
+
+  [[nodiscard]] constexpr C4DestinationModuleKind kind() const noexcept { return kind_; }
+  [[nodiscard]] constexpr std::uint32_t io_number() const noexcept { return io_number_; }
+  [[nodiscard]] constexpr std::uint32_t station_number() const noexcept {
+    return station_number_;
+  }
+  [[nodiscard]] constexpr bool is_own_station_selector() const noexcept {
+    return kind_ == C4DestinationModuleKind::OwnStation && is_valid();
+  }
+  [[nodiscard]] constexpr bool is_valid() const noexcept {
+    switch (kind_) {
+      case C4DestinationModuleKind::OwnStation:
+        return io_number_ == module_io::OwnStation && station_number_ == 0U;
+      case C4DestinationModuleKind::MultipleCpu:
+        return selector_number_ >= 1U && selector_number_ <= 4U &&
+               io_number_ == (module_io::MultipleCpu1 + selector_number_ - 1U) &&
+               station_number_ == 0U;
+      case C4DestinationModuleKind::RedundantControlSystemCpu:
+        return io_number_ == module_io::ControlSystemCpu && station_number_ == 0U;
+      case C4DestinationModuleKind::RedundantStandbySystemCpu:
+        return io_number_ == module_io::StandbySystemCpu && station_number_ == 0U;
+      case C4DestinationModuleKind::RedundantSystemACpu:
+        return io_number_ == module_io::SystemACpu && station_number_ == 0U;
+      case C4DestinationModuleKind::RedundantSystemBCpu:
+        return io_number_ == module_io::SystemBCpu && station_number_ == 0U;
+      case C4DestinationModuleKind::Explicit:
+        return io_number_ <= 0xFFFFU && station_number_ <= 0xFFU;
+    }
+    return false;
+  }
+
+ private:
+  constexpr C4DestinationModule(
+      C4DestinationModuleKind kind,
+      std::uint32_t io_number,
+      std::uint32_t station_number,
+      std::uint32_t selector_number) noexcept
+      : kind_(kind),
+        io_number_(io_number),
+        station_number_(station_number),
+        selector_number_(selector_number) {}
+
+  C4DestinationModuleKind kind_;
+  std::uint32_t io_number_;
+  std::uint32_t station_number_;
+  std::uint32_t selector_number_;
+};
+
+/// \brief Mandatory request-source station number for an m:n multidrop route.
+class SelfStationNo {
+ public:
+  [[nodiscard]] static constexpr SelfStationNo number(std::uint32_t value) noexcept {
+    return SelfStationNo(value);
+  }
+
+  [[nodiscard]] constexpr std::uint32_t value() const noexcept { return value_; }
+  [[nodiscard]] constexpr bool is_valid() const noexcept { return value_ <= 0x1FU; }
+
+ private:
+  constexpr explicit SelfStationNo(std::uint32_t value) noexcept : value_(value) {}
+
+  std::uint32_t value_;
+};
+
+/// \brief Explicit 1C multidrop route. Network and self-station fields do not exist on this type.
+class C1MultidropRoute {
+ public:
+  constexpr explicit C1MultidropRoute(std::uint32_t station_no) noexcept
+      : station_no_(station_no) {}
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
+
+ private:
+  std::uint32_t station_no_;
+};
+
+/// \brief Explicit 2C normal/1:n multidrop route. Self-station is fixed to zero.
+class C2StandardMultidropRoute {
+ public:
+  constexpr explicit C2StandardMultidropRoute(std::uint32_t station_no) noexcept
+      : station_no_(station_no) {}
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
+
+ private:
+  std::uint32_t station_no_;
+};
+
+/// \brief Explicit 2C m:n multidrop route with a mandatory self-station number.
+class C2MnMultidropRoute {
+ public:
+  constexpr C2MnMultidropRoute(
+      std::uint32_t station_no,
+      SelfStationNo self_station_no) noexcept
+      : station_no_(station_no), self_station_no_(self_station_no) {}
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
+  [[nodiscard]] constexpr SelfStationNo self_station_no() const noexcept {
+    return self_station_no_;
+  }
+
+ private:
+  std::uint32_t station_no_;
+  SelfStationNo self_station_no_;
+};
+
+/// \brief Explicit 3C normal/1:n multidrop route. Self-station is fixed to zero.
+class C3StandardMultidropRoute {
+ public:
+  constexpr C3StandardMultidropRoute(
+      std::uint32_t station_no,
+      std::uint32_t network_no,
+      C34PcTarget pc_target) noexcept
+      : station_no_(station_no),
+        network_no_(network_no),
+        pc_target_(pc_target) {}
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
+  [[nodiscard]] constexpr std::uint32_t network_no() const noexcept { return network_no_; }
+  [[nodiscard]] constexpr C34PcTarget pc_target() const noexcept { return pc_target_; }
+
+ private:
+  std::uint32_t station_no_;
+  std::uint32_t network_no_;
+  C34PcTarget pc_target_;
+};
+
+/// \brief Explicit 3C m:n multidrop route with a mandatory self-station number.
+class C3MnMultidropRoute {
+ public:
+  constexpr C3MnMultidropRoute(
+      std::uint32_t station_no,
+      std::uint32_t network_no,
+      C34PcTarget pc_target,
+      SelfStationNo self_station_no) noexcept
+      : station_no_(station_no),
+        network_no_(network_no),
+        pc_target_(pc_target),
+        self_station_no_(self_station_no) {}
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
+  [[nodiscard]] constexpr std::uint32_t network_no() const noexcept { return network_no_; }
+  [[nodiscard]] constexpr C34PcTarget pc_target() const noexcept { return pc_target_; }
+  [[nodiscard]] constexpr SelfStationNo self_station_no() const noexcept {
+    return self_station_no_;
+  }
+
+ private:
+  std::uint32_t station_no_;
+  std::uint32_t network_no_;
+  C34PcTarget pc_target_;
+  SelfStationNo self_station_no_;
+};
+
+/// \brief Explicit 4C normal/1:n multidrop route. Self-station is fixed to zero.
+class C4StandardMultidropRoute {
+ public:
+  constexpr C4StandardMultidropRoute(
+      std::uint32_t station_no,
+      std::uint32_t network_no,
+      C34PcTarget pc_target,
+      C4DestinationModule destination_module) noexcept
+      : station_no_(station_no),
+        network_no_(network_no),
+        pc_target_(pc_target),
+        destination_module_(destination_module) {}
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
+  [[nodiscard]] constexpr std::uint32_t network_no() const noexcept { return network_no_; }
+  [[nodiscard]] constexpr C34PcTarget pc_target() const noexcept { return pc_target_; }
+  [[nodiscard]] constexpr C4DestinationModule destination_module() const noexcept {
+    return destination_module_;
+  }
+
+ private:
+  std::uint32_t station_no_;
+  std::uint32_t network_no_;
+  C34PcTarget pc_target_;
+  C4DestinationModule destination_module_;
+};
+
+/// \brief Explicit 4C m:n multidrop route with a mandatory self-station number.
+class C4MnMultidropRoute {
+ public:
+  constexpr C4MnMultidropRoute(
+      std::uint32_t station_no,
+      std::uint32_t network_no,
+      C34PcTarget pc_target,
+      C4DestinationModule destination_module,
+      SelfStationNo self_station_no) noexcept
+      : station_no_(station_no),
+        network_no_(network_no),
+        pc_target_(pc_target),
+        destination_module_(destination_module),
+        self_station_no_(self_station_no) {}
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept { return station_no_; }
+  [[nodiscard]] constexpr std::uint32_t network_no() const noexcept { return network_no_; }
+  [[nodiscard]] constexpr C34PcTarget pc_target() const noexcept { return pc_target_; }
+  [[nodiscard]] constexpr C4DestinationModule destination_module() const noexcept {
+    return destination_module_;
+  }
+  [[nodiscard]] constexpr SelfStationNo self_station_no() const noexcept {
+    return self_station_no_;
+  }
+
+ private:
+  std::uint32_t station_no_;
+  std::uint32_t network_no_;
+  C34PcTarget pc_target_;
+  C4DestinationModule destination_module_;
+  SelfStationNo self_station_no_;
+};
+
+/// \brief Explicit non-default 1E route with a mandatory typed PC target.
+class E1Route {
+ public:
+  constexpr explicit E1Route(E1PcTarget pc_target) noexcept : pc_target_(pc_target) {}
+  [[nodiscard]] constexpr E1PcTarget pc_target() const noexcept { return pc_target_; }
+
+ private:
+  E1PcTarget pc_target_;
+};
+
+/// \brief Explicit route selection for a protocol session.
+///
+/// Default construction represents an omitted route and is rejected before request encoding. Use
+/// `RouteConfig {HostStationRoute {}}` or a frame-specific route type explicitly.
+class RouteConfig {
+ public:
+  constexpr RouteConfig() noexcept = default;
+  constexpr explicit RouteConfig(HostStationRoute) noexcept : kind_(RouteKind::HostStation) {}
+  constexpr explicit RouteConfig(C1MultidropRoute route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C1),
+        station_no_(route.station_no()) {}
+  constexpr explicit RouteConfig(C2StandardMultidropRoute route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C2),
+        station_no_(route.station_no()) {}
+  constexpr explicit RouteConfig(C2MnMultidropRoute route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C2),
+        station_no_(route.station_no()), mn_multidrop_(true),
+        self_station_no_(route.self_station_no().value()),
+        self_station_valid_(route.self_station_no().is_valid()) {}
+  constexpr explicit RouteConfig(C3StandardMultidropRoute route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C3),
+        station_no_(route.station_no()), network_no_(route.network_no()),
+        pc_no_(route.pc_target().value()), pc_target_valid_(route.pc_target().is_valid()) {}
+  constexpr explicit RouteConfig(C3MnMultidropRoute route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C3),
+        station_no_(route.station_no()), network_no_(route.network_no()),
+        pc_no_(route.pc_target().value()), pc_target_valid_(route.pc_target().is_valid()),
+        mn_multidrop_(true), self_station_no_(route.self_station_no().value()),
+        self_station_valid_(route.self_station_no().is_valid()) {}
+  constexpr explicit RouteConfig(C4StandardMultidropRoute route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C4),
+        station_no_(route.station_no()), network_no_(route.network_no()),
+        pc_no_(route.pc_target().value()), pc_target_valid_(route.pc_target().is_valid()),
+        module_io_no_(route.destination_module().io_number()),
+        module_station_no_(route.destination_module().station_number()),
+        destination_module_valid_(route.destination_module().is_valid()),
+        destination_module_own_selector_(route.destination_module().is_own_station_selector()) {}
+  constexpr explicit RouteConfig(C4MnMultidropRoute route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::C4),
+        station_no_(route.station_no()), network_no_(route.network_no()),
+        pc_no_(route.pc_target().value()), pc_target_valid_(route.pc_target().is_valid()),
+        module_io_no_(route.destination_module().io_number()),
+        module_station_no_(route.destination_module().station_number()),
+        destination_module_valid_(route.destination_module().is_valid()),
+        destination_module_own_selector_(route.destination_module().is_own_station_selector()),
+        mn_multidrop_(true), self_station_no_(route.self_station_no().value()),
+        self_station_valid_(route.self_station_no().is_valid()) {}
+  constexpr explicit RouteConfig(E1Route route) noexcept
+      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::E1),
+        pc_no_(route.pc_target().value()), pc_target_valid_(route.pc_target().is_valid()) {}
+
+  [[nodiscard]] constexpr RouteKind kind() const noexcept { return kind_; }
+  [[nodiscard]] constexpr bool is_specified() const noexcept {
+    return kind_ != RouteKind::Unspecified;
+  }
+  [[nodiscard]] constexpr bool is_host_station() const noexcept {
+    return kind_ == RouteKind::HostStation;
+  }
+  [[nodiscard]] constexpr bool is_multidrop() const noexcept {
+    return kind_ == RouteKind::MultidropStation;
+  }
+  [[nodiscard]] constexpr bool supports_frame(FrameKind frame_kind) const noexcept {
+    return is_host_station() || (is_multidrop() && route_frame_ == frame_kind);
+  }
+
+  [[nodiscard]] constexpr std::uint32_t station_no() const noexcept {
+    return is_multidrop() ? station_no_ : 0x00U;
+  }
+  [[nodiscard]] constexpr std::uint32_t network_no() const noexcept {
+    return is_multidrop() ? network_no_ : 0x00U;
+  }
+  [[nodiscard]] constexpr std::uint32_t pc_no() const noexcept {
+    return is_multidrop() ? pc_no_ : 0xFFU;
+  }
+  [[nodiscard]] constexpr bool pc_target_valid() const noexcept {
+    return is_host_station() || pc_target_valid_;
+  }
+  [[nodiscard]] constexpr std::uint32_t request_destination_module_io_no() const noexcept {
+    return is_multidrop() ? module_io_no_ : module_io::OwnStation;
+  }
+  [[nodiscard]] constexpr std::uint32_t request_destination_module_station_no() const noexcept {
+    return is_multidrop() ? module_station_no_ : 0x00U;
+  }
+  [[nodiscard]] constexpr bool destination_module_valid() const noexcept {
+    return is_host_station() || destination_module_valid_;
+  }
+  [[nodiscard]] constexpr bool destination_module_is_own_station() const noexcept {
+    return is_host_station() || destination_module_own_selector_;
+  }
+  [[nodiscard]] constexpr bool is_mn_multidrop() const noexcept {
+    return is_multidrop() && mn_multidrop_;
+  }
+  [[nodiscard]] constexpr std::uint32_t self_station_no() const noexcept {
+    return is_mn_multidrop() ? self_station_no_ : 0x00U;
+  }
+  [[nodiscard]] constexpr bool self_station_valid() const noexcept {
+    return !is_mn_multidrop() || self_station_valid_;
+  }
+
+ private:
+  friend class FrameCodec;
+
+  [[nodiscard]] static constexpr RouteConfig c1_wire_route(
+      std::uint8_t station_no,
+      std::uint8_t pc_no) noexcept {
+    RouteConfig route {C1MultidropRoute {station_no}};
+    route.pc_no_ = pc_no;
+    route.pc_target_valid_ = true;
+    return route;
+  }
+
+  RouteKind kind_ = RouteKind::Unspecified;
+  FrameKind route_frame_ = static_cast<FrameKind>(0xFF);
+  std::uint32_t station_no_ = 0x00U;
+  std::uint32_t network_no_ = 0x00U;
+  std::uint32_t pc_no_ = 0xFFU;
+  bool pc_target_valid_ = false;
+  std::uint32_t module_io_no_ = module_io::OwnStation;
+  std::uint32_t module_station_no_ = 0x00U;
+  bool destination_module_valid_ = false;
+  bool destination_module_own_selector_ = false;
+  bool mn_multidrop_ = false;
+  std::uint32_t self_station_no_ = 0x00U;
+  bool self_station_valid_ = true;
+};
+
+class MelsecSerialClient;
+class PosixSyncClient;
+
+/// \brief Immutable tagged protocol configuration shared by codecs and client requests.
 ///
 /// Treat this as the immutable session configuration for one serial link. The same object is used
 /// by:
@@ -552,38 +1138,166 @@ struct RouteConfig {
 /// - `FrameCodec` for frame wrapping and response decoding
 /// - `CommandCodec` for command subcommand/device-layout differences
 /// - `MelsecSerialClient` and `PosixSyncClient` for runtime request execution
-struct ProtocolConfig {
-  /// Selected serial frame family.
-  FrameKind frame_kind = FrameKind::C4;
-  /// Selected payload encoding inside the frame.
-  CodeMode code_mode = CodeMode::Binary;
-  /// Selected ASCII framing flavor when `code_mode == CodeMode::Ascii`.
-  AsciiFormat ascii_format = AsciiFormat::Format3;
-  /// Block number used only by `ASCII Format2` on `2C/3C/4C`.
-  ///
-  /// The external device chooses this value in the range `0x00..0xFF`. It is ignored by
-  /// `Format1`, `Format3`, `Format4`, binary `Format5`, `1C`, and `1E`.
-  std::uint8_t ascii_block_number = 0x00;
-  /// Public PLC profile used to derive frame-family compatibility and device/subcommand layout.
-  ///
-  /// Applications must set this explicitly before encoding requests or running a client.
-  PlcProfile plc_profile = PlcProfile::Unspecified;
-  /// Enables or disables the ASCII/binary sum-check where that frame family supports it.
-  bool sum_check_enabled = true;
-  /// Route header fields used for every encoded request.
-  RouteConfig route {};
-  /// Request timeout policy used by the async client and stream decoder.
-  TimeoutConfig timeout {};
+class ProtocolConfig {
+ public:
+  ProtocolConfig() = delete;
+
+  /// \brief Constructs an explicit C4 Binary/Format5 session.
+  [[nodiscard]] static constexpr ProtocolConfig c4_binary(
+      PlcProfile plc_profile,
+      SumCheckMode sum_check_mode,
+      RouteConfig route,
+      TimeoutConfig timeout = {}) noexcept {
+    return ProtocolConfig(
+        FrameKind::C4,
+        CodeMode::Binary,
+        static_cast<AsciiFormat>(0xFF),
+        plc_profile,
+        sum_check_mode,
+        route,
+        timeout,
+        E1MonitoringTimer {});
+  }
+
+  /// \brief Constructs an explicit ASCII session with a mandatory framing format.
+  [[nodiscard]] static constexpr ProtocolConfig ascii(
+      AsciiFrameKind ascii_frame_kind,
+      AsciiFormat ascii_format,
+      PlcProfile plc_profile,
+      SumCheckMode sum_check_mode,
+      RouteConfig route,
+      TimeoutConfig timeout = {}) noexcept {
+    return ProtocolConfig(
+        mcprotocol::serial::frame_kind(ascii_frame_kind),
+        CodeMode::Ascii,
+        ascii_format,
+        plc_profile,
+        sum_check_mode,
+        route,
+        timeout,
+        E1MonitoringTimer {});
+  }
+
+  /// \brief Constructs an explicit 1E session; 1E has no public ASCII-format input.
+  [[nodiscard]] static constexpr ProtocolConfig e1(
+      CodeMode code_mode,
+      PlcProfile plc_profile,
+      RouteConfig route,
+      TimeoutConfig timeout = {},
+      E1MonitoringTimer e1_monitoring_timer = {}) noexcept {
+    return ProtocolConfig(
+        FrameKind::E1,
+        code_mode,
+        static_cast<AsciiFormat>(0xFF),
+        plc_profile,
+        SumCheckMode::Disabled,
+        route,
+        timeout,
+        e1_monitoring_timer);
+  }
+
+  [[nodiscard]] constexpr FrameKind frame_kind() const noexcept { return frame_kind_; }
+  [[nodiscard]] constexpr CodeMode code_mode() const noexcept { return code_mode_; }
+  [[nodiscard]] constexpr bool has_ascii_format() const noexcept {
+    return code_mode_ == CodeMode::Ascii && frame_kind_ != FrameKind::E1;
+  }
+  [[nodiscard]] constexpr AsciiFormat ascii_format() const noexcept { return ascii_format_; }
+  [[nodiscard]] constexpr PlcProfile plc_profile() const noexcept { return plc_profile_; }
+  [[nodiscard]] constexpr SumCheckMode sum_check_mode() const noexcept {
+    return sum_check_mode_;
+  }
+  [[nodiscard]] constexpr const RouteConfig& route() const noexcept { return route_; }
+  [[nodiscard]] constexpr const TimeoutConfig& timeout() const noexcept { return timeout_; }
+  [[nodiscard]] constexpr const E1MonitoringTimer& e1_monitoring_timer() const noexcept {
+    return e1_monitoring_timer_;
+  }
+
+  /// \brief Returns a new immutable session configuration with a different explicit profile.
+  [[nodiscard]] constexpr ProtocolConfig with_plc_profile(PlcProfile value) const noexcept {
+    return ProtocolConfig(
+        frame_kind_, code_mode_, ascii_format_, value, sum_check_mode_, route_, timeout_,
+        e1_monitoring_timer_);
+  }
+
+  /// \brief Returns a new immutable session configuration with a different typed route.
+  [[nodiscard]] constexpr ProtocolConfig with_route(RouteConfig value) const noexcept {
+    return ProtocolConfig(
+        frame_kind_, code_mode_, ascii_format_, plc_profile_, sum_check_mode_, value, timeout_,
+        e1_monitoring_timer_);
+  }
+
+  /// \brief Returns a new immutable session configuration with different host timeout settings.
+  [[nodiscard]] constexpr ProtocolConfig with_timeout(TimeoutConfig value) const noexcept {
+    return ProtocolConfig(
+        frame_kind_, code_mode_, ascii_format_, plc_profile_, sum_check_mode_, route_, value,
+        e1_monitoring_timer_);
+  }
+
+  [[nodiscard]] constexpr ProtocolConfig with_response_timeout_ms(
+      std::uint32_t value) const noexcept {
+    TimeoutConfig next = timeout_;
+    next.response_timeout_ms = value;
+    return with_timeout(next);
+  }
+
+  [[nodiscard]] constexpr ProtocolConfig with_inter_byte_timeout_ms(
+      std::uint32_t value) const noexcept {
+    TimeoutConfig next = timeout_;
+    next.inter_byte_timeout_ms = value;
+    return with_timeout(next);
+  }
+
+ private:
+  struct UnconfiguredTag {};
+
+  constexpr ProtocolConfig(
+      FrameKind frame_kind,
+      CodeMode code_mode,
+      AsciiFormat ascii_format,
+      PlcProfile plc_profile,
+      SumCheckMode sum_check_mode,
+      RouteConfig route,
+      TimeoutConfig timeout,
+      E1MonitoringTimer e1_monitoring_timer) noexcept
+      : frame_kind_(frame_kind),
+        code_mode_(code_mode),
+        ascii_format_(ascii_format),
+        plc_profile_(plc_profile),
+        sum_check_mode_(sum_check_mode),
+        route_(route),
+        timeout_(timeout),
+        e1_monitoring_timer_(e1_monitoring_timer) {}
+
+  constexpr explicit ProtocolConfig(UnconfiguredTag) noexcept {}
+  [[nodiscard]] static constexpr ProtocolConfig unconfigured_for_storage() noexcept {
+    return ProtocolConfig(UnconfiguredTag {});
+  }
+
+  friend class MelsecSerialClient;
+  friend class PosixSyncClient;
+
+  FrameKind frame_kind_ = static_cast<FrameKind>(0xFF);
+  CodeMode code_mode_ = static_cast<CodeMode>(0xFF);
+  AsciiFormat ascii_format_ = static_cast<AsciiFormat>(0xFF);
+  PlcProfile plc_profile_ = PlcProfile::Unspecified;
+  SumCheckMode sum_check_mode_ = static_cast<SumCheckMode>(0xFF);
+  RouteConfig route_ {};
+  TimeoutConfig timeout_ {};
+  E1MonitoringTimer e1_monitoring_timer_ {};
 };
 
 /// \brief Device code plus numeric address.
 ///
 /// This is the normalized address form used throughout the library after string-address parsing.
 struct DeviceAddress {
+  DeviceAddress() = delete;
+  constexpr DeviceAddress(DeviceCode device_code, std::uint32_t device_number) noexcept
+      : code(device_code), number(device_number) {}
+
   /// Device family such as `D`, `M`, `X`, `LTN`, or `LZ`.
-  DeviceCode code = DeviceCode::D;
+  DeviceCode code;
   /// Numeric index inside the selected device family.
-  std::uint32_t number = 0;
+  std::uint32_t number;
 };
 
 /// \brief Extended file-register address using block number plus `R` word number.
@@ -591,44 +1305,70 @@ struct DeviceAddress {
 /// This is the block-addressed form used by `1C ACPU-common` and by the chapter-18 block path on
 /// `1E`.
 struct ExtendedFileRegisterAddress {
+  ExtendedFileRegisterAddress() = delete;
+  constexpr ExtendedFileRegisterAddress(
+      std::uint16_t target_block_number,
+      std::uint16_t target_word_number) noexcept
+      : block_number(target_block_number), word_number(target_word_number) {}
+
   /// Extended file-register block number.
-  std::uint16_t block_number = 1;
+  std::uint16_t block_number;
   /// Word number inside the selected block.
-  std::uint16_t word_number = 0;
+  std::uint16_t word_number;
 };
 
 /// \name Device-Memory Contiguous Requests
 /// @{
 /// \brief Contiguous word-read request (`0401`).
 struct BatchReadWordsRequest {
+  BatchReadWordsRequest() = delete;
+  constexpr BatchReadWordsRequest(DeviceAddress first_device, std::uint16_t point_count) noexcept
+      : head_device(first_device), points(point_count) {}
+
   /// First device in the contiguous range.
-  DeviceAddress head_device {};
+  DeviceAddress head_device;
   /// Number of points to read starting at `head_device`.
-  std::uint16_t points = 0;
+  std::uint16_t points;
 };
 
 /// \brief Contiguous bit-read request (`0401` bit path).
 struct BatchReadBitsRequest {
+  BatchReadBitsRequest() = delete;
+  constexpr BatchReadBitsRequest(DeviceAddress first_device, std::uint16_t point_count) noexcept
+      : head_device(first_device), points(point_count) {}
+
   /// First bit device in the contiguous range.
-  DeviceAddress head_device {};
+  DeviceAddress head_device;
   /// Number of bit points to read starting at `head_device`.
-  std::uint16_t points = 0;
+  std::uint16_t points;
 };
 
 /// \brief Contiguous word-write request (`1401`).
 struct BatchWriteWordsRequest {
+  BatchWriteWordsRequest() = delete;
+  constexpr BatchWriteWordsRequest(
+      DeviceAddress first_device,
+      std::span<const std::uint16_t> write_words) noexcept
+      : head_device(first_device), words(write_words) {}
+
   /// First device in the contiguous write range.
-  DeviceAddress head_device {};
+  DeviceAddress head_device;
   /// Caller-owned word data to write starting at `head_device`.
-  std::span<const std::uint16_t> words {};
+  std::span<const std::uint16_t> words;
 };
 
 /// \brief Contiguous bit-write request (`1401` bit path).
 struct BatchWriteBitsRequest {
+  BatchWriteBitsRequest() = delete;
+  constexpr BatchWriteBitsRequest(
+      DeviceAddress first_device,
+      std::span<const BitValue> write_bits) noexcept
+      : head_device(first_device), bits(write_bits) {}
+
   /// First bit device in the contiguous write range.
-  DeviceAddress head_device {};
+  DeviceAddress head_device;
   /// Caller-owned bit data to write starting at `head_device`.
-  std::span<const BitValue> bits {};
+  std::span<const BitValue> bits;
 };
 /// @}
 
@@ -636,119 +1376,231 @@ struct BatchWriteBitsRequest {
 /// @{
 /// \brief Extended file-register batch read (`ER` on 1C ACPU-common, chapter-18 block path on 1E).
 struct ExtendedFileRegisterBatchReadWordsRequest {
+  ExtendedFileRegisterBatchReadWordsRequest() = delete;
+  constexpr ExtendedFileRegisterBatchReadWordsRequest(
+      ExtendedFileRegisterAddress first_device,
+      std::uint16_t point_count) noexcept
+      : head_device(first_device), points(point_count) {}
+
   /// First block-addressed file-register word to read.
-  ExtendedFileRegisterAddress head_device {};
+  ExtendedFileRegisterAddress head_device;
   /// Number of words to read from the file-register range.
-  std::uint16_t points = 0;
+  std::uint16_t points;
 };
 
 /// \brief Direct extended file-register batch read (`NR` on 1C AnA/AnUCPU common, chapter-18 direct path on 1E).
 struct ExtendedFileRegisterDirectBatchReadWordsRequest {
+  ExtendedFileRegisterDirectBatchReadWordsRequest() = delete;
+  constexpr ExtendedFileRegisterDirectBatchReadWordsRequest(
+      std::uint32_t first_device_number,
+      std::uint16_t point_count) noexcept
+      : head_device_number(first_device_number), points(point_count) {}
+
   /// \brief `NR/NW` direct address on 1C or the chapter-18 direct `R` address on 1E.
-  std::uint32_t head_device_number = 0;
+  std::uint32_t head_device_number;
   /// Number of words to read from the direct file-register range.
-  std::uint16_t points = 0;
+  std::uint16_t points;
 };
 
 /// \brief Extended file-register batch write (`EW` on 1C ACPU-common, chapter-18 block path on 1E).
 struct ExtendedFileRegisterBatchWriteWordsRequest {
+  ExtendedFileRegisterBatchWriteWordsRequest() = delete;
+  constexpr ExtendedFileRegisterBatchWriteWordsRequest(
+      ExtendedFileRegisterAddress first_device,
+      std::span<const std::uint16_t> write_words) noexcept
+      : head_device(first_device), words(write_words) {}
+
   /// First block-addressed file-register word to write.
-  ExtendedFileRegisterAddress head_device {};
+  ExtendedFileRegisterAddress head_device;
   /// Caller-owned word data to write starting at `head_device`.
-  std::span<const std::uint16_t> words {};
+  std::span<const std::uint16_t> words;
 };
 
 /// \brief Direct extended file-register batch write (`NW` on 1C AnA/AnUCPU common, chapter-18 direct path on 1E).
 struct ExtendedFileRegisterDirectBatchWriteWordsRequest {
+  ExtendedFileRegisterDirectBatchWriteWordsRequest() = delete;
+  constexpr ExtendedFileRegisterDirectBatchWriteWordsRequest(
+      std::uint32_t first_device_number,
+      std::span<const std::uint16_t> write_words) noexcept
+      : head_device_number(first_device_number), words(write_words) {}
+
   /// \brief `NR/NW` direct address on 1C or the chapter-18 direct `R` address on 1E.
-  std::uint32_t head_device_number = 0;
+  std::uint32_t head_device_number;
   /// Caller-owned word data to write starting at `head_device_number`.
-  std::span<const std::uint16_t> words {};
+  std::span<const std::uint16_t> words;
 };
 
 /// \brief One item inside extended file-register random write (`ET` on 1C, chapter-18 on 1E).
 struct ExtendedFileRegisterRandomWriteWordItem {
+  ExtendedFileRegisterRandomWriteWordItem() = delete;
+  constexpr ExtendedFileRegisterRandomWriteWordItem(
+      ExtendedFileRegisterAddress target_device,
+      std::uint16_t write_value) noexcept
+      : device(target_device), value(write_value) {}
+
   /// Target extended file-register address.
-  ExtendedFileRegisterAddress device {};
+  ExtendedFileRegisterAddress device;
   /// One word written to `device`.
-  std::uint16_t value = 0;
+  std::uint16_t value;
 };
 
 /// \brief Extended file-register monitor registration (`EM` on 1C, chapter-18 on 1E).
 struct ExtendedFileRegisterMonitorRegistration {
+  ExtendedFileRegisterMonitorRegistration() = delete;
+  constexpr explicit ExtendedFileRegisterMonitorRegistration(
+      std::span<const ExtendedFileRegisterAddress> monitor_items) noexcept
+      : items(monitor_items) {}
+
   /// Sparse list of block-addressed file-register items to register for monitoring.
-  std::span<const ExtendedFileRegisterAddress> items {};
+  std::span<const ExtendedFileRegisterAddress> items;
 };
 /// @}
 
 /// \name Device-Memory Random And Multi-Block Requests
 /// @{
-/// \brief One item inside a native random-read request (`0403` or monitor registration).
-struct RandomReadItem {
-  /// Target device address for this sparse item.
-  DeviceAddress device {};
-  /// `true` when the item should be encoded as a double-word device access.
-  bool double_word = false;
+/// \brief One explicitly word-width item in a native random-read or monitor request.
+struct RandomReadWordItem {
+  /// Target device address read as one 16-bit word (bit devices return a 16-point mask word).
+  DeviceAddress device;
 };
 
-/// \brief Native random-read request made of sparse word/dword items.
+/// \brief One explicitly double-word-width item in a native random-read or monitor request.
+struct RandomReadDWordItem {
+  /// Target device address read as one 32-bit double word.
+  DeviceAddress device;
+};
+
+/// \brief Native random-read request with separate word and double-word domains.
 struct RandomReadRequest {
-  /// Sparse word/dword items encoded in the native random-read request.
-  std::span<const RandomReadItem> items {};
+  RandomReadRequest() = delete;
+  constexpr RandomReadRequest(
+      std::span<const RandomReadWordItem> words,
+      std::span<const RandomReadDWordItem> dwords) noexcept
+      : word_items(words), dword_items(dwords) {}
+
+  /// Sparse 16-bit items, encoded first and returned through the word output span.
+  std::span<const RandomReadWordItem> word_items;
+  /// Sparse 32-bit items, encoded second and returned through the dword output span.
+  std::span<const RandomReadDWordItem> dword_items;
 };
 
-/// \brief One word or double-word item inside native random write (`1402` word path).
+/// \brief One explicitly word-width item inside native random write (`1402` word path).
+///
+/// Device and value are a single construction boundary. Explicit zero is valid; omission is not.
 struct RandomWriteWordItem {
+  RandomWriteWordItem() = delete;
+  constexpr RandomWriteWordItem(DeviceAddress target_device, std::uint16_t write_value) noexcept
+      : device(target_device), value(write_value) {}
+
   /// Target device address for the sparse write.
-  DeviceAddress device {};
-  /// One word or double-word value to write.
-  std::uint32_t value = 0;
-  /// `true` when the target is encoded as a double-word write item.
-  bool double_word = false;
+  DeviceAddress device;
+  /// One 16-bit word value to write.
+  std::uint16_t value;
+};
+
+/// \brief One explicitly double-word-width item inside native random write (`1402` word path).
+///
+/// Device and value are a single construction boundary. Explicit zero is valid; omission is not.
+struct RandomWriteDWordItem {
+  RandomWriteDWordItem() = delete;
+  constexpr RandomWriteDWordItem(DeviceAddress target_device, std::uint32_t write_value) noexcept
+      : device(target_device), value(write_value) {}
+
+  /// Target device address for the sparse write.
+  DeviceAddress device;
+  /// One 32-bit double-word value to write.
+  std::uint32_t value;
 };
 
 /// \brief One bit item inside native random write (`1402` bit path).
+///
+/// Device and value are a single construction boundary. Explicit `Off` is valid; omission and
+/// unknown enum values are rejected.
 struct RandomWriteBitItem {
+  RandomWriteBitItem() = delete;
+  constexpr RandomWriteBitItem(DeviceAddress target_device, BitValue write_value) noexcept
+      : device(target_device), value(write_value) {}
+
   /// Target bit device address for the sparse write.
-  DeviceAddress device {};
+  DeviceAddress device;
   /// Bit value written to `device`.
-  BitValue value = BitValue::Off;
+  BitValue value;
 };
 
 /// \brief One block inside native multi-block read (`0406`).
 struct MultiBlockReadBlock {
+  MultiBlockReadBlock() = delete;
+  constexpr MultiBlockReadBlock(
+      DeviceAddress first_device,
+      std::uint16_t point_count,
+      bool use_bit_block) noexcept
+      : head_device(first_device), points(point_count), bit_block(use_bit_block) {}
+
   /// First device in this contiguous block.
-  DeviceAddress head_device {};
+  DeviceAddress head_device;
   /// Number of points in this block.
-  std::uint16_t points = 0;
+  std::uint16_t points;
   /// `true` for bit blocks, `false` for word blocks.
-  bool bit_block = false;
+  bool bit_block;
 };
 
 /// \brief Native multi-block read request composed of multiple contiguous blocks.
 struct MultiBlockReadRequest {
+  MultiBlockReadRequest() = delete;
+  constexpr explicit MultiBlockReadRequest(
+      std::span<const MultiBlockReadBlock> request_blocks) noexcept
+      : blocks(request_blocks) {}
+
   /// Ordered block list encoded into the native multi-block read request.
-  std::span<const MultiBlockReadBlock> blocks {};
+  std::span<const MultiBlockReadBlock> blocks;
 };
 
 /// \brief One block inside native multi-block write (`1406`).
 struct MultiBlockWriteBlock {
+  MultiBlockWriteBlock() = delete;
+  constexpr MultiBlockWriteBlock(
+      DeviceAddress first_device,
+      std::uint16_t point_count,
+      bool use_bit_block,
+      std::span<const std::uint16_t> write_words,
+      std::span<const BitValue> write_bits) noexcept
+      : head_device(first_device),
+        points(point_count),
+        bit_block(use_bit_block),
+        words(write_words),
+        bits(write_bits) {}
+  constexpr MultiBlockWriteBlock(
+      DeviceAddress first_device,
+      std::uint16_t point_count,
+      std::span<const std::uint16_t> write_words) noexcept
+      : MultiBlockWriteBlock(first_device, point_count, false, write_words, {}) {}
+  constexpr MultiBlockWriteBlock(
+      DeviceAddress first_device,
+      std::uint16_t point_count,
+      std::span<const BitValue> write_bits) noexcept
+      : MultiBlockWriteBlock(first_device, point_count, true, {}, write_bits) {}
+
   /// First device in this contiguous block.
-  DeviceAddress head_device {};
+  DeviceAddress head_device;
   /// Point count for this block.
-  std::uint16_t points = 0;
+  std::uint16_t points;
   /// `true` when `bits` is used, `false` when `words` is used.
-  bool bit_block = false;
+  bool bit_block;
   /// Caller-owned word data for word blocks.
-  std::span<const std::uint16_t> words {};
+  std::span<const std::uint16_t> words;
   /// Caller-owned bit data for bit blocks.
-  std::span<const BitValue> bits {};
+  std::span<const BitValue> bits;
 };
 
 /// \brief Native multi-block write request composed of multiple contiguous blocks.
 struct MultiBlockWriteRequest {
+  MultiBlockWriteRequest() = delete;
+  constexpr explicit MultiBlockWriteRequest(
+      std::span<const MultiBlockWriteBlock> request_blocks) noexcept
+      : blocks(request_blocks) {}
+
   /// Ordered block list encoded into the native multi-block write request.
-  std::span<const MultiBlockWriteBlock> blocks {};
+  std::span<const MultiBlockWriteBlock> blocks;
 };
 
 /// \brief Parsed layout description for one block returned by `parse_multi_block_read_response()`.
@@ -756,7 +1608,7 @@ struct MultiBlockReadBlockResult {
   /// Block kind copied from the original request.
   bool bit_block = false;
   /// Block head device copied from the original request.
-  DeviceAddress head_device {};
+  DeviceAddress head_device {DeviceCode::D, 0U};
   /// Point count copied from the original request.
   std::uint16_t points = 0;
   /// Offset into the aggregate output storage returned by the parser.
@@ -770,8 +1622,16 @@ struct MultiBlockReadBlockResult {
 /// @{
 /// \brief Monitor registration payload used by `0801`.
 struct MonitorRegistration {
-  /// Sparse list of word/dword items to register for a later `0802` read.
-  std::span<const RandomReadItem> items {};
+  MonitorRegistration() = delete;
+  constexpr MonitorRegistration(
+      std::span<const RandomReadWordItem> words,
+      std::span<const RandomReadDWordItem> dwords) noexcept
+      : word_items(words), dword_items(dwords) {}
+
+  /// Sparse 16-bit items registered first.
+  std::span<const RandomReadWordItem> word_items;
+  /// Sparse 32-bit items registered second. Unsupported for 1C and 1E monitor commands.
+  std::span<const RandomReadDWordItem> dword_items;
 };
 /// @}
 
@@ -779,8 +1639,12 @@ struct MonitorRegistration {
 /// @{
 /// \brief User-frame registration-data read request (`0610`).
 struct UserFrameReadRequest {
+  UserFrameReadRequest() = delete;
+  constexpr explicit UserFrameReadRequest(std::uint16_t target_frame_no) noexcept
+      : frame_no(target_frame_no) {}
+
   /// User-frame number to read, typically in the documented `0x0000..0x03FF` or `0x8001..0x801F` ranges.
-  std::uint16_t frame_no = 0;
+  std::uint16_t frame_no;
 };
 
 /// \brief User-frame registration-data payload returned by `0610`.
@@ -795,26 +1659,45 @@ struct UserFrameRegistrationData {
 
 /// \brief User-frame registration-data write request (`1610`, subcommand `0000`).
 struct UserFrameWriteRequest {
+  UserFrameWriteRequest() = delete;
+  constexpr UserFrameWriteRequest(
+      std::uint16_t target_frame_no,
+      std::uint16_t target_frame_bytes,
+      std::span<const std::byte> target_registration_data) noexcept
+      : frame_no(target_frame_no),
+        frame_bytes(target_frame_bytes),
+        registration_data(target_registration_data) {}
+
   /// User-frame number to overwrite.
-  std::uint16_t frame_no = 0;
+  std::uint16_t frame_no;
   /// Frame-byte count encoded into the `1610` payload.
-  std::uint16_t frame_bytes = 0;
+  std::uint16_t frame_bytes;
   /// Raw user-frame registration bytes to store.
-  std::span<const std::byte> registration_data {};
+  std::span<const std::byte> registration_data;
 };
 
 /// \brief User-frame registration-data delete request (`1610`, subcommand `0001`).
 struct UserFrameDeleteRequest {
+  UserFrameDeleteRequest() = delete;
+  constexpr explicit UserFrameDeleteRequest(std::uint16_t target_frame_no) noexcept
+      : frame_no(target_frame_no) {}
+
   /// User-frame number to clear.
-  std::uint16_t frame_no = 0;
+  std::uint16_t frame_no;
 };
 
 /// \brief C24 global-signal ON/OFF request (`1618`).
 struct GlobalSignalControlRequest {
+  GlobalSignalControlRequest() = delete;
+  constexpr GlobalSignalControlRequest(
+      GlobalSignalTarget signal_target,
+      BitValue signal_value) noexcept
+      : target(signal_target), value(signal_value) {}
+
   /// Which global signal destination should be controlled.
-  GlobalSignalTarget target = GlobalSignalTarget::ReceivedSide;
-  /// `true` for ON, `false` for OFF.
-  bool turn_on = false;
+  GlobalSignalTarget target;
+  /// Explicit ON/OFF state.
+  BitValue value;
 };
 
 /// \brief C24 mode switching request (`1612`).
@@ -823,20 +1706,37 @@ struct GlobalSignalControlRequest {
 /// bit0 = mode number, bit1 = transmission setting, bit2 = communication speed.
 /// When a flag is false, the C24 uses the Engineering tool setting for that field.
 struct SerialModuleModeSwitchRequest {
+  SerialModuleModeSwitchRequest() = delete;
+  constexpr SerialModuleModeSwitchRequest(
+      SerialModuleChannel target_channel,
+      bool use_mode_no,
+      bool use_transmission_setting,
+      bool use_communication_speed,
+      SerialModuleModeNo target_mode_no,
+      std::uint8_t target_transmission_setting,
+      SerialModuleCommunicationSpeed target_communication_speed) noexcept
+      : channel(target_channel),
+        switch_mode_no(use_mode_no),
+        switch_transmission_setting(use_transmission_setting),
+        switch_communication_speed(use_communication_speed),
+        mode_no(target_mode_no),
+        transmission_setting(target_transmission_setting),
+        communication_speed(target_communication_speed) {}
+
   /// Target interface.
-  SerialModuleChannel channel = SerialModuleChannel::Ch1;
+  SerialModuleChannel channel;
   /// `true` to use `mode_no` from this command.
-  bool switch_mode_no = false;
+  bool switch_mode_no;
   /// `true` to use `transmission_setting` from this command.
-  bool switch_transmission_setting = false;
+  bool switch_transmission_setting;
   /// `true` to use `communication_speed` from this command.
-  bool switch_communication_speed = false;
+  bool switch_communication_speed;
   /// Operation mode number. The manual requires a valid non-zero value even when `switch_mode_no` is false.
-  SerialModuleModeNo mode_no = SerialModuleModeNo::McProtocolFormat1;
+  SerialModuleModeNo mode_no;
   /// Raw transmission-setting bit field used when `switch_transmission_setting` is true.
-  std::uint8_t transmission_setting = 0;
+  std::uint8_t transmission_setting;
   /// Communication speed used when `switch_communication_speed` is true.
-  SerialModuleCommunicationSpeed communication_speed = SerialModuleCommunicationSpeed::Bps300;
+  SerialModuleCommunicationSpeed communication_speed;
 };
 /// @}
 
@@ -844,38 +1744,64 @@ struct SerialModuleModeSwitchRequest {
 /// @{
 /// \brief Host-buffer read request (`0613`).
 struct HostBufferReadRequest {
+  HostBufferReadRequest() = delete;
+  constexpr HostBufferReadRequest(
+      std::uint32_t first_address,
+      std::uint16_t length_words) noexcept
+      : start_address(first_address), word_length(length_words) {}
+
   /// Starting host-buffer word address.
-  std::uint32_t start_address = 0;
+  std::uint32_t start_address;
   /// Number of words to read.
-  std::uint16_t word_length = 0;
+  std::uint16_t word_length;
 };
 
 /// \brief Host-buffer write request (`1613`).
 struct HostBufferWriteRequest {
+  HostBufferWriteRequest() = delete;
+  constexpr HostBufferWriteRequest(
+      std::uint32_t first_address,
+      std::span<const std::uint16_t> write_words) noexcept
+      : start_address(first_address), words(write_words) {}
+
   /// Starting host-buffer word address.
-  std::uint32_t start_address = 0;
+  std::uint32_t start_address;
   /// Caller-owned words written sequentially from `start_address`.
-  std::span<const std::uint16_t> words {};
+  std::span<const std::uint16_t> words;
 };
 
 /// \brief Module-buffer byte read request (`0601` helper path).
 struct ModuleBufferReadRequest {
+  ModuleBufferReadRequest() = delete;
+  constexpr ModuleBufferReadRequest(
+      std::uint32_t first_address,
+      std::uint16_t byte_count,
+      std::uint16_t target_module_number) noexcept
+      : start_address(first_address), bytes(byte_count), module_number(target_module_number) {}
+
   /// Starting module-buffer byte address.
-  std::uint32_t start_address = 0;
+  std::uint32_t start_address;
   /// Number of bytes to read.
-  std::uint16_t bytes = 0;
+  std::uint16_t bytes;
   /// Module number used by the addressed special-function module.
-  std::uint16_t module_number = 0;
+  std::uint16_t module_number;
 };
 
 /// \brief Module-buffer byte write request (`1601` helper path).
 struct ModuleBufferWriteRequest {
+  ModuleBufferWriteRequest() = delete;
+  constexpr ModuleBufferWriteRequest(
+      std::uint32_t first_address,
+      std::uint16_t target_module_number,
+      std::span<const std::byte> write_bytes) noexcept
+      : start_address(first_address), module_number(target_module_number), bytes(write_bytes) {}
+
   /// Starting module-buffer byte address.
-  std::uint32_t start_address = 0;
+  std::uint32_t start_address;
   /// Module number used by the addressed special-function module.
-  std::uint16_t module_number = 0;
+  std::uint16_t module_number;
   /// Caller-owned raw bytes written starting at `start_address`.
-  std::span<const std::byte> bytes {};
+  std::span<const std::byte> bytes;
 };
 /// @}
 
@@ -890,10 +1816,13 @@ struct CpuModelInfo {
 };
 
 /// \brief Optional RS-485 callbacks used by the async client around TX start/end.
+///
+/// `on_tx_begin` and `on_tx_end` are installed as a pair. Leaving both null disables library-side
+/// direction control; `user` may remain null even when the callback pair is installed.
 struct Rs485Hooks {
-  /// Optional callback fired immediately before the client expects TX to start.
+  /// Callback fired immediately before the client expects TX to start.
   void (*on_tx_begin)(void* user) = nullptr;
-  /// Optional callback fired after TX completion or after cleanup on failure/cancel.
+  /// Matching callback fired after physical TX completion or abort is reported.
   void (*on_tx_end)(void* user) = nullptr;
   /// Opaque user pointer passed back to both callbacks.
   void* user = nullptr;

@@ -18,7 +18,7 @@ using mcprotocol::serial::MelsecSerialClient;
 using mcprotocol::serial::PlcProfile;
 using mcprotocol::serial::ProtocolConfig;
 using mcprotocol::serial::RouteConfig;
-using mcprotocol::serial::RouteKind;
+using mcprotocol::serial::HostStationRoute;
 using mcprotocol::serial::Status;
 
 struct AppState {
@@ -36,23 +36,12 @@ AppState g_app;
 
 ProtocolConfig make_protocol() {
   // Keep frame/profile explicit. See docsrc/user/GOTCHAS.md before changing them.
-  ProtocolConfig config;
-  config.frame_kind = FrameKind::C4;
-  config.code_mode = CodeMode::Ascii;
-  config.ascii_format = AsciiFormat::Format4;
-  config.plc_profile = PlcProfile::MelsecQ;
-  config.sum_check_enabled = false;
-  config.route = RouteConfig {
-      .kind = RouteKind::HostStation,
-      .station_no = 0x00,
-      .network_no = 0x00,
-      .pc_no = 0xFF,
-      .request_destination_module_io_no = mcprotocol::serial::module_io::OwnStation,
-      .request_destination_module_station_no = 0x00,
-      .self_station_enabled = false,
-      .self_station_no = 0x00,
-  };
-  return config;
+  return ProtocolConfig::ascii(
+      mcprotocol::serial::AsciiFrameKind::C4,
+      AsciiFormat::Format4,
+      PlcProfile::MelsecQ,
+      mcprotocol::serial::SumCheckMode::Disabled,
+      RouteConfig {HostStationRoute {}});
 }
 
 void on_request_complete(void* user, Status status) {
@@ -129,10 +118,7 @@ void loop() {
     // Start a read-only request; the transport sends pending_tx_frame().
     const Status status = g_app.client.async_batch_read_words(
         now,
-        BatchReadWordsRequest {
-            .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100},
-            .points = static_cast<std::uint16_t>(g_app.out_words.size()),
-        },
+        BatchReadWordsRequest({mcprotocol::serial::DeviceCode::D, 100}, static_cast<std::uint16_t>(g_app.out_words.size())),
         std::span<std::uint16_t>(g_app.out_words.data(), g_app.out_words.size()),
         on_request_complete,
         &g_app);
@@ -147,7 +133,7 @@ void loop() {
 
   if (!g_app.done && g_app.tx_started && !g_app.tx_completed) {
     // Notify the client after the transport reports the frame was sent.
-    const Status status = g_app.client.notify_tx_complete(now);
+    const Status status = g_app.client.notify_tx_complete(now, mcprotocol::serial::ok_status());
     if (status.ok()) {
       g_app.tx_completed = true;
       simulate_response(g_app, now);

@@ -27,7 +27,7 @@ using mcprotocol::serial::MelsecSerialClient;
 using mcprotocol::serial::PlcProfile;
 using mcprotocol::serial::ProtocolConfig;
 using mcprotocol::serial::RouteConfig;
-using mcprotocol::serial::RouteKind;
+using mcprotocol::serial::HostStationRoute;
 using mcprotocol::serial::Status;
 using mcprotocol::serial::StatusCode;
 
@@ -37,7 +37,7 @@ constexpr std::uint32_t kMaxBackoffMs = 30000;
 constexpr std::uint32_t kPlcBaud = MCPROTOCOL_EXAMPLE_PLC_BAUD;
 constexpr int kRxPin = 6;
 constexpr int kTxPin = 7;
-constexpr DeviceAddress kHeadDevice {.code = DeviceCode::D, .number = 100};
+constexpr DeviceAddress kHeadDevice {DeviceCode::D, 100};
 
 struct AppState {
   MelsecSerialClient client;
@@ -61,23 +61,12 @@ void log_state(const char* state, const char* message) {
 }
 
 ProtocolConfig make_protocol() {
-  ProtocolConfig config;
-  config.frame_kind = FrameKind::C4;
-  config.code_mode = CodeMode::Ascii;
-  config.ascii_format = AsciiFormat::Format4;
-  config.plc_profile = PlcProfile::MelsecQ;
-  config.sum_check_enabled = false;
-  config.route = RouteConfig {
-      .kind = RouteKind::HostStation,
-      .station_no = 0x00,
-      .network_no = 0x00,
-      .pc_no = 0xFF,
-      .request_destination_module_io_no = mcprotocol::serial::module_io::OwnStation,
-      .request_destination_module_station_no = 0x00,
-      .self_station_enabled = false,
-      .self_station_no = 0x00,
-  };
-  return config;
+  return ProtocolConfig::ascii(
+      mcprotocol::serial::AsciiFrameKind::C4,
+      AsciiFormat::Format4,
+      PlcProfile::MelsecQ,
+      mcprotocol::serial::SumCheckMode::Disabled,
+      RouteConfig {HostStationRoute {}});
 }
 
 bool retryable(Status status) {
@@ -149,7 +138,7 @@ void pump_uart_tx(std::uint32_t now_ms) {
       frame.size());
   g_plc_serial.flush();
   const Status tx_status = (written == frame.size())
-      ? g_app.client.notify_tx_complete(now_ms)
+      ? g_app.client.notify_tx_complete(now_ms, mcprotocol::serial::ok_status())
       : mcprotocol::serial::make_status(StatusCode::Transport, "UART write failed");
   if (!tx_status.ok()) {
     on_request_complete(&g_app, tx_status);
@@ -192,10 +181,7 @@ void start_read_if_due(std::uint32_t now_ms) {
   g_app.tx_sent = false;
   const Status status = g_app.client.async_batch_read_words(
       now_ms,
-      BatchReadWordsRequest {
-          .head_device = kHeadDevice,
-          .points = static_cast<std::uint16_t>(g_app.out_words.size()),
-      },
+      BatchReadWordsRequest(kHeadDevice, static_cast<std::uint16_t>(g_app.out_words.size())),
       std::span<std::uint16_t>(g_app.out_words.data(), g_app.out_words.size()),
       on_request_complete,
       &g_app);

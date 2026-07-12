@@ -120,10 +120,8 @@ namespace {
   dcb.BaudRate = static_cast<DWORD>(config.baud_rate);
 
   switch (config.data_bits) {
-    case 5: dcb.ByteSize = 5; break;
-    case 6: dcb.ByteSize = 6; break;
-    case 7: dcb.ByteSize = 7; break;
-    case 8: dcb.ByteSize = 8; break;
+    case 7: dcb.ByteSize = static_cast<BYTE>(7); break;
+    case 8: dcb.ByteSize = static_cast<BYTE>(8); break;
     default: return make_status(StatusCode::InvalidArgument, "Unsupported data bit width");
   }
 
@@ -134,15 +132,17 @@ namespace {
   }
 
   switch (config.parity) {
-    case 'N': case 'n': dcb.Parity = NOPARITY;   dcb.fParity = FALSE; break;
-    case 'E': case 'e': dcb.Parity = EVENPARITY;  dcb.fParity = TRUE;  break;
-    case 'O': case 'o': dcb.Parity = ODDPARITY;   dcb.fParity = TRUE;  break;
+    case SerialParity::None: dcb.Parity = NOPARITY;   dcb.fParity = FALSE; break;
+    case SerialParity::Even: dcb.Parity = EVENPARITY;  dcb.fParity = TRUE;  break;
+    case SerialParity::Odd: dcb.Parity = ODDPARITY;   dcb.fParity = TRUE;  break;
     default: return make_status(StatusCode::InvalidArgument, "Unsupported parity");
   }
 
   dcb.fBinary      = TRUE;
-  dcb.fOutxCtsFlow = config.rts_cts ? TRUE : FALSE;
-  dcb.fRtsControl  = config.rts_cts ? RTS_CONTROL_HANDSHAKE : RTS_CONTROL_DISABLE;
+  dcb.fOutxCtsFlow = config.hardware_flow_control == HardwareFlowControl::RtsCts ? TRUE : FALSE;
+  dcb.fRtsControl  = config.hardware_flow_control == HardwareFlowControl::RtsCts
+                         ? RTS_CONTROL_HANDSHAKE
+                         : RTS_CONTROL_DISABLE;
   dcb.fOutX        = FALSE;
   dcb.fInX         = FALSE;
   dcb.fNull        = FALSE;
@@ -170,8 +170,9 @@ PosixSerialPort::~PosixSerialPort() {
 }
 
 Status PosixSerialPort::open(const PosixSerialConfig& config) noexcept {
-  if (config.device_path.empty()) {
-    return make_status(StatusCode::InvalidArgument, "Device path must not be empty");
+  const Status config_status = validate_serial_config(config);
+  if (!config_status.ok()) {
+    return config_status;
   }
   if (fd_ >= 0) {
     close();

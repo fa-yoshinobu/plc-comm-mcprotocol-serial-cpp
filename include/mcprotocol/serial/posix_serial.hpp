@@ -6,21 +6,104 @@
 #include "mcprotocol/serial/status.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
+#include "mcprotocol/serial/types.hpp"
 
 namespace mcprotocol::serial {
 
+/// \brief Explicit parity selection for a host serial port.
+enum class SerialParity : std::uint8_t {
+  None,
+  Even,
+  Odd,
+};
+
+/// \brief Explicit hardware flow-control selection for a host serial port.
+enum class HardwareFlowControl : std::uint8_t {
+  None,
+  RtsCts,
+};
+
 /// \brief Host-side serial-port configuration used by `PosixSerialPort`.
 ///
-/// `device_path` accepts `/dev/...` style paths on POSIX systems and `COM3` or `\\.\COM10`
-/// style names on Windows.
+/// Every constructor argument is required. `device_path` accepts `/dev/...` style paths on POSIX
+/// systems and `COM3` or `\\.\COM10` style names on Windows. The referenced device-path text must
+/// remain alive while the configuration is used.
 struct PosixSerialConfig {
-  std::string_view device_path {};
-  std::uint32_t baud_rate = 9600;
-  std::uint8_t data_bits = 8;
-  std::uint8_t stop_bits = 1;
-  char parity = 'N';
-  bool rts_cts = false;
+  constexpr PosixSerialConfig(
+      std::string_view device_path_value,
+      std::uint32_t baud_rate_value,
+      std::uint32_t data_bits_value,
+      std::uint32_t stop_bits_value,
+      SerialParity parity_value,
+      HardwareFlowControl hardware_flow_control_value) noexcept
+      : device_path(device_path_value),
+        baud_rate(baud_rate_value),
+        data_bits(data_bits_value),
+        stop_bits(stop_bits_value),
+        parity(parity_value),
+        hardware_flow_control(hardware_flow_control_value) {}
+
+  PosixSerialConfig() = delete;
+
+  std::string_view device_path;
+  std::uint32_t baud_rate;
+  std::uint32_t data_bits;
+  std::uint32_t stop_bits;
+  SerialParity parity;
+  HardwareFlowControl hardware_flow_control;
 };
+
+[[nodiscard]] inline Status validate_serial_config(const PosixSerialConfig& config) noexcept {
+  if (config.device_path.empty()) {
+    return make_status(StatusCode::InvalidArgument, "Device path must not be empty");
+  }
+  if (config.device_path.find('\0') != std::string_view::npos) {
+    return make_status(StatusCode::InvalidArgument, "Device path must not contain embedded NUL");
+  }
+  if (config.baud_rate == 0U) {
+    return make_status(StatusCode::InvalidArgument, "Baud rate must be greater than zero");
+  }
+  if (config.data_bits != 7U && config.data_bits != 8U) {
+    return make_status(StatusCode::InvalidArgument, "MC protocol data bits must be 7 or 8");
+  }
+  if (config.stop_bits != 1U && config.stop_bits != 2U) {
+    return make_status(StatusCode::InvalidArgument, "Stop bits must be 1 or 2");
+  }
+  switch (config.parity) {
+    case SerialParity::None:
+    case SerialParity::Even:
+    case SerialParity::Odd:
+      break;
+    default:
+      return make_status(StatusCode::InvalidArgument, "Unknown serial parity");
+  }
+  switch (config.hardware_flow_control) {
+    case HardwareFlowControl::None:
+    case HardwareFlowControl::RtsCts:
+      break;
+    default:
+      return make_status(StatusCode::InvalidArgument, "Unknown hardware flow control");
+  }
+  return ok_status();
+}
+
+[[nodiscard]] inline Status validate_mc_serial_config(
+    const PosixSerialConfig& serial_config,
+    const ProtocolConfig& protocol_config) noexcept {
+  const Status serial_status = validate_serial_config(serial_config);
+  if (!serial_status.ok()) {
+    return serial_status;
+  }
+  if (protocol_config.code_mode() == CodeMode::Binary && serial_config.data_bits != 8U) {
+    return make_status(StatusCode::InvalidArgument, "Binary MC protocol requires 8 data bits");
+  }
+  if (protocol_config.code_mode() == CodeMode::Ascii &&
+      serial_config.data_bits != 7U &&
+      serial_config.data_bits != 8U) {
+    return make_status(StatusCode::InvalidArgument, "ASCII MC protocol requires 7 or 8 data bits");
+  }
+  return ok_status();
+}
 
 /// \brief Minimal blocking host-side serial-port wrapper used by the CLI tools.
 ///

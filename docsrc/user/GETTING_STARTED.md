@@ -69,12 +69,16 @@ Use `plc_profile_display_name(profile)` when you need a UI label.
 
 ```cpp
 auto protocol = mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(
-    mcprotocol::serial::PlcProfile::MelsecQ);
+    mcprotocol::serial::PlcProfile::MelsecQ,
+    mcprotocol::serial::SumCheckMode::Disabled,
+    mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
 ```
 
 ## First read on a host
 
-This CMake/source-tree example uses `PosixSyncClient`, `PosixSerialConfig`, `make_c4_ascii_format4_protocol(PlcProfile::MelsecQ)`, and `read_words("D100", words)`. The PlatformIO package does not contain the host facade implementation.
+This CMake/source-tree example uses `PosixSyncClient`, explicit serial settings,
+`make_c4_ascii_format4_protocol(..., RouteConfig {HostStationRoute {}})`, and
+`read_words("D100", words)`. The PlatformIO package does not contain the host facade implementation.
 
 ```cpp
 #include <array>
@@ -84,26 +88,31 @@ This CMake/source-tree example uses `PosixSyncClient`, `PosixSerialConfig`, `mak
 #include "mcprotocol_serial.hpp"
 
 int main() {
+  using mcprotocol::serial::HardwareFlowControl;
   using mcprotocol::serial::PlcProfile;
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
+  using mcprotocol::serial::SerialParity;
   using mcprotocol::serial::Status;
+  using mcprotocol::serial::SumCheckMode;
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
-  PosixSerialConfig serial {};
+  const PosixSerialConfig serial(
 #if defined(_WIN32)
-  serial.device_path = "COM3";
+      "COM3",
 #else
-  serial.device_path = "/dev/ttyUSB0";
+      "/dev/ttyUSB0",
 #endif
-  serial.baud_rate = 19200;
-  serial.data_bits = 8;
-  serial.stop_bits = 1;
-  serial.parity = 'E';
-  serial.rts_cts = false;
+      19200,
+      8,
+      1,
+      SerialParity::Even,
+      HardwareFlowControl::None);
 
-  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
-  protocol.route.station_no = 0;
+  auto protocol = make_c4_ascii_format4_protocol(
+      PlcProfile::MelsecQ,
+      SumCheckMode::Disabled,
+      mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
 
   PosixSyncClient plc;
   Status status = plc.open(serial, protocol);
@@ -159,6 +168,6 @@ The serial values in examples are also sample defaults. Match the actual PLC ser
 | --- | --- |
 | No response from the PLC | Baud rate, parity, and stop bits must all match the PLC serial module DIP switch or parameter settings. |
 | PLC error or framing error | Check that the PLC module is configured for the same frame type and code mode. |
-| RS-485 multi-drop does not answer | `protocol.route.station_no` must match the station number of the target serial module. |
+| RS-485 multi-drop does not answer | Select the frame-specific route and the actual topology. Use a `*StandardMultidropRoute` for normal/1:n or a `*MnMultidropRoute` with the assigned `SelfStationNo` for m:n. Ensure station—and for 3C/4C, network and PC target—matches the serial module. For 4C, also verify the mandatory destination-module target. Use the explicit 1E PC target when 1E is selected. |
 | MCU sample prints zeros or no values | Verify the UART TX/RX pins and the TTL-to-RS-232C or RS-485 interface. |
 | Wiring uncertainty | See the shared [MC Protocol Serial setup guide](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/serial/) before changing software settings. |

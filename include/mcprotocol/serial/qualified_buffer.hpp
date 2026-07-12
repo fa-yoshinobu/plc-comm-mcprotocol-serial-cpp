@@ -20,9 +20,18 @@ enum class QualifiedBufferDeviceKind : std::uint8_t {
 
 /// \brief Parsed `U...\\G...` or `U...\\HG...` qualified word device.
 struct QualifiedBufferWordDevice {
-  QualifiedBufferDeviceKind kind = QualifiedBufferDeviceKind::G;
-  std::uint16_t module_number = 0;
-  std::uint32_t word_address = 0;
+  QualifiedBufferWordDevice() = delete;
+  constexpr QualifiedBufferWordDevice(
+      QualifiedBufferDeviceKind device_kind,
+      std::uint16_t target_module_number,
+      std::uint32_t target_word_address) noexcept
+      : kind(device_kind),
+        module_number(target_module_number),
+        word_address(target_word_address) {}
+
+  QualifiedBufferDeviceKind kind;
+  std::uint16_t module_number;
+  std::uint32_t word_address;
 };
 
 /// \brief Returns `"G"` or `"HG"` for the helper device kind.
@@ -157,11 +166,8 @@ using mcprotocol::serial::detail::parse_u32;
         "Qualified buffer device word address is invalid");
   }
 
-  out_device = QualifiedBufferWordDevice {
-      .kind = kind,
-      .module_number = static_cast<std::uint16_t>(module_number),
-      .word_address = word_address,
-  };
+  out_device = QualifiedBufferWordDevice(
+      kind, static_cast<std::uint16_t>(module_number), word_address);
   return ok_status();
 }
 
@@ -181,11 +187,10 @@ using mcprotocol::serial::detail::parse_u32;
         "Qualified buffer read length must be in range 1..960 words");
   }
 
-  out_request = ModuleBufferReadRequest {
-      .start_address = qualified_buffer_word_to_byte_address(device.word_address),
-      .bytes = static_cast<std::uint16_t>(word_length * 2U),
-      .module_number = device.module_number,
-  };
+  out_request = ModuleBufferReadRequest(
+      qualified_buffer_word_to_byte_address(device.word_address),
+      static_cast<std::uint16_t>(word_length * 2U),
+      device.module_number);
   return ok_status();
 }
 
@@ -241,11 +246,10 @@ using mcprotocol::serial::detail::parse_u32;
     return encode_status;
   }
 
-  out_request = ModuleBufferWriteRequest {
-      .start_address = qualified_buffer_word_to_byte_address(device.word_address),
-      .module_number = device.module_number,
-      .bytes = byte_storage.first(out_byte_count),
-  };
+  out_request = ModuleBufferWriteRequest(
+      qualified_buffer_word_to_byte_address(device.word_address),
+      device.module_number,
+      byte_storage.first(out_byte_count));
   return ok_status();
 }
 

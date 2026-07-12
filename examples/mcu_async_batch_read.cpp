@@ -18,8 +18,9 @@ using mcprotocol::serial::MelsecSerialClient;
 using mcprotocol::serial::PlcProfile;
 using mcprotocol::serial::ProtocolConfig;
 using mcprotocol::serial::RouteConfig;
-using mcprotocol::serial::RouteKind;
+using mcprotocol::serial::HostStationRoute;
 using mcprotocol::serial::Status;
+using mcprotocol::serial::SumCheckMode;
 
 struct ExampleApp {
   MelsecSerialClient client;
@@ -35,23 +36,12 @@ struct ExampleApp {
 
 ProtocolConfig make_protocol() {
   // Keep frame/profile explicit. See docsrc/user/GOTCHAS.md before changing them.
-  ProtocolConfig config;
-  config.frame_kind = FrameKind::C4;
-  config.code_mode = CodeMode::Ascii;
-  config.ascii_format = AsciiFormat::Format4;
-  config.plc_profile = PlcProfile::MelsecQ;
-  config.sum_check_enabled = false;
-  config.route = RouteConfig {
-      .kind = RouteKind::HostStation,
-      .station_no = 0x00,
-      .network_no = 0x00,
-      .pc_no = 0xFF,
-      .request_destination_module_io_no = mcprotocol::serial::module_io::OwnStation,
-      .request_destination_module_station_no = 0x00,
-      .self_station_enabled = false,
-      .self_station_no = 0x00,
-  };
-  return config;
+  return ProtocolConfig::ascii(
+      mcprotocol::serial::AsciiFrameKind::C4,
+      AsciiFormat::Format4,
+      PlcProfile::MelsecQ,
+      SumCheckMode::Disabled,
+      RouteConfig {HostStationRoute {}});
 }
 
 void on_request_complete(void* user, Status status) {
@@ -103,10 +93,7 @@ int main() {
   // Start a read-only batch request; the transport sends pending_tx_frame().
   status = app.client.async_batch_read_words(
       0,
-      BatchReadWordsRequest {
-          .head_device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100},
-          .points = static_cast<std::uint16_t>(app.out_words.size()),
-      },
+      BatchReadWordsRequest({mcprotocol::serial::DeviceCode::D, 100}, static_cast<std::uint16_t>(app.out_words.size())),
       std::span<std::uint16_t>(app.out_words.data(), app.out_words.size()),
       on_request_complete,
       &app);
@@ -120,7 +107,7 @@ int main() {
   for (std::uint32_t tick = 1; tick <= 4 && !app.request_done; ++tick) {
     if (app.tx_started && !app.tx_completed) {
       // Notify the client after the transport reports the frame was sent.
-      status = app.client.notify_tx_complete(tick);
+      status = app.client.notify_tx_complete(tick, mcprotocol::serial::ok_status());
       if (!status.ok()) {
         std::fprintf(stderr, "notify_tx_complete failed: %s\n", status.message);
         return 1;

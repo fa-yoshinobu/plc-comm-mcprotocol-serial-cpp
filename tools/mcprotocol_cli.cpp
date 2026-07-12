@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <optional>
 #include "mcprotocol/serial/span_compat.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
 
@@ -14,17 +15,12 @@
 #include "mcprotocol/serial/posix_serial.hpp"
 #include "mcprotocol/serial/qualified_buffer.hpp"
 #include "../src/host_now_ms.hpp"
+#include "mcprotocol/serial/detail/fixed_item_array.hpp"
 #include "../src/protocol_predicates.hpp"
 
 namespace {
 
 bool g_dump_frames = false;
-
-#if defined(_WIN32)
-constexpr const char* kDefaultSerialDevicePath = "COM1";
-#else
-constexpr const char* kDefaultSerialDevicePath = "/dev/ttyUSB0";
-#endif
 
 using mcprotocol::serial::AsciiFormat;
 using mcprotocol::serial::BatchReadBitsRequest;
@@ -33,6 +29,15 @@ using mcprotocol::serial::BatchWriteBitsRequest;
 using mcprotocol::serial::BatchWriteWordsRequest;
 using mcprotocol::serial::BitValue;
 using mcprotocol::serial::CodeMode;
+using mcprotocol::serial::C1MultidropRoute;
+using mcprotocol::serial::C2MnMultidropRoute;
+using mcprotocol::serial::C2StandardMultidropRoute;
+using mcprotocol::serial::C3MnMultidropRoute;
+using mcprotocol::serial::C3StandardMultidropRoute;
+using mcprotocol::serial::C4MnMultidropRoute;
+using mcprotocol::serial::C4StandardMultidropRoute;
+using mcprotocol::serial::C4DestinationModule;
+using mcprotocol::serial::C34PcTarget;
 using mcprotocol::serial::CpuModelInfo;
 using mcprotocol::serial::DeviceAddress;
 using mcprotocol::serial::DeviceCode;
@@ -43,18 +48,23 @@ using mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest;
 using mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest;
 using mcprotocol::serial::ExtendedFileRegisterMonitorRegistration;
 using mcprotocol::serial::ExtendedFileRegisterRandomWriteWordItem;
+using mcprotocol::serial::E1PcTarget;
+using mcprotocol::serial::E1Route;
+using mcprotocol::serial::E1MonitoringTimer;
 using mcprotocol::serial::FrameKind;
 using mcprotocol::serial::GlobalSignalControlRequest;
 using mcprotocol::serial::GlobalSignalTarget;
+using mcprotocol::serial::HardwareFlowControl;
 using mcprotocol::serial::HostBufferReadRequest;
 using mcprotocol::serial::HostBufferWriteRequest;
+using mcprotocol::serial::HostStationRoute;
 using mcprotocol::serial::LinkDirectDevice;
 using mcprotocol::serial::LinkDirectMonitorRegistration;
 using mcprotocol::serial::LinkDirectMultiBlockReadBlock;
 using mcprotocol::serial::LinkDirectMultiBlockReadRequest;
 using mcprotocol::serial::LinkDirectMultiBlockWriteBlock;
 using mcprotocol::serial::LinkDirectMultiBlockWriteRequest;
-using mcprotocol::serial::LinkDirectRandomReadItem;
+using mcprotocol::serial::LinkDirectRandomReadWordItem;
 using mcprotocol::serial::LinkDirectRandomWriteBitItem;
 using mcprotocol::serial::LinkDirectRandomWriteWordItem;
 using mcprotocol::serial::MelsecSerialClient;
@@ -70,16 +80,24 @@ using mcprotocol::serial::PosixSerialConfig;
 using mcprotocol::serial::PosixSerialPort;
 using mcprotocol::serial::ProtocolConfig;
 using mcprotocol::serial::QualifiedBufferWordDevice;
-using mcprotocol::serial::RandomReadItem;
+using mcprotocol::serial::QualifiedBufferDeviceKind;
+using mcprotocol::serial::RandomReadDWordItem;
+using mcprotocol::serial::RandomReadWordItem;
 using mcprotocol::serial::RandomReadRequest;
 using mcprotocol::serial::RandomWriteBitItem;
+using mcprotocol::serial::RandomWriteDWordItem;
 using mcprotocol::serial::RandomWriteWordItem;
 using mcprotocol::serial::RemoteOperationMode;
 using mcprotocol::serial::RemoteRunClearMode;
+using mcprotocol::serial::RouteConfig;
 using mcprotocol::serial::RouteKind;
 using mcprotocol::serial::Rs485Hooks;
+using mcprotocol::serial::SerialParity;
+using mcprotocol::serial::SelfStationNo;
 using mcprotocol::serial::Status;
 using mcprotocol::serial::StatusCode;
+using mcprotocol::serial::SumCheckMode;
+using mcprotocol::serial::deadline_reached;
 using mcprotocol::serial::UserFrameDeleteRequest;
 using mcprotocol::serial::UserFrameReadRequest;
 using mcprotocol::serial::UserFrameRegistrationData;
@@ -88,6 +106,7 @@ using mcprotocol::serial::decode_qualified_buffer_word_values;
 using mcprotocol::serial::highlevel::decode_long_state_bit;
 using mcprotocol::serial::highlevel::get_long_state_read_spec;
 using mcprotocol::serial::highlevel::LongStateReadRoute;
+using mcprotocol::serial::highlevel::LongStateReadKind;
 using mcprotocol::serial::highlevel::LongStateReadSpec;
 using mcprotocol::serial::is_iq_r_series;
 using mcprotocol::serial::make_qualified_buffer_read_words_request;
@@ -144,6 +163,7 @@ enum class CommandKind : std::uint8_t {
   WriteNativeQualifiedWords,
   RandomRead,
   RandomWriteWords,
+  RandomWriteDWords,
   RandomWriteFileRegisterWords,
   RandomWriteBits,
   WriteWords,
@@ -174,21 +194,98 @@ enum class ProbeMultiBlockMode : std::uint8_t {
   BitB,
 };
 
+enum class CliPcTargetKind : std::uint8_t {
+  Unspecified,
+  Number,
+  ControlSystem,
+  StandbySystem,
+  SpecialFe,
+  ConnectedStation,
+};
+
+enum class CliModuleTargetKind : std::uint8_t {
+  Unspecified,
+  OwnStation,
+  MultipleCpu,
+  RedundantControlSystemCpu,
+  RedundantStandbySystemCpu,
+  RedundantSystemACpu,
+  RedundantSystemBCpu,
+  Explicit,
+};
+
+enum class CliTopology : std::uint8_t {
+  Unspecified,
+  Standard,
+  Mn,
+};
+
 struct CommandState {
   bool done = false;
   Status status {};
 };
 
+// Command-line parsing necessarily has an incomplete intermediate state. Keep that state local to
+// the executable; only construct the library's immutable ProtocolConfig after every required
+// selector and the typed route have been supplied.
+struct ProtocolConfigInput {
+  FrameKind frame_kind = static_cast<FrameKind>(0xFF);
+  CodeMode code_mode = static_cast<CodeMode>(0xFF);
+  AsciiFormat ascii_format = static_cast<AsciiFormat>(0xFF);
+  PlcProfile plc_profile = PlcProfile::Unspecified;
+  SumCheckMode sum_check_mode = static_cast<SumCheckMode>(0xFF);
+  RouteConfig route {};
+  mcprotocol::serial::TimeoutConfig timeout {};
+  E1MonitoringTimer e1_monitoring_timer {};
+};
+
 struct CliOptions {
-  PosixSerialConfig serial {};
-  ProtocolConfig protocol {};
+  std::string_view serial_device {};
+  std::uint32_t baud_rate = 0;
+  std::uint32_t data_bits = 0;
+  std::uint32_t stop_bits = 0;
+  SerialParity parity = SerialParity::None;
+  HardwareFlowControl hardware_flow_control = HardwareFlowControl::None;
+  bool serial_device_specified = false;
+  bool baud_rate_specified = false;
+  bool data_bits_specified = false;
+  bool stop_bits_specified = false;
+  bool parity_specified = false;
+  bool hardware_flow_control_specified = false;
+  ProtocolConfigInput protocol_input {};
+  std::optional<ProtocolConfig> protocol {};
   bool frame_specified = false;
   bool plc_profile_specified = false;
+  bool sum_check_specified = false;
+  RouteKind route_kind = RouteKind::Unspecified;
+  std::uint8_t station_no = 0x00U;
+  std::uint8_t network_no = 0x00U;
+  CliTopology topology = CliTopology::Unspecified;
+  std::uint32_t self_station_no = 0x00U;
+  bool route_kind_specified = false;
+  bool station_specified = false;
+  bool network_specified = false;
+  CliPcTargetKind pc_target_kind = CliPcTargetKind::Unspecified;
+  std::uint32_t pc_target_number = 0U;
+  bool pc_target_specified = false;
+  CliModuleTargetKind module_target_kind = CliModuleTargetKind::Unspecified;
+  std::uint32_t module_target_number = 0U;
+  std::uint32_t module_io_number = 0U;
+  std::uint32_t module_station_number = 0U;
+  bool module_target_specified = false;
+  bool topology_specified = false;
+  bool self_station_specified = false;
+  bool e1_monitoring_timer_specified = false;
+  RemoteOperationMode remote_run_mode = static_cast<RemoteOperationMode>(0U);
+  RemoteRunClearMode remote_run_clear_mode = static_cast<RemoteRunClearMode>(0xFFU);
+  RemoteOperationMode remote_pause_mode = static_cast<RemoteOperationMode>(0U);
   bool rts_toggle = false;
   bool dump_frames = false;
   CommandKind command = CommandKind::None;
   int command_argc = 0;
   char** command_argv = nullptr;
+
+  [[nodiscard]] const ProtocolConfig& protocol_config() const { return protocol.value(); }
 };
 
 struct DeviceParseSpec {
@@ -245,60 +342,60 @@ constexpr std::array<DeviceParseSpec, 39> kDeviceParseSpecs {{
 }};
 
 constexpr std::array<ProbeTarget, 26> kProbeTargets {{
-    {"STS0", {.code = DeviceCode::STS, .number = 0}},
-    {"STC0", {.code = DeviceCode::STC, .number = 0}},
-    {"STN0", {.code = DeviceCode::STN, .number = 0}},
-    {"TS0", {.code = DeviceCode::TS, .number = 0}},
-    {"TC0", {.code = DeviceCode::TC, .number = 0}},
-    {"TN0", {.code = DeviceCode::TN, .number = 0}},
-    {"CS0", {.code = DeviceCode::CS, .number = 0}},
-    {"CC0", {.code = DeviceCode::CC, .number = 0}},
-    {"CN0", {.code = DeviceCode::CN, .number = 0}},
-    {"SB0", {.code = DeviceCode::SB, .number = 0}},
-    {"SW0", {.code = DeviceCode::SW, .number = 0}},
-    {"DX0", {.code = DeviceCode::DX, .number = 0}},
-    {"DY0", {.code = DeviceCode::DY, .number = 0}},
-    {"ZR0", {.code = DeviceCode::ZR, .number = 0}},
-    {"X0", {.code = DeviceCode::X, .number = 0}},
-    {"Y0", {.code = DeviceCode::Y, .number = 0}},
-    {"M0", {.code = DeviceCode::M, .number = 0}},
-    {"L0", {.code = DeviceCode::L, .number = 0}},
-    {"F0", {.code = DeviceCode::F, .number = 0}},
-    {"V0", {.code = DeviceCode::V, .number = 0}},
-    {"B0", {.code = DeviceCode::B, .number = 0}},
-    {"D0", {.code = DeviceCode::D, .number = 0}},
-    {"W0", {.code = DeviceCode::W, .number = 0}},
-    {"S0", {.code = DeviceCode::S, .number = 0}},
-    {"Z0", {.code = DeviceCode::Z, .number = 0}},
-    {"R0", {.code = DeviceCode::R, .number = 0}},
+    {"STS0", {DeviceCode::STS, 0}},
+    {"STC0", {DeviceCode::STC, 0}},
+    {"STN0", {DeviceCode::STN, 0}},
+    {"TS0", {DeviceCode::TS, 0}},
+    {"TC0", {DeviceCode::TC, 0}},
+    {"TN0", {DeviceCode::TN, 0}},
+    {"CS0", {DeviceCode::CS, 0}},
+    {"CC0", {DeviceCode::CC, 0}},
+    {"CN0", {DeviceCode::CN, 0}},
+    {"SB0", {DeviceCode::SB, 0}},
+    {"SW0", {DeviceCode::SW, 0}},
+    {"DX0", {DeviceCode::DX, 0}},
+    {"DY0", {DeviceCode::DY, 0}},
+    {"ZR0", {DeviceCode::ZR, 0}},
+    {"X0", {DeviceCode::X, 0}},
+    {"Y0", {DeviceCode::Y, 0}},
+    {"M0", {DeviceCode::M, 0}},
+    {"L0", {DeviceCode::L, 0}},
+    {"F0", {DeviceCode::F, 0}},
+    {"V0", {DeviceCode::V, 0}},
+    {"B0", {DeviceCode::B, 0}},
+    {"D0", {DeviceCode::D, 0}},
+    {"W0", {DeviceCode::W, 0}},
+    {"S0", {DeviceCode::S, 0}},
+    {"Z0", {DeviceCode::Z, 0}},
+    {"R0", {DeviceCode::R, 0}},
 }};
 
 constexpr std::array<ProbeTarget, 25> kProbeWriteTargets {{
-    {"STS0", {.code = DeviceCode::STS, .number = 0}},
-    {"STC0", {.code = DeviceCode::STC, .number = 0}},
-    {"STN0", {.code = DeviceCode::STN, .number = 0}},
-    {"TS0", {.code = DeviceCode::TS, .number = 0}},
-    {"TC0", {.code = DeviceCode::TC, .number = 0}},
-    {"TN0", {.code = DeviceCode::TN, .number = 0}},
-    {"CS0", {.code = DeviceCode::CS, .number = 0}},
-    {"CC0", {.code = DeviceCode::CC, .number = 0}},
-    {"CN0", {.code = DeviceCode::CN, .number = 0}},
-    {"SB0", {.code = DeviceCode::SB, .number = 0}},
-    {"SW0", {.code = DeviceCode::SW, .number = 0}},
-    {"DX0", {.code = DeviceCode::DX, .number = 0}},
-    {"DY0", {.code = DeviceCode::DY, .number = 0}},
-    {"ZR0", {.code = DeviceCode::ZR, .number = 0}},
-    {"X0", {.code = DeviceCode::X, .number = 0}},
-    {"Y0", {.code = DeviceCode::Y, .number = 0}},
-    {"M0", {.code = DeviceCode::M, .number = 0}},
-    {"L0", {.code = DeviceCode::L, .number = 0}},
-    {"F100", {.code = DeviceCode::F, .number = 100}},
-    {"V0", {.code = DeviceCode::V, .number = 0}},
-    {"B0", {.code = DeviceCode::B, .number = 0}},
-    {"D0", {.code = DeviceCode::D, .number = 0}},
-    {"W0", {.code = DeviceCode::W, .number = 0}},
-    {"Z0", {.code = DeviceCode::Z, .number = 0}},
-    {"R0", {.code = DeviceCode::R, .number = 0}},
+    {"STS0", {DeviceCode::STS, 0}},
+    {"STC0", {DeviceCode::STC, 0}},
+    {"STN0", {DeviceCode::STN, 0}},
+    {"TS0", {DeviceCode::TS, 0}},
+    {"TC0", {DeviceCode::TC, 0}},
+    {"TN0", {DeviceCode::TN, 0}},
+    {"CS0", {DeviceCode::CS, 0}},
+    {"CC0", {DeviceCode::CC, 0}},
+    {"CN0", {DeviceCode::CN, 0}},
+    {"SB0", {DeviceCode::SB, 0}},
+    {"SW0", {DeviceCode::SW, 0}},
+    {"DX0", {DeviceCode::DX, 0}},
+    {"DY0", {DeviceCode::DY, 0}},
+    {"ZR0", {DeviceCode::ZR, 0}},
+    {"X0", {DeviceCode::X, 0}},
+    {"Y0", {DeviceCode::Y, 0}},
+    {"M0", {DeviceCode::M, 0}},
+    {"L0", {DeviceCode::L, 0}},
+    {"F100", {DeviceCode::F, 100}},
+    {"V0", {DeviceCode::V, 0}},
+    {"B0", {DeviceCode::B, 0}},
+    {"D0", {DeviceCode::D, 0}},
+    {"W0", {DeviceCode::W, 0}},
+    {"Z0", {DeviceCode::Z, 0}},
+    {"R0", {DeviceCode::R, 0}},
 }};
 
 constexpr std::size_t kCliMaxBatchWordPoints = mcprotocol::serial::kMaxBatchWordPoints;
@@ -321,16 +418,16 @@ constexpr std::size_t kCliMaxExtendedFileRegisterRandomWriteItems = 40U;
 }
 
 [[nodiscard]] constexpr std::size_t cli_request_command_header_size(const ProtocolConfig& config) {
-  return config.code_mode == CodeMode::Ascii ? 8U : 4U;
+  return config.code_mode() == CodeMode::Ascii ? 8U : 4U;
 }
 
 [[nodiscard]] constexpr std::size_t cli_request_word_count_size(const ProtocolConfig& config) {
-  return config.code_mode == CodeMode::Ascii ? 4U : 2U;
+  return config.code_mode() == CodeMode::Ascii ? 4U : 2U;
 }
 
 [[nodiscard]] constexpr std::size_t cli_request_device_reference_size(const ProtocolConfig& config) {
   const bool iqr = is_iq_r_series(config);
-  if (config.code_mode == CodeMode::Ascii) {
+  if (config.code_mode() == CodeMode::Ascii) {
     return iqr ? 12U : 8U;
   }
   return iqr ? 6U : 4U;
@@ -344,7 +441,7 @@ constexpr std::size_t kCliMaxExtendedFileRegisterRandomWriteItems = 40U;
     return 0U;
   }
   const std::size_t buffer_limit =
-      (mcprotocol::serial::kMaxRequestDataBytes - overhead) / (config.code_mode == CodeMode::Ascii ? 4U : 2U);
+      (mcprotocol::serial::kMaxRequestDataBytes - overhead) / (config.code_mode() == CodeMode::Ascii ? 4U : 2U);
   return buffer_limit < mcprotocol::serial::kMaxBatchWordPoints ? buffer_limit : mcprotocol::serial::kMaxBatchWordPoints;
 }
 
@@ -356,15 +453,15 @@ constexpr std::size_t kCliMaxExtendedFileRegisterRandomWriteItems = 40U;
     return 0U;
   }
   const std::size_t remaining = mcprotocol::serial::kMaxRequestDataBytes - overhead;
-  const std::size_t buffer_limit = config.code_mode == CodeMode::Ascii ? remaining : (remaining * 2U);
+  const std::size_t buffer_limit = config.code_mode() == CodeMode::Ascii ? remaining : (remaining * 2U);
   const std::size_t protocol_limit =
-      config.code_mode == CodeMode::Ascii ? mcprotocol::serial::kMaxBatchBitPointsAscii
+      config.code_mode() == CodeMode::Ascii ? mcprotocol::serial::kMaxBatchBitPointsAscii
                                           : mcprotocol::serial::kMaxBatchBitPointsBinary;
   return buffer_limit < protocol_limit ? buffer_limit : protocol_limit;
 }
 
 [[nodiscard]] constexpr bool cli_is_e1_frame(const ProtocolConfig& config) {
-  return config.frame_kind == FrameKind::E1;
+  return config.frame_kind() == FrameKind::E1;
 }
 
 [[nodiscard]] constexpr std::size_t cli_max_extended_file_register_word_points(const ProtocolConfig& config) {
@@ -406,9 +503,9 @@ void print_usage() {
       "  mcprotocol_cli [options] loopback HEXASCII\n"
       "\n"
       "  Control and Recovery:\n"
-      "  mcprotocol_cli [options] remote-run [no-force|force] [no-clear|outside-latch|all-clear]\n"
+      "  mcprotocol_cli [options] remote-run no-force|force no-clear|outside-latch|all-clear\n"
       "  mcprotocol_cli [options] remote-stop\n"
-      "  mcprotocol_cli [options] remote-pause [no-force|force]\n"
+      "  mcprotocol_cli [options] remote-pause no-force|force\n"
       "  mcprotocol_cli [options] latch-clear\n"
       "  mcprotocol_cli [options] unlock PASSWORD\n"
       "  mcprotocol_cli [options] lock PASSWORD\n"
@@ -416,7 +513,7 @@ void print_usage() {
       "  mcprotocol_cli [options] remote-reset\n"
       "  mcprotocol_cli [options] global-signal on|off current|x1a|x1b [STATION]\n"
       "  mcprotocol_cli [options] init-sequence\n"
-      "  mcprotocol_cli [options] recover-c24 [eot|cl]\n"
+      "  mcprotocol_cli [options] recover-c24 eot|cl\n"
       "\n"
       "  User Frame and File Register:\n"
       "  mcprotocol_cli [options] read-user-frame FRAME_NO\n"
@@ -454,8 +551,9 @@ void print_usage() {
       "  mcprotocol_cli [options] write-native-qualified-words U3E0\\\\G0 VALUE [VALUE ...]\n"
       "\n"
       "  Native Random and Probe:\n"
-      "  mcprotocol_cli [options] random-read DEVICE [DEVICE ...]\n"
+      "  mcprotocol_cli [options] random-read word:DEVICE|dword:DEVICE [...]\n"
       "  mcprotocol_cli [options] random-write-words DEVICE=VALUE [DEVICE=VALUE ...]\n"
+      "  mcprotocol_cli [options] random-write-dwords DEVICE=VALUE [DEVICE=VALUE ...]\n"
       "  mcprotocol_cli [options] random-write-bits DEVICE=0|1 [DEVICE=0|1 ...]\n"
       "  mcprotocol_cli [options] probe-all\n"
       "  mcprotocol_cli [options] probe-write-all\n"
@@ -470,36 +568,38 @@ void print_usage() {
       "  mcprotocol_cli [options] probe-write-module-buffer\n"
       "\n"
       "Options:\n"
-#if defined(_WIN32)
-      "  --device PATH               Serial device path (default: COM1)\n"
-#else
-      "  --device PATH               Serial device path (default: /dev/ttyUSB0)\n"
-#endif
-      "  --baud RATE                Baud rate (default: 9600)\n"
-      "  --data-bits N              Data bits: 5/6/7/8 (default: 8)\n"
-      "  --stop-bits N              Stop bits: 1/2 (default: 1)\n"
-      "  --parity N|E|O             Parity (default: N)\n"
-      "  --rts-cts on|off           Hardware flow control (default: off)\n"
+      "  --device PATH              Required. Serial device path\n"
+      "  --baud RATE                Required. Baud rate greater than zero\n"
+      "  --data-bits N              Required. Data bits: 7/8; binary requires 8\n"
+      "  --stop-bits N              Required. Stop bits: 1/2\n"
+      "  --parity N|E|O             Required. Parity: none/even/odd\n"
+      "  --hardware-flow MODE       Required. none | rts-cts\n"
       "  --rts-toggle on|off        Toggle RTS during TX for RS-485 DE control\n"
       "  --dump-frames on|off       Print raw TX/RX frame bytes to stderr (default: off)\n"
       "  --frame MODE               Required. c4-binary | c4-ascii-f1 | c4-ascii-f2 | c4-ascii-f3 | c4-ascii-f4 | c3-ascii-f1 | c3-ascii-f2 | c3-ascii-f3 | c3-ascii-f4 | c2-ascii-f1 | c2-ascii-f2 | c2-ascii-f3 | c2-ascii-f4 | c1-ascii-f1 | c1-ascii-f3 | c1-ascii-f4 | e1-binary | e1-ascii\n"
       "  --plc-profile PROFILE      Required. Canonical PLC profile: melsec:iq-r | melsec:iq-l | melsec:iq-f | melsec:qcpu | melsec:lcpu | melsec:qna | melsec:ana-anu | melsec:a\n"
-      "  --block-no N               ASCII Format2 block number 0..255 (default: 0)\n"
-      "  --station N                Station number; non-zero implies multidrop\n"
-      "  --self-station N           Self-station number for m:n connections\n"
-      "  --sum-check on|off         Enable or disable sum-check (default: on)\n"
-      "  --response-timeout-ms N    Response timeout in milliseconds (default: 5000)\n"
+      "  --route ROUTE              Required. host | multidrop\n"
+      "  --station N                Station number for an explicit multidrop route\n"
+      "  --network N                Required for 3C/4C multidrop; invalid for 1C/2C/host\n"
+      "  --pc-target TARGET         Required for 3C/4C/1E non-host routes: 1..N | control | standby | special-fe | connected\n"
+      "  --module-target TARGET     Required for 4C multidrop: own | cpu-1..cpu-4 | redundant-control | redundant-standby | redundant-a | redundant-b | explicit:IO:STATION\n"
+      "  --topology TOPOLOGY        Required for 2C/3C/4C multidrop: standard (normal/1:n) | mn\n"
+      "  --self-station N           Required only for mn topology (0..31)\n"
+      "  --sum-check on|off         Required for C1/C2/C3/C4; rejected for fixed 1E\n"
+      "  --response-timeout-ms N    Total response timeout after TX (default: 3000)\n"
+      "  --e1-monitoring-timer-ms N PLC-side 1E timer in exact 250 ms units (default: 4000)\n"
       "  --inter-byte-timeout-ms N  Inter-byte timeout in milliseconds (default: 250)\n"
       "\n"
       "Notes:\n"
-      "  remote-run defaults to no-force + no-clear. Use force or all-clear only when you intend that effect.\n"
-      "  remote-pause defaults to no-force. remote-stop and latch-clear change PLC state.\n"
+      "  remote-run requires both conflict mode and clear mode; neither is inferred.\n"
+      "  remote-pause requires an explicit conflict mode; it is never inferred or escalated.\n"
+      "  remote-stop and latch-clear also change PLC state.\n"
       "  unlock/lock send the configured remote password as ASCII bytes; non-iQ-R-compatible profiles use exactly 4 chars, melsec:iq-r uses 6..32.\n"
       "  error-clear sends C24 clear-error-information (1617); it is not the E71 COM.ERR-only variant.\n"
-      "  remote-reset may complete without a response; this CLI treats a pure response-timeout after TX as success.\n"
+      "  remote-reset completes when request transmission finishes; it does not wait for a response or confirm PLC state.\n"
       "  global-signal maps to C24 command 1618 on 2C/3C/4C; STATION defaults to 0.\n"
-      "  init-sequence maps to 1615 and is binary 4C format-5 only; some targets complete without replying.\n"
-      "  recover-c24 sends ASCII EOT CRLF by default; pass cl to send CL CRLF.\n"
+      "  init-sequence maps to 1615 and is binary 4C format-5 only; an unconfirmed result is outcome-unknown.\n"
+      "  recover-c24 requires eot or cl explicitly; no recovery control code is inferred.\n"
       "  Use recover-c24 after timeout or mixed-response states on C24 ASCII links; no reply is expected.\n"
       "  read-native-qualified-words / write-native-qualified-words use the native 0401/1401 Un\\G/Un\\HG route when the selected profile supports it.\n"
       "  read-qualified-words / write-qualified-words expose the 0601/1601 helper route; profiles that require native-qualified access reject it.\n"
@@ -603,6 +703,187 @@ void print_usage() {
   return false;
 }
 
+[[nodiscard]] bool parse_serial_parity(std::string_view text, SerialParity& out_value) {
+  if (text == "N" || text == "n" || text == "none") {
+    out_value = SerialParity::None;
+    return true;
+  }
+  if (text == "E" || text == "e" || text == "even") {
+    out_value = SerialParity::Even;
+    return true;
+  }
+  if (text == "O" || text == "o" || text == "odd") {
+    out_value = SerialParity::Odd;
+    return true;
+  }
+  return false;
+}
+
+[[nodiscard]] bool parse_hardware_flow_control(
+    std::string_view text,
+    HardwareFlowControl& out_value) {
+  if (text == "none") {
+    out_value = HardwareFlowControl::None;
+    return true;
+  }
+  if (text == "rts-cts") {
+    out_value = HardwareFlowControl::RtsCts;
+    return true;
+  }
+  return false;
+}
+
+[[nodiscard]] bool parse_sum_check_mode(std::string_view text, SumCheckMode& out_value) {
+  bool enabled = false;
+  if (!parse_on_off(text, enabled)) {
+    return false;
+  }
+  out_value = enabled ? SumCheckMode::Enabled : SumCheckMode::Disabled;
+  return true;
+}
+
+[[nodiscard]] bool parse_pc_target(
+    std::string_view text,
+    CliPcTargetKind& out_kind,
+    std::uint32_t& out_number) {
+  if (text == "control") {
+    out_kind = CliPcTargetKind::ControlSystem;
+    return true;
+  }
+  if (text == "standby") {
+    out_kind = CliPcTargetKind::StandbySystem;
+    return true;
+  }
+  if (text == "special-fe") {
+    out_kind = CliPcTargetKind::SpecialFe;
+    return true;
+  }
+  if (text == "connected") {
+    out_kind = CliPcTargetKind::ConnectedStation;
+    return true;
+  }
+  if (!parse_u32_auto(text, out_number)) {
+    return false;
+  }
+  out_kind = CliPcTargetKind::Number;
+  return true;
+}
+
+[[nodiscard]] constexpr C34PcTarget make_c34_pc_target(
+    CliPcTargetKind kind,
+    std::uint32_t number) noexcept {
+  switch (kind) {
+    case CliPcTargetKind::ControlSystem:
+      return C34PcTarget::control_system();
+    case CliPcTargetKind::StandbySystem:
+      return C34PcTarget::standby_system();
+    case CliPcTargetKind::SpecialFe:
+      return C34PcTarget::special_fe();
+    case CliPcTargetKind::ConnectedStation:
+      return C34PcTarget::connected_station();
+    case CliPcTargetKind::Number:
+      switch (number) {
+        case 0x7DU:
+          return C34PcTarget::control_system();
+        case 0x7EU:
+          return C34PcTarget::standby_system();
+        case 0xFEU:
+          return C34PcTarget::special_fe();
+        case 0xFFU:
+          return C34PcTarget::connected_station();
+        default:
+          return C34PcTarget::number(number);
+      }
+    case CliPcTargetKind::Unspecified:
+      return C34PcTarget::number(number);
+  }
+  return C34PcTarget::number(number);
+}
+
+[[nodiscard]] constexpr E1PcTarget make_e1_pc_target(
+    CliPcTargetKind kind,
+    std::uint32_t number) noexcept {
+  return kind == CliPcTargetKind::ConnectedStation ||
+                 (kind == CliPcTargetKind::Number && number == 0xFFU)
+             ? E1PcTarget::connected_station()
+             : E1PcTarget::number(number);
+}
+
+[[nodiscard]] bool parse_module_target(
+    std::string_view text,
+    CliModuleTargetKind& out_kind,
+    std::uint32_t& out_target_number,
+    std::uint32_t& out_io_number,
+    std::uint32_t& out_station_number) {
+  if (text == "own") {
+    out_kind = CliModuleTargetKind::OwnStation;
+    return true;
+  }
+  if (text.size() == 5U && text.substr(0U, 4U) == "cpu-") {
+    if (!parse_u32_auto(text.substr(4U), out_target_number)) {
+      return false;
+    }
+    out_kind = CliModuleTargetKind::MultipleCpu;
+    return true;
+  }
+  if (text == "redundant-control") {
+    out_kind = CliModuleTargetKind::RedundantControlSystemCpu;
+    return true;
+  }
+  if (text == "redundant-standby") {
+    out_kind = CliModuleTargetKind::RedundantStandbySystemCpu;
+    return true;
+  }
+  if (text == "redundant-a") {
+    out_kind = CliModuleTargetKind::RedundantSystemACpu;
+    return true;
+  }
+  if (text == "redundant-b") {
+    out_kind = CliModuleTargetKind::RedundantSystemBCpu;
+    return true;
+  }
+  constexpr std::string_view explicit_prefix = "explicit:";
+  if (text.substr(0U, explicit_prefix.size()) != explicit_prefix) {
+    return false;
+  }
+  const std::string_view fields = text.substr(explicit_prefix.size());
+  const std::size_t separator = fields.find(':');
+  if (separator == std::string_view::npos || separator == 0U ||
+      separator + 1U >= fields.size() ||
+      fields.find(':', separator + 1U) != std::string_view::npos ||
+      !parse_u32_auto(fields.substr(0U, separator), out_io_number) ||
+      !parse_u32_auto(fields.substr(separator + 1U), out_station_number)) {
+    return false;
+  }
+  out_kind = CliModuleTargetKind::Explicit;
+  return true;
+}
+
+[[nodiscard]] constexpr C4DestinationModule make_c4_destination_module(
+    CliModuleTargetKind kind,
+    std::uint32_t target_number,
+    std::uint32_t io_number,
+    std::uint32_t station_number) noexcept {
+  switch (kind) {
+    case CliModuleTargetKind::OwnStation:
+      return C4DestinationModule::own_station();
+    case CliModuleTargetKind::MultipleCpu:
+      return C4DestinationModule::multiple_cpu(target_number);
+    case CliModuleTargetKind::RedundantControlSystemCpu:
+      return C4DestinationModule::redundant_control_system_cpu();
+    case CliModuleTargetKind::RedundantStandbySystemCpu:
+      return C4DestinationModule::redundant_standby_system_cpu();
+    case CliModuleTargetKind::RedundantSystemACpu:
+      return C4DestinationModule::redundant_system_a_cpu();
+    case CliModuleTargetKind::RedundantSystemBCpu:
+      return C4DestinationModule::redundant_system_b_cpu();
+    case CliModuleTargetKind::Explicit:
+    case CliModuleTargetKind::Unspecified:
+      return C4DestinationModule::explicit_target(io_number, station_number);
+  }
+  return C4DestinationModule::explicit_target(io_number, station_number);
+}
+
 [[nodiscard]] bool parse_global_signal_target(
     std::string_view text,
     GlobalSignalTarget& out_target) {
@@ -636,11 +917,11 @@ void print_usage() {
 [[nodiscard]] bool parse_remote_operation_mode(
     std::string_view text,
     RemoteOperationMode& out_mode) {
-  if (text == "no-force" || text == "normal" || text == "safe" || text == "0001" || text == "1") {
+  if (text == "no-force") {
     out_mode = RemoteOperationMode::DoNotExecuteForcibly;
     return true;
   }
-  if (text == "force" || text == "0003" || text == "3") {
+  if (text == "force") {
     out_mode = RemoteOperationMode::ExecuteForcibly;
     return true;
   }
@@ -717,7 +998,7 @@ void print_usage() {
   return "mixed";
 }
 
-[[nodiscard]] bool parse_frame_mode(std::string_view text, ProtocolConfig& config) {
+[[nodiscard]] bool parse_frame_mode(std::string_view text, ProtocolConfigInput& config) {
   if (text == "c4-binary") {
     config.frame_kind = FrameKind::C4;
     config.code_mode = CodeMode::Binary;
@@ -817,19 +1098,19 @@ void print_usage() {
   if (text == "e1-binary") {
     config.frame_kind = FrameKind::E1;
     config.code_mode = CodeMode::Binary;
-    config.ascii_format = AsciiFormat::Format3;
+    config.ascii_format = static_cast<AsciiFormat>(0xFF);
     return true;
   }
   if (text == "e1-ascii") {
     config.frame_kind = FrameKind::E1;
     config.code_mode = CodeMode::Ascii;
-    config.ascii_format = AsciiFormat::Format1;
+    config.ascii_format = static_cast<AsciiFormat>(0xFF);
     return true;
   }
   return false;
 }
 
-[[nodiscard]] bool parse_profile(std::string_view text, ProtocolConfig& config) {
+[[nodiscard]] bool parse_profile(std::string_view text, ProtocolConfigInput& config) {
   PlcProfile profile = PlcProfile::Unspecified;
   if (!parse_plc_profile(text.data(), text.size(), profile)) {
     return false;
@@ -881,18 +1162,40 @@ void print_usage() {
   return true;
 }
 
+[[nodiscard]] bool parse_explicit_random_read_arg(
+    std::string_view text,
+    bool& out_dword,
+    DeviceAddress& out_device) {
+  std::string_view width;
+  std::string_view device_text;
+  if (!split_once(text, ':', width, device_text) ||
+      (width != "word" && width != "dword") ||
+      !parse_device_address(device_text, out_device)) {
+    return false;
+  }
+  out_dword = width == "dword";
+  return true;
+}
+
+[[nodiscard]] bool parse_word_write_arg(
+    std::string_view text,
+    RandomWriteWordItem& out_item);
+[[nodiscard]] bool parse_dword_write_arg(
+    std::string_view text,
+    RandomWriteDWordItem& out_item);
+[[nodiscard]] bool parse_bit_write_arg(
+    std::string_view text,
+    RandomWriteBitItem& out_item);
+
 [[nodiscard]] bool parse_link_direct_random_read_item(
     std::string_view text,
-    LinkDirectRandomReadItem& out_item) {
-  LinkDirectDevice device {};
+    LinkDirectRandomReadWordItem& out_item) {
+  LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
   const Status status = parse_link_direct_device(text, device);
   if (!status.ok()) {
     return false;
   }
-  out_item = LinkDirectRandomReadItem {
-      .device = device,
-      .double_word = false,
-  };
+  out_item = LinkDirectRandomReadWordItem {device};
   return true;
 }
 
@@ -905,7 +1208,7 @@ void print_usage() {
     return false;
   }
 
-  LinkDirectDevice device {};
+  LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
   const Status status = parse_link_direct_device(device_text, device);
   if (!status.ok()) {
     return false;
@@ -916,11 +1219,7 @@ void print_usage() {
     return false;
   }
 
-  out_item = LinkDirectRandomWriteWordItem {
-      .device = device,
-      .value = value,
-      .double_word = false,
-  };
+  out_item = LinkDirectRandomWriteWordItem(device, static_cast<std::uint16_t>(value));
   return true;
 }
 
@@ -933,7 +1232,7 @@ void print_usage() {
     return false;
   }
 
-  LinkDirectDevice device {};
+  LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
   const Status status = parse_link_direct_device(device_text, device);
   if (!status.ok()) {
     return false;
@@ -948,10 +1247,7 @@ void print_usage() {
     return false;
   }
 
-  out_item = LinkDirectRandomWriteBitItem {
-      .device = device,
-      .value = value,
-  };
+  out_item = LinkDirectRandomWriteBitItem(device, value);
   return true;
 }
 
@@ -965,7 +1261,7 @@ void print_usage() {
     return false;
   }
 
-  LinkDirectDevice device {};
+  LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
   const Status status = parse_link_direct_device(device_text, device);
   if (!status.ok()) {
     return false;
@@ -976,11 +1272,7 @@ void print_usage() {
     return false;
   }
 
-  out_block = LinkDirectMultiBlockReadBlock {
-      .head_device = device,
-      .points = static_cast<std::uint16_t>(points),
-      .bit_block = bit_block,
-  };
+  out_block = LinkDirectMultiBlockReadBlock(device, static_cast<std::uint16_t>(points), bit_block);
   return true;
 }
 
@@ -1063,52 +1355,43 @@ void print_usage() {
 }
 
 [[nodiscard]] bool parse_args(int argc, char** argv, CliOptions& options) {
-  options.serial.device_path = kDefaultSerialDevicePath;
-  options.protocol.frame_kind = FrameKind::C4;
-  options.protocol.code_mode = CodeMode::Binary;
-  options.protocol.ascii_format = AsciiFormat::Format3;
-  options.protocol.ascii_block_number = 0x00;
-  options.protocol.plc_profile = PlcProfile::Unspecified;
-  options.protocol.sum_check_enabled = true;
-  options.protocol.route.kind = RouteKind::HostStation;
-  options.protocol.route.station_no = 0x00;
-  options.protocol.route.network_no = 0x00;
-  options.protocol.route.pc_no = 0xFF;
-  options.protocol.route.request_destination_module_io_no = mcprotocol::serial::module_io::OwnStation;
-  options.protocol.route.request_destination_module_station_no = 0x00;
-  options.protocol.route.self_station_enabled = false;
-  options.protocol.timeout.response_timeout_ms = 5000;
-  options.protocol.timeout.inter_byte_timeout_ms = 250;
-
   int index = 1;
   while (index < argc) {
     const std::string_view arg(argv[index]);
     if (arg == "--device" && (index + 1) < argc) {
-      options.serial.device_path = argv[++index];
+      options.serial_device = argv[++index];
+      options.serial_device_specified = true;
     } else if (arg == "--baud" && (index + 1) < argc) {
       std::uint32_t value = 0;
       if (!parse_u32(argv[++index], value)) {
         return false;
       }
-      options.serial.baud_rate = value;
+      options.baud_rate = value;
+      options.baud_rate_specified = true;
     } else if (arg == "--data-bits" && (index + 1) < argc) {
       std::uint32_t value = 0;
-      if (!parse_u32(argv[++index], value) || value > 8U) {
+      if (!parse_u32(argv[++index], value)) {
         return false;
       }
-      options.serial.data_bits = static_cast<std::uint8_t>(value);
+      options.data_bits = value;
+      options.data_bits_specified = true;
     } else if (arg == "--stop-bits" && (index + 1) < argc) {
       std::uint32_t value = 0;
-      if (!parse_u32(argv[++index], value) || value > 2U) {
+      if (!parse_u32(argv[++index], value)) {
         return false;
       }
-      options.serial.stop_bits = static_cast<std::uint8_t>(value);
+      options.stop_bits = value;
+      options.stop_bits_specified = true;
     } else if (arg == "--parity" && (index + 1) < argc) {
-      options.serial.parity = argv[++index][0];
-    } else if (arg == "--rts-cts" && (index + 1) < argc) {
-      if (!parse_on_off(argv[++index], options.serial.rts_cts)) {
+      if (!parse_serial_parity(argv[++index], options.parity)) {
         return false;
       }
+      options.parity_specified = true;
+    } else if (arg == "--hardware-flow" && (index + 1) < argc) {
+      if (!parse_hardware_flow_control(argv[++index], options.hardware_flow_control)) {
+        return false;
+      }
+      options.hardware_flow_control_specified = true;
     } else if (arg == "--rts-toggle" && (index + 1) < argc) {
       if (!parse_on_off(argv[++index], options.rts_toggle)) {
         return false;
@@ -1118,51 +1401,98 @@ void print_usage() {
         return false;
       }
     } else if (arg == "--frame" && (index + 1) < argc) {
-      if (!parse_frame_mode(argv[++index], options.protocol)) {
+      if (!parse_frame_mode(argv[++index], options.protocol_input)) {
         return false;
       }
       options.frame_specified = true;
     } else if (arg == "--plc-profile" && (index + 1) < argc) {
-      if (!parse_profile(argv[++index], options.protocol)) {
+      if (!parse_profile(argv[++index], options.protocol_input)) {
         return false;
       }
       options.plc_profile_specified = true;
-    } else if (arg == "--block-no" && (index + 1) < argc) {
+    } else if (arg == "--route" && (index + 1) < argc) {
+      const std::string_view value(argv[++index]);
+      if (value == "host") {
+        options.route_kind = RouteKind::HostStation;
+      } else if (value == "multidrop") {
+        options.route_kind = RouteKind::MultidropStation;
+      } else {
+        return false;
+      }
+      options.route_kind_specified = true;
+    } else if (arg == "--station" && (index + 1) < argc) {
       std::uint32_t value = 0;
       if (!parse_u32_auto(argv[++index], value) || value > 0xFFU) {
         return false;
       }
-      options.protocol.ascii_block_number = static_cast<std::uint8_t>(value);
-    } else if (arg == "--station" && (index + 1) < argc) {
+      options.station_no = static_cast<std::uint8_t>(value);
+      options.station_specified = true;
+    } else if (arg == "--network" && (index + 1) < argc) {
       std::uint32_t value = 0;
-      if (!parse_u32_auto(argv[++index], value)) {
+      if (!parse_u32_auto(argv[++index], value) || value > 0xFFU) {
         return false;
       }
-      options.protocol.route.station_no = static_cast<std::uint8_t>(value);
-      options.protocol.route.kind = value == 0U ? RouteKind::HostStation : RouteKind::MultidropStation;
+      options.network_no = static_cast<std::uint8_t>(value);
+      options.network_specified = true;
+    } else if (arg == "--pc-target" && (index + 1) < argc) {
+      if (!parse_pc_target(
+              argv[++index],
+              options.pc_target_kind,
+              options.pc_target_number)) {
+        return false;
+      }
+      options.pc_target_specified = true;
+    } else if (arg == "--module-target" && (index + 1) < argc) {
+      if (!parse_module_target(
+              argv[++index],
+              options.module_target_kind,
+              options.module_target_number,
+              options.module_io_number,
+              options.module_station_number)) {
+        return false;
+      }
+      options.module_target_specified = true;
+    } else if (arg == "--topology" && (index + 1) < argc) {
+      const std::string_view value(argv[++index]);
+      if (value == "standard") {
+        options.topology = CliTopology::Standard;
+      } else if (value == "mn") {
+        options.topology = CliTopology::Mn;
+      } else {
+        return false;
+      }
+      options.topology_specified = true;
     } else if (arg == "--self-station" && (index + 1) < argc) {
       std::uint32_t value = 0;
       if (!parse_u32_auto(argv[++index], value)) {
         return false;
       }
-      options.protocol.route.self_station_enabled = true;
-      options.protocol.route.self_station_no = static_cast<std::uint8_t>(value);
+      options.self_station_no = value;
+      options.self_station_specified = true;
     } else if (arg == "--sum-check" && (index + 1) < argc) {
-      if (!parse_on_off(argv[++index], options.protocol.sum_check_enabled)) {
+      if (!parse_sum_check_mode(argv[++index], options.protocol_input.sum_check_mode)) {
         return false;
       }
+      options.sum_check_specified = true;
     } else if (arg == "--response-timeout-ms" && (index + 1) < argc) {
       std::uint32_t value = 0;
       if (!parse_u32(argv[++index], value)) {
         return false;
       }
-      options.protocol.timeout.response_timeout_ms = value;
+      options.protocol_input.timeout.response_timeout_ms = value;
+    } else if (arg == "--e1-monitoring-timer-ms" && (index + 1) < argc) {
+      std::uint32_t value = 0;
+      if (!parse_u32(argv[++index], value)) {
+        return false;
+      }
+      options.protocol_input.e1_monitoring_timer = E1MonitoringTimer::milliseconds(value);
+      options.e1_monitoring_timer_specified = true;
     } else if (arg == "--inter-byte-timeout-ms" && (index + 1) < argc) {
       std::uint32_t value = 0;
       if (!parse_u32(argv[++index], value)) {
         return false;
       }
-      options.protocol.timeout.inter_byte_timeout_ms = value;
+      options.protocol_input.timeout.inter_byte_timeout_ms = value;
     } else if (!arg.empty() && arg.front() != '-') {
       if (arg == "cpu-model" || arg == "read-cpu-model") {
         options.command = CommandKind::CpuModel;
@@ -1250,6 +1580,8 @@ void print_usage() {
         options.command = CommandKind::RandomRead;
       } else if (arg == "random-write-words") {
         options.command = CommandKind::RandomWriteWords;
+      } else if (arg == "random-write-dwords") {
+        options.command = CommandKind::RandomWriteDWords;
       } else if (arg == "random-write-file-register") {
         options.command = CommandKind::RandomWriteFileRegisterWords;
       } else if (arg == "random-write-bits") {
@@ -1303,9 +1635,155 @@ void print_usage() {
     return false;
   }
 
-  if (options.command != CommandKind::RecoverC24 &&
-      (!options.frame_specified || !options.plc_profile_specified)) {
+  if (!options.serial_device_specified ||
+      !options.baud_rate_specified ||
+      !options.data_bits_specified ||
+      !options.stop_bits_specified ||
+      !options.parity_specified ||
+      !options.hardware_flow_control_specified) {
     return false;
+  }
+
+  if (options.command != CommandKind::RecoverC24 &&
+      (!options.frame_specified || !options.plc_profile_specified ||
+       !options.route_kind_specified)) {
+    return false;
+  }
+
+  if (options.command != CommandKind::RecoverC24) {
+    const bool is_e1 = options.protocol_input.frame_kind == FrameKind::E1;
+    if ((is_e1 && options.sum_check_specified) ||
+        (!is_e1 && !options.sum_check_specified)) {
+      return false;
+    }
+  } else if (options.sum_check_specified) {
+    return false;
+  }
+
+  if (options.e1_monitoring_timer_specified &&
+      (options.command == CommandKind::RecoverC24 ||
+       options.protocol_input.frame_kind != FrameKind::E1)) {
+    return false;
+  }
+
+  if (options.command != CommandKind::RecoverC24) {
+    if (options.route_kind == RouteKind::HostStation) {
+      if (options.station_specified || options.network_specified || options.pc_target_specified ||
+          options.module_target_specified || options.topology_specified ||
+          options.self_station_specified) {
+        return false;
+      }
+      options.protocol_input.route = RouteConfig {HostStationRoute {}};
+    } else if (options.route_kind == RouteKind::MultidropStation) {
+      switch (options.protocol_input.frame_kind) {
+        case FrameKind::C1:
+          if (!options.station_specified || options.network_specified ||
+              options.pc_target_specified || options.module_target_specified ||
+              options.topology_specified || options.self_station_specified) {
+            return false;
+          }
+          options.protocol_input.route = RouteConfig {C1MultidropRoute {options.station_no}};
+          break;
+        case FrameKind::C2:
+          if (!options.station_specified || options.network_specified || options.pc_target_specified ||
+              options.module_target_specified || !options.topology_specified ||
+              (options.topology == CliTopology::Standard && options.self_station_specified) ||
+              (options.topology == CliTopology::Mn && !options.self_station_specified)) {
+            return false;
+          }
+          options.protocol_input.route = options.topology == CliTopology::Standard
+              ? RouteConfig {C2StandardMultidropRoute {options.station_no}}
+              : RouteConfig {C2MnMultidropRoute {
+                    options.station_no, SelfStationNo::number(options.self_station_no)}};
+          break;
+        case FrameKind::C3:
+          if (!options.station_specified || !options.network_specified ||
+              !options.pc_target_specified || options.module_target_specified ||
+              !options.topology_specified ||
+              (options.topology == CliTopology::Standard && options.self_station_specified) ||
+              (options.topology == CliTopology::Mn && !options.self_station_specified)) {
+            return false;
+          }
+          options.protocol_input.route = options.topology == CliTopology::Standard
+              ? RouteConfig {C3StandardMultidropRoute {
+                    options.station_no,
+                    options.network_no,
+                    make_c34_pc_target(options.pc_target_kind, options.pc_target_number)}}
+              : RouteConfig {C3MnMultidropRoute {
+                    options.station_no,
+                    options.network_no,
+                    make_c34_pc_target(options.pc_target_kind, options.pc_target_number),
+                    SelfStationNo::number(options.self_station_no)}};
+          break;
+        case FrameKind::C4:
+          if (!options.station_specified || !options.network_specified ||
+              !options.pc_target_specified || !options.module_target_specified ||
+              !options.topology_specified ||
+              (options.topology == CliTopology::Standard && options.self_station_specified) ||
+              (options.topology == CliTopology::Mn && !options.self_station_specified)) {
+            return false;
+          }
+          options.protocol_input.route = options.topology == CliTopology::Standard
+              ? RouteConfig {C4StandardMultidropRoute {
+                    options.station_no,
+                    options.network_no,
+                    make_c34_pc_target(options.pc_target_kind, options.pc_target_number),
+                    make_c4_destination_module(
+                        options.module_target_kind,
+                        options.module_target_number,
+                        options.module_io_number,
+                        options.module_station_number)}}
+              : RouteConfig {C4MnMultidropRoute {
+                    options.station_no,
+                    options.network_no,
+                    make_c34_pc_target(options.pc_target_kind, options.pc_target_number),
+                    make_c4_destination_module(
+                        options.module_target_kind,
+                        options.module_target_number,
+                        options.module_io_number,
+                        options.module_station_number),
+                    SelfStationNo::number(options.self_station_no)}};
+          break;
+        case FrameKind::E1:
+          if (options.station_specified || options.network_specified ||
+              options.module_target_specified || options.topology_specified ||
+              options.self_station_specified ||
+              !options.pc_target_specified ||
+              (options.pc_target_kind != CliPcTargetKind::Number &&
+               options.pc_target_kind != CliPcTargetKind::ConnectedStation)) {
+            return false;
+          }
+          options.protocol_input.route = RouteConfig {E1Route {
+              make_e1_pc_target(options.pc_target_kind, options.pc_target_number)}};
+          break;
+      }
+    } else {
+      return false;
+    }
+
+    const ProtocolConfigInput& input = options.protocol_input;
+    if (input.frame_kind == FrameKind::E1) {
+      options.protocol.emplace(ProtocolConfig::e1(
+          input.code_mode,
+          input.plc_profile,
+          input.route,
+          input.timeout,
+          input.e1_monitoring_timer));
+    } else if (input.code_mode == CodeMode::Binary) {
+      options.protocol.emplace(ProtocolConfig::c4_binary(
+          input.plc_profile,
+          input.sum_check_mode,
+          input.route,
+          input.timeout));
+    } else {
+      options.protocol.emplace(ProtocolConfig::ascii(
+          static_cast<mcprotocol::serial::AsciiFrameKind>(input.frame_kind),
+          input.ascii_format,
+          input.plc_profile,
+          input.sum_check_mode,
+          input.route,
+          input.timeout));
+    }
   }
 
   switch (options.command) {
@@ -1328,16 +1806,21 @@ void print_usage() {
     case CommandKind::ProbeWriteModuleBuffer:
       return options.command_argc <= 1;
     case CommandKind::RemoteRun:
-      return options.command_argc <= 2;
+      return options.command_argc == 2 &&
+             parse_remote_operation_mode(options.command_argv[0], options.remote_run_mode) &&
+             parse_remote_run_clear_mode(
+                 options.command_argv[1], options.remote_run_clear_mode);
     case CommandKind::RemotePause:
-      return options.command_argc <= 1;
+      return options.command_argc == 1 &&
+             parse_remote_operation_mode(
+                 options.command_argv[0], options.remote_pause_mode);
     case CommandKind::GlobalSignal:
       return options.command_argc == 2 || options.command_argc == 3;
     case CommandKind::UnlockRemotePassword:
     case CommandKind::LockRemotePassword:
       return options.command_argc == 1;
     case CommandKind::RecoverC24:
-      return options.command_argc <= 1;
+      return options.command_argc == 1;
     case CommandKind::Loopback:
       return options.command_argc == 1;
     case CommandKind::ReadUserFrame:
@@ -1368,23 +1851,87 @@ void print_usage() {
     case CommandKind::WriteNativeQualifiedWords:
       return options.command_argc >= 2;
     case CommandKind::RandomReadLinkDirect:
-    case CommandKind::RandomWriteLinkDirectWords:
-    case CommandKind::RandomWriteLinkDirectBits:
     case CommandKind::MultiBlockReadLinkDirectWords:
     case CommandKind::MultiBlockReadLinkDirectBits:
     case CommandKind::MultiBlockWriteLinkDirectWords:
     case CommandKind::MultiBlockWriteLinkDirectBits:
     case CommandKind::MonitorLinkDirect:
-    case CommandKind::RandomRead:
-    case CommandKind::RandomWriteWords:
     case CommandKind::RandomWriteFileRegisterWords:
-    case CommandKind::RandomWriteBits:
     case CommandKind::WriteWords:
     case CommandKind::WriteFileRegisterWords:
     case CommandKind::WriteFileRegisterWordsDirect:
     case CommandKind::WriteBits:
     case CommandKind::MonitorFileRegister:
       return options.command_argc >= 1;
+    case CommandKind::RandomWriteLinkDirectWords:
+      if (options.command_argc < 1) {
+        return false;
+      }
+      for (int index = 0; index < options.command_argc; ++index) {
+        LinkDirectRandomWriteWordItem item(
+            LinkDirectDevice {0U, DeviceAddress {DeviceCode::D, 0U}}, 0U);
+        if (!parse_link_direct_random_write_word_item(options.command_argv[index], item)) {
+          return false;
+        }
+      }
+      return true;
+    case CommandKind::RandomWriteLinkDirectBits:
+      if (options.command_argc < 1) {
+        return false;
+      }
+      for (int index = 0; index < options.command_argc; ++index) {
+        LinkDirectRandomWriteBitItem item(
+            LinkDirectDevice {0U, DeviceAddress {DeviceCode::D, 0U}}, BitValue::Off);
+        if (!parse_link_direct_random_write_bit_item(options.command_argv[index], item)) {
+          return false;
+        }
+      }
+      return true;
+    case CommandKind::RandomRead:
+      if (options.command_argc < 1) {
+        return false;
+      }
+      for (int index = 0; index < options.command_argc; ++index) {
+        bool dword = false;
+  DeviceAddress device(DeviceCode::D, 0U);
+        if (!parse_explicit_random_read_arg(options.command_argv[index], dword, device)) {
+          return false;
+        }
+      }
+      return true;
+    case CommandKind::RandomWriteWords:
+      if (options.command_argc < 1) {
+        return false;
+      }
+      for (int index = 0; index < options.command_argc; ++index) {
+        RandomWriteWordItem item(DeviceAddress {DeviceCode::D, 0U}, 0U);
+        if (!parse_word_write_arg(options.command_argv[index], item)) {
+          return false;
+        }
+      }
+      return true;
+    case CommandKind::RandomWriteDWords:
+      if (options.command_argc < 1) {
+        return false;
+      }
+      for (int index = 0; index < options.command_argc; ++index) {
+        RandomWriteDWordItem item(DeviceAddress {DeviceCode::D, 0U}, 0U);
+        if (!parse_dword_write_arg(options.command_argv[index], item)) {
+          return false;
+        }
+      }
+      return true;
+    case CommandKind::RandomWriteBits:
+      if (options.command_argc < 1) {
+        return false;
+      }
+      for (int index = 0; index < options.command_argc; ++index) {
+        RandomWriteBitItem item(DeviceAddress {DeviceCode::M, 0U}, BitValue::Off);
+        if (!parse_bit_write_arg(options.command_argv[index], item)) {
+          return false;
+        }
+      }
+      return true;
     case CommandKind::None:
       return false;
   }
@@ -1461,7 +2008,7 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
     std::string_view arg,
     std::byte& out_control_code,
     std::string_view& out_name) {
-  if (arg.empty() || equals_ignore_case(arg, "eot")) {
+  if (equals_ignore_case(arg, "eot")) {
     out_control_code = std::byte {0x04U};
     out_name = "EOT";
     return true;
@@ -1572,11 +2119,29 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
     std::span<const std::uint8_t> request_data,
     mcprotocol::serial::RawResponseFrame& out_frame,
     bool dump_frames = false) {
+  static std::uint8_t next_raw_format2_block_number = 0U;
+  const bool format2 = config.code_mode() == CodeMode::Ascii &&
+                       config.frame_kind() != FrameKind::C1 &&
+                       config.frame_kind() != FrameKind::E1 &&
+                       config.ascii_format() == AsciiFormat::Format2;
+  const mcprotocol::serial::FrameCodecContext frame_context =
+      format2
+          ? mcprotocol::serial::FrameCodecContext::format2(next_raw_format2_block_number)
+          : mcprotocol::serial::FrameCodecContext::none();
   std::array<std::uint8_t, mcprotocol::serial::kMaxRequestFrameBytes> tx_frame {};
   std::size_t tx_size = 0;
-  Status status = mcprotocol::serial::FrameCodec::encode_request(config, request_data, tx_frame, tx_size);
+  Status status = mcprotocol::serial::FrameCodec::encode_request(
+      config,
+      frame_context,
+      request_data,
+      tx_frame,
+      tx_size);
   if (!status.ok()) {
     return status;
+  }
+  if (format2) {
+    next_raw_format2_block_number =
+        static_cast<std::uint8_t>(next_raw_format2_block_number + 1U);
   }
 
   status = discard_stale_rx(port);
@@ -1613,18 +2178,21 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
 
   std::array<std::uint8_t, mcprotocol::serial::kMaxResponseFrameBytes> rx_frame {};
   std::size_t rx_size = 0;
-  const std::uint32_t response_deadline_ms = now_ms() + config.timeout.response_timeout_ms;
+  const std::uint32_t response_deadline_ms = now_ms() + config.timeout().response_timeout_ms;
   std::uint32_t inter_byte_deadline_ms = response_deadline_ms;
   bool saw_rx = false;
 
   std::array<std::byte, 256> rx_chunk {};
   while (true) {
     const std::uint32_t current_ms = now_ms();
-    if ((!saw_rx && current_ms >= response_deadline_ms) || (saw_rx && current_ms >= inter_byte_deadline_ms)) {
+    const bool response_expired = deadline_reached(current_ms, response_deadline_ms);
+    const bool inter_byte_expired =
+        saw_rx && deadline_reached(current_ms, inter_byte_deadline_ms);
+    if (response_expired || inter_byte_expired) {
       return mcprotocol::serial::make_status(
           StatusCode::Timeout,
-          saw_rx ? "Timed out while waiting for the rest of the response"
-                 : "Timed out while waiting for a response");
+          inter_byte_expired ? "Timed out while waiting for the rest of the response"
+                             : "Total response deadline expired");
     }
 
     std::size_t bytes_read = 0;
@@ -1634,6 +2202,19 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
     }
     if (bytes_read == 0U) {
       continue;
+    }
+
+    const std::uint32_t received_ms = now_ms();
+    const bool response_expired_after_read =
+        deadline_reached(received_ms, response_deadline_ms);
+    const bool inter_byte_expired_after_read =
+        saw_rx && deadline_reached(received_ms, inter_byte_deadline_ms);
+    if (response_expired_after_read || inter_byte_expired_after_read) {
+      return mcprotocol::serial::make_status(
+          StatusCode::Timeout,
+          inter_byte_expired_after_read
+              ? "Timed out while waiting for the rest of the response"
+              : "Total response deadline expired");
     }
 
     const std::span<const std::byte> rx_chunk_bytes(rx_chunk.data(), bytes_read);
@@ -1650,10 +2231,20 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
         bytes_read);
     rx_size += bytes_read;
     saw_rx = true;
-    inter_byte_deadline_ms = now_ms() + config.timeout.inter_byte_timeout_ms;
+    inter_byte_deadline_ms = received_ms + config.timeout().inter_byte_timeout_ms;
 
     const mcprotocol::serial::DecodeResult decode =
-        mcprotocol::serial::FrameCodec::decode_response(config, std::span<const std::uint8_t>(rx_frame.data(), rx_size));
+        mcprotocol::serial::FrameCodec::decode_response(
+            config,
+            frame_context,
+            std::span<const std::uint8_t>(rx_frame.data(), rx_size));
+    if (decode.response_identity_mismatch && decode.bytes_consumed != 0U) {
+      const std::size_t remaining = rx_size - decode.bytes_consumed;
+      std::memmove(rx_frame.data(), rx_frame.data() + decode.bytes_consumed, remaining);
+      rx_size = remaining;
+      saw_rx = remaining != 0U;
+      continue;
+    }
     if (decode.status == mcprotocol::serial::DecodeStatus::Complete) {
       out_frame = decode.frame;
       if (decode.frame.type == mcprotocol::serial::ResponseType::PlcError) {
@@ -1790,32 +2381,33 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
               static_cast<unsigned>(mcprotocol::serial::sparse_native_mask_word(raw_value)));
 }
 
-[[nodiscard]] constexpr bool is_double_word_device(DeviceCode code) {
-  switch (code) {
-    case DeviceCode::LTN:
-    case DeviceCode::LSTN:
-    case DeviceCode::LCN:
-    case DeviceCode::LZ:
-      return true;
-    default:
-      return false;
-  }
-}
-
 [[nodiscard]] bool parse_word_write_arg(std::string_view text, RandomWriteWordItem& out_item) {
   const std::size_t equal_pos = text.find('=');
   if (equal_pos == std::string_view::npos || equal_pos == 0U || equal_pos == (text.size() - 1U)) {
     return false;
   }
   std::uint32_t value = 0;
-  DeviceAddress device {};
+  DeviceAddress device(DeviceCode::D, 0U);
+  if (!parse_device_address(text.substr(0, equal_pos), device) ||
+      !parse_u32_auto(text.substr(equal_pos + 1U), value) || value > 0xFFFFU) {
+    return false;
+  }
+  out_item = RandomWriteWordItem(device, static_cast<std::uint16_t>(value));
+  return true;
+}
+
+[[nodiscard]] bool parse_dword_write_arg(std::string_view text, RandomWriteDWordItem& out_item) {
+  const std::size_t equal_pos = text.find('=');
+  if (equal_pos == std::string_view::npos || equal_pos == 0U || equal_pos == (text.size() - 1U)) {
+    return false;
+  }
+  DeviceAddress device(DeviceCode::D, 0U);
+  std::uint32_t value = 0;
   if (!parse_device_address(text.substr(0, equal_pos), device) ||
       !parse_u32_auto(text.substr(equal_pos + 1U), value)) {
     return false;
   }
-  out_item.device = device;
-  out_item.value = value;
-  out_item.double_word = is_double_word_device(device.code);
+  out_item = RandomWriteDWordItem(device, value);
   return true;
 }
 
@@ -1824,14 +2416,13 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
   if (equal_pos == std::string_view::npos || equal_pos == 0U || equal_pos == (text.size() - 1U)) {
     return false;
   }
-  DeviceAddress device {};
+  DeviceAddress device(DeviceCode::D, 0U);
   BitValue value = BitValue::Off;
   if (!parse_device_address(text.substr(0, equal_pos), device) ||
       !parse_bit_value(text.substr(equal_pos + 1U), value)) {
     return false;
   }
-  out_item.device = device;
-  out_item.value = value;
+  out_item = RandomWriteBitItem(device, value);
   return true;
 }
 
@@ -1884,7 +2475,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     return false;
   }
   std::uint32_t value = 0;
-  ExtendedFileRegisterAddress address {};
+  ExtendedFileRegisterAddress address(1U, 0U);
   if (!parse_extended_file_register_address(text.substr(0, equal_pos), config, address) ||
       !parse_u32_auto(text.substr(equal_pos + 1U), value) ||
       value > 0xFFFFU) {
@@ -1906,10 +2497,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
   const Status start_status = client.async_batch_write_words(
       now_ms(),
-      BatchWriteWordsRequest {
-          .head_device = head_device,
-          .words = values,
-      },
+      BatchWriteWordsRequest(head_device, values),
       request_complete,
       &command_state);
   if (!start_status.ok()) {
@@ -2108,10 +2696,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
   const Status start_status = client.async_batch_read_words(
       now_ms(),
-      BatchReadWordsRequest {
-          .head_device = head_device,
-          .points = points,
-      },
+      BatchReadWordsRequest(head_device, points),
       out_values,
       request_complete,
       &command_state);
@@ -2155,10 +2740,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
   const Status start_status = client.async_batch_read_words(
       now_ms(),
-      BatchReadWordsRequest {
-          .head_device = device,
-          .points = 1,
-      },
+      BatchReadWordsRequest(device, 1),
       std::span<std::uint16_t>(&out_value, 1U),
       request_complete,
       &command_state);
@@ -2179,10 +2761,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
   const Status start_status = client.async_batch_read_bits(
       now_ms(),
-      BatchReadBitsRequest {
-          .head_device = device,
-          .points = 1,
-      },
+      BatchReadBitsRequest(device, 1),
       std::span<BitValue>(&out_value, 1U),
       request_complete,
       &command_state);
@@ -2204,10 +2783,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
   const Status start_status = client.async_batch_read_bits(
       now_ms(),
-      BatchReadBitsRequest {
-          .head_device = head_device,
-          .points = points,
-      },
+      BatchReadBitsRequest(head_device, points),
       out_values,
       request_complete,
       &command_state);
@@ -2235,7 +2811,8 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
         "Long state bit-read output buffer is too small");
   }
 
-  LongStateReadSpec spec {};
+  LongStateReadSpec spec(
+      LongStateReadRoute::StatusBlock, DeviceCode::LTN, LongStateReadKind::Contact);
   Status status = get_long_state_read_spec(head_device.code, spec);
   if (!status.ok()) {
     return status;
@@ -2257,10 +2834,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
         client,
         port,
         command_state,
-        DeviceAddress {
-            .code = spec.base_code,
-            .number = head_device.number + static_cast<std::uint32_t>(index),
-        },
+        DeviceAddress {spec.base_code, head_device.number + static_cast<std::uint32_t>(index)},
         static_cast<std::uint16_t>(status_block.size()),
         std::span<std::uint16_t>(status_block.data(), status_block.size()));
     if (!status.ok()) {
@@ -2344,10 +2918,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
   const Status start_status = client.async_batch_write_bits(
       now_ms(),
-      BatchWriteBitsRequest {
-          .head_device = head_device,
-          .bits = values,
-      },
+      BatchWriteBitsRequest(head_device, values),
       request_complete,
       &command_state);
   if (!start_status.ok()) {
@@ -2391,8 +2962,8 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const LinkDirectRandomReadItem> items,
-    std::span<std::uint32_t> out_values) {
+    std::span<const LinkDirectRandomReadWordItem> items,
+    std::span<std::uint16_t> out_values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2408,6 +2979,24 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
   return drive_request(client, port, command_state);
 }
 
+[[nodiscard]] Status run_link_direct_random_read(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    std::span<const LinkDirectRandomReadWordItem> items,
+    std::span<std::uint32_t> out_values) {
+  std::array<std::uint16_t, mcprotocol::serial::kMaxRandomAccessItems> words {};
+  const Status status = run_link_direct_random_read(
+      client, port, command_state, items,
+      std::span<std::uint16_t>(words.data(), out_values.size()));
+  if (status.ok()) {
+    for (std::size_t index = 0; index < out_values.size(); ++index) {
+      out_values[index] = words[index];
+    }
+  }
+  return status;
+}
+
 [[nodiscard]] Status run_random_write_words(
     MelsecSerialClient& client,
     PosixSerialPort& port,
@@ -2419,8 +3008,24 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
   const Status start_status = client.async_random_write_words(
       now_ms(),
       items,
+      {},
       request_complete,
       &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_random_write_dwords(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    std::span<const RandomWriteDWordItem> items) {
+  command_state.done = false;
+  command_state.status = Status {};
+  const Status start_status = client.async_random_write_words(
+      now_ms(), {}, items, request_complete, &command_state);
   if (!start_status.ok()) {
     return start_status;
   }
@@ -2450,21 +3055,42 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const RandomReadItem> items,
-    std::span<std::uint32_t> out_values) {
+    std::span<const RandomReadWordItem> word_items,
+    std::span<const RandomReadDWordItem> dword_items,
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) {
   command_state.done = false;
   command_state.status = Status {};
 
   const Status start_status = client.async_random_read(
       now_ms(),
-      RandomReadRequest {.items = items},
-      out_values,
+      RandomReadRequest(word_items, dword_items),
+      out_words,
+      out_dwords,
       request_complete,
       &command_state);
   if (!start_status.ok()) {
     return start_status;
   }
   return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_random_read(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    std::span<const RandomReadWordItem> items,
+    std::span<std::uint32_t> out_values) {
+  std::array<std::uint16_t, mcprotocol::serial::kMaxRandomAccessItems> words {};
+  const Status status = run_random_read(
+      client, port, command_state, items, {},
+      std::span<std::uint16_t>(words.data(), out_values.size()), {});
+  if (status.ok()) {
+    for (std::size_t index = 0; index < out_values.size(); ++index) {
+      out_values[index] = words[index];
+    }
+  }
+  return status;
 }
 
 [[nodiscard]] Status run_link_direct_random_write_bits(
@@ -2597,13 +3223,13 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const LinkDirectRandomReadItem> items) {
+    std::span<const LinkDirectRandomReadWordItem> items) {
   command_state.done = false;
   command_state.status = Status {};
 
   const Status start_status = client.async_link_direct_register_monitor(
       now_ms(),
-      LinkDirectMonitorRegistration {.items = items},
+      LinkDirectMonitorRegistration(items),
       request_complete,
       &command_state);
   if (!start_status.ok()) {
@@ -2616,13 +3242,43 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const RandomReadItem> items) {
+    std::span<const RandomReadWordItem> word_items,
+    std::span<const RandomReadDWordItem> dword_items) {
   command_state.done = false;
   command_state.status = Status {};
 
   const Status start_status = client.async_register_monitor(
       now_ms(),
-      mcprotocol::serial::MonitorRegistration {.items = items},
+      mcprotocol::serial::MonitorRegistration(word_items, dword_items),
+      request_complete,
+      &command_state);
+  if (!start_status.ok()) {
+    return start_status;
+  }
+  return drive_request(client, port, command_state);
+}
+
+[[nodiscard]] Status run_register_monitor(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    std::span<const RandomReadWordItem> items) {
+  return run_register_monitor(client, port, command_state, items, {});
+}
+
+[[nodiscard]] Status run_read_monitor(
+    MelsecSerialClient& client,
+    PosixSerialPort& port,
+    CommandState& command_state,
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) {
+  command_state.done = false;
+  command_state.status = Status {};
+
+  const Status start_status = client.async_read_monitor(
+      now_ms(),
+      out_words,
+      out_dwords,
       request_complete,
       &command_state);
   if (!start_status.ok()) {
@@ -2636,18 +3292,16 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     PosixSerialPort& port,
     CommandState& command_state,
     std::span<std::uint32_t> out_values) {
-  command_state.done = false;
-  command_state.status = Status {};
-
-  const Status start_status = client.async_read_monitor(
-      now_ms(),
-      out_values,
-      request_complete,
-      &command_state);
-  if (!start_status.ok()) {
-    return start_status;
+  std::array<std::uint16_t, mcprotocol::serial::kMaxMonitorItems> words {};
+  const Status status = run_read_monitor(
+      client, port, command_state,
+      std::span<std::uint16_t>(words.data(), out_values.size()), {});
+  if (status.ok()) {
+    for (std::size_t index = 0; index < out_values.size(); ++index) {
+      out_values[index] = words[index];
+    }
   }
-  return drive_request(client, port, command_state);
+  return status;
 }
 
 [[nodiscard]] Status run_read_host_buffer(
@@ -2740,27 +3394,49 @@ int main(int argc, char** argv) {
   }
   g_dump_frames = options.dump_frames;
 
-  PosixSerialPort port;
-  Status status = port.open(options.serial);
+  const PosixSerialConfig serial(
+      options.serial_device,
+      options.baud_rate,
+      options.data_bits,
+      options.stop_bits,
+      options.parity,
+      options.hardware_flow_control);
+
+  Status status = options.command == CommandKind::RecoverC24
+                      ? mcprotocol::serial::validate_serial_config(serial)
+                      : mcprotocol::serial::validate_mc_serial_config(serial, options.protocol_config());
   if (!status.ok()) {
-    print_status_error("Failed to open serial port", status);
+    print_status_error("Invalid serial configuration", status);
     return 1;
   }
 
   MelsecSerialClient client;
   if (options.command != CommandKind::RecoverC24) {
+    status = client.configure(options.protocol_config());
+    if (!status.ok()) {
+      print_status_error("Invalid protocol configuration", status);
+      return 1;
+    }
+  }
+
+  PosixSerialPort port;
+  status = port.open(serial);
+  if (!status.ok()) {
+    print_status_error("Failed to open serial port", status);
+    return 1;
+  }
+
+  if (options.command != CommandKind::RecoverC24) {
     if (options.rts_toggle) {
-      client.set_rs485_hooks(Rs485Hooks {
+      status = client.set_rs485_hooks(Rs485Hooks {
           .on_tx_begin = on_tx_begin,
           .on_tx_end = on_tx_end,
           .user = &port,
       });
-    }
-
-    status = client.configure(options.protocol);
-    if (!status.ok()) {
-      print_status_error("Invalid protocol configuration", status);
-      return 1;
+      if (!status.ok()) {
+        print_status_error("Invalid RS-485 hook configuration", status);
+        return 1;
+      }
     }
   }
 
@@ -2783,19 +3459,12 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::RemoteRun: {
-      RemoteOperationMode mode = RemoteOperationMode::DoNotExecuteForcibly;
-      RemoteRunClearMode clear_mode = RemoteRunClearMode::DoNotClear;
-      if (options.command_argc >= 1 &&
-          !parse_remote_operation_mode(options.command_argv[0], mode)) {
-        std::fprintf(stderr, "remote-run mode must be no-force or force\n");
-        return 1;
-      }
-      if (options.command_argc >= 2 &&
-          !parse_remote_run_clear_mode(options.command_argv[1], clear_mode)) {
-        std::fprintf(stderr, "remote-run clear mode must be no-clear, outside-latch, or all-clear\n");
-        return 1;
-      }
-      status = client.async_remote_run(now_ms(), mode, clear_mode, request_complete, &command_state);
+      status = client.async_remote_run(
+          now_ms(),
+          options.remote_run_mode,
+          options.remote_run_clear_mode,
+          request_complete,
+          &command_state);
       if (!status.ok()) {
         print_status_error("Failed to start remote-run request", status);
         return 1;
@@ -2806,8 +3475,8 @@ int main(int argc, char** argv) {
         return 1;
       }
       std::printf("remote-run=ok mode=0x%04X clear=0x%02X\n",
-                  static_cast<unsigned>(mode),
-                  static_cast<unsigned>(clear_mode));
+                  static_cast<unsigned>(options.remote_run_mode),
+                  static_cast<unsigned>(options.remote_run_clear_mode));
       return 0;
     }
 
@@ -2827,13 +3496,8 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::RemotePause: {
-      RemoteOperationMode mode = RemoteOperationMode::DoNotExecuteForcibly;
-      if (options.command_argc >= 1 &&
-          !parse_remote_operation_mode(options.command_argv[0], mode)) {
-        std::fprintf(stderr, "remote-pause mode must be no-force or force\n");
-        return 1;
-      }
-      status = client.async_remote_pause(now_ms(), mode, request_complete, &command_state);
+      status = client.async_remote_pause(
+          now_ms(), options.remote_pause_mode, request_complete, &command_state);
       if (!status.ok()) {
         print_status_error("Failed to start remote-pause request", status);
         return 1;
@@ -2843,7 +3507,9 @@ int main(int argc, char** argv) {
         print_status_error("remote-pause request failed", status);
         return 1;
       }
-      std::printf("remote-pause=ok mode=0x%04X\n", static_cast<unsigned>(mode));
+      std::printf(
+          "remote-pause=ok mode=0x%04X\n",
+          static_cast<unsigned>(options.remote_pause_mode));
       return 0;
     }
 
@@ -2928,9 +3594,7 @@ int main(int argc, char** argv) {
         print_status_error("remote-reset request failed", status);
         return 1;
       }
-      const bool no_response =
-          std::strcmp(status.message, "Remote RESET completed without a response") == 0;
-      std::printf("remote-reset=ok response=%s\n", no_response ? "none" : "ack");
+      std::printf("remote-reset=request-sent response=not-expected\n");
       return 0;
     }
 
@@ -2957,10 +3621,7 @@ int main(int argc, char** argv) {
 
       status = client.async_control_global_signal(
           now_ms(),
-          GlobalSignalControlRequest {
-              .target = target,
-              .turn_on = turn_on,
-          },
+          GlobalSignalControlRequest(target, (turn_on ? mcprotocol::serial::BitValue::On : mcprotocol::serial::BitValue::Off)),
           request_complete,
           &command_state);
       if (!status.ok()) {
@@ -2972,16 +3633,11 @@ int main(int argc, char** argv) {
         print_status_error("global-signal request failed", status);
         return 1;
       }
-      const bool no_response =
-          std::strcmp(
-              status.message,
-              "Global signal control completed without a response") == 0;
       std::printf(
-          "global-signal=ok state=%s target=%s station=%u response=%s\n",
+          "global-signal=ok state=%s target=%s station=%u response=ack\n",
           turn_on ? "on" : "off",
           global_signal_target_name(target),
-          static_cast<unsigned>(station_no),
-          no_response ? "none" : "ack");
+          static_cast<unsigned>(station_no));
       return 0;
     }
 
@@ -2999,19 +3655,14 @@ int main(int argc, char** argv) {
         print_status_error("init-sequence request failed", status);
         return 1;
       }
-      const bool no_response =
-          std::strcmp(
-              status.message,
-              "Transmission-sequence initialization completed without a response") == 0;
-      std::printf("init-sequence=ok response=%s\n", no_response ? "none" : "ack");
+      std::printf("init-sequence=ok response=ack\n");
       return 0;
     }
 
     case CommandKind::RecoverC24: {
       std::byte control_code {};
       std::string_view control_name;
-      const std::string_view requested_kind =
-          options.command_argc == 0 ? std::string_view {} : std::string_view(options.command_argv[0]);
+      const std::string_view requested_kind(options.command_argv[0]);
       if (!parse_c24_recovery_kind(requested_kind, control_code, control_name)) {
         std::fprintf(stderr, "recover-c24 mode must be 'eot' or 'cl'\n");
         return 1;
@@ -3062,7 +3713,7 @@ int main(int argc, char** argv) {
       UserFrameRegistrationData data {};
       status = client.async_read_user_frame(
           now_ms(),
-          UserFrameReadRequest {.frame_no = static_cast<std::uint16_t>(frame_no)},
+          UserFrameReadRequest(static_cast<std::uint16_t>(frame_no)),
           data,
           request_complete,
           &command_state);
@@ -3119,11 +3770,7 @@ int main(int argc, char** argv) {
 
       status = client.async_write_user_frame(
           now_ms(),
-          UserFrameWriteRequest {
-              .frame_no = static_cast<std::uint16_t>(frame_no),
-              .frame_bytes = static_cast<std::uint16_t>(frame_bytes),
-              .registration_data = std::span<const std::byte>(registration_data.data(), registration_size),
-          },
+          UserFrameWriteRequest(static_cast<std::uint16_t>(frame_no), static_cast<std::uint16_t>(frame_bytes), std::span<const std::byte>(registration_data.data(), registration_size)),
           request_complete,
           &command_state);
       if (!status.ok()) {
@@ -3155,7 +3802,7 @@ int main(int argc, char** argv) {
 
       status = client.async_delete_user_frame(
           now_ms(),
-          UserFrameDeleteRequest {.frame_no = static_cast<std::uint16_t>(frame_no)},
+          UserFrameDeleteRequest(static_cast<std::uint16_t>(frame_no)),
           request_complete,
           &command_state);
       if (!status.ok()) {
@@ -3348,8 +3995,8 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ProbeRandomRead: {
-      constexpr DeviceAddress kWordHeadDevice {.code = mcprotocol::serial::DeviceCode::D, .number = 100};
-      constexpr DeviceAddress kBitHeadDevice {.code = mcprotocol::serial::DeviceCode::M, .number = 100};
+      constexpr DeviceAddress kWordHeadDevice {mcprotocol::serial::DeviceCode::D, 100};
+      constexpr DeviceAddress kBitHeadDevice {mcprotocol::serial::DeviceCode::M, 100};
       std::array<std::uint16_t, 6> contiguous_words {};
       std::array<BitValue, 6> contiguous_bits {};
 
@@ -3431,8 +4078,8 @@ int main(int argc, char** argv) {
                   contiguous_bits.front() == BitValue::On ? 1U : 0U,
                   contiguous_bits.back() == BitValue::On ? 1U : 0U);
 
-      const std::array<RandomReadItem, 1> word_single_items {{
-          {.device = DeviceAddress {.code = DeviceCode::D, .number = 100U}, .double_word = false},
+      const std::array<RandomReadWordItem, 1> word_single_items {{
+          {.device = DeviceAddress {DeviceCode::D, 100U}},
       }};
       const std::array<std::uint16_t, 1> word_single_expected {{
           contiguous_words[0],
@@ -3443,7 +4090,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomReadItem>(word_single_items.data(), word_single_items.size()),
+          std::span<const RandomReadWordItem>(word_single_items.data(), word_single_items.size()),
           std::span<std::uint32_t>(word_single_values.data(), word_single_values.size()));
       if (!status.ok()) {
         print_probe_status_line("random-read-word-single", status);
@@ -3457,9 +4104,9 @@ int main(int argc, char** argv) {
         std::printf("random-read-word-single=ok native\n");
       }
 
-      const std::array<RandomReadItem, 2> word_dense_items {{
-          {.device = DeviceAddress {.code = DeviceCode::D, .number = 100U}, .double_word = false},
-          {.device = DeviceAddress {.code = DeviceCode::D, .number = 101U}, .double_word = false},
+      const std::array<RandomReadWordItem, 2> word_dense_items {{
+          {.device = DeviceAddress {DeviceCode::D, 100U}},
+          {.device = DeviceAddress {DeviceCode::D, 101U}},
       }};
       const std::array<std::uint16_t, 2> word_dense_expected {{
           contiguous_words[0],
@@ -3471,7 +4118,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomReadItem>(word_dense_items.data(), word_dense_items.size()),
+          std::span<const RandomReadWordItem>(word_dense_items.data(), word_dense_items.size()),
           std::span<std::uint32_t>(word_dense_values.data(), word_dense_values.size()));
       if (!status.ok()) {
         print_probe_status_line("random-read-word-dense", status);
@@ -3485,9 +4132,9 @@ int main(int argc, char** argv) {
         std::printf("random-read-word-dense=ok native\n");
       }
 
-      const std::array<RandomReadItem, 2> word_sparse_items {{
-          {.device = DeviceAddress {.code = DeviceCode::D, .number = 100U}, .double_word = false},
-          {.device = DeviceAddress {.code = DeviceCode::D, .number = 105U}, .double_word = false},
+      const std::array<RandomReadWordItem, 2> word_sparse_items {{
+          {.device = DeviceAddress {DeviceCode::D, 100U}},
+          {.device = DeviceAddress {DeviceCode::D, 105U}},
       }};
       const std::array<std::uint16_t, 2> word_sparse_expected {{
           contiguous_words[0],
@@ -3499,7 +4146,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomReadItem>(word_sparse_items.data(), word_sparse_items.size()),
+          std::span<const RandomReadWordItem>(word_sparse_items.data(), word_sparse_items.size()),
           std::span<std::uint32_t>(word_sparse_values.data(), word_sparse_values.size()));
       if (!status.ok()) {
         print_probe_status_line("random-read-word-sparse", status);
@@ -3513,8 +4160,8 @@ int main(int argc, char** argv) {
         std::printf("random-read-word-sparse=ok native\n");
       }
 
-      const std::array<RandomReadItem, 1> bit_single_items {{
-          {.device = DeviceAddress {.code = DeviceCode::M, .number = 100U}, .double_word = false},
+      const std::array<RandomReadWordItem, 1> bit_single_items {{
+          {.device = DeviceAddress {DeviceCode::M, 100U}},
       }};
       const std::array<BitValue, 1> bit_single_expected {{
           contiguous_bits[0],
@@ -3525,7 +4172,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomReadItem>(bit_single_items.data(), bit_single_items.size()),
+          std::span<const RandomReadWordItem>(bit_single_items.data(), bit_single_items.size()),
           std::span<std::uint32_t>(bit_single_values.data(), bit_single_values.size()));
       if (!status.ok()) {
         print_probe_status_line("random-read-bit-single", status);
@@ -3539,9 +4186,9 @@ int main(int argc, char** argv) {
         std::printf("random-read-bit-single=ok native\n");
       }
 
-      const std::array<RandomReadItem, 2> bit_dense_items {{
-          {.device = DeviceAddress {.code = DeviceCode::M, .number = 100U}, .double_word = false},
-          {.device = DeviceAddress {.code = DeviceCode::M, .number = 101U}, .double_word = false},
+      const std::array<RandomReadWordItem, 2> bit_dense_items {{
+          {.device = DeviceAddress {DeviceCode::M, 100U}},
+          {.device = DeviceAddress {DeviceCode::M, 101U}},
       }};
       const std::array<BitValue, 2> bit_dense_expected {{
           contiguous_bits[0],
@@ -3553,7 +4200,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomReadItem>(bit_dense_items.data(), bit_dense_items.size()),
+          std::span<const RandomReadWordItem>(bit_dense_items.data(), bit_dense_items.size()),
           std::span<std::uint32_t>(bit_dense_values.data(), bit_dense_values.size()));
       if (!status.ok()) {
         print_probe_status_line("random-read-bit-dense", status);
@@ -3567,9 +4214,9 @@ int main(int argc, char** argv) {
         std::printf("random-read-bit-dense=ok native\n");
       }
 
-      const std::array<RandomReadItem, 2> bit_sparse_items {{
-          {.device = DeviceAddress {.code = DeviceCode::M, .number = 100U}, .double_word = false},
-          {.device = DeviceAddress {.code = DeviceCode::M, .number = 105U}, .double_word = false},
+      const std::array<RandomReadWordItem, 2> bit_sparse_items {{
+          {.device = DeviceAddress {DeviceCode::M, 100U}},
+          {.device = DeviceAddress {DeviceCode::M, 105U}},
       }};
       const std::array<BitValue, 2> bit_sparse_expected {{
           contiguous_bits[0],
@@ -3581,7 +4228,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomReadItem>(bit_sparse_items.data(), bit_sparse_items.size()),
+          std::span<const RandomReadWordItem>(bit_sparse_items.data(), bit_sparse_items.size()),
           std::span<std::uint32_t>(bit_sparse_values.data(), bit_sparse_values.size()));
       if (!status.ok()) {
         print_probe_status_line("random-read-bit-sparse", status);
@@ -3606,7 +4253,7 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ProbeRandomWriteWords: {
-      constexpr DeviceAddress kHeadDevice {.code = mcprotocol::serial::DeviceCode::D, .number = 100};
+      constexpr DeviceAddress kHeadDevice {mcprotocol::serial::DeviceCode::D, 100};
       std::array<std::uint16_t, 6> backup_words {};
       bool backups_valid = false;
 
@@ -3719,7 +4366,8 @@ int main(int argc, char** argv) {
       }
 
       const std::array<RandomWriteWordItem, 1> single_item {{
-          {.device = DeviceAddress {.code = DeviceCode::D, .number = 100U}, .value = random_values[0], .double_word = false},
+          RandomWriteWordItem(
+              DeviceAddress {DeviceCode::D, 100U}, random_values[0]),
       }};
       bool random_single_ok = false;
       status = run_random_write_words(
@@ -3752,8 +4400,10 @@ int main(int argc, char** argv) {
       }
 
       const std::array<RandomWriteWordItem, 2> dense_items {{
-          {.device = DeviceAddress {.code = DeviceCode::D, .number = 100U}, .value = random_values[0], .double_word = false},
-          {.device = DeviceAddress {.code = DeviceCode::D, .number = 101U}, .value = random_values[1], .double_word = false},
+          RandomWriteWordItem(
+              DeviceAddress {DeviceCode::D, 100U}, random_values[0]),
+          RandomWriteWordItem(
+              DeviceAddress {DeviceCode::D, 101U}, random_values[1]),
       }};
       bool random_dense_ok = false;
       status = run_random_write_words(
@@ -3786,8 +4436,10 @@ int main(int argc, char** argv) {
       }
 
       const std::array<RandomWriteWordItem, 2> sparse_items {{
-          {.device = DeviceAddress {.code = DeviceCode::D, .number = 100U}, .value = random_values[0], .double_word = false},
-          {.device = DeviceAddress {.code = DeviceCode::D, .number = 105U}, .value = random_values[1], .double_word = false},
+          RandomWriteWordItem(
+              DeviceAddress {DeviceCode::D, 100U}, random_values[0]),
+          RandomWriteWordItem(
+              DeviceAddress {DeviceCode::D, 105U}, random_values[1]),
       }};
       bool random_sparse_ok = false;
       status = run_random_write_words(
@@ -3844,7 +4496,7 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ProbeRandomWriteBits: {
-      constexpr DeviceAddress kHeadDevice {.code = mcprotocol::serial::DeviceCode::M, .number = 100};
+      constexpr DeviceAddress kHeadDevice {mcprotocol::serial::DeviceCode::M, 100};
       std::array<BitValue, 16> backup_bits {};
       bool backups_valid = false;
 
@@ -3995,9 +4647,10 @@ int main(int argc, char** argv) {
         return 1;
       }
 
-      std::array<RandomWriteBitItem, 16> dense_items {};
+      auto dense_items = mcprotocol::serial::detail::make_filled_array<RandomWriteBitItem, 16>(
+          RandomWriteBitItem(DeviceAddress {DeviceCode::M, 0U}, BitValue::Off));
       for (std::size_t index = 0; index < dense_items.size(); ++index) {
-        dense_items[index].device = DeviceAddress {.code = DeviceCode::M, .number = 100U + static_cast<std::uint32_t>(index)};
+        dense_items[index].device = DeviceAddress {DeviceCode::M, 100U + static_cast<std::uint32_t>(index)};
         dense_items[index].value = dense_pattern[index];
       }
 
@@ -4032,8 +4685,9 @@ int main(int argc, char** argv) {
       }
 
       const std::array<RandomWriteBitItem, 1> single_item {{
-          {.device = DeviceAddress {.code = DeviceCode::M, .number = 100U + static_cast<std::uint32_t>(single_offset)},
-           .value = single_value},
+          RandomWriteBitItem(
+              DeviceAddress {DeviceCode::M, 100U + static_cast<std::uint32_t>(single_offset)},
+              single_value),
       }};
 
       bool random_single_ok = false;
@@ -4066,12 +4720,10 @@ int main(int argc, char** argv) {
         return 1;
       }
 
-      std::array<RandomWriteBitItem, 4> sparse_items {};
+      auto sparse_items = mcprotocol::serial::detail::make_filled_array<RandomWriteBitItem, 4>(
+          RandomWriteBitItem(DeviceAddress {DeviceCode::M, 0U}, BitValue::Off));
       for (std::size_t index = 0; index < sparse_items.size(); ++index) {
-        sparse_items[index].device = DeviceAddress {
-            .code = DeviceCode::M,
-            .number = 100U + static_cast<std::uint32_t>(sparse_offsets[index]),
-        };
+        sparse_items[index].device = DeviceAddress {DeviceCode::M, 100U + static_cast<std::uint32_t>(sparse_offsets[index])};
         sparse_items[index].value = sparse_values[index];
       }
 
@@ -4139,10 +4791,10 @@ int main(int argc, char** argv) {
         return 1;
       }
 
-      constexpr DeviceAddress kWordBlockADevice {.code = mcprotocol::serial::DeviceCode::D, .number = 100};
-      constexpr DeviceAddress kWordBlockBDevice {.code = mcprotocol::serial::DeviceCode::D, .number = 110};
-      constexpr DeviceAddress kBitBlockADevice {.code = mcprotocol::serial::DeviceCode::M, .number = 100};
-      constexpr DeviceAddress kBitBlockBDevice {.code = mcprotocol::serial::DeviceCode::M, .number = 200};
+      constexpr DeviceAddress kWordBlockADevice {mcprotocol::serial::DeviceCode::D, 100};
+      constexpr DeviceAddress kWordBlockBDevice {mcprotocol::serial::DeviceCode::D, 110};
+      constexpr DeviceAddress kBitBlockADevice {mcprotocol::serial::DeviceCode::M, 100};
+      constexpr DeviceAddress kBitBlockBDevice {mcprotocol::serial::DeviceCode::M, 200};
 
       const std::string_view mode_name = probe_multi_block_mode_name(probe_mode);
       const bool verify_word_a = probe_mode == ProbeMultiBlockMode::Mixed ||
@@ -4319,30 +4971,30 @@ int main(int argc, char** argv) {
       backups_valid = true;
 
       const std::array<MultiBlockReadBlock, 2> read_word_blocks {{
-          {.head_device = kWordBlockADevice, .points = 2, .bit_block = false},
-          {.head_device = kWordBlockBDevice, .points = 3, .bit_block = false},
+          MultiBlockReadBlock(kWordBlockADevice, 2U, false),
+          MultiBlockReadBlock(kWordBlockBDevice, 3U, false),
       }};
       const std::array<MultiBlockReadBlock, 2> read_bit_blocks {{
-          {.head_device = kBitBlockADevice, .points = 1, .bit_block = true},
-          {.head_device = kBitBlockBDevice, .points = 2, .bit_block = true},
+          MultiBlockReadBlock(kBitBlockADevice, 1U, true),
+          MultiBlockReadBlock(kBitBlockBDevice, 2U, true),
       }};
       const std::array<MultiBlockReadBlock, 4> read_mixed_blocks {{
-          {.head_device = kWordBlockADevice, .points = 2, .bit_block = false},
-          {.head_device = kWordBlockBDevice, .points = 3, .bit_block = false},
-          {.head_device = kBitBlockADevice, .points = 1, .bit_block = true},
-          {.head_device = kBitBlockBDevice, .points = 2, .bit_block = true},
+          MultiBlockReadBlock(kWordBlockADevice, 2U, false),
+          MultiBlockReadBlock(kWordBlockBDevice, 3U, false),
+          MultiBlockReadBlock(kBitBlockADevice, 1U, true),
+          MultiBlockReadBlock(kBitBlockBDevice, 2U, true),
       }};
       const std::array<MultiBlockReadBlock, 1> read_word_block_a_only {{
-          {.head_device = kWordBlockADevice, .points = 2, .bit_block = false},
+          MultiBlockReadBlock(kWordBlockADevice, 2U, false),
       }};
       const std::array<MultiBlockReadBlock, 1> read_word_block_b_only {{
-          {.head_device = kWordBlockBDevice, .points = 3, .bit_block = false},
+          MultiBlockReadBlock(kWordBlockBDevice, 3U, false),
       }};
       const std::array<MultiBlockReadBlock, 1> read_bit_block_a_only {{
-          {.head_device = kBitBlockADevice, .points = 1, .bit_block = true},
+          MultiBlockReadBlock(kBitBlockADevice, 1U, true),
       }};
       const std::array<MultiBlockReadBlock, 1> read_bit_block_b_only {{
-          {.head_device = kBitBlockBDevice, .points = 2, .bit_block = true},
+          MultiBlockReadBlock(kBitBlockBDevice, 2U, true),
       }};
       const std::span<const MultiBlockReadBlock> selected_read_blocks =
           probe_mode == ProbeMultiBlockMode::WordOnly
@@ -4371,9 +5023,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          MultiBlockReadRequest {
-              .blocks = selected_read_blocks,
-          },
+          MultiBlockReadRequest(selected_read_blocks),
           std::span<std::uint16_t>(multi_read_words.data(), include_words ? multi_read_words.size() : 0U),
           std::span<BitValue>(multi_read_bits.data(), include_bits ? multi_read_bits.size() : 0U),
           std::span<MultiBlockReadBlockResult>(multi_read_results.data(), selected_read_blocks.size()));
@@ -4447,66 +5097,60 @@ int main(int argc, char** argv) {
           BitValue::Off, BitValue::On, BitValue::Off, BitValue::Off,
       }};
       const std::array<MultiBlockWriteBlock, 2> write_word_blocks {{
-          {.head_device = kWordBlockADevice,
-           .points = static_cast<std::uint16_t>(test_word_block_a.size()),
-           .bit_block = false,
-           .words = std::span<const std::uint16_t>(test_word_block_a.data(), test_word_block_a.size())},
-          {.head_device = kWordBlockBDevice,
-           .points = static_cast<std::uint16_t>(test_word_block_b.size()),
-           .bit_block = false,
-           .words = std::span<const std::uint16_t>(test_word_block_b.data(), test_word_block_b.size())},
+          MultiBlockWriteBlock(
+              kWordBlockADevice,
+              static_cast<std::uint16_t>(test_word_block_a.size()),
+              std::span<const std::uint16_t>(test_word_block_a.data(), test_word_block_a.size())),
+          MultiBlockWriteBlock(
+              kWordBlockBDevice,
+              static_cast<std::uint16_t>(test_word_block_b.size()),
+              std::span<const std::uint16_t>(test_word_block_b.data(), test_word_block_b.size())),
       }};
       const std::array<MultiBlockWriteBlock, 2> write_bit_blocks {{
-          {.head_device = kBitBlockADevice,
-           .points = 1,
-           .bit_block = true,
-           .bits = std::span<const BitValue>(test_bit_block_a.data(), test_bit_block_a.size())},
-          {.head_device = kBitBlockBDevice,
-           .points = 2,
-           .bit_block = true,
-           .bits = std::span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())},
+          MultiBlockWriteBlock(
+              kBitBlockADevice, 1U,
+              std::span<const BitValue>(test_bit_block_a.data(), test_bit_block_a.size())),
+          MultiBlockWriteBlock(
+              kBitBlockBDevice, 2U,
+              std::span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())),
       }};
       const std::array<MultiBlockWriteBlock, 4> write_mixed_blocks {{
-          {.head_device = kWordBlockADevice,
-           .points = static_cast<std::uint16_t>(test_word_block_a.size()),
-           .bit_block = false,
-           .words = std::span<const std::uint16_t>(test_word_block_a.data(), test_word_block_a.size())},
-          {.head_device = kWordBlockBDevice,
-           .points = static_cast<std::uint16_t>(test_word_block_b.size()),
-           .bit_block = false,
-           .words = std::span<const std::uint16_t>(test_word_block_b.data(), test_word_block_b.size())},
-          {.head_device = kBitBlockADevice,
-           .points = 1,
-           .bit_block = true,
-           .bits = std::span<const BitValue>(test_bit_block_a.data(), test_bit_block_a.size())},
-          {.head_device = kBitBlockBDevice,
-           .points = 2,
-           .bit_block = true,
-           .bits = std::span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())},
+          MultiBlockWriteBlock(
+              kWordBlockADevice,
+              static_cast<std::uint16_t>(test_word_block_a.size()),
+              std::span<const std::uint16_t>(test_word_block_a.data(), test_word_block_a.size())),
+          MultiBlockWriteBlock(
+              kWordBlockBDevice,
+              static_cast<std::uint16_t>(test_word_block_b.size()),
+              std::span<const std::uint16_t>(test_word_block_b.data(), test_word_block_b.size())),
+          MultiBlockWriteBlock(
+              kBitBlockADevice, 1U,
+              std::span<const BitValue>(test_bit_block_a.data(), test_bit_block_a.size())),
+          MultiBlockWriteBlock(
+              kBitBlockBDevice, 2U,
+              std::span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())),
       }};
       const std::array<MultiBlockWriteBlock, 1> write_word_block_a_only {{
-          {.head_device = kWordBlockADevice,
-           .points = static_cast<std::uint16_t>(test_word_block_a.size()),
-           .bit_block = false,
-           .words = std::span<const std::uint16_t>(test_word_block_a.data(), test_word_block_a.size())},
+          MultiBlockWriteBlock(
+              kWordBlockADevice,
+              static_cast<std::uint16_t>(test_word_block_a.size()),
+              std::span<const std::uint16_t>(test_word_block_a.data(), test_word_block_a.size())),
       }};
       const std::array<MultiBlockWriteBlock, 1> write_word_block_b_only {{
-          {.head_device = kWordBlockBDevice,
-           .points = static_cast<std::uint16_t>(test_word_block_b.size()),
-           .bit_block = false,
-           .words = std::span<const std::uint16_t>(test_word_block_b.data(), test_word_block_b.size())},
+          MultiBlockWriteBlock(
+              kWordBlockBDevice,
+              static_cast<std::uint16_t>(test_word_block_b.size()),
+              std::span<const std::uint16_t>(test_word_block_b.data(), test_word_block_b.size())),
       }};
       const std::array<MultiBlockWriteBlock, 1> write_bit_block_a_only {{
-          {.head_device = kBitBlockADevice,
-           .points = 1,
-           .bit_block = true,
-           .bits = std::span<const BitValue>(test_bit_block_a.data(), test_bit_block_a.size())},
+          MultiBlockWriteBlock(
+              kBitBlockADevice, 1U,
+              std::span<const BitValue>(test_bit_block_a.data(), test_bit_block_a.size())),
       }};
       const std::array<MultiBlockWriteBlock, 1> write_bit_block_b_only {{
-          {.head_device = kBitBlockBDevice,
-           .points = 2,
-           .bit_block = true,
-           .bits = std::span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())},
+          MultiBlockWriteBlock(
+              kBitBlockBDevice, 2U,
+              std::span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())),
       }};
       const std::span<const MultiBlockWriteBlock> selected_write_blocks =
           probe_mode == ProbeMultiBlockMode::WordOnly
@@ -4533,9 +5177,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          MultiBlockWriteRequest {
-              .blocks = selected_write_blocks,
-          });
+          MultiBlockWriteRequest(selected_write_blocks));
       if (!status.ok()) {
         std::printf("multi-block-write=skip ");
         if (status.code == StatusCode::PlcError) {
@@ -4695,7 +5337,7 @@ int main(int argc, char** argv) {
       }
       if (!probe_mode.empty()) {
         mcprotocol::serial::RawResponseFrame frame {};
-        status = run_read_monitor_raw(options.protocol, port, options.rts_toggle, frame, options.dump_frames);
+        status = run_read_monitor_raw(options.protocol_config(), port, options.rts_toggle, frame, options.dump_frames);
         if (!status.ok()) {
           std::printf("probe-monitor[read-only]: skip ");
           if (status.code == StatusCode::PlcError) {
@@ -4711,11 +5353,11 @@ int main(int argc, char** argv) {
         return 0;
       }
 
-      const std::array<RandomReadItem, 4> items {{
-          {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 100}, .double_word = false},
-          {.device = {.code = mcprotocol::serial::DeviceCode::D, .number = 105}, .double_word = false},
-          {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 100}, .double_word = false},
-          {.device = {.code = mcprotocol::serial::DeviceCode::M, .number = 105}, .double_word = false},
+      const std::array<RandomReadWordItem, 4> items {{
+          {.device = {mcprotocol::serial::DeviceCode::D, 100}},
+          {.device = {mcprotocol::serial::DeviceCode::D, 105}},
+          {.device = {mcprotocol::serial::DeviceCode::M, 100}},
+          {.device = {mcprotocol::serial::DeviceCode::M, 105}},
       }};
 
       std::array<std::uint32_t, items.size()> monitor_values {};
@@ -4723,7 +5365,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomReadItem>(items.data(), items.size()));
+          std::span<const RandomReadWordItem>(items.data(), items.size()));
       if (!status.ok()) {
         std::printf("probe-monitor: skip register ");
         if (status.code == StatusCode::PlcError) {
@@ -4813,10 +5455,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          HostBufferReadRequest {
-              .start_address = 0U,
-              .word_length = 1U,
-          },
+          HostBufferReadRequest(0U, 1U),
           std::span<std::uint16_t>(words.data(), words.size()));
       if (!status.ok()) {
         std::printf("probe-host-buffer: skip ");
@@ -4837,11 +5476,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ModuleBufferReadRequest {
-              .start_address = 0U,
-              .bytes = static_cast<std::uint16_t>(bytes.size()),
-              .module_number = 0U,
-          },
+          ModuleBufferReadRequest(0U, static_cast<std::uint16_t>(bytes.size()), 0U),
           std::span<std::byte>(bytes.data(), bytes.size()));
       if (!status.ok()) {
         std::printf("probe-module-buffer: skip ");
@@ -4873,7 +5508,7 @@ int main(int argc, char** argv) {
             client,
             port,
             command_state,
-            HostBufferReadRequest {.start_address = start_address, .word_length = 1U},
+            HostBufferReadRequest(start_address, 1U),
             std::span<std::uint16_t>(original.data(), original.size()));
         if (!status.ok()) {
           print_status_error("probe-write-host-buffer backup failed", status);
@@ -4887,10 +5522,7 @@ int main(int argc, char** argv) {
             client,
             port,
             command_state,
-            HostBufferWriteRequest {
-                .start_address = start_address,
-                .words = std::span<const std::uint16_t>(test_value.data(), test_value.size()),
-            });
+            HostBufferWriteRequest(start_address, std::span<const std::uint16_t>(test_value.data(), test_value.size())));
         if (!status.ok()) {
           if (!recorded_skip_status) {
             first_skip_status = status;
@@ -4904,7 +5536,7 @@ int main(int argc, char** argv) {
             client,
             port,
             command_state,
-            HostBufferReadRequest {.start_address = start_address, .word_length = 1U},
+            HostBufferReadRequest(start_address, 1U),
             std::span<std::uint16_t>(verify.data(), verify.size()));
         if (!status.ok()) {
           print_status_error("probe-write-host-buffer verify failed", status);
@@ -4924,10 +5556,7 @@ int main(int argc, char** argv) {
             client,
             port,
             command_state,
-            HostBufferWriteRequest {
-                .start_address = start_address,
-                .words = std::span<const std::uint16_t>(original.data(), original.size()),
-            });
+            HostBufferWriteRequest(start_address, std::span<const std::uint16_t>(original.data(), original.size())));
         if (!status.ok()) {
           print_status_error("probe-write-host-buffer restore failed", status);
           return 1;
@@ -4938,7 +5567,7 @@ int main(int argc, char** argv) {
             client,
             port,
             command_state,
-            HostBufferReadRequest {.start_address = start_address, .word_length = 1U},
+            HostBufferReadRequest(start_address, 1U),
             std::span<std::uint16_t>(restored.data(), restored.size()));
         if (!status.ok()) {
           print_status_error("probe-write-host-buffer re-read failed", status);
@@ -4986,11 +5615,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ModuleBufferReadRequest {
-              .start_address = 0U,
-              .bytes = static_cast<std::uint16_t>(original.size()),
-              .module_number = 0U,
-          },
+          ModuleBufferReadRequest(0U, static_cast<std::uint16_t>(original.size()), 0U),
           std::span<std::byte>(original.data(), original.size()));
       if (!status.ok()) {
         print_status_error("probe-write-module-buffer backup failed", status);
@@ -5005,11 +5630,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ModuleBufferWriteRequest {
-              .start_address = 0U,
-              .module_number = 0U,
-              .bytes = std::span<const std::byte>(test_value.data(), test_value.size()),
-          });
+          ModuleBufferWriteRequest(0U, 0U, std::span<const std::byte>(test_value.data(), test_value.size())));
       if (!status.ok()) {
         std::printf("probe-write-module-buffer: skip ");
         if (status.code == StatusCode::PlcError) {
@@ -5025,11 +5646,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ModuleBufferReadRequest {
-              .start_address = 0U,
-              .bytes = static_cast<std::uint16_t>(verify.size()),
-              .module_number = 0U,
-          },
+          ModuleBufferReadRequest(0U, static_cast<std::uint16_t>(verify.size()), 0U),
           std::span<std::byte>(verify.data(), verify.size()));
       if (!status.ok()) {
         print_status_error("probe-write-module-buffer verify failed", status);
@@ -5048,11 +5665,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ModuleBufferWriteRequest {
-              .start_address = 0U,
-              .module_number = 0U,
-              .bytes = std::span<const std::byte>(original.data(), original.size()),
-          });
+          ModuleBufferWriteRequest(0U, 0U, std::span<const std::byte>(original.data(), original.size())));
       if (!status.ok()) {
         print_status_error("probe-write-module-buffer restore failed", status);
         return 1;
@@ -5063,11 +5676,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ModuleBufferReadRequest {
-              .start_address = 0U,
-              .bytes = static_cast<std::uint16_t>(restored.size()),
-              .module_number = 0U,
-          },
+          ModuleBufferReadRequest(0U, static_cast<std::uint16_t>(restored.size()), 0U),
           std::span<std::byte>(restored.data(), restored.size()));
       if (!status.ok()) {
         print_status_error("probe-write-module-buffer re-read failed", status);
@@ -5110,10 +5719,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          HostBufferReadRequest {
-              .start_address = start_address,
-              .word_length = static_cast<std::uint16_t>(word_length),
-          },
+          HostBufferReadRequest(start_address, static_cast<std::uint16_t>(word_length)),
           std::span<std::uint16_t>(words.data(), static_cast<std::size_t>(word_length)));
       if (!status.ok()) {
         print_status_error("read-host-buffer request failed", status);
@@ -5152,10 +5758,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          HostBufferWriteRequest {
-              .start_address = start_address,
-              .words = std::span<const std::uint16_t>(words.data(), static_cast<std::size_t>(word_count)),
-          });
+          HostBufferWriteRequest(start_address, std::span<const std::uint16_t>(words.data(), static_cast<std::size_t>(word_count))));
       if (!status.ok()) {
         print_status_error("write-host-buffer request failed", status);
         return 1;
@@ -5185,11 +5788,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ModuleBufferReadRequest {
-              .start_address = start_address,
-              .bytes = static_cast<std::uint16_t>(byte_length),
-              .module_number = static_cast<std::uint16_t>(module_number),
-          },
+          ModuleBufferReadRequest(start_address, static_cast<std::uint16_t>(byte_length), static_cast<std::uint16_t>(module_number)),
           std::span<std::byte>(bytes.data(), static_cast<std::size_t>(byte_length)));
       if (!status.ok()) {
         print_status_error("read-module-buffer request failed", status);
@@ -5202,7 +5801,7 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ReadQualifiedWords: {
-      QualifiedBufferWordDevice device {};
+  QualifiedBufferWordDevice device(QualifiedBufferDeviceKind::G, 0U, 0U);
       const std::string_view device_arg(options.command_argv[0]);
       const std::string_view points_arg(options.command_argv[1]);
       status = parse_qualified_buffer_word_device(device_arg, device);
@@ -5210,7 +5809,7 @@ int main(int argc, char** argv) {
         print_status_error("Invalid qualified buffer device", status);
         return 2;
       }
-      status = validate_qualified_buffer_helper_route(options.protocol.plc_profile, device);
+      status = validate_qualified_buffer_helper_route(options.protocol_config().plc_profile(), device);
       if (!status.ok()) {
         print_status_error("Unsupported qualified buffer helper route", status);
         return 2;
@@ -5224,7 +5823,7 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      ModuleBufferReadRequest request {};
+      ModuleBufferReadRequest request(0U, 0U, 0U);
       status = make_qualified_buffer_read_words_request(
           device,
           static_cast<std::uint16_t>(points),
@@ -5269,7 +5868,7 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ReadNativeQualifiedWords: {
-      QualifiedBufferWordDevice device {};
+  QualifiedBufferWordDevice device(QualifiedBufferDeviceKind::G, 0U, 0U);
       const std::string_view device_arg(options.command_argv[0]);
       const std::string_view points_arg(options.command_argv[1]);
       status = parse_qualified_buffer_word_device(device_arg, device);
@@ -5341,11 +5940,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ModuleBufferWriteRequest {
-              .start_address = start_address,
-              .module_number = static_cast<std::uint16_t>(module_number),
-              .bytes = std::span<const std::byte>(bytes.data(), static_cast<std::size_t>(byte_count)),
-          });
+          ModuleBufferWriteRequest(start_address, static_cast<std::uint16_t>(module_number), std::span<const std::byte>(bytes.data(), static_cast<std::size_t>(byte_count))));
       if (!status.ok()) {
         print_status_error("write-module-buffer request failed", status);
         return 1;
@@ -5355,14 +5950,14 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::WriteQualifiedWords: {
-      QualifiedBufferWordDevice device {};
+  QualifiedBufferWordDevice device(QualifiedBufferDeviceKind::G, 0U, 0U);
       const std::string_view device_arg(options.command_argv[0]);
       status = parse_qualified_buffer_word_device(device_arg, device);
       if (!status.ok()) {
         print_status_error("Invalid qualified buffer device", status);
         return 2;
       }
-      status = validate_qualified_buffer_helper_route(options.protocol.plc_profile, device);
+      status = validate_qualified_buffer_helper_route(options.protocol_config().plc_profile(), device);
       if (!status.ok()) {
         print_status_error("Unsupported qualified buffer helper route", status);
         return 2;
@@ -5385,7 +5980,7 @@ int main(int argc, char** argv) {
       }
 
       std::array<std::byte, 1920> byte_storage {};
-      ModuleBufferWriteRequest request {};
+      ModuleBufferWriteRequest request(0U, 0U, {});
       std::size_t byte_count = 0U;
       status = make_qualified_buffer_write_words_request(
           device,
@@ -5408,7 +6003,7 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::WriteNativeQualifiedWords: {
-      QualifiedBufferWordDevice device {};
+  QualifiedBufferWordDevice device(QualifiedBufferDeviceKind::G, 0U, 0U);
       const std::string_view device_arg(options.command_argv[0]);
       status = parse_qualified_buffer_word_device(device_arg, device);
       if (!status.ok()) {
@@ -5447,7 +6042,7 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ReadWords: {
-      DeviceAddress device {};
+  DeviceAddress device(DeviceCode::D, 0U);
       const std::string_view device_arg(options.command_argv[0]);
       const std::string_view points_arg(options.command_argv[1]);
       if (!parse_device_address(device_arg, device)) {
@@ -5467,7 +6062,7 @@ int main(int argc, char** argv) {
       std::array<std::uint16_t, 960> words {};
       status = client.async_batch_read_words(
           now_ms(),
-          BatchReadWordsRequest {.head_device = device, .points = static_cast<std::uint16_t>(points)},
+          BatchReadWordsRequest(device, static_cast<std::uint16_t>(points)),
           std::span<std::uint16_t>(words.data(), points),
           request_complete,
           &command_state);
@@ -5487,10 +6082,10 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ReadFileRegisterWords: {
-      ExtendedFileRegisterAddress address {};
+  ExtendedFileRegisterAddress address(1U, 0U);
       const std::string_view address_arg(options.command_argv[0]);
       const std::string_view points_arg(options.command_argv[1]);
-      if (!parse_extended_file_register_address(address_arg, options.protocol, address)) {
+      if (!parse_extended_file_register_address(address_arg, options.protocol_config(), address)) {
         std::fprintf(
             stderr,
             "Invalid file-register address: %.*s\n",
@@ -5498,7 +6093,7 @@ int main(int argc, char** argv) {
             address_arg.data());
         return 2;
       }
-      const std::size_t max_points = cli_max_extended_file_register_word_points(options.protocol);
+      const std::size_t max_points = cli_max_extended_file_register_word_points(options.protocol_config());
       std::uint32_t points = 0;
       if (!parse_u32(points_arg, points) || points == 0U || points > max_points) {
         std::fprintf(stderr, "Invalid file-register word count: %.*s\n",
@@ -5512,10 +6107,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ExtendedFileRegisterBatchReadWordsRequest {
-              .head_device = address,
-              .points = static_cast<std::uint16_t>(points),
-          },
+          ExtendedFileRegisterBatchReadWordsRequest(address, static_cast<std::uint16_t>(points)),
           std::span<std::uint16_t>(words.data(), points));
       if (!status.ok()) {
         print_status_error("read-file-register request failed", status);
@@ -5531,7 +6123,7 @@ int main(int argc, char** argv) {
       const std::string_view head_arg(options.command_argv[0]);
       const std::string_view points_arg(options.command_argv[1]);
       const std::uint32_t max_head_device_number =
-          cli_max_direct_extended_file_register_head_device_number(options.protocol);
+          cli_max_direct_extended_file_register_head_device_number(options.protocol_config());
       std::uint32_t head_device_number = 0;
       if (!parse_u32(head_arg, head_device_number) || head_device_number > max_head_device_number) {
         std::fprintf(
@@ -5541,7 +6133,7 @@ int main(int argc, char** argv) {
             head_arg.data());
         return 2;
       }
-      const std::size_t max_points = cli_max_extended_file_register_word_points(options.protocol);
+      const std::size_t max_points = cli_max_extended_file_register_word_points(options.protocol_config());
       std::uint32_t points = 0;
       if (!parse_u32(points_arg, points) || points == 0U || points > max_points) {
         std::fprintf(stderr, "Invalid direct file-register word count: %.*s\n",
@@ -5555,10 +6147,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ExtendedFileRegisterDirectBatchReadWordsRequest {
-              .head_device_number = head_device_number,
-              .points = static_cast<std::uint16_t>(points),
-          },
+          ExtendedFileRegisterDirectBatchReadWordsRequest(head_device_number, static_cast<std::uint16_t>(points)),
           std::span<std::uint16_t>(words.data(), points));
       if (!status.ok()) {
         print_status_error("read-file-register-direct request failed", status);
@@ -5571,7 +6160,7 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ReadLinkDirectWords: {
-      LinkDirectDevice device {};
+  LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
       const std::string_view device_arg(options.command_argv[0]);
       const std::string_view points_arg(options.command_argv[1]);
       status = parse_link_direct_device(device_arg, device);
@@ -5606,7 +6195,7 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ReadBits: {
-      DeviceAddress device {};
+  DeviceAddress device(DeviceCode::D, 0U);
       const std::string_view device_arg(options.command_argv[0]);
       const std::string_view points_arg(options.command_argv[1]);
       if (!parse_device_address(device_arg, device)) {
@@ -5622,7 +6211,8 @@ int main(int argc, char** argv) {
                      points_arg.data());
         return 2;
       }
-      LongStateReadSpec long_state_spec {};
+      LongStateReadSpec long_state_spec(
+          LongStateReadRoute::StatusBlock, DeviceCode::LTN, LongStateReadKind::Contact);
       if (get_long_state_read_spec(device.code, long_state_spec).ok()) {
         std::fprintf(
             stderr,
@@ -5633,7 +6223,7 @@ int main(int argc, char** argv) {
       std::array<BitValue, 7904> bits {};
       status = client.async_batch_read_bits(
           now_ms(),
-          BatchReadBitsRequest {.head_device = device, .points = static_cast<std::uint16_t>(points)},
+          BatchReadBitsRequest(device, static_cast<std::uint16_t>(points)),
           std::span<BitValue>(bits.data(), points),
           request_complete,
           &command_state);
@@ -5653,7 +6243,7 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ReadLongStateBits: {
-      DeviceAddress device {};
+  DeviceAddress device(DeviceCode::D, 0U);
       const std::string_view device_arg(options.command_argv[0]);
       const std::string_view points_arg(options.command_argv[1]);
       if (!parse_device_address(device_arg, device)) {
@@ -5689,7 +6279,7 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ReadLinkDirectBits: {
-      LinkDirectDevice device {};
+  LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
       const std::string_view device_arg(options.command_argv[0]);
       const std::string_view points_arg(options.command_argv[1]);
       status = parse_link_direct_device(device_arg, device);
@@ -5724,7 +6314,7 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::WriteLinkDirectWords: {
-      LinkDirectDevice device {};
+  LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
       const std::string_view device_arg(options.command_argv[0]);
       status = parse_link_direct_device(device_arg, device);
       if (!status.ok()) {
@@ -5763,7 +6353,7 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::WriteLinkDirectBits: {
-      LinkDirectDevice device {};
+  LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
       const std::string_view device_arg(options.command_argv[0]);
       status = parse_link_direct_device(device_arg, device);
       if (!status.ok()) {
@@ -5812,7 +6402,11 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<LinkDirectRandomReadItem, mcprotocol::serial::kMaxRandomAccessItems> items {};
+      auto items = mcprotocol::serial::detail::make_filled_array<
+          LinkDirectRandomReadWordItem,
+          mcprotocol::serial::kMaxRandomAccessItems>(
+          LinkDirectRandomReadWordItem {
+              LinkDirectDevice {0U, DeviceAddress {DeviceCode::D, 0U}}});
       for (int index = 0; index < options.command_argc; ++index) {
         if (!parse_link_direct_random_read_item(options.command_argv[index], items[static_cast<std::size_t>(index)])) {
           std::fprintf(stderr, "Invalid random-read-link-direct item: %s\n", options.command_argv[index]);
@@ -5825,7 +6419,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const LinkDirectRandomReadItem>(items.data(), static_cast<std::size_t>(options.command_argc)),
+          std::span<const LinkDirectRandomReadWordItem>(items.data(), static_cast<std::size_t>(options.command_argc)),
           std::span<std::uint32_t>(values.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
         print_status_error("random-read-link-direct request failed", status);
@@ -5851,7 +6445,11 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<LinkDirectRandomWriteWordItem, mcprotocol::serial::kMaxRandomAccessItems> items {};
+      auto items = mcprotocol::serial::detail::make_filled_array<
+          LinkDirectRandomWriteWordItem,
+          mcprotocol::serial::kMaxRandomAccessItems>(
+          LinkDirectRandomWriteWordItem(
+              LinkDirectDevice {0U, DeviceAddress {DeviceCode::W, 0U}}, 0U));
       for (int index = 0; index < options.command_argc; ++index) {
         if (!parse_link_direct_random_write_word_item(
                 options.command_argv[index],
@@ -5883,7 +6481,11 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<LinkDirectRandomWriteBitItem, kMaxRandomWriteBitItems> items {};
+      auto items = mcprotocol::serial::detail::make_filled_array<
+          LinkDirectRandomWriteBitItem,
+          kMaxRandomWriteBitItems>(
+          LinkDirectRandomWriteBitItem(
+              LinkDirectDevice {0U, DeviceAddress {DeviceCode::B, 0U}}, BitValue::Off));
       for (int index = 0; index < options.command_argc; ++index) {
         if (!parse_link_direct_random_write_bit_item(
                 options.command_argv[index],
@@ -5914,7 +6516,11 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<LinkDirectMultiBlockReadBlock, mcprotocol::serial::kMaxMultiBlockCount> blocks {};
+      auto blocks = mcprotocol::serial::detail::make_filled_array<
+          LinkDirectMultiBlockReadBlock,
+          mcprotocol::serial::kMaxMultiBlockCount>(
+          LinkDirectMultiBlockReadBlock(
+              LinkDirectDevice {0U, DeviceAddress {DeviceCode::D, 0U}}, 0U, false));
       for (int index = 0; index < options.command_argc; ++index) {
         if (!parse_link_direct_multi_block_read_spec(
                 options.command_argv[index],
@@ -5941,11 +6547,9 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          LinkDirectMultiBlockReadRequest {
-              .blocks = std::span<const LinkDirectMultiBlockReadBlock>(
+          LinkDirectMultiBlockReadRequest(std::span<const LinkDirectMultiBlockReadBlock>(
                   blocks.data(),
-                  static_cast<std::size_t>(options.command_argc)),
-          },
+                  static_cast<std::size_t>(options.command_argc))),
           std::span<std::uint16_t>(words.data(), total_words),
           std::span<BitValue>(bits.data(), bits.size()),
           std::span<MultiBlockReadBlockResult>(results.data(), static_cast<std::size_t>(options.command_argc)));
@@ -5976,7 +6580,11 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<LinkDirectMultiBlockReadBlock, mcprotocol::serial::kMaxMultiBlockCount> blocks {};
+      auto blocks = mcprotocol::serial::detail::make_filled_array<
+          LinkDirectMultiBlockReadBlock,
+          mcprotocol::serial::kMaxMultiBlockCount>(
+          LinkDirectMultiBlockReadBlock(
+              LinkDirectDevice {0U, DeviceAddress {DeviceCode::D, 0U}}, 0U, true));
       for (int index = 0; index < options.command_argc; ++index) {
         if (!parse_link_direct_multi_block_read_spec(
                 options.command_argv[index],
@@ -6003,11 +6611,9 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          LinkDirectMultiBlockReadRequest {
-              .blocks = std::span<const LinkDirectMultiBlockReadBlock>(
+          LinkDirectMultiBlockReadRequest(std::span<const LinkDirectMultiBlockReadBlock>(
                   blocks.data(),
-                  static_cast<std::size_t>(options.command_argc)),
-          },
+                  static_cast<std::size_t>(options.command_argc))),
           std::span<std::uint16_t>(words.data(), words.size()),
           std::span<BitValue>(bits.data(), total_bit_values),
           std::span<MultiBlockReadBlockResult>(results.data(), static_cast<std::size_t>(options.command_argc)));
@@ -6036,11 +6642,16 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<LinkDirectMultiBlockWriteBlock, mcprotocol::serial::kMaxMultiBlockCount> blocks {};
+      auto blocks = mcprotocol::serial::detail::make_filled_array<
+          LinkDirectMultiBlockWriteBlock,
+          mcprotocol::serial::kMaxMultiBlockCount>(
+          LinkDirectMultiBlockWriteBlock(
+              LinkDirectDevice {0U, DeviceAddress {DeviceCode::D, 0U}}, 0U,
+              std::span<const std::uint16_t> {}));
       std::array<std::uint16_t, 960> word_pool {};
       std::size_t word_offset = 0U;
       for (int index = 0; index < options.command_argc; ++index) {
-        LinkDirectDevice device {};
+  LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
         std::size_t count = 0U;
         if (!parse_link_direct_multi_block_write_word_spec(
                 options.command_argv[index],
@@ -6050,12 +6661,10 @@ int main(int argc, char** argv) {
           std::fprintf(stderr, "Invalid multi-block-write-link-direct-words block: %s\n", options.command_argv[index]);
           return 2;
         }
-        blocks[static_cast<std::size_t>(index)] = LinkDirectMultiBlockWriteBlock {
-            .head_device = device,
-            .points = static_cast<std::uint16_t>(count),
-            .bit_block = false,
-            .words = std::span<const std::uint16_t>(word_pool.data() + word_offset, count),
-        };
+        blocks[static_cast<std::size_t>(index)] = LinkDirectMultiBlockWriteBlock(
+            device,
+            static_cast<std::uint16_t>(count),
+            std::span<const std::uint16_t>(word_pool.data() + word_offset, count));
         word_offset += count;
       }
 
@@ -6063,11 +6672,9 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          LinkDirectMultiBlockWriteRequest {
-              .blocks = std::span<const LinkDirectMultiBlockWriteBlock>(
+          LinkDirectMultiBlockWriteRequest(std::span<const LinkDirectMultiBlockWriteBlock>(
                   blocks.data(),
-                  static_cast<std::size_t>(options.command_argc)),
-          });
+                  static_cast<std::size_t>(options.command_argc))));
       if (!status.ok()) {
         print_status_error("multi-block-write-link-direct-words request failed", status);
         return 1;
@@ -6084,11 +6691,16 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<LinkDirectMultiBlockWriteBlock, mcprotocol::serial::kMaxMultiBlockCount> blocks {};
+      auto blocks = mcprotocol::serial::detail::make_filled_array<
+          LinkDirectMultiBlockWriteBlock,
+          mcprotocol::serial::kMaxMultiBlockCount>(
+          LinkDirectMultiBlockWriteBlock(
+              LinkDirectDevice {0U, DeviceAddress {DeviceCode::D, 0U}}, 0U,
+              std::span<const BitValue> {}));
       std::array<BitValue, 960U * 16U> bit_pool {};
       std::size_t bit_offset = 0U;
       for (int index = 0; index < options.command_argc; ++index) {
-        LinkDirectDevice device {};
+  LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
         std::size_t count = 0U;
         if (!parse_link_direct_multi_block_write_bit_spec(
                 options.command_argv[index],
@@ -6098,12 +6710,10 @@ int main(int argc, char** argv) {
           std::fprintf(stderr, "Invalid multi-block-write-link-direct-bits block: %s\n", options.command_argv[index]);
           return 2;
         }
-        blocks[static_cast<std::size_t>(index)] = LinkDirectMultiBlockWriteBlock {
-            .head_device = device,
-            .points = static_cast<std::uint16_t>(count / 16U),
-            .bit_block = true,
-            .bits = std::span<const BitValue>(bit_pool.data() + bit_offset, count),
-        };
+        blocks[static_cast<std::size_t>(index)] = LinkDirectMultiBlockWriteBlock(
+            device,
+            static_cast<std::uint16_t>(count / 16U),
+            std::span<const BitValue>(bit_pool.data() + bit_offset, count));
         bit_offset += count;
       }
 
@@ -6111,11 +6721,9 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          LinkDirectMultiBlockWriteRequest {
-              .blocks = std::span<const LinkDirectMultiBlockWriteBlock>(
+          LinkDirectMultiBlockWriteRequest(std::span<const LinkDirectMultiBlockWriteBlock>(
                   blocks.data(),
-                  static_cast<std::size_t>(options.command_argc)),
-          });
+                  static_cast<std::size_t>(options.command_argc))));
       if (!status.ok()) {
         print_status_error("multi-block-write-link-direct-bits request failed", status);
         return 1;
@@ -6130,11 +6738,12 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<ExtendedFileRegisterAddress, 20> items {};
+      auto items = mcprotocol::serial::detail::make_filled_array<
+          ExtendedFileRegisterAddress, 20>(ExtendedFileRegisterAddress(1U, 0U));
       for (int index = 0; index < options.command_argc; ++index) {
         if (!parse_extended_file_register_address(
                 options.command_argv[index],
-                options.protocol,
+                options.protocol_config(),
                 items[static_cast<std::size_t>(index)])) {
           std::fprintf(stderr, "Invalid monitor-file-register item: %s\n", options.command_argv[index]);
           return 2;
@@ -6146,11 +6755,9 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ExtendedFileRegisterMonitorRegistration {
-              .items = std::span<const ExtendedFileRegisterAddress>(
+          ExtendedFileRegisterMonitorRegistration(std::span<const ExtendedFileRegisterAddress>(
                   items.data(),
-                  static_cast<std::size_t>(options.command_argc)),
-          },
+                  static_cast<std::size_t>(options.command_argc))),
           std::span<std::uint16_t>(values.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
         print_status_error("monitor-file-register request failed", status);
@@ -6170,7 +6777,11 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<LinkDirectRandomReadItem, mcprotocol::serial::kMaxMonitorItems> items {};
+      auto items = mcprotocol::serial::detail::make_filled_array<
+          LinkDirectRandomReadWordItem,
+          mcprotocol::serial::kMaxMonitorItems>(
+          LinkDirectRandomReadWordItem {
+              LinkDirectDevice {0U, DeviceAddress {DeviceCode::D, 0U}}});
       for (int index = 0; index < options.command_argc; ++index) {
         if (!parse_link_direct_random_read_item(options.command_argv[index], items[static_cast<std::size_t>(index)])) {
           std::fprintf(stderr, "Invalid monitor-link-direct item: %s\n", options.command_argv[index]);
@@ -6182,7 +6793,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const LinkDirectRandomReadItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
+          std::span<const LinkDirectRandomReadWordItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
         print_status_error("monitor-link-direct register failed", status);
         return 1;
@@ -6217,27 +6828,46 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<RandomReadItem, mcprotocol::serial::kMaxRandomAccessItems> items {};
+      auto word_items = mcprotocol::serial::detail::make_filled_array<
+          RandomReadWordItem,
+          mcprotocol::serial::kMaxRandomAccessItems>(
+          RandomReadWordItem {DeviceAddress {DeviceCode::D, 0U}});
+      auto dword_items = mcprotocol::serial::detail::make_filled_array<
+          RandomReadDWordItem,
+          mcprotocol::serial::kMaxRandomAccessItems>(
+          RandomReadDWordItem {DeviceAddress {DeviceCode::D, 0U}});
+      std::array<bool, mcprotocol::serial::kMaxRandomAccessItems> is_dword {};
+      std::array<std::size_t, mcprotocol::serial::kMaxRandomAccessItems> result_indices {};
+      std::size_t word_count = 0;
+      std::size_t dword_count = 0;
       for (int index = 0; index < options.command_argc; ++index) {
-        DeviceAddress device {};
+        bool dword = false;
+  DeviceAddress device(DeviceCode::D, 0U);
         const std::string_view device_arg(options.command_argv[index]);
-        if (!parse_device_address(device_arg, device)) {
-          std::fprintf(stderr, "Invalid random-read item: %s\n", options.command_argv[index]);
+        if (!parse_explicit_random_read_arg(device_arg, dword, device)) {
+          std::fprintf(
+              stderr,
+              "Invalid random-read item (expected word:DEVICE or dword:DEVICE): %s\n",
+              options.command_argv[index]);
           return 2;
         }
-        items[static_cast<std::size_t>(index)] = RandomReadItem {
-            .device = device,
-            .double_word = is_double_word_device(device.code),
-        };
+        if (dword) {
+          is_dword[static_cast<std::size_t>(index)] = true;
+          result_indices[static_cast<std::size_t>(index)] = dword_count;
+          dword_items[dword_count++] = RandomReadDWordItem {device};
+        } else {
+          result_indices[static_cast<std::size_t>(index)] = word_count;
+          word_items[word_count++] = RandomReadWordItem {device};
+        }
       }
 
-      std::array<std::uint32_t, mcprotocol::serial::kMaxRandomAccessItems> values {};
+      std::array<std::uint16_t, mcprotocol::serial::kMaxRandomAccessItems> word_values {};
+      std::array<std::uint32_t, mcprotocol::serial::kMaxRandomAccessItems> dword_values {};
       status = client.async_random_read(
           now_ms(),
-          RandomReadRequest {
-              .items = std::span<const RandomReadItem>(items.data(), static_cast<std::size_t>(options.command_argc)),
-          },
-          std::span<std::uint32_t>(values.data(), static_cast<std::size_t>(options.command_argc)),
+          RandomReadRequest(std::span<const RandomReadWordItem>(word_items.data(), word_count), std::span<const RandomReadDWordItem>(dword_items.data(), dword_count)),
+          std::span<std::uint16_t>(word_values.data(), word_count),
+          std::span<std::uint32_t>(dword_values.data(), dword_count),
           request_complete,
           &command_state);
       if (!status.ok()) {
@@ -6250,14 +6880,18 @@ int main(int argc, char** argv) {
         return 1;
       }
       for (int index = 0; index < options.command_argc; ++index) {
-        const auto value = values[static_cast<std::size_t>(index)];
-        if (is_bit_device(items[static_cast<std::size_t>(index)].device.code)) {
-          print_sparse_native_bit_value(options.command_argv[index], value);
-        } else if (items[static_cast<std::size_t>(index)].double_word) {
+        const std::size_t input_index = static_cast<std::size_t>(index);
+        const std::size_t result_index = result_indices[input_index];
+        if (is_dword[input_index]) {
+          const std::uint32_t value = dword_values[result_index];
           std::printf("%s=0x%08X %u\n", options.command_argv[index], value, value);
+          continue;
+        }
+        const std::uint16_t value = word_values[result_index];
+        if (is_bit_device(word_items[result_index].device.code)) {
+          print_sparse_native_bit_value(options.command_argv[index], value);
         } else {
-          const unsigned word = static_cast<unsigned>(value & 0xFFFFU);
-          std::printf("%s=0x%04X %u\n", options.command_argv[index], word, word);
+          std::printf("%s=0x%04X %u\n", options.command_argv[index], value, value);
         }
       }
       return 0;
@@ -6271,15 +6905,13 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<RandomWriteWordItem, mcprotocol::serial::kMaxRandomAccessItems> items {};
+      auto items = mcprotocol::serial::detail::make_filled_array<
+          RandomWriteWordItem,
+          mcprotocol::serial::kMaxRandomAccessItems>(
+          RandomWriteWordItem(DeviceAddress {DeviceCode::D, 0U}, 0U));
       for (int index = 0; index < options.command_argc; ++index) {
         if (!parse_word_write_arg(options.command_argv[index], items[static_cast<std::size_t>(index)])) {
           std::fprintf(stderr, "Invalid random-write-words item: %s\n", options.command_argv[index]);
-          return 2;
-        }
-        if (!items[static_cast<std::size_t>(index)].double_word &&
-            items[static_cast<std::size_t>(index)].value > 0xFFFFU) {
-          std::fprintf(stderr, "random-write-words value must be 0..65535: %s\n", options.command_argv[index]);
           return 2;
         }
       }
@@ -6297,18 +6929,51 @@ int main(int argc, char** argv) {
       return 0;
     }
 
+    case CommandKind::RandomWriteDWords: {
+      if (options.command_argc > static_cast<int>(mcprotocol::serial::kMaxRandomAccessItems)) {
+        std::fprintf(stderr, "Too many random-write-dwords items; max is %zu\n",
+                     mcprotocol::serial::kMaxRandomAccessItems);
+        return 2;
+      }
+      auto items = mcprotocol::serial::detail::make_filled_array<
+          RandomWriteDWordItem,
+          mcprotocol::serial::kMaxRandomAccessItems>(
+          RandomWriteDWordItem(DeviceAddress {DeviceCode::D, 0U}, 0U));
+      for (int index = 0; index < options.command_argc; ++index) {
+        if (!parse_dword_write_arg(
+                options.command_argv[index], items[static_cast<std::size_t>(index)])) {
+          std::fprintf(stderr, "Invalid random-write-dwords item: %s\n", options.command_argv[index]);
+          return 2;
+        }
+      }
+      status = run_random_write_dwords(
+          client, port, command_state,
+          std::span<const RandomWriteDWordItem>(
+              items.data(), static_cast<std::size_t>(options.command_argc)));
+      if (!status.ok()) {
+        print_status_error("random-write-dwords request failed", status);
+        return 1;
+      }
+      std::printf("random-write-dwords=ok mode=native\n");
+      return 0;
+    }
+
     case CommandKind::RandomWriteFileRegisterWords: {
-      const std::size_t max_items = cli_max_extended_file_register_random_write_items(options.protocol);
+      const std::size_t max_items = cli_max_extended_file_register_random_write_items(options.protocol_config());
       if (options.command_argc > static_cast<int>(max_items)) {
         std::fprintf(stderr, "Too many random-write-file-register items; max is %zu\n", max_items);
         return 2;
       }
 
-      std::array<ExtendedFileRegisterRandomWriteWordItem, kCliMaxExtendedFileRegisterRandomWriteItems> items {};
+      auto items = mcprotocol::serial::detail::make_filled_array<
+          ExtendedFileRegisterRandomWriteWordItem,
+          kCliMaxExtendedFileRegisterRandomWriteItems>(
+          ExtendedFileRegisterRandomWriteWordItem(
+              ExtendedFileRegisterAddress(1U, 0U), 0U));
       for (int index = 0; index < options.command_argc; ++index) {
         if (!parse_extended_file_register_write_arg(
                 options.command_argv[index],
-                options.protocol,
+                options.protocol_config(),
                 items[static_cast<std::size_t>(index)])) {
           std::fprintf(stderr, "Invalid random-write-file-register item: %s\n", options.command_argv[index]);
           return 2;
@@ -6337,7 +7002,10 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<RandomWriteBitItem, kMaxRandomWriteBitItems> items {};
+      auto items = mcprotocol::serial::detail::make_filled_array<
+          RandomWriteBitItem,
+          kMaxRandomWriteBitItems>(
+          RandomWriteBitItem(DeviceAddress {DeviceCode::M, 0U}, BitValue::Off));
       for (int index = 0; index < options.command_argc; ++index) {
         if (!parse_bit_write_arg(options.command_argv[index], items[static_cast<std::size_t>(index)])) {
           std::fprintf(stderr, "Invalid random-write-bits item: %s\n", options.command_argv[index]);
@@ -6360,9 +7028,9 @@ int main(int argc, char** argv) {
 
     case CommandKind::WriteWords: {
       std::array<std::uint16_t, kCliMaxBatchWordPoints> group_values {};
-      const std::size_t max_group_points = cli_max_batch_write_words_points(options.protocol);
-      DeviceAddress group_head {};
-      DeviceAddress previous_device {};
+      const std::size_t max_group_points = cli_max_batch_write_words_points(options.protocol_config());
+      DeviceAddress group_head(DeviceCode::D, 0U);
+      DeviceAddress previous_device(DeviceCode::D, 0U);
       bool have_group = false;
       std::size_t group_size = 0;
 
@@ -6386,7 +7054,7 @@ int main(int argc, char** argv) {
       };
 
       for (int index = 0; index < options.command_argc; ++index) {
-        RandomWriteWordItem item {};
+        RandomWriteWordItem item(DeviceAddress {DeviceCode::D, 0U}, 0U);
         if (!parse_word_write_arg(options.command_argv[index], item)) {
           std::fprintf(stderr, "Invalid write-words item: %s\n", options.command_argv[index]);
           return 2;
@@ -6418,9 +7086,9 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::WriteFileRegisterWords: {
-      ExtendedFileRegisterAddress head_address {};
+      ExtendedFileRegisterAddress head_address(1U, 0U);
       const std::string_view head_arg(options.command_argv[0]);
-      if (!parse_extended_file_register_address(head_arg, options.protocol, head_address)) {
+      if (!parse_extended_file_register_address(head_arg, options.protocol_config(), head_address)) {
         std::fprintf(
             stderr,
             "Invalid file-register head address: %.*s\n",
@@ -6429,7 +7097,7 @@ int main(int argc, char** argv) {
         return 2;
       }
       const int word_count = options.command_argc - 1;
-      const std::size_t max_points = cli_max_extended_file_register_word_points(options.protocol);
+      const std::size_t max_points = cli_max_extended_file_register_word_points(options.protocol_config());
       if (word_count <= 0 || static_cast<std::size_t>(word_count) > max_points) {
         std::fprintf(stderr, "write-file-register word count must be in range 1..%zu\n", max_points);
         return 2;
@@ -6449,12 +7117,9 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ExtendedFileRegisterBatchWriteWordsRequest {
-              .head_device = head_address,
-              .words = std::span<const std::uint16_t>(
+          ExtendedFileRegisterBatchWriteWordsRequest(head_address, std::span<const std::uint16_t>(
                   words.data(),
-                  static_cast<std::size_t>(word_count)),
-          });
+                  static_cast<std::size_t>(word_count))));
       if (!status.ok()) {
         print_status_error("write-file-register request failed", status);
         return 1;
@@ -6466,7 +7131,7 @@ int main(int argc, char** argv) {
     case CommandKind::WriteFileRegisterWordsDirect: {
       const std::string_view head_arg(options.command_argv[0]);
       const std::uint32_t max_head_device_number =
-          cli_max_direct_extended_file_register_head_device_number(options.protocol);
+          cli_max_direct_extended_file_register_head_device_number(options.protocol_config());
       std::uint32_t head_device_number = 0;
       if (!parse_u32(head_arg, head_device_number) || head_device_number > max_head_device_number) {
         std::fprintf(
@@ -6477,7 +7142,7 @@ int main(int argc, char** argv) {
         return 2;
       }
       const int word_count = options.command_argc - 1;
-      const std::size_t max_points = cli_max_extended_file_register_word_points(options.protocol);
+      const std::size_t max_points = cli_max_extended_file_register_word_points(options.protocol_config());
       if (word_count <= 0 || static_cast<std::size_t>(word_count) > max_points) {
         std::fprintf(stderr, "write-file-register-direct word count must be in range 1..%zu\n", max_points);
         return 2;
@@ -6497,12 +7162,9 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ExtendedFileRegisterDirectBatchWriteWordsRequest {
-              .head_device_number = head_device_number,
-              .words = std::span<const std::uint16_t>(
+          ExtendedFileRegisterDirectBatchWriteWordsRequest(head_device_number, std::span<const std::uint16_t>(
                   words.data(),
-                  static_cast<std::size_t>(word_count)),
-          });
+                  static_cast<std::size_t>(word_count))));
       if (!status.ok()) {
         print_status_error("write-file-register-direct request failed", status);
         return 1;
@@ -6512,10 +7174,10 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::WriteBits: {
-      const std::size_t max_group_points = cli_max_batch_write_bits_points(options.protocol);
+      const std::size_t max_group_points = cli_max_batch_write_bits_points(options.protocol_config());
       std::array<BitValue, kCliMaxBatchBitPoints> group_values {};
-      DeviceAddress group_head {};
-      DeviceAddress previous_device {};
+      DeviceAddress group_head(DeviceCode::M, 0U);
+      DeviceAddress previous_device(DeviceCode::M, 0U);
       bool have_group = false;
       std::size_t group_size = 0;
 
@@ -6539,7 +7201,7 @@ int main(int argc, char** argv) {
       };
 
       for (int index = 0; index < options.command_argc; ++index) {
-        RandomWriteBitItem item {};
+        RandomWriteBitItem item(DeviceAddress {DeviceCode::M, 0U}, BitValue::Off);
         if (!parse_bit_write_arg(options.command_argv[index], item)) {
           std::fprintf(stderr, "Invalid write-bits item: %s\n", options.command_argv[index]);
           return 2;

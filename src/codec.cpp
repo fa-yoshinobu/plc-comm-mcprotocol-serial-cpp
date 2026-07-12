@@ -132,7 +132,7 @@ class ByteWriter {
 // Protocol feature predicates and frame/device sizing helpers.
 
 [[nodiscard]] constexpr bool is_qna_family_series(const ProtocolConfig& config) noexcept {
-  const PlcSeries series = plc_series_from_profile(config.plc_profile);
+  const PlcSeries series = plc_series_from_profile(config.plc_profile());
   return series == PlcSeries::QnA || series == PlcSeries::AnA_AnU;
 }
 
@@ -165,7 +165,7 @@ class ByteWriter {
 
 [[nodiscard]] constexpr bool is_c4_frame(const ProtocolConfig& config) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_C4
-  return config.frame_kind == FrameKind::C4;
+  return config.frame_kind() == FrameKind::C4;
 #else
   (void)config;
   return false;
@@ -174,7 +174,7 @@ class ByteWriter {
 
 [[nodiscard]] constexpr bool is_c3_frame(const ProtocolConfig& config) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_C3
-  return config.frame_kind == FrameKind::C3;
+  return config.frame_kind() == FrameKind::C3;
 #else
   (void)config;
   return false;
@@ -183,7 +183,7 @@ class ByteWriter {
 
 [[nodiscard]] constexpr bool is_c2_frame(const ProtocolConfig& config) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_C2
-  return config.frame_kind == FrameKind::C2;
+  return config.frame_kind() == FrameKind::C2;
 #else
   (void)config;
   return false;
@@ -192,7 +192,7 @@ class ByteWriter {
 
 [[nodiscard]] constexpr bool is_c1_frame(const ProtocolConfig& config) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_C1
-  return config.frame_kind == FrameKind::C1;
+  return config.frame_kind() == FrameKind::C1;
 #else
   (void)config;
   return false;
@@ -201,7 +201,7 @@ class ByteWriter {
 
 [[nodiscard]] constexpr bool is_e1_frame(const ProtocolConfig& config) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
-  return config.frame_kind == FrameKind::E1;
+  return config.frame_kind() == FrameKind::E1;
 #else
   (void)config;
   return false;
@@ -209,17 +209,39 @@ class ByteWriter {
 }
 
 [[nodiscard]] constexpr bool is_ascii_enq_family(const ProtocolConfig& config) noexcept {
-  return config.ascii_format == AsciiFormat::Format1 ||
-         config.ascii_format == AsciiFormat::Format2 ||
-         config.ascii_format == AsciiFormat::Format4;
+  return config.ascii_format() == AsciiFormat::Format1 ||
+         config.ascii_format() == AsciiFormat::Format2 ||
+         config.ascii_format() == AsciiFormat::Format4;
 }
 
 [[nodiscard]] constexpr bool uses_ascii_crlf(const ProtocolConfig& config) noexcept {
-  return config.ascii_format == AsciiFormat::Format4;
+  return config.ascii_format() == AsciiFormat::Format4;
 }
 
 [[nodiscard]] constexpr std::size_t ascii_block_number_length(const ProtocolConfig& config) noexcept {
-  return (!is_c1_frame(config) && !is_e1_frame(config) && config.ascii_format == AsciiFormat::Format2) ? 2U : 0U;
+  return (!is_c1_frame(config) && !is_e1_frame(config) && config.ascii_format() == AsciiFormat::Format2) ? 2U : 0U;
+}
+
+[[nodiscard]] constexpr bool uses_format2_block_number(const ProtocolConfig& config) noexcept {
+  return is_ascii_mode(config) && ascii_block_number_length(config) != 0U;
+}
+
+[[nodiscard]] Status validate_frame_context(
+    const ProtocolConfig& config,
+    FrameCodecContext context) noexcept {
+  if (uses_format2_block_number(config)) {
+    return context.has_format2_block_number()
+               ? ok_status()
+               : make_status(
+                     StatusCode::InvalidArgument,
+                     "ASCII Format2 requires an explicit per-wire block number");
+  }
+  if (context.has_format2_block_number()) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "Format2 block number is invalid for the selected frame");
+  }
+  return ok_status();
 }
 
 [[nodiscard]] constexpr std::size_t ascii_route_length(FrameKind frame_kind) noexcept {
@@ -271,8 +293,8 @@ class ByteWriter {
 }
 
 [[nodiscard]] constexpr std::size_t ascii_error_code_width(const ProtocolConfig& config) noexcept {
-  return ((MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && config.frame_kind == FrameKind::C1) ||
-          (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && config.frame_kind == FrameKind::E1))
+  return ((MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && config.frame_kind() == FrameKind::C1) ||
+          (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && config.frame_kind() == FrameKind::E1))
              ? 2U
              : 4U;
 }
@@ -447,11 +469,7 @@ class ByteWriter {
 
 [[nodiscard]] constexpr std::uint16_t e1_acpu_monitoring_timer(
     const ProtocolConfig& config) noexcept {
-  if (config.timeout.response_timeout_ms == 0U) {
-    return 0U;
-  }
-  const std::uint32_t ticks = (config.timeout.response_timeout_ms + 249U) / 250U;
-  return static_cast<std::uint16_t>(ticks > 0xFFFFU ? 0xFFFFU : ticks);
+  return static_cast<std::uint16_t>(config.e1_monitoring_timer().ticks());
 }
 
 [[nodiscard]] constexpr bool is_remote_password_iq_r(const ProtocolConfig& config) noexcept {
@@ -467,18 +485,14 @@ class ByteWriter {
     return config;
   }
 
-  ProtocolConfig wire_config = config;
-  wire_config.plc_profile = PlcProfile::MelsecQ;
-  return wire_config;
+  return config.with_plc_profile(PlcProfile::MelsecQ);
 }
 
 [[nodiscard]] ProtocolConfig qualified_native_wire_config(
     const ProtocolConfig& config,
     const QualifiedBufferWordDevice& device) noexcept {
-  if (config.plc_profile == PlcProfile::MelsecIqL && device.kind == QualifiedBufferDeviceKind::G) {
-    ProtocolConfig wire_config = config;
-    wire_config.plc_profile = PlcProfile::MelsecQ;
-    return wire_config;
+  if (config.plc_profile() == PlcProfile::MelsecIqL && device.kind == QualifiedBufferDeviceKind::G) {
+    return config.with_plc_profile(PlcProfile::MelsecQ);
   }
   return config;
 }
@@ -708,7 +722,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (is_c1_frame(config) && !is_ascii_mode(config)) {
     return make_status(StatusCode::UnsupportedConfiguration, "1C frame supports ASCII only");
   }
-  const PlcSeries series = plc_series_from_profile(config.plc_profile);
+  const PlcSeries series = plc_series_from_profile(config.plc_profile());
   if (!is_c1_supported_series(series)) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
@@ -720,7 +734,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] constexpr C1CommandFamily c1_command_family(const ProtocolConfig& config) noexcept {
-  return plc_series_from_profile(config.plc_profile) == PlcSeries::A
+  return plc_series_from_profile(config.plc_profile()) == PlcSeries::A
       ? C1CommandFamily::AcpuCommon
       : C1CommandFamily::QnaCommon;
 }
@@ -848,6 +862,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     default:
       return invalid_argument("Global signal target must be current, x1a, or x1b");
   }
+  if (request.value != BitValue::Off && request.value != BitValue::On) {
+    return invalid_argument("Global signal value must be BitValue::Off or BitValue::On");
+  }
   return ok_status();
 }
 
@@ -859,6 +876,12 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
       break;
     default:
       return invalid_argument("Serial-module mode switch channel must be ch1 or ch2");
+  }
+
+  if (!request.switch_mode_no &&
+      !request.switch_transmission_setting &&
+      !request.switch_communication_speed) {
+    return invalid_argument("Serial-module mode switch requires at least one explicit change");
   }
 
   switch (request.mode_no) {
@@ -1003,10 +1026,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     const ExtendedFileRegisterAddress& address) noexcept {
-  const DeviceAddress device {
-      .code = DeviceCode::R,
-      .number = address.word_number,
-  };
+  const DeviceAddress device(DeviceCode::R, address.word_number);
   if (!append_e1_device_reference(writer, config, device)) {
     return false;
   }
@@ -1018,10 +1038,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     std::uint32_t head_device_number) noexcept {
-  const DeviceAddress device {
-      .code = DeviceCode::R,
-      .number = head_device_number,
-  };
+  const DeviceAddress device(DeviceCode::R, head_device_number);
   return append_e1_device_reference(writer, config, device);
 }
 
@@ -1043,17 +1060,14 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return append_ascii_device_number(writer, head_device_number, 7U, false);
 }
 
-[[nodiscard]] Status validate_random_write_word_item_device(
+[[nodiscard]] Status validate_random_item_device(
     const ProtocolConfig& config,
-    const RandomWriteWordItem& item,
-    const char* word_message,
-    const char* dword_message) noexcept;
-[[nodiscard]] Status validate_random_read_item_device(
-    const ProtocolConfig& config,
-    const RandomReadItem& item,
+    const DeviceAddress& device,
+    bool double_word,
     const char* word_message,
     const char* dword_message) noexcept;
 [[nodiscard]] Status validate_bit_device(const DeviceAddress& device, const char* message) noexcept;
+[[nodiscard]] constexpr bool is_valid_bit_value(BitValue value) noexcept;
 [[nodiscard]] bool is_bit_device_code(DeviceCode code) noexcept;
 [[nodiscard]] bool is_c1_word_unit_bit_head(const DeviceAddress& device) noexcept;
 
@@ -1062,12 +1076,10 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_c1_random_write_word_item(
     const ProtocolConfig& config,
     const RandomWriteWordItem& item) noexcept {
-  if (item.double_word) {
-    return invalid_argument("1C random write words does not support double-word items");
-  }
-  const Status item_status = validate_random_write_word_item_device(
+  const Status item_status = validate_random_item_device(
       config,
-      item,
+      item.device,
+      false,
       "1C random write words requires supported word or 16-point bit devices",
       "1C random write words does not support double-word items");
   if (!item_status.ok()) {
@@ -1096,14 +1108,12 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] Status validate_c1_monitor_item(
     const ProtocolConfig& config,
-    const RandomReadItem& item,
+    const RandomReadWordItem& item,
     bool bit_units) noexcept {
-  if (item.double_word) {
-    return invalid_argument("1C monitor does not support double-word items");
-  }
-  const Status item_status = validate_random_read_item_device(
+  const Status item_status = validate_random_item_device(
       config,
-      item,
+      item.device,
+      false,
       "1C monitor requires supported devices",
       "1C monitor does not support double-word items");
   if (!item_status.ok()) {
@@ -1188,12 +1198,17 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return is_bit_device_code(code) ? 40U : 256U;
 }
 
-[[nodiscard]] bool c1_monitor_uses_bit_units(std::span<const RandomReadItem> items) noexcept {
-  if (items.empty()) {
+[[nodiscard]] bool c1_monitor_uses_bit_units(
+    std::span<const RandomReadWordItem> word_items,
+    std::span<const RandomReadDWordItem> dword_items) noexcept {
+  if (!dword_items.empty()) {
     return false;
   }
-  for (const RandomReadItem& item : items) {
-    if (item.double_word || !is_bit_device_code(item.device.code)) {
+  if (word_items.empty()) {
+    return false;
+  }
+  for (const RandomReadWordItem& item : word_items) {
+    if (!is_bit_device_code(item.device.code)) {
       return false;
     }
   }
@@ -1230,7 +1245,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_link_direct_word_device(
     const ProtocolConfig& config,
     const LinkDirectDevice& device) noexcept {
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     return invalid_argument("melsec:iq-f does not support link-direct devices");
   }
   if (is_ascii_mode(config) && device.network_number > 0x0FFFU) {
@@ -1245,7 +1260,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_link_direct_bit_device(
     const ProtocolConfig& config,
     const LinkDirectDevice& device) noexcept {
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     return invalid_argument("melsec:iq-f does not support link-direct devices");
   }
   if (is_ascii_mode(config) && device.network_number > 0x0FFFU) {
@@ -1259,10 +1274,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] Status validate_link_direct_random_read_item(
     const ProtocolConfig& config,
-    const LinkDirectRandomReadItem& item) noexcept {
-  if (item.double_word) {
-    return invalid_argument("Link direct random read does not support double-word items");
-  }
+    const LinkDirectRandomReadWordItem& item) noexcept {
   if (is_link_direct_word_device(item.device.device.code)) {
     return validate_link_direct_word_device(config, item.device);
   }
@@ -1275,9 +1287,6 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_link_direct_random_write_word_item(
     const ProtocolConfig& config,
     const LinkDirectRandomWriteWordItem& item) noexcept {
-  if (item.double_word) {
-    return invalid_argument("Link direct random word write does not support double-word items");
-  }
   return validate_link_direct_word_device(config, item.device);
 }
 
@@ -1305,7 +1314,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     const QualifiedBufferWordDevice& device) noexcept {
   if (device.kind == QualifiedBufferDeviceKind::HG) {
-    const PlcSeries series = plc_series_from_profile(config.plc_profile);
+    const PlcSeries series = plc_series_from_profile(config.plc_profile());
     if (series == PlcSeries::IQ_F) {
       return invalid_argument("HG device extension access is not available for MELSEC iQ-F");
     }
@@ -1370,10 +1379,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     ByteWriter& writer,
     const ProtocolConfig& config,
     const QualifiedBufferWordDevice& device) noexcept {
-  const DeviceAddress address {
-      .code = qualified_device_code(device),
-      .number = device.word_address,
-  };
+  const DeviceAddress address(qualified_device_code(device), device.word_address);
   return writer.push(0x00U) &&
          writer.push(0x00U) &&
          append_device_reference_binary(writer, config, address) &&
@@ -1503,27 +1509,27 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] bool encode_ascii_route(ByteWriter& writer, const ProtocolConfig& config) noexcept {
-  if (!append_ascii_hex(writer, config.route.station_no, 2)) {
+  if (!append_ascii_hex(writer, config.route().station_no(), 2)) {
     return false;
   }
   if (is_c2_frame(config)) {
-    return append_ascii_hex(writer, config.route.self_station_enabled ? config.route.self_station_no : 0U, 2);
+    return append_ascii_hex(writer, config.route().self_station_no(), 2);
   }
-  if (!append_ascii_hex(writer, config.route.network_no, 2)) {
+  if (!append_ascii_hex(writer, config.route().network_no(), 2)) {
     return false;
   }
-  if (!append_ascii_hex(writer, config.route.pc_no, 2)) {
+  if (!append_ascii_hex(writer, config.route().pc_no(), 2)) {
     return false;
   }
   if (is_c4_frame(config)) {
-    if (!append_ascii_hex(writer, config.route.request_destination_module_io_no, 4)) {
+    if (!append_ascii_hex(writer, config.route().request_destination_module_io_no(), 4)) {
       return false;
     }
-    if (!append_ascii_hex(writer, config.route.request_destination_module_station_no, 2)) {
+    if (!append_ascii_hex(writer, config.route().request_destination_module_station_no(), 2)) {
       return false;
     }
   }
-  return append_ascii_hex(writer, config.route.self_station_enabled ? config.route.self_station_no : 0U, 2);
+  return append_ascii_hex(writer, config.route().self_station_no(), 2);
 }
 
 [[nodiscard]] bool append_ascii_frame_id(ByteWriter& writer, FrameKind frame_kind) noexcept {
@@ -1534,12 +1540,14 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] bool encode_binary_route(ByteWriter& writer, const ProtocolConfig& config) noexcept {
-  return writer.push(config.route.station_no) &&
-         writer.push(config.route.network_no) &&
-         writer.push(config.route.pc_no) &&
-         writer.append_le16(config.route.request_destination_module_io_no) &&
-         writer.push(config.route.request_destination_module_station_no) &&
-         writer.push(config.route.self_station_enabled ? config.route.self_station_no : 0U);
+  return writer.push(static_cast<std::uint8_t>(config.route().station_no())) &&
+         writer.push(static_cast<std::uint8_t>(config.route().network_no())) &&
+         writer.push(static_cast<std::uint8_t>(config.route().pc_no())) &&
+         writer.append_le16(static_cast<std::uint16_t>(
+             config.route().request_destination_module_io_no())) &&
+         writer.push(static_cast<std::uint8_t>(
+             config.route().request_destination_module_station_no())) &&
+         writer.push(static_cast<std::uint8_t>(config.route().self_station_no()));
 }
 
 [[nodiscard]] Status unsupported(const char* message) noexcept {
@@ -1551,21 +1559,21 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] Status validate_plc_profile_config(const ProtocolConfig& config) noexcept {
-  if (!is_plc_profile_specified(config.plc_profile)) {
+  if (!is_plc_profile_specified(config.plc_profile())) {
     return invalid_argument("PLC profile is required. Set ProtocolConfig::plc_profile to an explicit canonical profile.");
   }
   return ok_status();
 }
 
-[[nodiscard]] constexpr bool is_valid_multidrop_station_no(std::uint8_t station_no) noexcept {
-  return station_no <= 0x1FU || station_no == 0xFFU;
+[[nodiscard]] constexpr bool is_valid_multidrop_station_no(std::uint32_t station_no) noexcept {
+  return station_no <= 0x1FU;
 }
 
-[[nodiscard]] constexpr bool is_valid_routed_network_no(std::uint8_t network_no) noexcept {
-  return network_no <= 0xEFU || network_no == 0xFEU;
+[[nodiscard]] constexpr bool is_valid_routed_network_no(std::uint32_t network_no) noexcept {
+  return network_no <= 0xEFU;
 }
 
-[[nodiscard]] constexpr bool is_valid_routed_pc_no(std::uint8_t pc_no) noexcept {
+[[nodiscard]] constexpr bool is_valid_routed_pc_no(std::uint32_t pc_no) noexcept {
   return pc_no == 0xFFU ||
          (pc_no >= 0x01U && pc_no <= 0x78U) ||
          pc_no == 0x7DU ||
@@ -1573,15 +1581,27 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
          pc_no == 0xFEU;
 }
 
+[[nodiscard]] constexpr C34PcTarget c34_pc_target_from_wire(std::uint32_t pc_no) noexcept {
+  switch (pc_no) {
+    case 0x7DU:
+      return C34PcTarget::control_system();
+    case 0x7EU:
+      return C34PcTarget::standby_system();
+    case 0xFEU:
+      return C34PcTarget::special_fe();
+    case 0xFFU:
+      return C34PcTarget::connected_station();
+    default:
+      return C34PcTarget::number(pc_no);
+  }
+}
+
 [[nodiscard]] constexpr bool uses_routed_header(const ProtocolConfig& config) noexcept {
   return is_c3_frame(config) || is_c4_frame(config);
 }
 
 [[nodiscard]] constexpr bool is_connected_station_route(const ProtocolConfig& config) noexcept {
-  return config.route.network_no == 0x00U &&
-         config.route.pc_no == 0xFFU &&
-         config.route.request_destination_module_io_no == module_io::OwnStation &&
-         config.route.request_destination_module_station_no == 0x00U;
+  return config.route().destination_module_is_own_station();
 }
 
 [[nodiscard]] Status validate_connected_station_only_command_config(
@@ -1898,6 +1918,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] Status encode_frame_payload_ascii(
     const ProtocolConfig& config,
+    FrameCodecContext context,
     std::span<const std::uint8_t> request_data,
     std::span<std::uint8_t> out_payload,
     std::size_t& out_size) noexcept {
@@ -1907,7 +1928,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
       return invalid_argument("1E request data must begin with a command subheader");
     }
     if (!payload_writer.append(request_data.first(2U)) ||
-        !append_ascii_hex(payload_writer, config.route.pc_no, 2U) ||
+        !append_ascii_hex(payload_writer, config.route().pc_no(), 2U) ||
         !append_ascii_hex(payload_writer, e1_acpu_monitoring_timer(config), 4U) ||
         !payload_writer.append(request_data.subspan(2U))) {
       return buffer_too_small("1E ASCII frame payload buffer is too small");
@@ -1916,8 +1937,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     return ok_status();
   }
   if (is_c1_frame(config)) {
-    if (!append_ascii_hex(payload_writer, config.route.station_no, 2) ||
-        !append_ascii_hex(payload_writer, config.route.pc_no, 2) ||
+    if (!append_ascii_hex(payload_writer, config.route().station_no(), 2) ||
+        !append_ascii_hex(payload_writer, config.route().pc_no(), 2) ||
         !payload_writer.append(request_data)) {
       return buffer_too_small("ASCII frame payload buffer is too small");
     }
@@ -1925,8 +1946,11 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     return ok_status();
   }
   if ((ascii_block_number_length(config) != 0U &&
-       !append_ascii_hex(payload_writer, config.ascii_block_number, ascii_block_number_length(config))) ||
-      !append_ascii_frame_id(payload_writer, config.frame_kind) ||
+       !append_ascii_hex(
+           payload_writer,
+           context.format2_block_number(),
+           ascii_block_number_length(config))) ||
+      !append_ascii_frame_id(payload_writer, config.frame_kind()) ||
       !encode_ascii_route(payload_writer, config) ||
       !payload_writer.append(request_data)) {
     return buffer_too_small("ASCII frame payload buffer is too small");
@@ -1946,7 +1970,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
       return invalid_argument("1E request data must begin with a command subheader");
     }
     if (!payload_writer.push(request_data[0]) ||
-        !payload_writer.push(config.route.pc_no) ||
+        !payload_writer.push(static_cast<std::uint8_t>(config.route().pc_no())) ||
         !payload_writer.append_le16(e1_acpu_monitoring_timer(config)) ||
         !payload_writer.append(request_data.subspan(1U))) {
       return buffer_too_small("1E binary frame payload buffer is too small");
@@ -1954,7 +1978,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     out_size = payload_writer.size();
     return ok_status();
   }
-  if (!payload_writer.push(frame_id(config.frame_kind)) ||
+  if (!payload_writer.push(frame_id(config.frame_kind())) ||
       !encode_binary_route(payload_writer, config) ||
       !payload_writer.append(request_data)) {
     return buffer_too_small("Binary frame payload buffer is too small");
@@ -2006,7 +2030,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] constexpr bool supports_random_lz_device(const ProtocolConfig& config) noexcept {
-  const PlcSeries series = plc_series_from_profile(config.plc_profile);
+  const PlcSeries series = plc_series_from_profile(config.plc_profile());
   return series == PlcSeries::IQ_R || series == PlcSeries::IQ_F;
 }
 
@@ -2061,7 +2085,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     DeviceCode code,
     const char* message) noexcept {
-  if (config.plc_profile == PlcProfile::MelsecIqL && is_iq_l_unsupported_plain_device_code(code)) {
+  if (config.plc_profile() == PlcProfile::MelsecIqL && is_iq_l_unsupported_plain_device_code(code)) {
     return invalid_argument(message);
   }
   return ok_status();
@@ -2071,7 +2095,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     const ProtocolConfig& config,
     DeviceCode code,
     const char* message) noexcept {
-  if (config.plc_profile == PlcProfile::MelsecIqF && is_iq_f_unsupported_plain_device_code(code)) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF && is_iq_f_unsupported_plain_device_code(code)) {
     return invalid_argument(message);
   }
   return ok_status();
@@ -2174,68 +2198,40 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
-[[nodiscard]] Status validate_random_read_item_device(
+[[nodiscard]] Status validate_random_item_device(
     const ProtocolConfig& config,
-    const RandomReadItem& item,
+    const DeviceAddress& device,
+    bool double_word,
     const char* word_message,
     const char* dword_message) noexcept {
-  const DeviceSpec* spec = find_device_spec(item.device.code);
+  const DeviceSpec* spec = find_device_spec(device.code);
   if (spec == nullptr) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
+    return invalid_argument(double_word ? dword_message : word_message);
   }
-  if (is_qualified_only_device(item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
+  if (is_qualified_only_device(device.code)) {
+    return invalid_argument(double_word ? dword_message : word_message);
   }
   const Status profile_status = validate_profile_plain_device_support(
       config,
-      item.device.code,
-      item.double_word ? dword_message : word_message);
+      device.code,
+      double_word ? dword_message : word_message);
   if (!profile_status.ok()) {
     return profile_status;
   }
-  if (requires_random_dword_access(item.device.code) != item.double_word &&
-      requires_random_dword_access(item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
+  if (requires_random_dword_access(device.code) && !double_word) {
+    return invalid_argument(word_message);
   }
-  if (is_random_device_unsupported_by_profile(config, item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
+  if (is_random_device_unsupported_by_profile(config, device.code)) {
+    return invalid_argument(double_word ? dword_message : word_message);
   }
-  if (is_long_contact_coil_device(item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
+  if (is_long_contact_coil_device(device.code)) {
+    return invalid_argument(double_word ? dword_message : word_message);
   }
   return ok_status();
 }
 
-[[nodiscard]] Status validate_random_write_word_item_device(
-    const ProtocolConfig& config,
-    const RandomWriteWordItem& item,
-    const char* word_message,
-    const char* dword_message) noexcept {
-  const DeviceSpec* spec = find_device_spec(item.device.code);
-  if (spec == nullptr) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
-  }
-  if (is_qualified_only_device(item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
-  }
-  const Status profile_status = validate_profile_plain_device_support(
-      config,
-      item.device.code,
-      item.double_word ? dword_message : word_message);
-  if (!profile_status.ok()) {
-    return profile_status;
-  }
-  if (requires_random_dword_access(item.device.code) != item.double_word &&
-      requires_random_dword_access(item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
-  }
-  if (is_random_device_unsupported_by_profile(config, item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
-  }
-  if (is_long_contact_coil_device(item.device.code)) {
-    return invalid_argument(item.double_word ? dword_message : word_message);
-  }
-  return ok_status();
+[[nodiscard]] constexpr bool is_valid_bit_value(BitValue value) noexcept {
+  return value == BitValue::Off || value == BitValue::On;
 }
 
 [[nodiscard]] Status validate_request_data_size(
@@ -2352,7 +2348,39 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     return plc_profile_status;
   }
 
-  if (!is_frame_kind_enabled(config.frame_kind)) {
+  if (!is_valid_frame_kind(config.frame_kind())) {
+    return invalid_argument("Unknown frame family");
+  }
+
+  if (!is_valid_code_mode(config.code_mode())) {
+    return invalid_argument("Unknown code mode");
+  }
+
+  if (!is_wrap_safe_timeout_ms(config.timeout().response_timeout_ms)) {
+    return invalid_argument("Response timeout must be in range 1..2147483647 ms");
+  }
+
+  if (!is_wrap_safe_timeout_ms(config.timeout().inter_byte_timeout_ms)) {
+    return invalid_argument("Inter-byte timeout must be in range 1..2147483647 ms");
+  }
+
+  if (!config.e1_monitoring_timer().is_valid()) {
+    return invalid_argument(
+        "1E monitoring timer must be an exact 250 ms unit in range 0..16383750 ms");
+  }
+
+  if (!config.route().is_specified()) {
+    return invalid_argument("Route selection is required");
+  }
+  if (!config.route().supports_frame(config.frame_kind())) {
+    return invalid_argument("Route type does not match the selected frame family");
+  }
+
+  if (!is_valid_sum_check_mode(config.sum_check_mode())) {
+    return invalid_argument("Sum-check mode is required");
+  }
+
+  if (!is_frame_kind_enabled(config.frame_kind())) {
     return unsupported("Selected frame family is compiled out");
   }
 
@@ -2360,13 +2388,9 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     return unsupported("Selected code mode is compiled out");
   }
 
-  if (is_ascii_mode(config)) {
-    if (!is_e1_frame(config) &&
-        config.ascii_format != AsciiFormat::Format1 &&
-        config.ascii_format != AsciiFormat::Format2 &&
-        config.ascii_format != AsciiFormat::Format3 &&
-        config.ascii_format != AsciiFormat::Format4) {
-      return unsupported("Only ASCII Format1, Format2, Format3, and Format4 are supported");
+  if (is_ascii_mode(config) && !is_e1_frame(config)) {
+    if (!is_valid_ascii_format(config.ascii_format())) {
+      return invalid_argument("Unknown ASCII format");
     }
   } else if (!is_c4_frame(config) && !is_e1_frame(config)) {
     return unsupported("Binary mode supports only 4C Format5 or 1E");
@@ -2376,59 +2400,60 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     if (!is_ascii_mode(config)) {
       return unsupported("1C frames support only ASCII Format1, Format3, and Format4");
     }
-    if (config.ascii_format == AsciiFormat::Format2) {
+    if (config.ascii_format() == AsciiFormat::Format2) {
       return unsupported("1C frames do not support ASCII Format2");
-    }
-    if (config.route.self_station_enabled) {
-      return invalid_argument("1C frame does not use self-station routing");
     }
   }
 
   if (is_e1_frame(config)) {
-    if (config.route.self_station_enabled) {
-      return invalid_argument("1E frame does not use self-station routing");
+    if (is_valid_ascii_format(config.ascii_format())) {
+      return invalid_argument("1E configuration does not accept an ASCII-format input");
     }
-    if (config.route.station_no != 0x00U ||
-        config.route.network_no != 0x00U ||
-        config.route.request_destination_module_io_no != module_io::OwnStation ||
-        config.route.request_destination_module_station_no != 0x00U) {
+    if (config.sum_check_mode() != SumCheckMode::Disabled) {
+      return invalid_argument("1E has no configurable sum-check mode");
+    }
+    if (!config.route().pc_target_valid()) {
+      return invalid_argument("1E PC target is invalid");
+    }
+    if (config.route().station_no() != 0x00U ||
+        config.route().network_no() != 0x00U ||
+        config.route().request_destination_module_io_no() != module_io::OwnStation ||
+        config.route().request_destination_module_station_no() != 0x00U) {
       return invalid_argument("1E frame uses only route.pc_no; keep the other route fields at defaults");
     }
-    if (config.route.pc_no != 0xFFU && (config.route.pc_no == 0x00U || config.route.pc_no > 0x40U)) {
+    if (config.route().pc_no() != 0xFFU && (config.route().pc_no() == 0x00U || config.route().pc_no() > 0x40U)) {
       return invalid_argument("1E PC No. must be 0xFF or in range 0x01..0x40");
     }
     return ok_status();
   }
 
-  if (config.route.self_station_enabled && config.route.self_station_no > 0x1FU) {
+  if (!config.route().self_station_valid()) {
     return invalid_argument("Self-station number must be in range 0x00..0x1F");
   }
 
-  if (config.route.kind == RouteKind::HostStation) {
-    if (config.route.station_no != 0x00U ||
-        config.route.network_no != 0x00U ||
-        config.route.pc_no != 0xFFU ||
-        config.route.request_destination_module_io_no != module_io::OwnStation ||
-        config.route.request_destination_module_station_no != 0x00U) {
-      return invalid_argument("Host station route must use station=0, network=0, pc=FF, module_io=03FF, module_station=0");
-    }
-  } else {
-    if (!is_valid_multidrop_station_no(config.route.station_no)) {
-      return invalid_argument("Multidrop route station must be 0x00..0x1F or 0xFF");
+  if (config.route().is_multidrop()) {
+    if (!is_valid_multidrop_station_no(config.route().station_no())) {
+      return invalid_argument("Multidrop route station must be in range 0x00..0x1F");
     }
     if (!uses_routed_header(config)) {
-      if (config.route.network_no != 0x00U ||
-          config.route.pc_no != 0xFFU ||
-          config.route.request_destination_module_io_no != module_io::OwnStation ||
-          config.route.request_destination_module_station_no != 0x00U) {
+      if (config.route().network_no() != 0x00U ||
+          config.route().pc_no() != 0xFFU ||
+          config.route().request_destination_module_io_no() != module_io::OwnStation ||
+          config.route().request_destination_module_station_no() != 0x00U) {
         return invalid_argument("1C/2C multidrop route uses only station and self-station fields");
       }
     } else {
-      if (!is_valid_routed_network_no(config.route.network_no)) {
-        return invalid_argument("3C/4C network number must be 0x00..0xEF or 0xFE");
+      if (!config.route().pc_target_valid()) {
+        return invalid_argument("3C/4C PC target is invalid");
       }
-      if (!is_valid_routed_pc_no(config.route.pc_no)) {
+      if (!is_valid_routed_network_no(config.route().network_no())) {
+        return invalid_argument("3C/4C network number must be in range 0x00..0xEF");
+      }
+      if (!is_valid_routed_pc_no(config.route().pc_no())) {
         return invalid_argument("3C/4C PC No. must be 0xFF, 0x01..0x78, 0x7D, 0x7E, or 0xFE");
+      }
+      if (is_c4_frame(config) && !config.route().destination_module_valid()) {
+        return invalid_argument("4C request-destination module target is invalid");
       }
     }
   }
@@ -2441,9 +2466,23 @@ Status FrameCodec::encode_request(
     std::span<const std::uint8_t> request_data,
     std::span<std::uint8_t> out_frame,
     std::size_t& out_size) noexcept {
+  return encode_request(config, FrameCodecContext::none(), request_data, out_frame, out_size);
+}
+
+Status FrameCodec::encode_request(
+    const ProtocolConfig& config,
+    FrameCodecContext context,
+    std::span<const std::uint8_t> request_data,
+    std::span<std::uint8_t> out_frame,
+    std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status config_status = validate_config(config);
   if (!config_status.ok()) {
     return config_status;
+  }
+  const Status context_status = validate_frame_context(config, context);
+  if (!context_status.ok()) {
+    return context_status;
   }
 
   const Status request_status = validate_request_data_size(config, request_data);
@@ -2454,7 +2493,12 @@ Status FrameCodec::encode_request(
   std::array<std::uint8_t, kMaxRequestFrameBytes> payload_storage {};
   std::size_t payload_size = 0;
   Status status = (is_ascii_mode(config))
-                      ? encode_frame_payload_ascii(config, request_data, payload_storage, payload_size)
+                      ? encode_frame_payload_ascii(
+                            config,
+                            context,
+                            request_data,
+                            payload_storage,
+                            payload_size)
                       : encode_frame_payload_binary(config, request_data, payload_storage, payload_size);
   if (!status.ok()) {
     return status;
@@ -2475,7 +2519,7 @@ Status FrameCodec::encode_request(
       if (!frame_writer.push(kAsciiEnq) || !frame_writer.append(std::span<const std::uint8_t>(payload_storage.data(), payload_size))) {
         return buffer_too_small("ASCII request frame buffer is too small");
       }
-      if (config.sum_check_enabled) {
+      if (is_sum_check_enabled(config)) {
         const auto sum = compute_sum_check_ascii(std::span<const std::uint8_t>(payload_storage.data(), payload_size));
         if (!frame_writer.append(sum)) {
           return buffer_too_small("ASCII request sum-check buffer is too small");
@@ -2486,7 +2530,7 @@ Status FrameCodec::encode_request(
           !frame_writer.push(kAsciiEtx)) {
         return buffer_too_small("ASCII request frame buffer is too small");
       }
-      if (config.sum_check_enabled) {
+      if (is_sum_check_enabled(config)) {
         std::array<std::uint8_t, kMaxRequestFrameBytes + 1U> sum_bytes {};
         std::memcpy(sum_bytes.data(), payload_storage.data(), payload_size);
         sum_bytes[payload_size] = kAsciiEtx;
@@ -2525,7 +2569,7 @@ Status FrameCodec::encode_request(
       return buffer_too_small("Binary request frame buffer is too small");
     }
 
-    if (config.sum_check_enabled) {
+    if (is_sum_check_enabled(config)) {
       const auto sum = compute_sum_check_ascii(payload_writer.written());
       if (!frame_writer.append(sum)) {
         return buffer_too_small("Binary request sum-check buffer is too small");
@@ -2542,9 +2586,28 @@ Status FrameCodec::encode_success_response(
     std::span<const std::uint8_t> response_data,
     std::span<std::uint8_t> out_frame,
     std::size_t& out_size) noexcept {
+  return encode_success_response(
+      config,
+      FrameCodecContext::none(),
+      response_data,
+      out_frame,
+      out_size);
+}
+
+Status FrameCodec::encode_success_response(
+    const ProtocolConfig& config,
+    FrameCodecContext context,
+    std::span<const std::uint8_t> response_data,
+    std::span<std::uint8_t> out_frame,
+    std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status config_status = validate_config(config);
   if (!config_status.ok()) {
     return config_status;
+  }
+  const Status context_status = validate_frame_context(config, context);
+  if (!context_status.ok()) {
+    return context_status;
   }
 
   if (is_e1_frame(config)) {
@@ -2557,12 +2620,13 @@ Status FrameCodec::encode_success_response(
   if (is_ascii_mode(config)) {
     std::array<std::uint8_t, kMaxRequestFrameBytes> payload_storage {};
     std::size_t payload_size = 0;
-    Status payload_status = encode_frame_payload_ascii(config, {}, payload_storage, payload_size);
+    Status payload_status =
+        encode_frame_payload_ascii(config, context, {}, payload_storage, payload_size);
     if (!payload_status.ok()) {
       return payload_status;
     }
 
-    const std::size_t prefix_size = ascii_block_number_length(config) + ascii_header_length(config.frame_kind);
+    const std::size_t prefix_size = ascii_block_number_length(config) + ascii_header_length(config.frame_kind());
     ByteWriter writer(out_frame);
     if (is_ascii_enq_family(config)) {
       if (response_data.empty()) {
@@ -2577,7 +2641,7 @@ Status FrameCodec::encode_success_response(
             !writer.push(kAsciiEtx)) {
           return buffer_too_small("ASCII response frame buffer is too small");
         }
-        if (config.sum_check_enabled) {
+        if (is_sum_check_enabled(config)) {
           std::array<std::uint8_t, kMaxRequestFrameBytes + 1U> sum_bytes {};
           std::memcpy(sum_bytes.data(), payload_storage.data(), prefix_size);
           std::memcpy(sum_bytes.data() + prefix_size, response_data.data(), response_data.size());
@@ -2591,7 +2655,7 @@ Status FrameCodec::encode_success_response(
         }
       }
     } else {
-      const std::string_view end_code = ascii_success_end_code(config.frame_kind);
+      const std::string_view end_code = ascii_success_end_code(config.frame_kind());
       if (!writer.push(kAsciiStx) ||
           !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
           !append_text_bytes(writer, end_code) ||
@@ -2599,7 +2663,7 @@ Status FrameCodec::encode_success_response(
           !writer.push(kAsciiEtx)) {
         return buffer_too_small("ASCII response frame buffer is too small");
       }
-      if (config.sum_check_enabled && !response_data.empty()) {
+      if (is_sum_check_enabled(config) && !response_data.empty()) {
         const auto written = writer.written();
         const auto sum = compute_sum_check_ascii(written.subspan(1));
         if (!writer.append(sum)) {
@@ -2617,7 +2681,7 @@ Status FrameCodec::encode_success_response(
 
   std::array<std::uint8_t, kMaxRequestFrameBytes> body {};
   ByteWriter body_writer(body);
-  if (!body_writer.push(frame_id(config.frame_kind)) ||
+  if (!body_writer.push(frame_id(config.frame_kind())) ||
       !encode_binary_route(body_writer, config) ||
       !body_writer.append_le16(0xFFFFU) ||
       !body_writer.append_le16(0x0000U) ||
@@ -2647,7 +2711,7 @@ Status FrameCodec::encode_success_response(
   if (!frame_writer.push(kBinaryDle) || !frame_writer.push(kAsciiEtx)) {
     return buffer_too_small("Binary response frame buffer is too small");
   }
-  if (config.sum_check_enabled) {
+  if (is_sum_check_enabled(config)) {
     const auto sum = compute_sum_check_ascii(payload_writer.written());
     if (!frame_writer.append(sum)) {
       return buffer_too_small("Binary response sum-check buffer is too small");
@@ -2662,9 +2726,28 @@ Status FrameCodec::encode_error_response(
     std::uint16_t error_code,
     std::span<std::uint8_t> out_frame,
     std::size_t& out_size) noexcept {
+  return encode_error_response(
+      config,
+      FrameCodecContext::none(),
+      error_code,
+      out_frame,
+      out_size);
+}
+
+Status FrameCodec::encode_error_response(
+    const ProtocolConfig& config,
+    FrameCodecContext context,
+    std::uint16_t error_code,
+    std::span<std::uint8_t> out_frame,
+    std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status config_status = validate_config(config);
   if (!config_status.ok()) {
     return config_status;
+  }
+  const Status context_status = validate_frame_context(config, context);
+  if (!context_status.ok()) {
+    return context_status;
   }
 
   if (is_e1_frame(config)) {
@@ -2677,16 +2760,17 @@ Status FrameCodec::encode_error_response(
   if (is_ascii_mode(config)) {
     std::array<std::uint8_t, kMaxRequestFrameBytes> payload_storage {};
     std::size_t payload_size = 0;
-    Status payload_status = encode_frame_payload_ascii(config, {}, payload_storage, payload_size);
+    Status payload_status =
+        encode_frame_payload_ascii(config, context, {}, payload_storage, payload_size);
     if (!payload_status.ok()) {
       return payload_status;
     }
 
-    const std::size_t prefix_size = ascii_block_number_length(config) + ascii_header_length(config.frame_kind);
+    const std::size_t prefix_size = ascii_block_number_length(config) + ascii_header_length(config.frame_kind());
     const std::size_t error_width = ascii_error_code_width(config);
     ByteWriter writer(out_frame);
     if (is_ascii_enq_family(config)) {
-      const std::string_view end_code = ascii_error_end_code(config.frame_kind);
+      const std::string_view end_code = ascii_error_end_code(config.frame_kind());
       if (!writer.push(kAsciiNak) ||
           !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size))) {
         return buffer_too_small("ASCII error response frame buffer is too small");
@@ -2698,7 +2782,7 @@ Status FrameCodec::encode_error_response(
         return buffer_too_small("ASCII error response frame buffer is too small");
       }
     } else {
-      const std::string_view end_code = ascii_error_end_code(config.frame_kind);
+      const std::string_view end_code = ascii_error_end_code(config.frame_kind());
       if (!writer.push(kAsciiStx) ||
           !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
           !append_text_bytes(writer, end_code) ||
@@ -2716,7 +2800,7 @@ Status FrameCodec::encode_error_response(
 
   std::array<std::uint8_t, kMaxRequestFrameBytes> body {};
   ByteWriter body_writer(body);
-  if (!body_writer.push(frame_id(config.frame_kind)) ||
+  if (!body_writer.push(frame_id(config.frame_kind())) ||
       !encode_binary_route(body_writer, config) ||
       !body_writer.append_le16(0xFFFFU) ||
       !body_writer.append_le16(error_code)) {
@@ -2745,7 +2829,7 @@ Status FrameCodec::encode_error_response(
   if (!frame_writer.push(kBinaryDle) || !frame_writer.push(kAsciiEtx)) {
     return buffer_too_small("Binary error response frame buffer is too small");
   }
-  if (config.sum_check_enabled) {
+  if (is_sum_check_enabled(config)) {
     const auto sum = compute_sum_check_ascii(payload_writer.written());
     if (!frame_writer.append(sum)) {
       return buffer_too_small("Binary error response sum-check buffer is too small");
@@ -2758,6 +2842,13 @@ Status FrameCodec::encode_error_response(
 DecodeResult FrameCodec::decode_response(
     const ProtocolConfig& config,
     std::span<const std::uint8_t> bytes) noexcept {
+  return decode_response(config, FrameCodecContext::none(), bytes);
+}
+
+DecodeResult FrameCodec::decode_response(
+    const ProtocolConfig& config,
+    FrameCodecContext context,
+    std::span<const std::uint8_t> bytes) noexcept {
   const Status config_status = validate_config(config);
   if (!config_status.ok()) {
     return DecodeResult {
@@ -2767,9 +2858,179 @@ DecodeResult FrameCodec::decode_response(
         .bytes_consumed = 0,
     };
   }
+  const Status context_status = validate_frame_context(config, context);
+  if (!context_status.ok()) {
+    return DecodeResult {
+        .status = DecodeStatus::Error,
+        .frame = RawResponseFrame {},
+        .error = context_status,
+        .bytes_consumed = 0,
+    };
+  }
 
   if (bytes.empty()) {
     return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+  }
+
+  if (uses_format2_block_number(config)) {
+    if (bytes.size() < 3U) {
+      return DecodeResult {
+          .status = DecodeStatus::Incomplete,
+          .frame = RawResponseFrame {},
+          .error = ok_status(),
+          .bytes_consumed = 0,
+      };
+    }
+    std::uint32_t parsed_block_number = 0U;
+    if (!parse_ascii_hex(bytes.subspan(1U, 2U), parsed_block_number) ||
+        parsed_block_number > 0xFFU) {
+      return DecodeResult {
+          .status = DecodeStatus::Error,
+          .frame = RawResponseFrame {},
+          .error = parse_error("Failed to parse ASCII Format2 block number"),
+          .bytes_consumed = 3U,
+      };
+    }
+    const std::uint8_t actual_block_number = static_cast<std::uint8_t>(parsed_block_number);
+    if (actual_block_number != context.format2_block_number()) {
+      DecodeResult foreign = decode_response(
+          config,
+          FrameCodecContext::format2(actual_block_number),
+          bytes);
+      if (foreign.status != DecodeStatus::Incomplete) {
+        foreign.response_identity_mismatch = true;
+      }
+      return foreign;
+    }
+  }
+
+  if (is_ascii_mode(config) && !is_e1_frame(config) &&
+      (bytes[0] == kAsciiAck || bytes[0] == kAsciiNak || bytes[0] == kAsciiStx)) {
+    const std::size_t block_size = ascii_block_number_length(config);
+    const std::size_t frame_id_size = ascii_frame_id_length(config.frame_kind());
+    const std::size_t route_size = ascii_route_length(config.frame_kind());
+    const std::size_t route_offset = 1U + block_size + frame_id_size;
+    const std::size_t route_end = route_offset + route_size;
+    if (bytes.size() < route_end) {
+      return DecodeResult {
+          .status = DecodeStatus::Incomplete,
+          .frame = RawResponseFrame {},
+          .error = ok_status(),
+          .bytes_consumed = 0,
+      };
+    }
+
+    if (frame_id_size != 0U) {
+      std::uint32_t parsed_frame_id = 0U;
+      if (!parse_ascii_hex(bytes.subspan(1U + block_size, frame_id_size), parsed_frame_id) ||
+          parsed_frame_id != frame_id(config.frame_kind())) {
+        return DecodeResult {
+            .status = DecodeStatus::Error,
+            .frame = RawResponseFrame {},
+            .error = parse_error("ASCII response frame ID does not match protocol"),
+            .bytes_consumed = route_end,
+        };
+      }
+    }
+
+    auto parse_route_field = [&](std::size_t offset, std::size_t width, std::uint32_t& value) noexcept {
+      return parse_ascii_hex(bytes.subspan(route_offset + offset, width), value);
+    };
+
+    std::uint32_t station = 0U;
+    std::uint32_t network = 0U;
+    std::uint32_t pc = 0xFFU;
+    std::uint32_t module_io_no = module_io::OwnStation;
+    std::uint32_t module_station_no = 0U;
+    std::uint32_t self_station_no = 0U;
+    bool route_parse_ok = false;
+    RouteConfig actual_route {};
+    switch (config.frame_kind()) {
+      case FrameKind::C1:
+        route_parse_ok = parse_route_field(0U, 2U, station) &&
+                         parse_route_field(2U, 2U, pc);
+        if (route_parse_ok) {
+          actual_route = RouteConfig::c1_wire_route(
+              static_cast<std::uint8_t>(station),
+              static_cast<std::uint8_t>(pc));
+        }
+        break;
+      case FrameKind::C2:
+        route_parse_ok = parse_route_field(0U, 2U, station) &&
+                         parse_route_field(2U, 2U, self_station_no);
+        if (route_parse_ok) {
+          actual_route = self_station_no == 0U
+              ? RouteConfig {C2StandardMultidropRoute {station}}
+              : RouteConfig {C2MnMultidropRoute {
+                    station, SelfStationNo::number(self_station_no)}};
+        }
+        break;
+      case FrameKind::C3:
+        route_parse_ok = parse_route_field(0U, 2U, station) &&
+                         parse_route_field(2U, 2U, network) &&
+                         parse_route_field(4U, 2U, pc) &&
+                         parse_route_field(6U, 2U, self_station_no);
+        if (route_parse_ok) {
+          actual_route = self_station_no == 0U
+              ? RouteConfig {C3StandardMultidropRoute {
+                    station, network, c34_pc_target_from_wire(pc)}}
+              : RouteConfig {C3MnMultidropRoute {
+                    station,
+                    network,
+                    c34_pc_target_from_wire(pc),
+                    SelfStationNo::number(self_station_no)}};
+        }
+        break;
+      case FrameKind::C4:
+        route_parse_ok = parse_route_field(0U, 2U, station) &&
+                         parse_route_field(2U, 2U, network) &&
+                         parse_route_field(4U, 2U, pc) &&
+                         parse_route_field(6U, 4U, module_io_no) &&
+                         parse_route_field(10U, 2U, module_station_no) &&
+                         parse_route_field(12U, 2U, self_station_no);
+        if (route_parse_ok) {
+          actual_route = self_station_no == 0U
+              ? RouteConfig {C4StandardMultidropRoute {
+                    station,
+                    network,
+                    c34_pc_target_from_wire(pc),
+                    C4DestinationModule::explicit_target(module_io_no, module_station_no)}}
+              : RouteConfig {C4MnMultidropRoute {
+                    station,
+                    network,
+                    c34_pc_target_from_wire(pc),
+                    C4DestinationModule::explicit_target(module_io_no, module_station_no),
+                    SelfStationNo::number(self_station_no)}};
+        }
+        break;
+      case FrameKind::E1:
+        break;
+    }
+
+    if (!route_parse_ok) {
+      return DecodeResult {
+          .status = DecodeStatus::Error,
+          .frame = RawResponseFrame {},
+          .error = parse_error("Failed to parse ASCII response route identity"),
+          .bytes_consumed = route_end,
+      };
+    }
+
+    const bool route_mismatch =
+        station != config.route().station_no() ||
+        network != config.route().network_no() ||
+        pc != config.route().pc_no() ||
+        module_io_no != config.route().request_destination_module_io_no() ||
+        module_station_no != config.route().request_destination_module_station_no() ||
+        self_station_no != config.route().self_station_no();
+    if (route_mismatch) {
+      const ProtocolConfig foreign_config = config.with_route(actual_route);
+      DecodeResult foreign = decode_response(foreign_config, context, bytes);
+      if (foreign.status != DecodeStatus::Incomplete) {
+        foreign.response_identity_mismatch = true;
+      }
+      return foreign;
+    }
   }
 
   if (is_e1_frame(config)) {
@@ -2894,7 +3155,7 @@ DecodeResult FrameCodec::decode_response(
   }
 
   if (is_ascii_mode(config)) {
-    const std::size_t prefix_size = 1U + ascii_block_number_length(config) + ascii_header_length(config.frame_kind);
+    const std::size_t prefix_size = 1U + ascii_block_number_length(config) + ascii_header_length(config.frame_kind());
     const std::size_t terminator_size = uses_ascii_crlf(config) ? 2U : 0U;
     const std::size_t error_width = ascii_error_code_width(config);
     if (is_ascii_enq_family(config)) {
@@ -2914,7 +3175,7 @@ DecodeResult FrameCodec::decode_response(
       }
 
       if (bytes[0] == kAsciiNak) {
-        const std::string_view end_code = ascii_error_end_code(config.frame_kind);
+        const std::string_view end_code = ascii_error_end_code(config.frame_kind());
         std::size_t end_code_width = 0U;
         if (!is_c1_frame(config) &&
             bytes.size() >= (prefix_size + end_code.size()) &&
@@ -2969,7 +3230,7 @@ DecodeResult FrameCodec::decode_response(
       }
 
       const std::size_t etx_index = static_cast<std::size_t>(std::distance(bytes.begin(), etx_it));
-      const std::size_t checksum_size = config.sum_check_enabled ? 2U : 0U;
+      const std::size_t checksum_size = is_sum_check_enabled(config) ? 2U : 0U;
       const std::size_t total_size = etx_index + 1U + checksum_size + terminator_size;
       if (bytes.size() < total_size) {
         return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
@@ -2978,7 +3239,7 @@ DecodeResult FrameCodec::decode_response(
         return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
       }
 
-      if (config.sum_check_enabled &&
+      if (is_sum_check_enabled(config) &&
           !verify_ascii_sum(bytes.subspan(1, etx_index), bytes.subspan(etx_index + 1U, 2U))) {
         return DecodeResult {
             .status = DecodeStatus::Error,
@@ -3015,8 +3276,8 @@ DecodeResult FrameCodec::decode_response(
       };
     }
 
-    const std::string_view success_end_code = ascii_success_end_code(config.frame_kind);
-    const std::string_view error_end_code = ascii_error_end_code(config.frame_kind);
+    const std::string_view success_end_code = ascii_success_end_code(config.frame_kind());
+    const std::string_view error_end_code = ascii_error_end_code(config.frame_kind());
     const std::string_view alt_success_end_code = ascii_alt_success_end_code(config);
     const std::string_view alt_error_end_code = ascii_alt_error_end_code(config);
     const std::size_t minimum_end_code_width = [=]() noexcept {
@@ -3073,7 +3334,7 @@ DecodeResult FrameCodec::decode_response(
 
     if (success_match) {
       const bool has_data = etx_index > content_offset;
-      const std::size_t checksum_size = (config.sum_check_enabled && has_data) ? 2U : 0U;
+      const std::size_t checksum_size = (is_sum_check_enabled(config) && has_data) ? 2U : 0U;
       if (bytes.size() < (etx_index + 1U + checksum_size)) {
         return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
       }
@@ -3200,12 +3461,12 @@ DecodeResult FrameCodec::decode_response(
     return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
   }
 
-  const std::size_t checksum_size = config.sum_check_enabled ? 2U : 0U;
+  const std::size_t checksum_size = is_sum_check_enabled(config) ? 2U : 0U;
   if (bytes.size() < (index + checksum_size)) {
     return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
   }
 
-  if (config.sum_check_enabled &&
+  if (is_sum_check_enabled(config) &&
       !verify_ascii_sum(std::span<const std::uint8_t>(payload.data(), payload_size), bytes.subspan(index, 2U))) {
     return DecodeResult {
         .status = DecodeStatus::Error,
@@ -3234,7 +3495,7 @@ DecodeResult FrameCodec::decode_response(
     };
   }
 
-  const std::size_t route_size = binary_route_length(config.frame_kind);
+  const std::size_t route_size = binary_route_length(config.frame_kind());
   const std::size_t minimum_body_size = 2U + 1U + route_size + 2U + 2U;
   if (payload_size < minimum_body_size) {
     return DecodeResult {
@@ -3245,7 +3506,7 @@ DecodeResult FrameCodec::decode_response(
     };
   }
 
-  if (payload[2] != frame_id(config.frame_kind)) {
+  if (payload[2] != frame_id(config.frame_kind())) {
     return DecodeResult {
         .status = DecodeStatus::Error,
         .frame = RawResponseFrame {},
@@ -3253,6 +3514,22 @@ DecodeResult FrameCodec::decode_response(
         .bytes_consumed = index + checksum_size,
     };
   }
+
+  const std::size_t route_offset = 3U;
+  const std::uint8_t response_station = payload[route_offset];
+  const std::uint8_t response_network = payload[route_offset + 1U];
+  const std::uint8_t response_pc = payload[route_offset + 2U];
+  const std::uint16_t response_module_io = static_cast<std::uint16_t>(
+      payload[route_offset + 3U] | (payload[route_offset + 4U] << 8U));
+  const std::uint8_t response_module_station = payload[route_offset + 5U];
+  const std::uint8_t response_self_station = payload[route_offset + 6U];
+  const bool route_identity_mismatch =
+      response_station != config.route().station_no() ||
+      response_network != config.route().network_no() ||
+      response_pc != config.route().pc_no() ||
+      response_module_io != config.route().request_destination_module_io_no() ||
+      response_module_station != config.route().request_destination_module_station_no() ||
+      response_self_station != config.route().self_station_no();
 
   const std::size_t response_id_offset = 2U + 1U + route_size;
   const std::uint16_t response_id =
@@ -3288,6 +3565,7 @@ DecodeResult FrameCodec::decode_response(
       .frame = frame,
       .error = ok_status(),
       .bytes_consumed = index + checksum_size,
+      .response_identity_mismatch = route_identity_mismatch,
   };
 }
 
@@ -3411,7 +3689,7 @@ Status encode_read_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Extended file-register ER command requires PlcProfile melsec:a");
@@ -3448,7 +3726,7 @@ Status encode_direct_read_extended_file_register_words(
     if (!series_status.ok()) {
       return series_status;
     }
-    if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
+    if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
       return make_status(
           StatusCode::UnsupportedConfiguration,
           "1E direct extended file-register read requires PlcProfile melsec:a");
@@ -3473,7 +3751,7 @@ Status encode_direct_read_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile) != PlcSeries::QnA) {
+  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::QnA) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Direct extended file-register NR command requires PlcProfile melsec:ana-anu or melsec:qna");
@@ -3898,7 +4176,7 @@ Status encode_write_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Extended file-register EW command requires PlcProfile melsec:a");
@@ -3936,7 +4214,7 @@ Status encode_direct_write_extended_file_register_words(
     if (!series_status.ok()) {
       return series_status;
     }
-    if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
+    if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
       return make_status(
           StatusCode::UnsupportedConfiguration,
           "1E direct extended file-register write requires PlcProfile melsec:a");
@@ -3962,7 +4240,7 @@ Status encode_direct_write_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile) != PlcSeries::QnA) {
+  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::QnA) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Direct extended file-register NW command requires PlcProfile melsec:ana-anu or melsec:qna");
@@ -4178,10 +4456,7 @@ Status encode_link_direct_batch_write_bits(
   }
   const DeviceAddress effective_head =
       effective_batch_write_bits_head_device(config, device.device, bits);
-  const LinkDirectDevice effective_device {
-      .network_number = device.network_number,
-      .device = effective_head,
-  };
+  const LinkDirectDevice effective_device(device.network_number, effective_head);
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x1401U, extended_bit_subcommand(config)) ||
       !append_link_direct_device_reference(writer, config, effective_device) ||
@@ -4203,7 +4478,7 @@ Status encode_link_direct_batch_write_bits(
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
 Status encode_link_direct_random_read(
     const ProtocolConfig& config,
-    std::span<const LinkDirectRandomReadItem> items,
+    std::span<const LinkDirectRandomReadWordItem> word_items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -4211,16 +4486,16 @@ Status encode_link_direct_random_read(
     return plc_profile_status;
   }
   if (is_e1_frame(config)) {
-    (void)items;
+    (void)word_items;
     (void)out_request_data;
     (void)out_size;
     return unsupported("1E frame does not define link-direct access");
   }
-  if (items.empty()) {
+  if (word_items.empty()) {
     return invalid_argument("Link direct random read requires at least one item");
   }
 
-  for (const LinkDirectRandomReadItem& item : items) {
+  for (const LinkDirectRandomReadWordItem& item : word_items) {
     const Status item_status = validate_link_direct_random_read_item(config, item);
     if (!item_status.ok()) {
       return item_status;
@@ -4229,18 +4504,18 @@ Status encode_link_direct_random_read(
 
   const ProtocolConfig wire_config = link_direct_native_wire_config(config);
   const std::uint16_t limit = is_iq_r_series(wire_config) ? 96U : 192U;
-  if (items.size() > limit) {
+  if (word_items.size() > limit) {
     return invalid_argument("Link direct random read access-point count exceeds supported range");
   }
 
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x0403U, extended_word_subcommand(wire_config)) ||
-      !append_random_word_dword_count(writer, wire_config, static_cast<std::uint16_t>(items.size())) ||
+      !append_random_word_dword_count(writer, wire_config, static_cast<std::uint16_t>(word_items.size())) ||
       !append_random_word_dword_count(writer, wire_config, 0U)) {
     return buffer_too_small("Link direct random read request buffer is too small");
   }
 
-  for (const LinkDirectRandomReadItem& item : items) {
+  for (const LinkDirectRandomReadWordItem& item : word_items) {
     if (!append_link_direct_device_reference(writer, wire_config, item.device)) {
       return buffer_too_small("Link direct random read request buffer is too small");
     }
@@ -4265,42 +4540,51 @@ Status encode_random_read(
     (void)out_size;
     return unsupported("1E frame does not define random-read commands");
   }
-  if (request.items.empty()) {
+  if (request.word_items.empty() && request.dword_items.empty()) {
     return invalid_argument("Random read requires at least one item");
   }
-  std::uint16_t word_count = 0;
-  std::uint16_t dword_count = 0;
-  for (const RandomReadItem& item : request.items) {
-    const Status item_status = validate_random_read_item_device(
+  for (const RandomReadWordItem& item : request.word_items) {
+    const Status item_status = validate_random_item_device(
         config,
-        item,
+        item.device,
+        false,
         "Random read item must be a supported word device",
         "Random read item must be a supported double-word device");
     if (!item_status.ok()) {
       return item_status;
     }
-    item.double_word ? ++dword_count : ++word_count;
+  }
+  for (const RandomReadDWordItem& item : request.dword_items) {
+    const Status item_status = validate_random_item_device(
+        config,
+        item.device,
+        true,
+        "Random read item must be a supported word device",
+        "Random read item must be a supported double-word device");
+    if (!item_status.ok()) {
+      return item_status;
+    }
   }
 
   const std::uint16_t limit = random_read_access_point_limit(config);
-  if (static_cast<std::uint16_t>(word_count + dword_count) > limit) {
+  if (request.word_items.size() + request.dword_items.size() > limit) {
     return invalid_argument("Random read access-point count exceeds supported range");
   }
 
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x0403U, word_subcommand(config)) ||
-      !append_random_word_dword_count(writer, config, word_count) ||
-      !append_random_word_dword_count(writer, config, dword_count)) {
+      !append_random_word_dword_count(writer, config, static_cast<std::uint16_t>(request.word_items.size())) ||
+      !append_random_word_dword_count(writer, config, static_cast<std::uint16_t>(request.dword_items.size()))) {
     return buffer_too_small("Random read request buffer is too small");
   }
 
-  for (const RandomReadItem& item : request.items) {
-    if (!item.double_word && !append_device_reference(writer, config, item.device)) {
+  for (const RandomReadWordItem& item : request.word_items) {
+    if (!append_device_reference(writer, config, item.device)) {
       return buffer_too_small("Random read request buffer is too small");
     }
   }
-  for (const RandomReadItem& item : request.items) {
-    if (item.double_word && !append_device_reference(writer, config, item.device)) {
+  for (const RandomReadDWordItem& item : request.dword_items) {
+    if (!append_device_reference(writer, config, item.device)) {
       return buffer_too_small("Random read request buffer is too small");
     }
   }
@@ -4311,7 +4595,7 @@ Status encode_random_read(
 #else
 Status encode_link_direct_random_read(
     const ProtocolConfig& config,
-    std::span<const LinkDirectRandomReadItem> items,
+    std::span<const LinkDirectRandomReadWordItem> word_items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -4319,7 +4603,7 @@ Status encode_link_direct_random_read(
     return plc_profile_status;
   }
   (void)config;
-  (void)items;
+  (void)word_items;
   (void)out_request_data;
   (void)out_size;
   return unsupported("Random commands are disabled at build time");
@@ -4345,53 +4629,48 @@ Status encode_random_read(
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
 Status parse_random_read_response(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const RandomReadRequest& request,
     std::span<const std::uint8_t> response_data,
-    std::span<std::uint32_t> out_values) noexcept {
-  if (out_values.size() < items.size()) {
-    return buffer_too_small("Random read output buffer is too small");
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) noexcept {
+  if (out_words.size() < request.word_items.size() ||
+      out_dwords.size() < request.dword_items.size()) {
+    return buffer_too_small("Random read output buffers are too small");
   }
 
-  std::size_t expected_size = 0;
-  for (const RandomReadItem& item : items) {
-    expected_size += item.double_word ? (is_ascii_mode(config) ? 8U : 4U)
-                                      : (is_ascii_mode(config) ? 4U : 2U);
-  }
+  const std::size_t expected_size =
+      request.word_items.size() * (is_ascii_mode(config) ? 4U : 2U) +
+      request.dword_items.size() * (is_ascii_mode(config) ? 8U : 4U);
   if (response_data.size() != expected_size) {
     return parse_error("Random read response length mismatch");
   }
 
   std::size_t cursor = 0;
-  for (std::size_t index = 0; index < items.size(); ++index) {
-    if (items[index].double_word) {
-      continue;
-    }
+  for (std::size_t index = 0; index < request.word_items.size(); ++index) {
     if (is_ascii_mode(config)) {
-      if (!parse_ascii_dword(response_data.subspan(cursor, 4U), out_values[index])) {
+      std::uint32_t value = 0U;
+      if (!parse_ascii_dword(response_data.subspan(cursor, 4U), value)) {
         return parse_error("Failed to parse random read ASCII word value");
       }
-      out_values[index] &= 0xFFFFU;
+      out_words[index] = static_cast<std::uint16_t>(value);
       cursor += 4U;
     } else {
       std::uint16_t word_value = 0;
       if (!parse_binary_word(response_data, cursor, word_value)) {
         return parse_error("Failed to parse random read binary word value");
       }
-      out_values[index] = word_value;
+      out_words[index] = word_value;
       cursor += 2U;
     }
   }
-  for (std::size_t index = 0; index < items.size(); ++index) {
-    if (!items[index].double_word) {
-      continue;
-    }
+  for (std::size_t index = 0; index < request.dword_items.size(); ++index) {
     if (is_ascii_mode(config)) {
-      if (!parse_ascii_dword(response_data.subspan(cursor, 8U), out_values[index])) {
+      if (!parse_ascii_dword(response_data.subspan(cursor, 8U), out_dwords[index])) {
         return parse_error("Failed to parse random read ASCII double-word value");
       }
       cursor += 8U;
     } else {
-      if (!parse_binary_dword(response_data, cursor, out_values[index])) {
+      if (!parse_binary_dword(response_data, cursor, out_dwords[index])) {
         return parse_error("Failed to parse random read binary double-word value");
       }
       cursor += 4U;
@@ -4402,13 +4681,15 @@ Status parse_random_read_response(
 #else
 Status parse_random_read_response(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const RandomReadRequest& request,
     std::span<const std::uint8_t> response_data,
-    std::span<std::uint32_t> out_values) noexcept {
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) noexcept {
   (void)config;
-  (void)items;
+  (void)request;
   (void)response_data;
-  (void)out_values;
+  (void)out_words;
+  (void)out_dwords;
   return unsupported("Random commands are disabled at build time");
 }
 #endif
@@ -4456,8 +4737,8 @@ Status encode_link_direct_random_write_words(
 
   for (const LinkDirectRandomWriteWordItem& item : items) {
     if (!append_link_direct_device_reference(writer, wire_config, item.device) ||
-        (is_ascii_mode(config) ? !append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))
-                                             : !writer.append_le16(static_cast<std::uint16_t>(item.value & 0xFFFFU)))) {
+        (is_ascii_mode(config) ? !append_word_data_ascii(writer, item.value)
+                               : !writer.append_le16(item.value))) {
       return buffer_too_small("Link direct random write words request buffer is too small");
     }
   }
@@ -4468,7 +4749,8 @@ Status encode_link_direct_random_write_words(
 
 Status encode_random_write_words(
     const ProtocolConfig& config,
-    std::span<const RandomWriteWordItem> items,
+    std::span<const RandomWriteWordItem> word_items,
+    std::span<const RandomWriteDWordItem> dword_items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -4479,27 +4761,28 @@ Status encode_random_write_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (items.empty()) {
+  if (word_items.empty() && dword_items.empty()) {
     return invalid_argument("Random write words requires at least one item");
   }
 
   if (is_e1_frame(config)) {
-    if (items.size() > 40U) {
+    if (!dword_items.empty()) {
+      return invalid_argument("1E random write words does not support double-word items");
+    }
+    if (word_items.size() > 40U) {
       return invalid_argument("1E random write words count must be in range 1..40");
     }
     ByteWriter writer(out_request_data);
     if (!append_e1_subheader(writer, config, 0x05U) ||
-        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(items.size())) ||
+        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(word_items.size())) ||
         !append_e1_fixed_zero(writer, config)) {
       return buffer_too_small("1E random write words request buffer is too small");
     }
-    for (const RandomWriteWordItem& item : items) {
-      if (item.double_word) {
-        return invalid_argument("1E random write words does not support double-word items");
-      }
-      const Status item_status = validate_random_write_word_item_device(
+    for (const RandomWriteWordItem& item : word_items) {
+      const Status item_status = validate_random_item_device(
           config,
-          item,
+          item.device,
+          false,
           "1E random write words requires supported word or 16-point bit devices",
           "1E random write words does not support double-word items");
       if (!item_status.ok()) {
@@ -4512,8 +4795,8 @@ Status encode_random_write_words(
         return invalid_argument("1E random write words requires bit-device heads aligned to 16 points");
       }
       if (!append_e1_device_reference(writer, config, item.device) ||
-          !(is_ascii_mode(config) ? append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))
-                                               : writer.append_le16(static_cast<std::uint16_t>(item.value & 0xFFFFU)))) {
+          !(is_ascii_mode(config) ? append_word_data_ascii(writer, item.value)
+                                  : writer.append_le16(item.value))) {
         return buffer_too_small("1E random write words request buffer is too small");
       }
     }
@@ -4522,21 +4805,24 @@ Status encode_random_write_words(
   }
 
   if (is_c1_frame(config)) {
-    if (items.size() > 10U) {
+    if (!dword_items.empty()) {
+      return invalid_argument("1C random write words does not support double-word items");
+    }
+    if (word_items.size() > 10U) {
       return invalid_argument("1C random write words count must be in range 1..10");
     }
     ByteWriter writer(out_request_data);
     if (!append_c1_command(writer, config, kC1RandomWriteWordsCommand) ||
-        !append_c1_point_count(writer, static_cast<std::uint16_t>(items.size()))) {
+        !append_c1_point_count(writer, static_cast<std::uint16_t>(word_items.size()))) {
       return buffer_too_small("1C random write words request buffer is too small");
     }
-    for (const RandomWriteWordItem& item : items) {
+    for (const RandomWriteWordItem& item : word_items) {
       const Status item_status = validate_c1_random_write_word_item(config, item);
       if (!item_status.ok()) {
         return item_status;
       }
       if (!append_c1_device_reference(writer, config, item.device) ||
-          !append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))) {
+          !append_word_data_ascii(writer, item.value)) {
         return buffer_too_small("1C random write words request buffer is too small");
       }
     }
@@ -4544,44 +4830,50 @@ Status encode_random_write_words(
     return ok_status();
   }
 
-  std::uint16_t word_count = 0;
-  std::uint16_t dword_count = 0;
-  for (const RandomWriteWordItem& item : items) {
-    const Status item_status = validate_random_write_word_item_device(
+  for (const RandomWriteWordItem& item : word_items) {
+    const Status item_status = validate_random_item_device(
         config,
-        item,
+        item.device,
+        false,
         "Random write item must be a supported word device",
         "Random write item must be a supported double-word device");
     if (!item_status.ok()) {
       return item_status;
     }
-    item.double_word ? ++dword_count : ++word_count;
   }
-  const std::uint16_t weighted_limit = random_write_word_weighted_limit(config);
-  const std::uint16_t weighted_size = static_cast<std::uint16_t>((word_count * 12U) + (dword_count * 14U));
+  for (const RandomWriteDWordItem& item : dword_items) {
+    const Status item_status = validate_random_item_device(
+        config,
+        item.device,
+        true,
+        "Random write item must be a supported word device",
+        "Random write item must be a supported double-word device");
+    if (!item_status.ok()) {
+      return item_status;
+    }
+  }
+  const std::size_t weighted_limit = random_write_word_weighted_limit(config);
+  const std::size_t weighted_size =
+      (word_items.size() * 12U) + (dword_items.size() * 14U);
   if (weighted_size == 0U || weighted_size > weighted_limit) {
     return invalid_argument("Random write words exceeds the supported request size");
   }
 
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x1402U, word_subcommand(config)) ||
-      !append_random_word_dword_count(writer, config, word_count) ||
-      !append_random_word_dword_count(writer, config, dword_count)) {
+      !append_random_word_dword_count(writer, config, static_cast<std::uint16_t>(word_items.size())) ||
+      !append_random_word_dword_count(writer, config, static_cast<std::uint16_t>(dword_items.size()))) {
     return buffer_too_small("Random write words request buffer is too small");
   }
 
-  for (const RandomWriteWordItem& item : items) {
-    if (!item.double_word &&
-        (!append_device_reference(writer, config, item.device) ||
-         (is_ascii_mode(config) ? !append_word_data_ascii(writer, static_cast<std::uint16_t>(item.value & 0xFFFFU))
-                                              : !writer.append_le16(static_cast<std::uint16_t>(item.value & 0xFFFFU))))) {
+  for (const RandomWriteWordItem& item : word_items) {
+    if (!append_device_reference(writer, config, item.device) ||
+        (is_ascii_mode(config) ? !append_word_data_ascii(writer, item.value)
+                               : !writer.append_le16(item.value))) {
       return buffer_too_small("Random write words request buffer is too small");
     }
   }
-  for (const RandomWriteWordItem& item : items) {
-    if (!item.double_word) {
-      continue;
-    }
+  for (const RandomWriteDWordItem& item : dword_items) {
     const bool ok =
         append_device_reference(writer, config, item.device) &&
         (is_ascii_mode(config) ? append_dword_data_ascii(writer, item.value)
@@ -4639,7 +4931,7 @@ Status encode_random_write_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Extended file-register ET command requires PlcProfile melsec:a");
@@ -4686,7 +4978,8 @@ Status encode_link_direct_random_write_words(
 
 Status encode_random_write_words(
     const ProtocolConfig& config,
-    std::span<const RandomWriteWordItem> items,
+    std::span<const RandomWriteWordItem> word_items,
+    std::span<const RandomWriteDWordItem> dword_items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -4694,7 +4987,8 @@ Status encode_random_write_words(
     return plc_profile_status;
   }
   (void)config;
-  (void)items;
+  (void)word_items;
+  (void)dword_items;
   (void)out_request_data;
   (void)out_size;
   return unsupported("Random commands are disabled at build time");
@@ -4733,6 +5027,11 @@ Status encode_random_write_bits(
   }
   if (items.empty()) {
     return invalid_argument("Random write bits requires at least one item");
+  }
+  for (const RandomWriteBitItem& item : items) {
+    if (!is_valid_bit_value(item.value)) {
+      return invalid_argument("Random write bits requires each value to be Off or On");
+    }
   }
   if (is_e1_frame(config)) {
     if (items.size() > 80U) {
@@ -4865,6 +5164,11 @@ Status encode_link_direct_random_write_bits(
   }
   if (items.empty()) {
     return invalid_argument("Link direct random write bits requires at least one item");
+  }
+  for (const LinkDirectRandomWriteBitItem& item : items) {
+    if (!is_valid_bit_value(item.value)) {
+      return invalid_argument("Link direct random write bits requires each value to be Off or On");
+    }
   }
   const ProtocolConfig wire_config = link_direct_native_wire_config(config);
   const std::uint16_t limit = is_iq_r_series(wire_config) ? 94U : 188U;
@@ -5451,12 +5755,13 @@ Status encode_link_direct_register_monitor(
     (void)out_size;
     return unsupported("1E frame does not define link-direct access");
   }
-  if (request.items.empty()) {
+  if (request.word_items.empty()) {
     return invalid_argument("Link direct monitor registration requires at least one item");
   }
   std::array<std::uint8_t, kMaxRequestDataBytes> random_request_data {};
   std::size_t inner_size = 0;
-  Status status = encode_link_direct_random_read(config, request.items, random_request_data, inner_size);
+  Status status = encode_link_direct_random_read(
+      config, request.word_items, random_request_data, inner_size);
   if (!status.ok()) {
     return status;
   }
@@ -5489,29 +5794,33 @@ Status encode_register_monitor(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)request;
     (void)out_request_data;
     (void)out_size;
     return unsupported("melsec:iq-f does not support monitor registration");
   }
-  if (request.items.empty()) {
+  if (request.word_items.empty() && request.dword_items.empty()) {
     return invalid_argument("Monitor registration requires at least one item");
   }
   if (is_e1_frame(config)) {
-    const bool bit_units = c1_monitor_uses_bit_units(request.items);
+    if (!request.dword_items.empty()) {
+      return invalid_argument("1E monitor does not support double-word items");
+    }
+    const bool bit_units = c1_monitor_uses_bit_units(
+        request.word_items, request.dword_items);
     const std::size_t limit = bit_units ? 40U : 20U;
-    if (request.items.size() > limit) {
+    if (request.word_items.size() > limit) {
       return invalid_argument(bit_units ? "1E bit-unit monitor registration count must be in range 1..40"
                                         : "1E word-unit monitor registration count must be in range 1..20");
     }
     ByteWriter writer(out_request_data);
     if (!append_e1_subheader(writer, config, bit_units ? 0x06U : 0x07U) ||
-        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(request.items.size())) ||
+        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(request.word_items.size())) ||
         !append_e1_fixed_zero(writer, config)) {
       return buffer_too_small("1E monitor registration request buffer is too small");
     }
-    for (const RandomReadItem& item : request.items) {
+    for (const RandomReadWordItem& item : request.word_items) {
       const Status item_status = validate_c1_monitor_item(config, item, bit_units);
       if (!item_status.ok()) {
         return item_status;
@@ -5524,9 +5833,13 @@ Status encode_register_monitor(
     return ok_status();
   }
   if (is_c1_frame(config)) {
-    const bool bit_units = c1_monitor_uses_bit_units(request.items);
+    if (!request.dword_items.empty()) {
+      return invalid_argument("1C monitor does not support double-word items");
+    }
+    const bool bit_units = c1_monitor_uses_bit_units(
+        request.word_items, request.dword_items);
     const std::size_t limit = bit_units ? 40U : 20U;
-    if (request.items.size() > limit) {
+    if (request.word_items.size() > limit) {
       return invalid_argument(bit_units ? "1C bit-unit monitor registration count must be in range 1..40"
                                         : "1C word-unit monitor registration count must be in range 1..20");
     }
@@ -5535,10 +5848,10 @@ Status encode_register_monitor(
             writer,
             config,
             bit_units ? kC1RegisterMonitorBitsCommand : kC1RegisterMonitorWordsCommand) ||
-        !append_c1_point_count(writer, static_cast<std::uint16_t>(request.items.size()))) {
+        !append_c1_point_count(writer, static_cast<std::uint16_t>(request.word_items.size()))) {
       return buffer_too_small("1C monitor registration request buffer is too small");
     }
-    for (const RandomReadItem& item : request.items) {
+    for (const RandomReadWordItem& item : request.word_items) {
       const Status item_status = validate_c1_monitor_item(config, item, bit_units);
       if (!item_status.ok()) {
         return item_status;
@@ -5550,7 +5863,7 @@ Status encode_register_monitor(
     out_size = writer.size();
     return ok_status();
   }
-  RandomReadRequest random_request {.items = request.items};
+  RandomReadRequest random_request(request.word_items, request.dword_items);
   std::array<std::uint8_t, kMaxRequestDataBytes> random_request_data {};
   std::size_t inner_size = 0;
   Status status = encode_random_read(config, random_request, random_request_data, inner_size);
@@ -5614,7 +5927,7 @@ Status encode_register_extended_file_register_monitor(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Extended file-register EM command requires PlcProfile melsec:a");
@@ -5655,7 +5968,7 @@ Status encode_read_monitor(
   if (is_c1_frame(config)) {
     return invalid_argument("1C monitor read requires registered item metadata");
   }
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)out_request_data;
     (void)out_size;
     return unsupported("melsec:iq-f does not support monitor read");
@@ -5670,7 +5983,7 @@ Status encode_read_monitor(
 
 Status encode_read_monitor(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const MonitorRegistration& registration,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -5681,19 +5994,23 @@ Status encode_read_monitor(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
-    (void)items;
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
+    (void)registration;
     (void)out_request_data;
     (void)out_size;
     return unsupported("melsec:iq-f does not support monitor read");
   }
   if (!is_c1_frame(config)) {
     if (is_e1_frame(config)) {
-      if (items.empty()) {
+      if (registration.word_items.empty() && registration.dword_items.empty()) {
         return invalid_argument("1E monitor read requires registered items");
       }
-      const bool bit_units = c1_monitor_uses_bit_units(items);
-      for (const RandomReadItem& item : items) {
+      if (!registration.dword_items.empty()) {
+        return invalid_argument("1E monitor does not support double-word items");
+      }
+      const bool bit_units = c1_monitor_uses_bit_units(
+          registration.word_items, registration.dword_items);
+      for (const RandomReadWordItem& item : registration.word_items) {
         const Status item_status = validate_c1_monitor_item(config, item, bit_units);
         if (!item_status.ok()) {
           return item_status;
@@ -5708,11 +6025,15 @@ Status encode_read_monitor(
     }
     return encode_read_monitor(config, out_request_data, out_size);
   }
-  if (items.empty()) {
+  if (registration.word_items.empty() && registration.dword_items.empty()) {
     return invalid_argument("1C monitor read requires registered items");
   }
-  const bool bit_units = c1_monitor_uses_bit_units(items);
-  for (const RandomReadItem& item : items) {
+  if (!registration.dword_items.empty()) {
+    return invalid_argument("1C monitor does not support double-word items");
+  }
+  const bool bit_units = c1_monitor_uses_bit_units(
+      registration.word_items, registration.dword_items);
+  for (const RandomReadWordItem& item : registration.word_items) {
     const Status item_status = validate_c1_monitor_item(config, item, bit_units);
     if (!item_status.ok()) {
       return item_status;
@@ -5765,7 +6086,7 @@ Status encode_read_extended_file_register_monitor(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile) != PlcSeries::A) {
+  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "Extended file-register ME command requires PlcProfile melsec:a");
@@ -5790,25 +6111,30 @@ Status encode_read_extended_file_register_monitor(
 
 Status parse_read_monitor_response(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const MonitorRegistration& registration,
     std::span<const std::uint8_t> response_data,
-    std::span<std::uint32_t> out_values) noexcept {
-  if ((is_c1_frame(config) || is_e1_frame(config)) && c1_monitor_uses_bit_units(items)) {
-    if (out_values.size() < items.size()) {
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) noexcept {
+  if ((is_c1_frame(config) || is_e1_frame(config)) && c1_monitor_uses_bit_units(
+          registration.word_items, registration.dword_items)) {
+    if (out_words.size() < registration.word_items.size()) {
       return buffer_too_small("Monitor output buffer is too small");
     }
     const std::size_t expected_size =
-        is_e1_frame(config) ? items.size() + ((items.size() % 2U) == 0U ? 0U : 1U) : items.size();
+        is_e1_frame(config)
+            ? registration.word_items.size() +
+                  ((registration.word_items.size() % 2U) == 0U ? 0U : 1U)
+            : registration.word_items.size();
     if (response_data.size() != expected_size) {
       return parse_error(is_e1_frame(config)
                              ? "1E bit-unit monitor response length mismatch"
                              : "1C bit-unit monitor response length mismatch");
     }
-    for (std::size_t index = 0; index < items.size(); ++index) {
+    for (std::size_t index = 0; index < registration.word_items.size(); ++index) {
       if (response_data[index] == '0') {
-        out_values[index] = 0U;
+        out_words[index] = 0U;
       } else if (response_data[index] == '1') {
-        out_values[index] = 1U;
+        out_words[index] = 1U;
       } else {
         return parse_error(is_e1_frame(config)
                                ? "1E bit-unit monitor payload contains an invalid bit"
@@ -5817,7 +6143,12 @@ Status parse_read_monitor_response(
     }
     return ok_status();
   }
-  return parse_random_read_response(config, items, response_data, out_values);
+  return parse_random_read_response(
+      config,
+      RandomReadRequest(registration.word_items, registration.dword_items),
+      response_data,
+      out_words,
+      out_dwords);
 }
 
 Status parse_read_extended_file_register_monitor_response(
@@ -5898,7 +6229,7 @@ Status encode_read_monitor(
 
 Status encode_read_monitor(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const MonitorRegistration& registration,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -5906,7 +6237,7 @@ Status encode_read_monitor(
     return plc_profile_status;
   }
   (void)config;
-  (void)items;
+  (void)registration;
   (void)out_request_data;
   (void)out_size;
   return unsupported("Monitor commands are disabled at build time");
@@ -5930,13 +6261,15 @@ Status encode_read_extended_file_register_monitor(
 
 Status parse_read_monitor_response(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const MonitorRegistration& registration,
     std::span<const std::uint8_t> response_data,
-    std::span<std::uint32_t> out_values) noexcept {
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) noexcept {
   (void)config;
-  (void)items;
+  (void)registration;
   (void)response_data;
-  (void)out_values;
+  (void)out_words;
+  (void)out_dwords;
   return unsupported("Monitor commands are disabled at build time");
 }
 
@@ -6128,7 +6461,7 @@ Status encode_control_global_signal(
 
   const std::uint16_t specification =
       static_cast<std::uint16_t>(static_cast<std::uint8_t>(request.target));
-  const std::uint16_t subcommand = request.turn_on ? 0x0001U : 0x0000U;
+  const std::uint16_t subcommand = request.value == BitValue::On ? 0x0001U : 0x0000U;
 
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x1618U, subcommand) ||
@@ -6189,7 +6522,7 @@ Status encode_initialize_transmission_sequence(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (config.frame_kind != FrameKind::C4 || !is_binary_mode(config)) {
+  if (config.frame_kind() != FrameKind::C4 || !is_binary_mode(config)) {
     (void)out_request_data;
     (void)out_size;
     return unsupported(
@@ -6222,7 +6555,7 @@ Status encode_read_host_buffer(
     (void)out_size;
     return unsupported("1E frame does not define host-buffer access");
   }
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)request;
     (void)out_request_data;
     (void)out_size;
@@ -6255,17 +6588,8 @@ Status parse_read_host_buffer_response(
     std::span<const std::uint8_t> response_data,
     std::span<std::uint16_t> out_words) noexcept {
   return parse_batch_read_words_response(
-      ProtocolConfig {
-          .frame_kind = config.frame_kind,
-          .code_mode = config.code_mode,
-          .ascii_format = config.ascii_format,
-          .ascii_block_number = config.ascii_block_number,
-          .plc_profile = config.plc_profile,
-          .sum_check_enabled = config.sum_check_enabled,
-          .route = config.route,
-          .timeout = config.timeout,
-      },
-      BatchReadWordsRequest {.head_device = DeviceAddress {}, .points = request.word_length},
+      config,
+      BatchReadWordsRequest(DeviceAddress {DeviceCode::D, 0U}, request.word_length),
       response_data,
       out_words);
 }
@@ -6285,7 +6609,7 @@ Status encode_write_host_buffer(
     (void)out_size;
     return unsupported("1E frame does not define host-buffer access");
   }
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)request;
     (void)out_request_data;
     (void)out_size;
@@ -6372,7 +6696,7 @@ Status encode_read_module_buffer(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)request;
     (void)out_request_data;
     (void)out_size;
@@ -6471,7 +6795,7 @@ Status encode_write_module_buffer(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (config.plc_profile == PlcProfile::MelsecIqF) {
+  if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)request;
     (void)out_request_data;
     (void)out_size;
@@ -6658,6 +6982,7 @@ Status encode_remote_run(
     RemoteRunClearMode clear_mode,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
@@ -6718,6 +7043,7 @@ Status encode_remote_pause(
     RemoteOperationMode mode,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
@@ -6913,7 +7239,7 @@ Status encode_loopback(
     if (!c1_status.ok()) {
       return c1_status;
     }
-    if (config.route.pc_no != 0xFFU) {
+    if (config.route().pc_no() != 0xFFU) {
       return invalid_argument("1C loopback requires route.pc_no = 0xFF");
     }
     ByteWriter writer(out_request_data);

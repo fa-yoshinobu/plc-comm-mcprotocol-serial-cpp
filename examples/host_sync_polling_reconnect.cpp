@@ -15,21 +15,10 @@ using mcprotocol::serial::PosixSerialConfig;
 using mcprotocol::serial::PosixSyncClient;
 using mcprotocol::serial::ProtocolConfig;
 using mcprotocol::serial::Status;
+using mcprotocol::serial::SumCheckMode;
 using mcprotocol::serial::highlevel::make_c4_binary_protocol;
 using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
-#if defined(_WIN32)
-constexpr const char* kDefaultSerialDevice = "COM3";
-#else
-constexpr const char* kDefaultSerialDevice = "/dev/ttyUSB0";
-#endif
-
-constexpr const char* kDefaultPlcProfile = "melsec:qcpu";
-constexpr const char* kDefaultHeadDevice = "D100";
-constexpr unsigned kDefaultPoints = 4;
-constexpr unsigned kDefaultBaud = 19200;
-constexpr const char* kDefaultProtocol = "format4";
-constexpr bool kDefaultSumCheckEnabled = false;
 constexpr unsigned kPollIntervalMs = 1000;
 constexpr unsigned kInitialBackoffMs = 1000;
 constexpr unsigned kMaxBackoffMs = 30000;
@@ -40,32 +29,25 @@ enum class ProtocolSelection {
 };
 
 struct Options {
-  const char* serial_device = kDefaultSerialDevice;
-  const char* plc_profile_text = kDefaultPlcProfile;
-  const char* head_device = kDefaultHeadDevice;
-  unsigned points = kDefaultPoints;
-  unsigned baud = kDefaultBaud;
-  ProtocolSelection protocol = ProtocolSelection::Format4Ascii;
-  bool sum_check_enabled = kDefaultSumCheckEnabled;
+  const char* serial_device = nullptr;
+  const char* plc_profile_text = nullptr;
+  const char* head_device = nullptr;
+  unsigned points = 0;
+  unsigned baud = 0;
+  ProtocolSelection protocol = static_cast<ProtocolSelection>(0xFF);
+  SumCheckMode sum_check_mode = static_cast<SumCheckMode>(0xFF);
 };
 
 void print_usage(const char* argv0) {
   std::fprintf(
       stderr,
-      "Usage: %s [serial-device] [plc-profile] [head-device] [points] [baud] [format4|format5] [sum-check]\n"
+      "Usage: %s serial-device plc-profile head-device points baud format4|format5 sum-check\n"
       "\n"
-      "Defaults: %s %s %s %u %u %s off\n"
       "Example:  %s COM3 melsec:qcpu D100 4 19200 format5 off\n"
       "\n"
       "This sample is read-only. It logs connected/lost/reconnecting/recovered/read\n"
       "while polling words through the Windows/POSIX host serial backend.\n",
       argv0,
-      kDefaultSerialDevice,
-      kDefaultPlcProfile,
-      kDefaultHeadDevice,
-      kDefaultPoints,
-      kDefaultBaud,
-      kDefaultProtocol,
       argv0);
 }
 
@@ -99,16 +81,16 @@ bool parse_protocol(const char* text, ProtocolSelection& out_protocol) {
   return false;
 }
 
-bool parse_on_off(const char* text, bool& out_value) {
+bool parse_sum_check_mode(const char* text, SumCheckMode& out_value) {
   if (text == nullptr) {
     return false;
   }
   if (std::strcmp(text, "on") == 0 || std::strcmp(text, "true") == 0 || std::strcmp(text, "1") == 0) {
-    out_value = true;
+    out_value = SumCheckMode::Enabled;
     return true;
   }
   if (std::strcmp(text, "off") == 0 || std::strcmp(text, "false") == 0 || std::strcmp(text, "0") == 0) {
-    out_value = false;
+    out_value = SumCheckMode::Disabled;
     return true;
   }
   return false;
@@ -119,33 +101,27 @@ bool parse_args(int argc, char** argv, Options& out_options) {
     print_usage(argv[0]);
     return false;
   }
-  if (argc > 1) {
-    out_options.serial_device = argv[1];
+  if (argc != 8) {
+    print_usage(argv[0]);
+    return false;
   }
-  if (argc > 2) {
-    out_options.plc_profile_text = argv[2];
-  }
-  if (argc > 3) {
-    out_options.head_device = argv[3];
-  }
-  if (argc > 4 && !parse_unsigned(argv[4], out_options.points)) {
+  out_options.serial_device = argv[1];
+  out_options.plc_profile_text = argv[2];
+  out_options.head_device = argv[3];
+  if (!parse_unsigned(argv[4], out_options.points)) {
     std::fprintf(stderr, "Invalid points: %s\n", argv[4]);
     return false;
   }
-  if (argc > 5 && !parse_unsigned(argv[5], out_options.baud)) {
+  if (!parse_unsigned(argv[5], out_options.baud)) {
     std::fprintf(stderr, "Invalid baud: %s\n", argv[5]);
     return false;
   }
-  if (argc > 6 && !parse_protocol(argv[6], out_options.protocol)) {
+  if (!parse_protocol(argv[6], out_options.protocol)) {
     std::fprintf(stderr, "Invalid protocol format: %s\n", argv[6]);
     return false;
   }
-  if (argc > 7 && !parse_on_off(argv[7], out_options.sum_check_enabled)) {
+  if (!parse_sum_check_mode(argv[7], out_options.sum_check_mode)) {
     std::fprintf(stderr, "Invalid sum-check value: %s\n", argv[7]);
-    return false;
-  }
-  if (argc > 8) {
-    print_usage(argv[0]);
     return false;
   }
   if (out_options.points == 0 || out_options.points > 32) {
@@ -178,24 +154,25 @@ bool make_profile(const char* text, PlcProfile& out_profile) {
   return mcprotocol::serial::parse_plc_profile(text, std::strlen(text), out_profile);
 }
 
-ProtocolConfig make_protocol(ProtocolSelection selection, PlcProfile profile, bool sum_check_enabled) {
+ProtocolConfig make_protocol(
+    ProtocolSelection selection,
+    PlcProfile profile,
+    SumCheckMode sum_check_mode) {
+  const mcprotocol::serial::RouteConfig route {mcprotocol::serial::HostStationRoute {}};
   ProtocolConfig protocol = selection == ProtocolSelection::Format5Binary
-                                ? make_c4_binary_protocol(profile)
-                                : make_c4_ascii_format4_protocol(profile);
-  protocol.sum_check_enabled = sum_check_enabled;
-  protocol.route.station_no = 0;
+                                ? make_c4_binary_protocol(profile, sum_check_mode, route)
+                                : make_c4_ascii_format4_protocol(profile, sum_check_mode, route);
   return protocol;
 }
 
 PosixSerialConfig make_serial_config(const Options& options) {
-  return PosixSerialConfig {
-      .device_path = options.serial_device,
-      .baud_rate = static_cast<std::uint32_t>(options.baud),
-      .data_bits = 8,
-      .stop_bits = 1,
-      .parity = 'E',
-      .rts_cts = false,
-  };
+  return PosixSerialConfig(
+      options.serial_device,
+      static_cast<std::uint32_t>(options.baud),
+      8,
+      1,
+      mcprotocol::serial::SerialParity::Even,
+      mcprotocol::serial::HardwareFlowControl::None);
 }
 
 void print_read_values(const Options& options, const std::array<std::uint16_t, 32>& words) {
@@ -221,7 +198,7 @@ int main(int argc, char** argv) {
     return 2;
   }
 
-  auto protocol = make_protocol(options.protocol, profile, options.sum_check_enabled);
+  auto protocol = make_protocol(options.protocol, profile, options.sum_check_mode);
 
   const PosixSerialConfig serial = make_serial_config(options);
   bool connected_once = false;
@@ -237,7 +214,7 @@ int main(int argc, char** argv) {
       options.plc_profile_text,
       options.baud,
       protocol_name(options.protocol),
-      options.sum_check_enabled ? "on" : "off",
+      options.sum_check_mode == SumCheckMode::Enabled ? "on" : "off",
       options.head_device,
       options.points);
   log_state("reconnecting", start_message);

@@ -79,101 +79,97 @@ constexpr std::array<DeviceParseSpec, 38> kDeviceParseSpecs {{
 using mcprotocol::serial::detail::ascii_upper;
 using mcprotocol::serial::detail::parse_u32;
 
-[[nodiscard]] constexpr bool is_double_word_device(DeviceCode code) noexcept {
-  switch (code) {
-    case DeviceCode::LTN:
-    case DeviceCode::LSTN:
-    case DeviceCode::LCN:
-    case DeviceCode::LZ:
-      return true;
-    default:
-      return false;
-  }
-}
-
 }  // namespace detail
 
 /// \brief Returns a practical `Format5 / Binary / C4` configuration for an explicit PLC profile.
-[[nodiscard]] constexpr ProtocolConfig make_c4_binary_protocol(PlcProfile profile) noexcept {
-  ProtocolConfig config {};
-  config.frame_kind = FrameKind::C4;
-  config.code_mode = CodeMode::Binary;
-  config.ascii_format = AsciiFormat::Format3;
-  config.plc_profile = profile;
-  config.sum_check_enabled = true;
-  config.route.kind = RouteKind::HostStation;
-  config.route.station_no = 0x00;
-  config.route.network_no = 0x00;
-  config.route.pc_no = 0xFF;
-  config.route.request_destination_module_io_no = module_io::OwnStation;
-  config.route.request_destination_module_station_no = 0x00;
-  config.route.self_station_enabled = false;
-  config.route.self_station_no = 0x00;
-  config.timeout.response_timeout_ms = 5000;
-  config.timeout.inter_byte_timeout_ms = 250;
-  return config;
+[[nodiscard]] constexpr ProtocolConfig make_c4_binary_protocol(
+    PlcProfile profile,
+    SumCheckMode sum_check_mode,
+    RouteConfig route) noexcept {
+  return ProtocolConfig::c4_binary(profile, sum_check_mode, route);
 }
 
 /// \brief Returns a practical `Format4 / ASCII / C4` configuration for an explicit PLC profile.
-[[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format4_protocol(PlcProfile profile) noexcept {
-  ProtocolConfig config {};
-  config.frame_kind = FrameKind::C4;
-  config.code_mode = CodeMode::Ascii;
-  config.ascii_format = AsciiFormat::Format4;
-  config.plc_profile = profile;
-  config.sum_check_enabled = false;
-  config.route.kind = RouteKind::MultidropStation;
-  config.route.station_no = 0x00;
-  config.route.network_no = 0x00;
-  config.route.pc_no = 0xFF;
-  config.route.request_destination_module_io_no = module_io::OwnStation;
-  config.route.request_destination_module_station_no = 0x00;
-  config.route.self_station_enabled = false;
-  config.route.self_station_no = 0x00;
-  config.timeout.response_timeout_ms = 5000;
-  config.timeout.inter_byte_timeout_ms = 250;
-  return config;
+[[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format4_protocol(
+    PlcProfile profile,
+    SumCheckMode sum_check_mode,
+    RouteConfig route) noexcept {
+  return ProtocolConfig::ascii(
+      mcprotocol::serial::AsciiFrameKind::C4, AsciiFormat::Format4, profile, sum_check_mode, route);
 }
 
-/// \brief Returns a practical default for `Format2 / ASCII / C4`.
+/// \brief Returns a `Format2 / ASCII / C4` configuration with explicit profile and sum-check mode.
 ///
 /// `Format2` is the `Format1` style `ENQ/ACK/NAK/STX/ETX` link with an extra 1-byte block
-/// number inserted before the frame ID. The default block number is `0x00`; change
-/// `ProtocolConfig::ascii_block_number` if the host side needs a different value.
-[[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format2_protocol(PlcProfile profile) noexcept {
-  ProtocolConfig config = make_c4_ascii_format4_protocol(profile);
-  config.ascii_format = AsciiFormat::Format2;
-  config.sum_check_enabled = true;
-  config.route.kind = RouteKind::HostStation;
-  config.route.station_no = 0x00;
-  config.ascii_block_number = 0x00;
-  return config;
+/// number inserted before the frame ID. Block-number lifecycle is addressed separately by D-096.
+[[nodiscard]] constexpr ProtocolConfig make_c4_ascii_format2_protocol(
+    PlcProfile profile,
+    SumCheckMode sum_check_mode,
+    RouteConfig route) noexcept {
+  return ProtocolConfig::ascii(
+      mcprotocol::serial::AsciiFrameKind::C4, AsciiFormat::Format2, profile, sum_check_mode, route);
 }
 
 /// \brief String-address spec used to build sparse random-read or monitor requests.
-struct RandomReadSpec {
-  /// Plain device string such as `D100`, `LZ0`, or `LCN10`.
-  std::string_view device {};
-  /// `true` when the target should be encoded as a double-word sparse item.
-  bool double_word = false;
+struct RandomReadWordSpec {
+  RandomReadWordSpec() = delete;
+  constexpr explicit RandomReadWordSpec(std::string_view target_device) noexcept
+      : device(target_device) {}
+
+  /// Plain device string such as `D100` selected explicitly as 16-bit.
+  std::string_view device;
+};
+
+/// \brief String-address spec selected explicitly for 32-bit sparse read/monitor access.
+struct RandomReadDWordSpec {
+  RandomReadDWordSpec() = delete;
+  constexpr explicit RandomReadDWordSpec(std::string_view target_device) noexcept
+      : device(target_device) {}
+
+  /// Plain device string such as `D100`, `LZ0`, or `LCN10` selected explicitly as 32-bit.
+  std::string_view device;
 };
 
 /// \brief String-address spec used to build sparse random word-write items.
+///
+/// Device and value must be supplied together. Explicit zero is valid.
 struct RandomWriteWordSpec {
+  RandomWriteWordSpec() = delete;
+  constexpr RandomWriteWordSpec(std::string_view target_device, std::uint16_t write_value) noexcept
+      : device(target_device), value(write_value) {}
+
   /// Plain device string such as `D100` or `LZ0`.
-  std::string_view device {};
-  /// Word or double-word value written to `device`.
-  std::uint32_t value = 0;
-  /// `true` when the item should be encoded as a double-word sparse write.
-  bool double_word = false;
+  std::string_view device;
+  /// Explicit 16-bit word value written to `device`.
+  std::uint16_t value;
+};
+
+/// \brief String-address spec used to build an explicit double-word sparse write item.
+///
+/// Device and value must be supplied together. Explicit zero is valid.
+struct RandomWriteDWordSpec {
+  RandomWriteDWordSpec() = delete;
+  constexpr RandomWriteDWordSpec(std::string_view target_device, std::uint32_t write_value) noexcept
+      : device(target_device), value(write_value) {}
+
+  /// Plain device string such as `D100` or `LZ0`.
+  std::string_view device;
+  /// Explicit 32-bit double-word value written to `device`.
+  std::uint32_t value;
 };
 
 /// \brief String-address spec used to build sparse random bit-write items.
+///
+/// Device and value must be supplied together. Explicit `Off` is valid.
 struct RandomWriteBitSpec {
+  RandomWriteBitSpec() = delete;
+  constexpr RandomWriteBitSpec(std::string_view target_device, BitValue write_value) noexcept
+      : device(target_device), value(write_value) {}
+
   /// Plain bit-device string such as `M100` or `X10`.
-  std::string_view device {};
+  std::string_view device;
   /// Bit value written to `device`.
-  BitValue value = BitValue::Off;
+  BitValue value;
 };
 
 /// \brief Logical state selected from a long timer/counter status block.
@@ -189,12 +185,19 @@ enum class LongStateReadRoute : std::uint8_t {
 
 /// \brief Mapping from a long-family state device to the helper's internal read route.
 struct LongStateReadSpec {
+  LongStateReadSpec() = delete;
+  constexpr LongStateReadSpec(
+      LongStateReadRoute read_route,
+      DeviceCode target_base_code,
+      LongStateReadKind state_kind) noexcept
+      : route(read_route), base_code(target_base_code), kind(state_kind) {}
+
   /// Read route used internally by the long-state helper.
-  LongStateReadRoute route = LongStateReadRoute::StatusBlock;
+  LongStateReadRoute route;
   /// Base current-value device read with `0401` word access, or direct bit device for DirectBits.
-  DeviceCode base_code = DeviceCode::LTN;
+  DeviceCode base_code;
   /// Status bit selected from the third word of the block.
-  LongStateReadKind kind = LongStateReadKind::Contact;
+  LongStateReadKind kind;
 };
 
 /// \brief Parses a plain MC device string such as `D100`, `M100`, `X10`, or `B20`.
@@ -226,10 +229,7 @@ struct LongStateReadSpec {
       return make_status(StatusCode::InvalidArgument, "Device address number is invalid");
     }
 
-    out_device = DeviceAddress {
-        .code = spec.code,
-        .number = number,
-    };
+    out_device = DeviceAddress(spec.code, number);
     return ok_status();
   }
 
@@ -245,40 +245,28 @@ struct LongStateReadSpec {
     LongStateReadSpec& out_spec) noexcept {
   switch (code) {
     case DeviceCode::LTS:
-      out_spec = LongStateReadSpec {
-          .route = LongStateReadRoute::StatusBlock,
-          .base_code = DeviceCode::LTN,
-          .kind = LongStateReadKind::Contact};
+      out_spec = LongStateReadSpec(
+          LongStateReadRoute::StatusBlock, DeviceCode::LTN, LongStateReadKind::Contact);
       return ok_status();
     case DeviceCode::LTC:
-      out_spec = LongStateReadSpec {
-          .route = LongStateReadRoute::StatusBlock,
-          .base_code = DeviceCode::LTN,
-          .kind = LongStateReadKind::Coil};
+      out_spec = LongStateReadSpec(
+          LongStateReadRoute::StatusBlock, DeviceCode::LTN, LongStateReadKind::Coil);
       return ok_status();
     case DeviceCode::LSTS:
-      out_spec = LongStateReadSpec {
-          .route = LongStateReadRoute::StatusBlock,
-          .base_code = DeviceCode::LSTN,
-          .kind = LongStateReadKind::Contact};
+      out_spec = LongStateReadSpec(
+          LongStateReadRoute::StatusBlock, DeviceCode::LSTN, LongStateReadKind::Contact);
       return ok_status();
     case DeviceCode::LSTC:
-      out_spec = LongStateReadSpec {
-          .route = LongStateReadRoute::StatusBlock,
-          .base_code = DeviceCode::LSTN,
-          .kind = LongStateReadKind::Coil};
+      out_spec = LongStateReadSpec(
+          LongStateReadRoute::StatusBlock, DeviceCode::LSTN, LongStateReadKind::Coil);
       return ok_status();
     case DeviceCode::LCS:
-      out_spec = LongStateReadSpec {
-          .route = LongStateReadRoute::DirectBits,
-          .base_code = DeviceCode::LCS,
-          .kind = LongStateReadKind::Contact};
+      out_spec = LongStateReadSpec(
+          LongStateReadRoute::DirectBits, DeviceCode::LCS, LongStateReadKind::Contact);
       return ok_status();
     case DeviceCode::LCC:
-      out_spec = LongStateReadSpec {
-          .route = LongStateReadRoute::DirectBits,
-          .base_code = DeviceCode::LCC,
-          .kind = LongStateReadKind::Coil};
+      out_spec = LongStateReadSpec(
+          LongStateReadRoute::DirectBits, DeviceCode::LCC, LongStateReadKind::Coil);
       return ok_status();
     default:
       return make_status(StatusCode::InvalidArgument, "Device is not a long timer/counter state device");
@@ -307,15 +295,12 @@ struct LongStateReadSpec {
     std::string_view head_device,
     std::uint16_t points,
     BatchReadWordsRequest& out_request) noexcept {
-  DeviceAddress parsed {};
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(head_device, parsed);
   if (!status.ok()) {
     return status;
   }
-  out_request = BatchReadWordsRequest {
-      .head_device = parsed,
-      .points = points,
-  };
+  out_request = BatchReadWordsRequest(parsed, points);
   return ok_status();
 }
 
@@ -324,15 +309,12 @@ struct LongStateReadSpec {
     std::string_view head_device,
     std::uint16_t points,
     BatchReadBitsRequest& out_request) noexcept {
-  DeviceAddress parsed {};
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(head_device, parsed);
   if (!status.ok()) {
     return status;
   }
-  out_request = BatchReadBitsRequest {
-      .head_device = parsed,
-      .points = points,
-  };
+  out_request = BatchReadBitsRequest(parsed, points);
   return ok_status();
 }
 
@@ -341,15 +323,12 @@ struct LongStateReadSpec {
     std::string_view head_device,
     std::span<const std::uint16_t> words,
     BatchWriteWordsRequest& out_request) noexcept {
-  DeviceAddress parsed {};
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(head_device, parsed);
   if (!status.ok()) {
     return status;
   }
-  out_request = BatchWriteWordsRequest {
-      .head_device = parsed,
-      .words = words,
-  };
+  out_request = BatchWriteWordsRequest(parsed, words);
   return ok_status();
 }
 
@@ -358,51 +337,66 @@ struct LongStateReadSpec {
     std::string_view head_device,
     std::span<const BitValue> bits,
     BatchWriteBitsRequest& out_request) noexcept {
-  DeviceAddress parsed {};
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(head_device, parsed);
   if (!status.ok()) {
     return status;
   }
-  out_request = BatchWriteBitsRequest {
-      .head_device = parsed,
-      .bits = bits,
-  };
+  out_request = BatchWriteBitsRequest(parsed, bits);
   return ok_status();
 }
 
-/// \brief Builds one sparse random-read item from a string address.
-[[nodiscard]] inline Status make_random_read_item(
+/// \brief Builds one explicitly word-width sparse random-read item from a string address.
+[[nodiscard]] inline Status make_random_read_word_item(
     std::string_view device,
-    RandomReadItem& out_item,
-    bool double_word = false) noexcept {
-  DeviceAddress parsed {};
+    RandomReadWordItem& out_item) noexcept {
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(device, parsed);
   if (!status.ok()) {
     return status;
   }
-  out_item = RandomReadItem {
-      .device = parsed,
-      .double_word = double_word || detail::is_double_word_device(parsed.code),
-  };
+  out_item = RandomReadWordItem {parsed};
+  return ok_status();
+}
+
+/// \brief Builds one explicitly double-word-width sparse random-read item.
+[[nodiscard]] inline Status make_random_read_dword_item(
+    std::string_view device,
+    RandomReadDWordItem& out_item) noexcept {
+  DeviceAddress parsed(DeviceCode::D, 0U);
+  const Status status = parse_device_address(device, parsed);
+  if (!status.ok()) {
+    return status;
+  }
+  out_item = RandomReadDWordItem {parsed};
   return ok_status();
 }
 
 /// \brief Builds one sparse random word-write item from a string address.
 [[nodiscard]] inline Status make_random_write_word_item(
     std::string_view device,
-    std::uint32_t value,
-    RandomWriteWordItem& out_item,
-    bool double_word = false) noexcept {
-  DeviceAddress parsed {};
+    std::uint16_t value,
+    RandomWriteWordItem& out_item) noexcept {
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(device, parsed);
   if (!status.ok()) {
     return status;
   }
-  out_item = RandomWriteWordItem {
-      .device = parsed,
-      .value = value,
-      .double_word = double_word || detail::is_double_word_device(parsed.code),
-  };
+  out_item = RandomWriteWordItem(parsed, value);
+  return ok_status();
+}
+
+/// \brief Builds one explicitly double-word-width sparse random write item.
+[[nodiscard]] inline Status make_random_write_dword_item(
+    std::string_view device,
+    std::uint32_t value,
+    RandomWriteDWordItem& out_item) noexcept {
+  DeviceAddress parsed(DeviceCode::D, 0U);
+  const Status status = parse_device_address(device, parsed);
+  if (!status.ok()) {
+    return status;
+  }
+  out_item = RandomWriteDWordItem(parsed, value);
   return ok_status();
 }
 
@@ -411,41 +405,53 @@ struct LongStateReadSpec {
     std::string_view device,
     BitValue value,
     RandomWriteBitItem& out_item) noexcept {
-  DeviceAddress parsed {};
+  if (value != BitValue::Off && value != BitValue::On) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "Random write bit value must be BitValue::Off or BitValue::On");
+  }
+  DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(device, parsed);
   if (!status.ok()) {
     return status;
   }
-  out_item = RandomWriteBitItem {
-      .device = parsed,
-      .value = value,
-  };
+  out_item = RandomWriteBitItem(parsed, value);
   return ok_status();
 }
 
 /// \brief Builds a sparse random-read request from string-address specs.
 ///
-/// Use this when you want `0403` style sparse addressing without hand-filling `RandomReadItem`
-/// entries.
+/// Use this when you want `0403` style sparse addressing without hand-filling the explicit-width
+/// Word and DWord item types.
 [[nodiscard]] inline Status make_random_read_request(
-    std::span<const RandomReadSpec> specs,
-    std::span<RandomReadItem> out_items,
+    std::span<const RandomReadWordSpec> word_specs,
+    std::span<const RandomReadDWordSpec> dword_specs,
+    std::span<RandomReadWordItem> out_word_items,
+    std::span<RandomReadDWordItem> out_dword_items,
     RandomReadRequest& out_request) noexcept {
-  if (out_items.size() < specs.size()) {
-    return make_status(StatusCode::BufferTooSmall, "Random read output item buffer is too small");
+  if (out_word_items.size() < word_specs.size() ||
+      out_dword_items.size() < dword_specs.size()) {
+    return make_status(StatusCode::BufferTooSmall, "Random read output item buffers are too small");
   }
 
-  for (std::size_t index = 0; index < specs.size(); ++index) {
-    const Status status =
-        make_random_read_item(specs[index].device, out_items[index], specs[index].double_word);
+  for (std::size_t index = 0; index < word_specs.size(); ++index) {
+    const Status status = make_random_read_word_item(
+        word_specs[index].device, out_word_items[index]);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+  for (std::size_t index = 0; index < dword_specs.size(); ++index) {
+    const Status status = make_random_read_dword_item(
+        dword_specs[index].device, out_dword_items[index]);
     if (!status.ok()) {
       return status;
     }
   }
 
-  out_request = RandomReadRequest {
-      .items = std::span<const RandomReadItem>(out_items.data(), specs.size()),
-  };
+  out_request = RandomReadRequest(
+      std::span<const RandomReadWordItem>(out_word_items.data(), word_specs.size()),
+      std::span<const RandomReadDWordItem>(out_dword_items.data(), dword_specs.size()));
   return ok_status();
 }
 
@@ -454,18 +460,19 @@ struct LongStateReadSpec {
 /// The resulting payload is intended for `0801`. Readback still happens through the normal monitor
 /// read API.
 [[nodiscard]] inline Status make_monitor_registration(
-    std::span<const RandomReadSpec> specs,
-    std::span<RandomReadItem> out_items,
+    std::span<const RandomReadWordSpec> word_specs,
+    std::span<const RandomReadDWordSpec> dword_specs,
+    std::span<RandomReadWordItem> out_word_items,
+    std::span<RandomReadDWordItem> out_dword_items,
     MonitorRegistration& out_request) noexcept {
-  RandomReadRequest request {};
-  const Status status = make_random_read_request(specs, out_items, request);
+  RandomReadRequest request({}, {});
+  const Status status = make_random_read_request(
+      word_specs, dword_specs, out_word_items, out_dword_items, request);
   if (!status.ok()) {
     return status;
   }
 
-  out_request = MonitorRegistration {
-      .items = request.items,
-  };
+  out_request = MonitorRegistration(request.word_items, request.dword_items);
   return ok_status();
 }
 
@@ -482,14 +489,32 @@ struct LongStateReadSpec {
     const Status status = make_random_write_word_item(
         specs[index].device,
         specs[index].value,
-        out_items[index],
-        specs[index].double_word);
+        out_items[index]);
     if (!status.ok()) {
       return status;
     }
   }
 
   out_item_view = std::span<const RandomWriteWordItem>(out_items.data(), specs.size());
+  return ok_status();
+}
+
+/// \brief Builds sparse explicit double-word write items from string-address specs.
+[[nodiscard]] inline Status make_random_write_dword_items(
+    std::span<const RandomWriteDWordSpec> specs,
+    std::span<RandomWriteDWordItem> out_items,
+    std::span<const RandomWriteDWordItem>& out_item_view) noexcept {
+  if (out_items.size() < specs.size()) {
+    return make_status(StatusCode::BufferTooSmall, "Random write dword output item buffer is too small");
+  }
+  for (std::size_t index = 0; index < specs.size(); ++index) {
+    const Status status = make_random_write_dword_item(
+        specs[index].device, specs[index].value, out_items[index]);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+  out_item_view = std::span<const RandomWriteDWordItem>(out_items.data(), specs.size());
   return ok_status();
 }
 

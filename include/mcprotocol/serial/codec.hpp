@@ -54,6 +54,39 @@ struct DecodeResult {
   Status error {};
   /// Number of bytes consumed from the input span.
   std::size_t bytes_consumed = 0;
+  /// True when a complete response belongs to a different Format2 or route identity.
+  bool response_identity_mismatch = false;
+};
+
+/// \brief Per-wire-frame identity context kept outside static protocol configuration.
+///
+/// Normal clients allocate Format2 block numbers automatically. `format2()` exists for raw codec,
+/// test, and investigation callers that intentionally construct or decode one explicit wire frame.
+class FrameCodecContext {
+ public:
+  [[nodiscard]] static constexpr FrameCodecContext none() noexcept {
+    return FrameCodecContext(false, 0U);
+  }
+
+  [[nodiscard]] static constexpr FrameCodecContext format2(std::uint8_t block_number) noexcept {
+    return FrameCodecContext(true, block_number);
+  }
+
+  [[nodiscard]] constexpr bool has_format2_block_number() const noexcept {
+    return has_format2_block_number_;
+  }
+
+  [[nodiscard]] constexpr std::uint8_t format2_block_number() const noexcept {
+    return format2_block_number_;
+  }
+
+ private:
+  constexpr FrameCodecContext(bool has_format2_block_number, std::uint8_t format2_block_number) noexcept
+      : has_format2_block_number_(has_format2_block_number),
+        format2_block_number_(format2_block_number) {}
+
+  bool has_format2_block_number_;
+  std::uint8_t format2_block_number_;
 };
 
 /// \brief Returns the requested-point value from a sparse native bit result word.
@@ -94,12 +127,27 @@ class FrameCodec {
       std::span<std::uint8_t> out_frame,
       std::size_t& out_size) noexcept;
 
+  /// \brief Wraps command data using an explicit per-wire-frame identity context.
+  [[nodiscard]] static Status encode_request(
+      const ProtocolConfig& config,
+      FrameCodecContext context,
+      std::span<const std::uint8_t> request_data,
+      std::span<std::uint8_t> out_frame,
+      std::size_t& out_size) noexcept;
+
   /// \brief Builds a success response frame for tests and local tools.
   ///
   /// This is mainly used by tests and local validation helpers. Library users typically decode real
   /// target responses instead of constructing synthetic ones.
   [[nodiscard]] static Status encode_success_response(
       const ProtocolConfig& config,
+      std::span<const std::uint8_t> response_data,
+      std::span<std::uint8_t> out_frame,
+      std::size_t& out_size) noexcept;
+
+  [[nodiscard]] static Status encode_success_response(
+      const ProtocolConfig& config,
+      FrameCodecContext context,
       std::span<const std::uint8_t> response_data,
       std::span<std::uint8_t> out_frame,
       std::size_t& out_size) noexcept;
@@ -111,11 +159,24 @@ class FrameCodec {
       std::span<std::uint8_t> out_frame,
       std::size_t& out_size) noexcept;
 
+  [[nodiscard]] static Status encode_error_response(
+      const ProtocolConfig& config,
+      FrameCodecContext context,
+      std::uint16_t error_code,
+      std::span<std::uint8_t> out_frame,
+      std::size_t& out_size) noexcept;
+
   /// \brief Decodes one response frame from the front of `bytes`.
   ///
   /// The caller can use `bytes_consumed` to drop the decoded prefix and continue stream processing.
   [[nodiscard]] static DecodeResult decode_response(
       const ProtocolConfig& config,
+      std::span<const std::uint8_t> bytes) noexcept;
+
+  /// \brief Decodes one response using an explicit per-wire-frame identity context.
+  [[nodiscard]] static DecodeResult decode_response(
+      const ProtocolConfig& config,
+      FrameCodecContext context,
       std::span<const std::uint8_t> bytes) noexcept;
 };
 
@@ -249,7 +310,7 @@ namespace CommandCodec {
 /// @{
 [[nodiscard]] Status encode_link_direct_random_read(
     const ProtocolConfig& config,
-    std::span<const LinkDirectRandomReadItem> items,
+    std::span<const LinkDirectRandomReadWordItem> word_items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
@@ -261,13 +322,15 @@ namespace CommandCodec {
 
 [[nodiscard]] Status parse_random_read_response(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const RandomReadRequest& request,
     std::span<const std::uint8_t> response_data,
-    std::span<std::uint32_t> out_values) noexcept;
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) noexcept;
 
 [[nodiscard]] Status encode_random_write_words(
     const ProtocolConfig& config,
-    std::span<const RandomWriteWordItem> items,
+    std::span<const RandomWriteWordItem> word_items,
+    std::span<const RandomWriteDWordItem> dword_items,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
@@ -358,7 +421,7 @@ namespace CommandCodec {
 
 [[nodiscard]] Status encode_read_monitor(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const MonitorRegistration& registration,
     std::span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
@@ -370,9 +433,10 @@ namespace CommandCodec {
 
 [[nodiscard]] Status parse_read_monitor_response(
     const ProtocolConfig& config,
-    std::span<const RandomReadItem> items,
+    const MonitorRegistration& registration,
     std::span<const std::uint8_t> response_data,
-    std::span<std::uint32_t> out_values) noexcept;
+    std::span<std::uint16_t> out_words,
+    std::span<std::uint32_t> out_dwords) noexcept;
 
 [[nodiscard]] Status parse_read_extended_file_register_monitor_response(
     const ProtocolConfig& config,

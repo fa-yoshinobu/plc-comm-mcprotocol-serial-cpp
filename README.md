@@ -41,8 +41,9 @@ Select the PLC profile explicitly, configure the core client, then connect its a
 #include "mcprotocol_serial.hpp"
 
 auto protocol = mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(
-    mcprotocol::serial::PlcProfile::MelsecQ);
-protocol.route.station_no = 0;
+    mcprotocol::serial::PlcProfile::MelsecQ,
+    mcprotocol::serial::SumCheckMode::Disabled,
+    mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
 
 mcprotocol::serial::MelsecSerialClient plc;
 mcprotocol::serial::Status status = plc.configure(protocol);

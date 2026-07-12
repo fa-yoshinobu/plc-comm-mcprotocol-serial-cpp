@@ -17,7 +17,9 @@ enum class StatusCode : std::uint8_t {
   UnsupportedConfiguration,
   PlcError,
   BufferTooSmall,
-  Cancelled
+  Cancelled,
+  /// A state-changing request may have reached the PLC, but its result was not confirmed.
+  OperationOutcomeUnknown
 };
 
 /// \brief Result object returned by most public APIs.

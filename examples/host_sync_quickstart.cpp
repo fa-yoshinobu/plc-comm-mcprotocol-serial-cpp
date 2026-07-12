@@ -6,30 +6,34 @@
 
 int main() {
   using mcprotocol::serial::CpuModelInfo;
+  using mcprotocol::serial::HardwareFlowControl;
   using mcprotocol::serial::PlcProfile;
   using mcprotocol::serial::PosixSerialConfig;
   using mcprotocol::serial::PosixSyncClient;
+  using mcprotocol::serial::SerialParity;
+  using mcprotocol::serial::SumCheckMode;
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
   PosixSyncClient plc;
 
   // The serial port settings must match the PLC serial module exactly.
-  PosixSerialConfig serial {
+  const PosixSerialConfig serial(
 #if defined(_WIN32)
-      .device_path = "COM3",
+      "COM3",
 #else
-      .device_path = "/dev/ttyUSB0",
+      "/dev/ttyUSB0",
 #endif
-      .baud_rate = 19200,
-      .data_bits = 8,
-      .stop_bits = 1,
-      .parity = 'E',
-      .rts_cts = false,
-  };
+      19200,
+      8,
+      1,
+      SerialParity::Even,
+      HardwareFlowControl::None);
 
   // Keep the PLC profile explicit. See docsrc/user/GOTCHAS.md before changing it.
-  auto protocol = make_c4_ascii_format4_protocol(PlcProfile::MelsecQ);
-  protocol.route.station_no = 0;
+  auto protocol = make_c4_ascii_format4_protocol(
+      PlcProfile::MelsecQ,
+      SumCheckMode::Disabled,
+      mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
 
   // Open configures the blocking host facade and the underlying async client.
   mcprotocol::serial::Status status = plc.open(serial, protocol);
@@ -54,9 +58,9 @@ int main() {
     return 1;
   }
 
-  std::uint32_t sparse_d100 = 0;
+  std::uint16_t sparse_d100 = 0;
   // Random read shows the sparse-device path without writing to the PLC.
-  status = plc.random_read("D100", sparse_d100);
+  status = plc.random_read_word("D100", sparse_d100);
   if (!status.ok()) {
     std::fprintf(stderr, "random_read failed: %s\n", status.message);
     return 1;

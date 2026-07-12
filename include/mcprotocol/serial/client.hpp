@@ -5,6 +5,7 @@
 #include "mcprotocol/serial/compat/cstdint.hpp"
 
 #include "mcprotocol/serial/codec.hpp"
+#include "mcprotocol/serial/detail/fixed_item_array.hpp"
 #include "mcprotocol/serial/link_direct.hpp"
 #include "mcprotocol/serial/qualified_buffer.hpp"
 #include "mcprotocol/serial/span_compat.hpp"
@@ -16,7 +17,7 @@
 /// It owns no UART implementation itself. The embedding application is responsible for:
 ///
 /// - moving bytes from `pending_tx_frame()` to the actual serial port
-/// - calling `notify_tx_complete()` when TX is done
+/// - calling `notify_tx_complete(now_ms, transport_status)` when TX finishes or aborts
 /// - feeding received bytes back through `on_rx_bytes()`
 /// - calling `poll()` for timeout handling
 
@@ -28,36 +29,61 @@ namespace mcprotocol::serial {
 /// 1. call `configure()`
 /// 2. start an `async_*` request
 /// 3. transmit `pending_tx_frame()` with the board UART layer
-/// 4. call `notify_tx_complete()` when TX finishes
+/// 4. call `notify_tx_complete(now_ms, transport_status)` when TX finishes or aborts
 /// 5. feed received bytes with `on_rx_bytes()`
 /// 6. call `poll()` from the main loop or scheduler for timeout handling
 ///
-/// Output spans passed to `async_*` requests must remain valid until the completion callback fires
-/// or until the request is cancelled.
+/// Output spans passed to `async_*` requests must remain valid until the completion callback fires.
+/// Only one request may be active. A second enabled `async_*` request returns `Busy` before
+/// changing the active request's output storage, request metadata, or monitor state.
+/// Cancelling during TX records the cancellation but does not complete the request until the UART
+/// reports physical TX completion or abort through `notify_tx_complete()`.
+/// After transmission may have begun, any unconfirmed state-changing command completes as
+/// `OperationOutcomeUnknown`; the client never retries it automatically.
 class MelsecSerialClient {
  public:
   MelsecSerialClient() = default;
 
   /// \brief Stores protocol settings and validates the static configuration.
+  /// \brief Configures a session, or acknowledges that the caller reset the underlying transport.
+  ///
+  /// When `requires_transport_reset()` is true, drain/close/reopen the UART transport before
+  /// calling this again. A successful call clears the flag and allows new requests.
   [[nodiscard]] Status configure(const ProtocolConfig& config) noexcept;
   /// \brief Installs optional RS-485 TX begin/end hooks used by the async workflow.
-  void set_rs485_hooks(const Rs485Hooks& hooks) noexcept;
+  ///
+  /// Both callbacks must be supplied together or both omitted. Hooks cannot be changed while a
+  /// request is in flight, which guarantees that each TX begin callback is paired with the matching
+  /// TX end callback and user pointer.
+  [[nodiscard]] Status set_rs485_hooks(const Rs485Hooks& hooks) noexcept;
 
   /// \brief Returns whether a request is currently in flight.
   [[nodiscard]] bool busy() const noexcept;
+  /// \brief Returns true after an unsequenced ambiguous receive/transport failure until reset plus
+  /// reconfiguration.
+  ///
+  /// Format2 has a per-request block identity and can discard its own late response. Other frame
+  /// families cannot safely distinguish a same-route late response from the next request.
+  [[nodiscard]] bool requires_transport_reset() const noexcept;
   /// \brief Returns the encoded frame that should be sent to the UART layer.
   [[nodiscard]] std::span<const std::byte> pending_tx_frame() const noexcept;
 
-  /// \brief Advances the state machine after the transport finished sending the pending frame.
+  /// \brief Advances the state machine after the transport finished or aborted the pending TX.
+  ///
+  /// `transport_status` is mandatory. Pass `ok_status()` only after confirmed physical TX
+  /// completion; otherwise pass the actual transport failure or cancellation status.
   [[nodiscard]] Status notify_tx_complete(
       std::uint32_t now_ms,
-      Status transport_status = ok_status()) noexcept;
+      Status transport_status) noexcept;
 
   /// \brief Feeds received bytes into the response decoder.
   void on_rx_bytes(std::uint32_t now_ms, std::span<const std::byte> bytes) noexcept;
   /// \brief Checks timeouts for the current in-flight request.
   void poll(std::uint32_t now_ms) noexcept;
-  /// \brief Cancels the in-flight request and clears transient state.
+  /// \brief Requests cancellation of the in-flight request.
+  ///
+  /// During TX, completion is deferred until `notify_tx_complete()` confirms that physical TX has
+  /// completed or stopped, so an active RS-485 direction hook can always be released exactly once.
   void cancel() noexcept;
 
   /// \brief Starts contiguous word read (`0401`).
@@ -175,22 +201,28 @@ class MelsecSerialClient {
   [[nodiscard]] Status async_random_read(
       std::uint32_t now_ms,
       const RandomReadRequest& request,
-      std::span<std::uint32_t> out_values,
+      std::span<std::uint16_t> out_words,
+      std::span<std::uint32_t> out_dwords,
       CompletionHandler callback,
       void* user) noexcept;
 
   /// \brief Starts native `Jn\\...` random read (`0403` + device extension specification).
   [[nodiscard]] Status async_link_direct_random_read(
       std::uint32_t now_ms,
-      std::span<const LinkDirectRandomReadItem> items,
-      std::span<std::uint32_t> out_values,
+      std::span<const LinkDirectRandomReadWordItem> word_items,
+      std::span<std::uint16_t> out_words,
       CompletionHandler callback,
       void* user) noexcept;
 
   /// \brief Starts native random word/dword write (`1402` word path).
+  ///
+  /// Every item requires an explicit value. Once transmission has started, timeout, cancellation,
+  /// or an unconfirmed transport failure completes as `StatusCode::OperationOutcomeUnknown`; the
+  /// library never retries the write.
   [[nodiscard]] Status async_random_write_words(
       std::uint32_t now_ms,
-      std::span<const RandomWriteWordItem> items,
+      std::span<const RandomWriteWordItem> word_items,
+      std::span<const RandomWriteDWordItem> dword_items,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -202,6 +234,9 @@ class MelsecSerialClient {
       void* user) noexcept;
 
   /// \brief Starts native `Jn\\...` random word write (`1402` + device extension specification).
+  ///
+  /// Every item requires an explicit value. An unconfirmed result after transmission is
+  /// `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
   [[nodiscard]] Status async_link_direct_random_write_words(
       std::uint32_t now_ms,
       std::span<const LinkDirectRandomWriteWordItem> items,
@@ -209,6 +244,9 @@ class MelsecSerialClient {
       void* user) noexcept;
 
   /// \brief Starts native random bit write (`1402` bit path).
+  ///
+  /// Every item requires an explicit `Off` or `On`. An unconfirmed result after transmission is
+  /// `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
   [[nodiscard]] Status async_random_write_bits(
       std::uint32_t now_ms,
       std::span<const RandomWriteBitItem> items,
@@ -216,6 +254,9 @@ class MelsecSerialClient {
       void* user) noexcept;
 
   /// \brief Starts native `Jn\\...` random bit write (`1402` + device extension specification).
+  ///
+  /// Every item requires an explicit `Off` or `On`. An unconfirmed result after transmission is
+  /// `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
   [[nodiscard]] Status async_link_direct_random_write_bits(
       std::uint32_t now_ms,
       std::span<const LinkDirectRandomWriteBitItem> items,
@@ -284,7 +325,8 @@ class MelsecSerialClient {
   /// \brief Starts monitor read (`0802`) using the most recent registration.
   [[nodiscard]] Status async_read_monitor(
       std::uint32_t now_ms,
-      std::span<std::uint32_t> out_values,
+      std::span<std::uint16_t> out_words,
+      std::span<std::uint32_t> out_dwords,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -332,7 +374,10 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
 
-  /// \brief Starts remote RUN (`1001`).
+  /// \brief Starts remote RUN (`1001`) with mandatory conflict and clear policies.
+  ///
+  /// After transmission starts, an unconfirmed transport/timeout result is reported as
+  /// `StatusCode::OperationOutcomeUnknown`; the library never retries this command.
   [[nodiscard]] Status async_remote_run(
       std::uint32_t now_ms,
       RemoteOperationMode mode,
@@ -346,7 +391,10 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
 
-  /// \brief Starts remote PAUSE (`1003`).
+  /// \brief Starts remote PAUSE (`1003`) with a mandatory conflict policy.
+  ///
+  /// After transmission starts, an unconfirmed transport/timeout result is reported as
+  /// `StatusCode::OperationOutcomeUnknown`; the library never retries with another policy.
   [[nodiscard]] Status async_remote_pause(
       std::uint32_t now_ms,
       RemoteOperationMode mode,
@@ -381,8 +429,8 @@ class MelsecSerialClient {
 
   /// \brief Starts remote RESET (`1006`).
   ///
-  /// The manual notes that some targets may reset before returning a response. In that case this
-  /// client treats a pure response-timeout with no received bytes as success for this operation.
+  /// Completion means the request bytes were transmitted successfully. The command does not wait
+  /// for a normal response and does not claim that the PLC completed its reset.
   [[nodiscard]] Status async_remote_reset(
       std::uint32_t now_ms,
       CompletionHandler callback,
@@ -503,24 +551,34 @@ class MelsecSerialClient {
       std::size_t request_data_size,
       CompletionHandler callback,
       void* user) noexcept;
+  [[nodiscard]] Status validate_request_admission() const noexcept;
 
   [[nodiscard]] std::uint8_t expected_e1_response_subheader() const noexcept;
   [[nodiscard]] std::size_t expected_e1_success_response_data_size() const noexcept;
   [[nodiscard]] Status handle_response(std::span<const std::uint8_t> response_data) noexcept;
+  [[nodiscard]] Status active_timeout_status(const char* timeout_message) const noexcept;
+  [[nodiscard]] Status active_transport_failure_status(Status transport_status) const noexcept;
+  [[nodiscard]] Status active_unconfirmed_failure_status(Status failure_status) const noexcept;
+  [[nodiscard]] bool active_operation_outcome_can_be_unknown() const noexcept;
   void complete(Status status) noexcept;
   void clear_pending_outputs() noexcept;
   void clear_pending_copies() noexcept;
 
-  ProtocolConfig config_ {};
+  ProtocolConfig config_ = ProtocolConfig::unconfigured_for_storage();
   Rs485Hooks rs485_hooks_ {};
   bool configured_ = false;
   bool busy_ = false;
+  bool transport_reset_required_ = false;
   bool awaiting_write_complete_ = false;
+  bool cancel_requested_during_tx_ = false;
   OperationKind operation_ = OperationKind::None;
   CompletionHandler callback_ = nullptr;
   void* callback_user_ = nullptr;
   std::uint32_t response_deadline_ms_ = 0;
   std::uint32_t inter_byte_deadline_ms_ = 0;
+  std::uint8_t next_format2_block_number_ = 0;
+  std::uint8_t active_format2_block_number_ = 0;
+  bool active_format2_block_number_valid_ = false;
 
   std::array<std::uint8_t, kMaxRequestFrameBytes> tx_frame_ {};
   std::size_t tx_frame_size_ = 0;
@@ -528,24 +586,26 @@ class MelsecSerialClient {
   std::size_t rx_frame_size_ = 0;
   std::array<std::uint8_t, kMaxRequestDataBytes> request_data_ {};
 
-  BatchReadWordsRequest batch_read_words_request_ {};
-  ExtendedFileRegisterBatchReadWordsRequest extended_file_register_read_request_ {};
-  ExtendedFileRegisterDirectBatchReadWordsRequest direct_extended_file_register_read_request_ {};
-  BatchReadBitsRequest batch_read_bits_request_ {};
-  UserFrameReadRequest user_frame_read_request_ {};
-  QualifiedBufferWordDevice extended_batch_words_device_ {};
+  BatchReadWordsRequest batch_read_words_request_ {DeviceAddress {DeviceCode::D, 0U}, 0U};
+  ExtendedFileRegisterBatchReadWordsRequest extended_file_register_read_request_ {
+      ExtendedFileRegisterAddress {1U, 0U}, 0U};
+  ExtendedFileRegisterDirectBatchReadWordsRequest direct_extended_file_register_read_request_ {0U, 0U};
+  BatchReadBitsRequest batch_read_bits_request_ {DeviceAddress {DeviceCode::M, 0U}, 0U};
+  UserFrameReadRequest user_frame_read_request_ {0U};
+  QualifiedBufferWordDevice extended_batch_words_device_ {QualifiedBufferDeviceKind::G, 0U, 0U};
   std::uint16_t extended_batch_words_points_ = 0;
 #if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
-  HostBufferReadRequest host_buffer_read_request_ {};
+  HostBufferReadRequest host_buffer_read_request_ {0U, 0U};
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
-  ModuleBufferReadRequest module_buffer_read_request_ {};
+  ModuleBufferReadRequest module_buffer_read_request_ {0U, 0U, 0U};
 #endif
 
   std::span<std::uint16_t> out_words_ {};
   std::span<BitValue> out_bits_ {};
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
-  std::span<std::uint32_t> out_values_ {};
+  std::span<std::uint16_t> out_random_words_ {};
+  std::span<std::uint32_t> out_random_dwords_ {};
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
   std::span<std::byte> out_bytes_ {};
@@ -562,21 +622,44 @@ class MelsecSerialClient {
   UserFrameRegistrationData* out_user_frame_data_ = nullptr;
 
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
-  std::array<RandomReadItem, kMaxRandomAccessItems> pending_random_items_ {};
-  std::size_t pending_random_item_count_ = 0;
+  std::array<RandomReadWordItem, kMaxRandomAccessItems> pending_random_word_items_ =
+      detail::make_filled_array<RandomReadWordItem, kMaxRandomAccessItems>(
+          RandomReadWordItem {
+              DeviceAddress {static_cast<DeviceCode>(0xFFU), 0U}});
+  std::array<RandomReadDWordItem, kMaxRandomAccessItems> pending_random_dword_items_ =
+      detail::make_filled_array<RandomReadDWordItem, kMaxRandomAccessItems>(
+          RandomReadDWordItem {
+              DeviceAddress {static_cast<DeviceCode>(0xFFU), 0U}});
+  std::size_t pending_random_word_item_count_ = 0;
+  std::size_t pending_random_dword_item_count_ = 0;
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
-  std::array<RandomReadItem, kMaxMonitorItems> monitor_items_ {};
-  std::size_t monitor_item_count_ = 0;
+  std::array<RandomReadWordItem, kMaxMonitorItems> monitor_word_items_ =
+      detail::make_filled_array<RandomReadWordItem, kMaxMonitorItems>(
+          RandomReadWordItem {
+              DeviceAddress {static_cast<DeviceCode>(0xFFU), 0U}});
+  std::array<RandomReadDWordItem, kMaxMonitorItems> monitor_dword_items_ =
+      detail::make_filled_array<RandomReadDWordItem, kMaxMonitorItems>(
+          RandomReadDWordItem {
+              DeviceAddress {static_cast<DeviceCode>(0xFFU), 0U}});
+  std::size_t monitor_word_item_count_ = 0;
+  std::size_t monitor_dword_item_count_ = 0;
   bool monitor_registered_ = false;
-  std::array<ExtendedFileRegisterAddress, kMaxMonitorItems> pending_extended_file_register_items_ {};
+  std::array<ExtendedFileRegisterAddress, kMaxMonitorItems> pending_extended_file_register_items_ =
+      detail::make_filled_array<ExtendedFileRegisterAddress, kMaxMonitorItems>(
+          ExtendedFileRegisterAddress(0U, 0U));
   std::size_t pending_extended_file_register_item_count_ = 0;
-  std::array<ExtendedFileRegisterAddress, kMaxMonitorItems> extended_file_register_monitor_items_ {};
+  std::array<ExtendedFileRegisterAddress, kMaxMonitorItems> extended_file_register_monitor_items_ =
+      detail::make_filled_array<ExtendedFileRegisterAddress, kMaxMonitorItems>(
+          ExtendedFileRegisterAddress(0U, 0U));
   std::size_t extended_file_register_monitor_item_count_ = 0;
   bool extended_file_register_monitor_registered_ = false;
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
-  std::array<MultiBlockReadBlock, kMaxMultiBlockCount> pending_multi_blocks_ {};
+  std::array<MultiBlockReadBlock, kMaxMultiBlockCount> pending_multi_blocks_ =
+      detail::make_filled_array<MultiBlockReadBlock, kMaxMultiBlockCount>(
+          MultiBlockReadBlock(
+              DeviceAddress {static_cast<DeviceCode>(0xFFU), 0U}, 0U, false));
   std::size_t pending_multi_block_count_ = 0;
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
