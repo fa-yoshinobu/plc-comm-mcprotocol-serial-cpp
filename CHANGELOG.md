@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-07-13
+
 - Docs: Removed references to the independently maintained cross-repository verification run from library-owned profile records and terminology.
 - Library: A rejected concurrent `async_*` call now returns `Busy` before mutating the active
   request's output spans, copied request items, monitor metadata, or response-size expectations.
@@ -28,8 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reconfiguration before reuse, preventing stale response tails from completing a later request.
 - Tooling: `recover-c24` now requires an explicit `eot` or `cl` argument; omission is rejected
   before the serial device is opened.
-### BREAKING
 
+### BREAKING
 - Library: `notify_tx_complete` now requires an explicit transport status. RS-485 TX begin/end
   hooks must be installed as a complete pair, cannot change while a request is active, and always
   retain the same callback user through the matching end notification. Cancellation during TX is
@@ -136,8 +138,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tooling: `remote-pause` now requires exactly one `no-force|force` argument. Removed the
   `normal`, `safe`, and numeric conflict-policy aliases from both Remote RUN and PAUSE parsing.
 
-### Changed
+### Added
+- Tests: Added native and Arduino Mega consumers that build the packed tarball through `lib_deps` and require both core implementation objects to be linked.
 
+### Changed
 - Library: Added `StatusCode::OperationOutcomeUnknown`. Remote RUN transport failure, timeout,
   cancellation after TX, or an unconfirmable response reports that the PLC RUN state is unknown
   instead of looking like a pre-send validation failure. Remote RUN is never retried automatically.
@@ -163,8 +167,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   another request; the host sync wrapper closes its serial port. Format2 remains reusable because
   its block identity isolates late responses.
 
-### Tests
+- Release: The release workflow now checks the PlatformIO registry before publishing so an existing version cannot be republished.
+- Release: Bumped library, CMake, PlatformIO, Arduino, public version-header, and install-documentation metadata to `3.1.0`.
+- Library: Defined the PlatformIO package as core-only; host serial backends and `PosixSyncClient` remain source-tree CMake features.
+- Docs: Replaced README links to package-excluded `docsrc` files with stable public documentation-site links and separated the PlatformIO and host installation paths.
 
+### Fixed
+- Library: Corrected PlatformIO `srcFilter` paths to be relative to the manifest `srcDir`, so packed-package consumers compile and link `client.cpp` and `codec.cpp`.
+- Library: Moved bundled standard-library compatibility headers out of the public include root so they no longer shadow headers such as `<array>` on MSVC and other host toolchains.
+- Build: Made the library's no-exception/no-RTTI size flags opt-in and private so normal CMake consumers retain their exception and RTTI settings.
+
+### Tests
 - Added compile-time and runtime coverage for required serial configuration, invalid and unknown
   values, embedded-NUL paths, and binary/ASCII data-bit combinations.
 - Added Format2 coverage for explicit raw context, missing/inactive context rejection, 00..FF wrap,
@@ -183,22 +196,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   boundary vectors, CLI parse/validation cases, and immediate Remote RESET transmission completion.
 - Added inter-byte default/range, one-byte/multi-chunk, exact-boundary, deadline restart, 32-bit
   wrap, complete-response, partial-state discard, post-timeout isolation, and CLI boundary coverage.
-
-## [3.1.0] - 2026-07-10
-
-### Fixed
-- Library: Corrected PlatformIO `srcFilter` paths to be relative to the manifest `srcDir`, so packed-package consumers compile and link `client.cpp` and `codec.cpp`.
-- Library: Moved bundled standard-library compatibility headers out of the public include root so they no longer shadow headers such as `<array>` on MSVC and other host toolchains.
-- Build: Made the library's no-exception/no-RTTI size flags opt-in and private so normal CMake consumers retain their exception and RTTI settings.
-
-### Changed
-- Release: The release workflow now checks the PlatformIO registry before publishing so an existing version cannot be republished.
-- Release: Bumped library, CMake, PlatformIO, Arduino, public version-header, and install-documentation metadata to `3.1.0`.
-- Library: Defined the PlatformIO package as core-only; host serial backends and `PosixSyncClient` remain source-tree CMake features.
-- Docs: Replaced README links to package-excluded `docsrc` files with stable public documentation-site links and separated the PlatformIO and host installation paths.
-
-### Added
-- Tests: Added native and Arduino Mega consumers that build the packed tarball through `lib_deps` and require both core implementation objects to be linked.
 
 ## [3.0.0] - 2026-07-10
 
