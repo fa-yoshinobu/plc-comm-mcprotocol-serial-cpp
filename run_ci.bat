@@ -89,6 +89,10 @@ for %%I in (%~1) do if not "%%~$PATH:I"=="" (
   set "%~2=%%~$PATH:I"
   exit /b 0
 )
+if /I "%~1"=="pio.exe" if exist "%USERPROFILE%\.platformio\penv\Scripts\pio.exe" (
+  set "%~2=%USERPROFILE%\.platformio\penv\Scripts\pio.exe"
+  exit /b 0
+)
 >&2 echo %~1 not found.
 exit /b 1
 

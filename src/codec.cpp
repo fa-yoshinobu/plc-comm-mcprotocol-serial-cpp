@@ -480,7 +480,7 @@ class ByteWriter {
 // some validated iQ-R serial targets reject Jn\ native 0403/1402/0801 requests unless the
 // request body uses the Q/L extension-specification wire format. Keep this helper
 // narrow to link-direct native traffic so the default device encoding path stays rule-based.
-[[nodiscard]] ProtocolConfig link_direct_native_wire_config(const ProtocolConfig& config) noexcept {
+[[maybe_unused]] [[nodiscard]] ProtocolConfig link_direct_native_wire_config(const ProtocolConfig& config) noexcept {
   if (!is_binary_mode(config) || !is_iq_r_series(config)) {
     return config;
   }
@@ -750,7 +750,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
          writer.push(static_cast<std::uint8_t>('0'));
 }
 
-[[nodiscard]] bool append_c1_command_text(ByteWriter& writer, const char* text) noexcept {
+[[maybe_unused]] [[nodiscard]] bool append_c1_command_text(ByteWriter& writer, const char* text) noexcept {
   return writer.push(static_cast<std::uint8_t>(text[0])) &&
          writer.push(static_cast<std::uint8_t>(text[1])) &&
          writer.push(static_cast<std::uint8_t>('0'));
@@ -1073,7 +1073,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 // C1 random/monitor item helpers and link-direct device extensions.
 
-[[nodiscard]] Status validate_c1_random_write_word_item(
+[[maybe_unused]] [[nodiscard]] Status validate_c1_random_write_word_item(
     const ProtocolConfig& config,
     const RandomWriteWordItem& item) noexcept {
   const Status item_status = validate_random_item_device(
@@ -1094,7 +1094,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
-[[nodiscard]] Status validate_c1_random_write_bit_item(
+[[maybe_unused]] [[nodiscard]] Status validate_c1_random_write_bit_item(
     const RandomWriteBitItem& item) noexcept {
   const Status bit_status = validate_bit_device(item.device, "1C random write bits requires bit devices");
   if (!bit_status.ok()) {
@@ -1106,7 +1106,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
-[[nodiscard]] Status validate_c1_monitor_item(
+[[maybe_unused]] [[nodiscard]] Status validate_c1_monitor_item(
     const ProtocolConfig& config,
     const RandomReadWordItem& item,
     bool bit_units) noexcept {
@@ -1198,7 +1198,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return is_bit_device_code(code) ? 40U : 256U;
 }
 
-[[nodiscard]] bool c1_monitor_uses_bit_units(
+[[maybe_unused]] [[nodiscard]] bool c1_monitor_uses_bit_units(
     std::span<const RandomReadWordItem> word_items,
     std::span<const RandomReadDWordItem> dword_items) noexcept {
   if (!dword_items.empty()) {
@@ -1272,7 +1272,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
-[[nodiscard]] Status validate_link_direct_random_read_item(
+[[maybe_unused]] [[nodiscard]] Status validate_link_direct_random_read_item(
     const ProtocolConfig& config,
     const LinkDirectRandomReadWordItem& item) noexcept {
   if (is_link_direct_word_device(item.device.device.code)) {
@@ -1284,13 +1284,13 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return invalid_argument("Link direct random read requires X, Y, B, W, SB, or SW");
 }
 
-[[nodiscard]] Status validate_link_direct_random_write_word_item(
+[[maybe_unused]] [[nodiscard]] Status validate_link_direct_random_write_word_item(
     const ProtocolConfig& config,
     const LinkDirectRandomWriteWordItem& item) noexcept {
   return validate_link_direct_word_device(config, item.device);
 }
 
-[[nodiscard]] Status validate_link_direct_random_write_bit_item(
+[[maybe_unused]] [[nodiscard]] Status validate_link_direct_random_write_bit_item(
     const ProtocolConfig& config,
     const LinkDirectRandomWriteBitItem& item) noexcept {
   return validate_link_direct_bit_device(config, item.device);
@@ -1744,7 +1744,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return writer.append_le16(count);
 }
 
-[[nodiscard]] bool append_multi_block_block_count(
+[[maybe_unused]] [[nodiscard]] bool append_multi_block_block_count(
     ByteWriter& writer,
     const ProtocolConfig& config,
     std::uint16_t count) noexcept {
@@ -1754,7 +1754,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return count <= 0xFFU && writer.push(static_cast<std::uint8_t>(count));
 }
 
-[[nodiscard]] bool append_random_write_bit_count(
+[[maybe_unused]] [[nodiscard]] bool append_random_write_bit_count(
     ByteWriter& writer,
     const ProtocolConfig& config,
     std::uint16_t count) noexcept {
@@ -1764,7 +1764,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return count <= 0xFFU && writer.push(static_cast<std::uint8_t>(count));
 }
 
-[[nodiscard]] bool append_random_word_dword_count(
+[[maybe_unused]] [[nodiscard]] bool append_random_word_dword_count(
     ByteWriter& writer,
     const ProtocolConfig& config,
     std::uint16_t count) noexcept {
@@ -1774,7 +1774,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return count <= 0xFFU && writer.push(static_cast<std::uint8_t>(count));
 }
 
-[[nodiscard]] bool append_random_write_bit_device_reference(
+[[maybe_unused]] [[nodiscard]] bool append_random_write_bit_device_reference(
     ByteWriter& writer,
     const ProtocolConfig& config,
     const DeviceAddress& device) noexcept {
@@ -1843,7 +1843,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return head_device;
 }
 
-[[nodiscard]] bool append_word_units_from_bits_ascii(
+[[maybe_unused]] [[nodiscard]] bool append_word_units_from_bits_ascii(
     ByteWriter& writer,
     std::span<const BitValue> bits) noexcept {
   if ((bits.size() % 16U) != 0U) {
@@ -1863,7 +1863,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return true;
 }
 
-[[nodiscard]] bool append_word_units_from_bits_binary_direct(
+[[maybe_unused]] [[nodiscard]] bool append_word_units_from_bits_binary_direct(
     ByteWriter& writer,
     std::span<const BitValue> bits) noexcept {
   if ((bits.size() % 16U) != 0U) {
@@ -2245,7 +2245,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
                                                      : buffer_too_small("Binary request data exceeds maximum size");
 }
 
-[[nodiscard]] Status validate_loopback_chars(
+[[maybe_unused]] [[nodiscard]] Status validate_loopback_chars(
     const ProtocolConfig& config,
     std::span<const char> hex_ascii) noexcept {
   const std::size_t max_length = is_c1_frame(config) ? 254U : kMaxLoopbackBytes;

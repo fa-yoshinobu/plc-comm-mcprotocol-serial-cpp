@@ -89,7 +89,7 @@ struct StreamDecodeResult {
   std::size_t discard_prefix = 0;
 };
 
-[[nodiscard]] bool is_e1_bit_device(DeviceCode code) noexcept {
+[[maybe_unused]] [[nodiscard]] bool is_e1_bit_device(DeviceCode code) noexcept {
   switch (code) {
     case DeviceCode::X:
     case DeviceCode::Y:
