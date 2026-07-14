@@ -5,8 +5,8 @@ Branch: `quality/2026-07-overhaul`
 Authoritative cross-library decisions: `D:\APP\Close\instructions\omittable_configuration_decisions_20260711.md`
 
 This record preserves the repository-specific implementation contract and evidence. A checked item
-means evidence exists; Claude and live-hardware items remain open until they are actually performed
-or explicitly dispositioned.
+means evidence exists; live-hardware items remain open until they are actually performed or
+explicitly dispositioned.
 
 ## D-087: explicit serial device path
 
