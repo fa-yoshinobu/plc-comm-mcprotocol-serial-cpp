@@ -79,24 +79,26 @@ if %errorlevel% neq 0 (
 if "%RUN_PLATFORMIO%"=="1" (
   echo [platformio] Checking registry duplicate and package build...
   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\check_registry_duplicate.ps1 -Registry platformio -Package fa-yoshinobu/mcprotocol-serial-cpp -VersionSource library-properties -ManifestPath library.properties -CompareSource library-json -CompareManifestPath library.json
-  if %errorlevel% neq 0 (
+  if errorlevel 1 (
     echo [ERROR] PlatformIO registry check failed.
-    exit /b %errorlevel%
+    exit /b 1
   )
 
   call run_ci.bat --build-dir build_win --with-platformio
-  if %errorlevel% neq 0 (
+  if errorlevel 1 (
     echo [ERROR] PlatformIO sample gate failed.
-    exit /b %errorlevel%
+    exit /b 1
   )
 
   if not exist release-artifacts mkdir release-artifacts
-  set "PIO_EXE=pio"
-  if exist "%USERPROFILE%\.platformio\penv\Scripts\pio.exe" set "PIO_EXE=%USERPROFILE%\.platformio\penv\Scripts\pio.exe"
-  "%PIO_EXE%" pkg pack --output release-artifacts
-  if %errorlevel% neq 0 (
+  if exist "%USERPROFILE%\.platformio\penv\Scripts\pio.exe" (
+    "%USERPROFILE%\.platformio\penv\Scripts\pio.exe" pkg pack --output release-artifacts
+  ) else (
+    pio pkg pack --output release-artifacts
+  )
+  if errorlevel 1 (
     echo [ERROR] PlatformIO pack failed.
-    exit /b %errorlevel%
+    exit /b 1
   )
 )
 
@@ -106,6 +108,11 @@ git archive --format=zip --output "release-artifacts\mcprotocol-serial-cpp-v%VER
 if %errorlevel% neq 0 (
   echo [ERROR] Failed to build release archive.
   exit /b %errorlevel%
+)
+python scripts\check_release_archive.py "release-artifacts\mcprotocol-serial-cpp-v%VERSION%.zip"
+if errorlevel 1 (
+  echo [ERROR] Release archive content check failed.
+  exit /b 1
 )
 
 echo ===================================================

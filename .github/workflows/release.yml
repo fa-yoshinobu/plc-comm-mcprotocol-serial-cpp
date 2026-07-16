@@ -87,7 +87,7 @@ jobs:
           mkdir -p release-artifacts
           archive="release-artifacts/mcprotocol-serial-cpp-v${{ steps.version.outputs.version }}.zip"
           git archive --format=zip --output "${archive}" HEAD
-          unzip -l "${archive}" README.md LICENSE library.json library.properties include/* examples/* > /dev/null
+          python3 scripts/check_release_archive.py "${archive}"
 
       - name: Pack PlatformIO package
         run: |
