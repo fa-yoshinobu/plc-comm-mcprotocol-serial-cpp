@@ -2,6 +2,7 @@
 .github export-ignore
 .github/** export-ignore
 .gitignore export-ignore
+TODO.md export-ignore
 build_win export-ignore
 build_win/** export-ignore
 docsrc/maintainer export-ignore

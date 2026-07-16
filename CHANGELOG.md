@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-07-17
+
+- Release: Bumped library, CMake, PlatformIO, Arduino, public version-header, and install-documentation metadata to `3.2.0`.
+- CI: The PlatformIO release gate now discovers the standard per-user installation without a caller-specific PATH edit and treats repository-owned compiler warnings as errors.
+- CI: Fixed PlatformIO package-command selection and failure propagation so the release gate cannot report success after an empty or failed package invocation.
+- CI: Removed and ignored the repository-local `AGENTS.md`, excluded maintainer-only `TODO.md` from the GitHub Release ZIP, and added archive-content checks to the local and GitHub release gates.
+
 ## [3.1.0] - 2026-07-13
 
 - Docs: Removed references to the independently maintained cross-repository verification run from library-owned profile records and terminology.
