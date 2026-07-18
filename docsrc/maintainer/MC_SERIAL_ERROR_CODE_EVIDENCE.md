@@ -74,12 +74,12 @@ Observed abnormal responses:
 Historical raw-log filenames from the session are listed below. The transient
 files are not retained in the current workspace:
 
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format1_normal_read.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format1_abnormal_7fxx.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format1_raw_7fxx_probe2.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format1_write_and_dx_raw.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format1_sumcheck_enabled.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format1_sumcheck_write_readback.log`
+- `20260704_iqf_com4_format1_normal_read.log`
+- `20260704_iqf_com4_format1_abnormal_7fxx.log`
+- `20260704_iqf_com4_format1_raw_7fxx_probe2.log`
+- `20260704_iqf_com4_format1_write_and_dx_raw.log`
+- `20260704_iqf_com4_format1_sumcheck_enabled.log`
+- `20260704_iqf_com4_format1_sumcheck_write_readback.log`
 
 ## 2026-07-04: iQ-F / FX5, CLI `c1-ascii-f1`
 
@@ -109,8 +109,8 @@ Observed abnormal responses:
 
 Historical raw-log filenames (transient files not retained):
 
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_c1_ascii_f1_d100_read.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_c1_ascii_f1_abnormal_error_codes.log`
+- `20260704_iqf_com4_c1_ascii_f1_d100_read.log`
+- `20260704_iqf_com4_c1_ascii_f1_abnormal_error_codes.log`
 
 ## Additional 1C Error-Code Evidence Policy
 
@@ -162,12 +162,12 @@ responses match the earlier Format1 probes for the same request shapes.
 
 Historical raw-log filenames (transient files not retained):
 
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format4_sanity_reads.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format4_abnormal_error_codes.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format4_station_pc_mismatch.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format4_c1_write_readback.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format4_c4_write_readback.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format4_sumcheck_enabled_retest.log`
+- `20260704_iqf_com4_format4_sanity_reads.log`
+- `20260704_iqf_com4_format4_abnormal_error_codes.log`
+- `20260704_iqf_com4_format4_station_pc_mismatch.log`
+- `20260704_iqf_com4_format4_c1_write_readback.log`
+- `20260704_iqf_com4_format4_c4_write_readback.log`
+- `20260704_iqf_com4_format4_sumcheck_enabled_retest.log`
 
 Earlier sum-check attempts before the final PLC-side setting adjustment were
 transient and are not retained. The structured row above is the decision

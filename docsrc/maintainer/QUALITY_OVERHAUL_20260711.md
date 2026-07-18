@@ -2,7 +2,7 @@
 
 Status: complete; final acceptance recorded 2026-07-18
 Original implementation branch: `quality/2026-07-overhaul` (merged)
-Authoritative cross-library decisions: `D:\APP\Close\instructions\omittable_configuration_decisions_20260711.md`
+Authoritative cross-library decisions: archived workspace record `omittable_configuration_decisions_20260711.md`
 
 This record preserves the repository-specific implementation contract and evidence. A checked item
 means evidence exists. All decisions documented here have completed final acceptance; the approved
@@ -1090,7 +1090,7 @@ Acceptance criteria:
   `standard_header_consumer`, and `cli_serial_config_tests` all passed (3/3); Markdown links and the
   generated API-reference drift check passed.
 - PlatformIO results: after adding the existing
-  `C:\Users\GMKtek\.platformio\penv\Scripts` directory to the process PATH, the nine CI-selected
+  `%USERPROFILE%\.platformio\penv\Scripts` directory to the process PATH, the nine CI-selected
   native/RP2040/ESP32-C3/Arduino Mega environments and packed-package consumers passed. A direct
   full matrix run also passed all 12 configured environments, including native CLI, polling-
   reconnect, and Mega ultra-minimal. The D-110 review additionally caught and fixed C++17 aggregate
