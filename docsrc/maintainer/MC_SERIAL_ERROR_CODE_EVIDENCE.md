@@ -5,6 +5,34 @@ codes. It is maintainer evidence, not a public error-code promise. Do not
 publish unobserved code meanings from this file without a separate manual or
 hardware decision.
 
+## MCS-EVIDENCE-CLOSE-20260718-01: Error-code evidence collection closure
+
+Implementation scope: retained `1C` NAK and `C4`/serial `7Fxx` response-code
+evidence from the 2026-07-04 iQ-F / FX5 session, plus the corresponding shared
+docs-site summary.
+
+Target contract: the structured request/response tables in this record are the
+authoritative retained evidence. The raw workspace logs were transient and are
+not retained in the current workspace, so they are not claimed as available
+artifacts. The representative `1C` and `7Fxx` collection is complete and is not
+an active generic TODO. A future probe requires a specific diagnostic question,
+an exact PLC/profile and serial setup, and a newly approved live-verification
+batch.
+
+Compatibility impact: none. Runtime behavior, public API, profile policy, and
+support claims are unchanged.
+
+Acceptance criteria:
+
+- [x] Every retained observed code is tied to a request shape and physical bench
+      in this record.
+- [x] The shared troubleshooting page lists only project-observed codes and no
+      longer describes representative `1C` or `7Fxx` collection as pending.
+- [x] Missing transient raw logs have an explicit retention disposition and are
+      not presented as available evidence files.
+- [x] Unobserved code meanings remain outside the public project claim.
+- [x] No live PLC communication was performed for this closure.
+
 ## 2026-07-04: iQ-F / FX5, CLI `c4-ascii-f1`
 
 | Field | Value |
@@ -43,14 +71,15 @@ Observed abnormal responses:
 | `c4-ascii-f1` with sum-check enabled | `0401/0000` readback of `D100`, 1 point | success, `0x2468`, response sum `50` |
 | `c1-ascii-f1` with sum-check enabled | `WR0` readback of `D100`, 1 point | success, `0x2468`, response sum `C3` |
 
-Raw logs were captured under the workspace evidence directory:
+Historical raw-log filenames from the session are listed below. The transient
+files are not retained in the current workspace:
 
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format1_normal_read.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format1_abnormal_7fxx.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format1_raw_7fxx_probe2.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format1_write_and_dx_raw.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format1_sumcheck_enabled.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format1_sumcheck_write_readback.log`
+- `20260704_iqf_com4_format1_normal_read.log`
+- `20260704_iqf_com4_format1_abnormal_7fxx.log`
+- `20260704_iqf_com4_format1_raw_7fxx_probe2.log`
+- `20260704_iqf_com4_format1_write_and_dx_raw.log`
+- `20260704_iqf_com4_format1_sumcheck_enabled.log`
+- `20260704_iqf_com4_format1_sumcheck_write_readback.log`
 
 ## 2026-07-04: iQ-F / FX5, CLI `c1-ascii-f1`
 
@@ -78,10 +107,10 @@ Observed abnormal responses:
 | `WR0` raw read | invalid device `@0100`, 1 point | NAK `0x07` | Invalid 1C device-code probe. |
 | `WR0` raw read | `D100`, 0 points | NAK `0x06` | Invalid point-count probe. |
 
-Raw logs:
+Historical raw-log filenames (transient files not retained):
 
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_c1_ascii_f1_d100_read.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_c1_ascii_f1_abnormal_error_codes.log`
+- `20260704_iqf_com4_c1_ascii_f1_d100_read.log`
+- `20260704_iqf_com4_c1_ascii_f1_abnormal_error_codes.log`
 
 ## Additional 1C Error-Code Evidence Policy
 
@@ -131,15 +160,15 @@ This confirms that the current iQ-F bench can accept both the library `C1`
 Format4 read path and the `C4` ASCII Format4 read path. The observed abnormal
 responses match the earlier Format1 probes for the same request shapes.
 
-Raw logs:
+Historical raw-log filenames (transient files not retained):
 
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format4_sanity_reads.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format4_abnormal_error_codes.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format4_station_pc_mismatch.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format4_c1_write_readback.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format4_c4_write_readback.log`
-- `D:\APP\evidence\mcserial_error_codes\20260704_iqf_com4_format4_sumcheck_enabled_retest.log`
+- `20260704_iqf_com4_format4_sanity_reads.log`
+- `20260704_iqf_com4_format4_abnormal_error_codes.log`
+- `20260704_iqf_com4_format4_station_pc_mismatch.log`
+- `20260704_iqf_com4_format4_c1_write_readback.log`
+- `20260704_iqf_com4_format4_c4_write_readback.log`
+- `20260704_iqf_com4_format4_sumcheck_enabled_retest.log`
 
-Earlier sum-check attempts before the final PLC-side setting adjustment are kept
-as raw workspace logs, but the row above is the decision evidence for the
-sum-check-enabled setup.
+Earlier sum-check attempts before the final PLC-side setting adjustment were
+transient and are not retained. The structured row above is the decision
+evidence for the sum-check-enabled setup.
