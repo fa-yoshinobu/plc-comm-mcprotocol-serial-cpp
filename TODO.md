@@ -12,36 +12,42 @@ user explicitly approves the stated batch.
 
 ### MELSEC iQ-R / `melsec:iq-r`
 
-- [ ] Target: RCPU with RJ71C24-R2-class module; endpoint `COM3`; explicit settings `19200`, `8E1`,
-  `HardwareFlowControl::None`; read-only `D100`, 1 word. Purpose: confirm the new required typed
-  configuration opens the known endpoint and preserves the confirmed C4 frame behavior. Expected
-  evidence: successful model/read result plus recorded effective host serial settings. Restoration:
-  none (read-only). The 2026-07-16 FTDI/cable/gender-changer setup is not valid evidence for this
-  row because this FTDI USB-COM setup requires host RTS asserted; attempts with `None` timed out
-  without a response. Disposition for the current verification session: not tested further; leave
-  this row `unverified` until a separate RTS-independent physical setup is available.
+- [x] Linux POSIX no-flow setup: `R120PCPU` with `RJ71C24-R2` CH2 and the motherboard RS-232 port
+  `/dev/ttyS0` (PNP0501, I/O `0x3f8`), explicit `HardwareFlowControl::None`, `19200 / 8E1`, C4
+  binary Format 5, sum check disabled, station `0`; read-only `cpu-model` returned
+  `R120PCPU / 0x4844` and `D100`, 1 word, returned `0x0000` on 2026-07-18. The post-run termios
+  snapshot reported `19200`, `parenb`, even parity, `cs8`, one stop bit, and `-crtscts`. This
+  motherboard path is the separate RTS-independent physical setup required by this row. The
+  2026-07-16 FTDI timeout remains adapter/interconnect-specific evidence. No PLC write was sent.
 - [x] Windows RTS/CTS setup: `R120PCPU` with `RJ71C24-R2` CH2, FTDI `COM3`, corrected cable and new
   gender changer, explicit `HardwareFlowControl::RtsCts`, `19200 / 8E1`, C4 binary Format 5, sum
   check disabled, station `0`; read-only `cpu-model` returned `R120PCPU / 0x4844` and `D100`, 1 word,
   returned `0x0000`. This FTDI USB-COM adapter plus cable/gender-changer combination requires RTS
   `ON`. No PLC write was sent.
-- [ ] POSIX RTS/CTS setup: matching target, adapter, and endpoint not selected; live mapping remains
-  unverified independently of the completed Windows result.
+- [x] Linux POSIX RTS/CTS setup: `R120PCPU` with `RJ71C24-R2` CH2 and the motherboard RS-232 port
+  `/dev/ttyS0` (PNP0501, I/O `0x3f8`), explicit `HardwareFlowControl::RtsCts`, `19200 / 8E1`, C4
+  binary Format 5, sum check disabled, station `0`; read-only `cpu-model` returned
+  `R120PCPU / 0x4844` and `D100`, 1 word, returned `0x0000` on 2026-07-18. The post-run termios
+  snapshot reported `19200`, `parenb`, even parity, `cs8`, one stop bit, and `crtscts`. No PLC write
+  was sent.
 
 ### MELSEC-Q / `melsec:qcpu`
 
-- [ ] Target: Q06UDVCPU with QJ71C24N; endpoint `COM3`; explicit settings `19200`, `8E1`,
-  `HardwareFlowControl::None`; read-only `D100`, 1 word. Purpose: confirm required settings and
-  validation order against the known Q-series setup. Expected evidence: successful model/read result
-  plus recorded effective host serial settings. Restoration: none (read-only).
+- [x] Linux POSIX Q-series setup: `Q06UDVCPU` with `QJ71C24N` and the motherboard RS-232 port
+  `/dev/ttyS0`, explicit `19200 / 7E2`, `HardwareFlowControl::None`, C4 ASCII Format 4, sum check
+  disabled, station `0`; after the user applied the parameters and reset the unit, read-only
+  `cpu-model` returned `Q06UDVCPU / 0x0368` and `D100`, 1 word, returned `0x0000` on 2026-07-18.
+  The post-run termios snapshot reported `19200`, `parenb`, even parity, `cs7`, two stop bits, and
+  `-crtscts`. The pre-reset attempt received no bytes and timed out; the same command passed after
+  the reset. No PLC write was sent.
 
 ### Alternate serial formats
 
-- [ ] Target/profile/endpoint: to be selected only from available test hardware configured for ASCII
-  with 7 data bits and/or two stop bits. Device: `D100`, 1-word read only. Purpose: confirm the
-  explicitly supported ASCII+7 and stop-bit 2 backend paths. Expected evidence: configuration
-  snapshot and successful response using the same explicit library values. Restoration: return the
-  serial module to its recorded original data/parity/stop settings.
+- [x] The Q-series batch above independently confirmed the ASCII+7 and stop-bit 2 backend paths with
+  explicit `19200 / 7E2`, C4 ASCII Format 4 values on both the PLC module and Linux CLI. The
+  effective termios snapshot matched those values, and the read-only `D100` response succeeded.
+  The user selected this as the active module configuration for the batch; no PLC value restoration
+  was required.
 
 ## Resolved: R120PCPU / RJ71C24-R2 COM3 investigation (2026-07-16)
 
@@ -110,14 +116,17 @@ Final read-only evidence: `cpu-model` returned `R120PCPU / 0x4844`, and `read-wo
 - No PLC write was sent, so no value restoration was required. The module remained at
   `19200 / 8E1`, Format 5, sum check disabled, station `0`, RS/CS control disabled, DC-code
   transmission control selected, and both DC control modes disabled.
-- Remaining work is limited to the independent `HardwareFlowControl::None` and POSIX rows above;
-  neither is converted to a pass by the completed Windows RTS/CTS result. The `None` row will not
-  be tested further in the current verification session and remains `unverified` pending a separate
-  RTS-independent physical setup.
+- On 2026-07-18, the current Release-built Linux CLI at repository HEAD completed the same approved
+  read-only checks through the POSIX backend and motherboard `/dev/ttyS0` with RTS/CTS. The CLI
+  returned `R120PCPU / 0x4844` and `D100 = 0x0000`; the post-run termios snapshot confirmed
+  `19200 / 8E1` with `crtscts`. This closes the independent POSIX RTS/CTS row.
+- The same Linux motherboard path also completed `cpu-model` and `D100`, 1 word, with
+  `HardwareFlowControl::None`; the post-run termios snapshot confirmed `-crtscts`. This closes the
+  independent no-flow row without changing the earlier FTDI-specific disposition.
+- The iQ-R, MELSEC-Q, and alternate serial-format live rows in this section are complete.
 
-Each unavailable row remains `unverified`; release disposition must be decided row by row. Do not
-change module settings or communicate with `COM3` until the user identifies the connected PLC and
-explicitly says `OK` for the exact batch.
+Future live batches still require an identified PLC, endpoint, exact read/write scope, and explicit
+user approval before changing module settings or sending requests.
 
 ## Notes
 
