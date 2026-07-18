@@ -1,12 +1,13 @@
 # MC Protocol Serial C++ quality overhaul
 
-Status: implementation in progress
-Branch: `quality/2026-07-overhaul`
+Status: complete; final acceptance recorded 2026-07-18
+Original implementation branch: `quality/2026-07-overhaul` (merged)
 Authoritative cross-library decisions: `D:\APP\Close\instructions\omittable_configuration_decisions_20260711.md`
 
 This record preserves the repository-specific implementation contract and evidence. A checked item
-means evidence exists; live-hardware items remain open until they are actually performed or
-explicitly dispositioned.
+means evidence exists. All decisions documented here have completed final acceptance; the approved
+live-hardware evidence for D-087 through D-092 is recorded in the repository-root
+[TODO.md](../../TODO.md).
 
 ## D-087: explicit serial device path
 
@@ -35,7 +36,7 @@ Acceptance criteria:
 - [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; path lifetime, NUL validation, and pre-open ordering are deterministic API/backend properties and make no claim about a physical serial device).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
-- [ ] Final acceptance criteria verified and the item marked complete.
+- [x] Final acceptance criteria verified and the item marked complete (2026-07-18).
 
 ## D-088: explicit baud rate
 
@@ -60,7 +61,7 @@ Acceptance criteria:
 - [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; required-value parsing, zero rejection, and absence of baud fallback are deterministic pre-open properties).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
-- [ ] Final acceptance criteria verified and the item marked complete.
+- [x] Final acceptance criteria verified and the item marked complete (2026-07-18).
 
 ## D-089: explicit data bits and code-mode validation
 
@@ -87,7 +88,7 @@ Acceptance criteria:
 - [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; public type shape, mode/width validation, and Windows/POSIX branch removal are covered before OS handle access and make no signal-quality claim).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
-- [ ] Final acceptance criteria verified and the item marked complete.
+- [x] Final acceptance criteria verified and the item marked complete (2026-07-18).
 
 ## D-090: explicit stop bits
 
@@ -112,7 +113,7 @@ Acceptance criteria:
 - [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; accepted widths, invalid-width rejection, and backend mapping are deterministic configuration properties).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
-- [ ] Final acceptance criteria verified and the item marked complete.
+- [x] Final acceptance criteria verified and the item marked complete (2026-07-18).
 
 ## D-091: typed explicit parity
 
@@ -138,7 +139,7 @@ Acceptance criteria:
 - [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; enum membership, Windows DCB/POSIX termios mapping, CLI normalization, and no-fallback behavior are deterministic; actual PLC parity compatibility is outside this API decision).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
-- [ ] Final acceptance criteria verified and the item marked complete.
+- [x] Final acceptance criteria verified and the item marked complete (2026-07-18).
 
 ## D-092: typed explicit hardware flow control
 
@@ -165,7 +166,7 @@ Acceptance criteria:
 - [x] Claude findings dispositioned and affected checks rerun; all four findings were accepted and corrected.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no live check required; enum membership, DCB/termios mapping, and separation from RS-485 direction control are deterministic; this disposition does not claim that a particular adapter is wired for RTS/CTS).
 - [x] Documentation, migration notes, changelog, and source examples agree with the implementation.
-- [ ] Final acceptance criteria verified and the item marked complete.
+- [x] Final acceptance criteria verified and the item marked complete (2026-07-18).
 
 ## D-093: explicit frame family
 
@@ -290,7 +291,7 @@ clean. Raw codec use is explicit through `FrameCodecContext::format2(number)`.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   deterministic frame identity and state isolation are fully covered by codec/client tests, while
   existing Format2 hardware evidence remains unchanged).
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Documentation and final acceptance agree with the completed implementation (2026-07-18).
 
 ## D-097: explicit canonical PLC profile
 
@@ -395,7 +396,7 @@ contract with mandatory typed PC, destination-module, topology, and self-station
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   construction, pre-transport validation, fixed HostStation bytes, and no-fallback behavior are
   deterministic API/codec/client contracts).
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Documentation and final acceptance agree with the completed implementation (2026-07-18).
 
 ## D-100: mandatory frame-specific multidrop station and network
 
@@ -437,7 +438,7 @@ client discards complete mismatches while waiting. CLI/scripts require the same 
   frame layout, strict parsing, identity comparison, and client stream isolation are covered by
   deterministic vectors and simulated client state; existing hardware support evidence is not
   changed or promoted).
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Documentation and final acceptance agree with the completed implementation (2026-07-18).
 
 ## D-101: mandatory frame-specific PC target
 
@@ -488,7 +489,7 @@ universally valid topology meaning.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   mandatory construction, range validation, request bytes, response identity, and no-fallback
   behavior are deterministic contracts; existing hardware support evidence is unchanged).
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Documentation and final acceptance agree with the completed implementation (2026-07-18).
 
 ## D-102: mandatory typed 4C destination module
 
@@ -540,7 +541,7 @@ constants and do not acquire a convenient typed selector without configuration e
   selector construction, wire-width validation, request bytes, response identity, command routing,
   and no-fallback behavior are deterministic contracts; configuration-dependent module support
   remains explicit and is not promoted to verified hardware support).
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Documentation and final acceptance agree with the completed implementation (2026-07-18).
 
 ## D-103: mandatory typed m:n self-station topology
 
@@ -594,7 +595,7 @@ infer C24 station assignment or configuration-wide station-count constraints.
   type construction, width validation, frame bytes, response identity, stream isolation, and
   no-fallback behavior are deterministic contracts; PLC topology assignment is documented without
   being promoted to verified hardware evidence).
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Documentation and final acceptance agree with the completed implementation (2026-07-18).
 
 ## D-104: three-second response deadline and independent 1E monitoring timer
 
@@ -653,7 +654,7 @@ policy, and Format2 identity-based reuse are covered.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   defaults, validation, deadline math, request fields, and TX-completion state are deterministic;
   no existing hardware compatibility evidence is changed or promoted).
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Documentation and final acceptance agree with the completed implementation (2026-07-18).
 
 ## D-105: 250 ms inter-byte RX-inactivity timeout
 
@@ -706,7 +707,7 @@ and Format2 late-response identity are covered.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   defaults, value validation, clock math, chunk state, and timeout state transitions are
   deterministic; physical adapter gap characteristics remain user configuration).
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Documentation and final acceptance agree with the completed implementation (2026-07-18).
 
 ## D-106: mandatory Remote RUN conflict and clear policies
 
@@ -755,7 +756,7 @@ unknown outcome, no retry, reset gating, and existing success roundtrips are cov
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   argument presence, enum validation, command bytes, retry absence, result classification, and
   state transitions are deterministic; no claim is made about a particular PLC's resulting state).
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Documentation and final acceptance agree with the completed implementation (2026-07-18).
 
 ## D-107: mandatory Remote PAUSE conflict policy
 
@@ -803,7 +804,7 @@ cancel, unknown outcome, no retry/escalation, and reset gating are covered.
 - [x] Required live serial/PLC checks passed or explicitly dispositioned (no new live check required;
   argument presence, enum validation, command bytes, retry/escalation absence, result
   classification, and state transitions are deterministic; no PLC resulting state is claimed).
-- [ ] Documentation and final acceptance agree with the completed implementation.
+- [x] Documentation and final acceptance agree with the completed implementation (2026-07-18).
 
 ## D-108: explicit Word/DWord sparse-access types
 
@@ -1070,6 +1071,17 @@ Acceptance criteria:
   deterministic host/codec contracts and make no new hardware-support claim).
 - [x] Documentation and final acceptance agree with the completed implementation.
 
+## Final acceptance summary (2026-07-18)
+
+- All implementation, test, review, documentation, and final-acceptance checklist items in this
+  record are complete.
+- D-087 through D-092 additionally passed the approved Linux/POSIX read-only live checks recorded in
+  the repository-root [TODO.md](../../TODO.md): iQ-R at `19200 / 8E1` with and without RTS/CTS, and
+  Q-series at `19200 / 7E2` with C4 ASCII Format 4.
+- D-096 and D-099 through D-107 received final sign-off against their already recorded automated,
+  package, documentation, and review evidence; they did not require additional live PLC checks.
+- No active quality-overhaul TODO remains.
+
 ## Verification evidence
 
 - Build/test commands: `run_ci.bat --build-dir build_review --with-platformio` and
@@ -1202,6 +1214,10 @@ Acceptance criteria:
   after their final runs below.
 - Physical serial/PLC communication: not executed in this correction batch; no new hardware claim
   was introduced and MCS-CR-001 records the deterministic-test disposition.
+- Subsequent approved read-only live evidence was recorded on 2026-07-18 for the Linux POSIX serial
+  backend, both hardware-flow modes, explicit `7E2`, and C4 ASCII Format 4. See the repository-root
+  [TODO.md](../../TODO.md) for the exact targets, endpoints, settings, responses, and no-write safety
+  record.
 - Claude review: `CLAUDE-MCS-20260712-01` was executed against `ec7f6b9`. All four findings were
   accepted, corrected, self-reviewed, and reverified. The later `a403a4f` commit changed only
   archived review-document references and did not alter runtime, tests, or the public API.

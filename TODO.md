@@ -1,14 +1,14 @@
 # TODO
 
-Current active TODOs only.
+Current status and recently completed live-verification evidence.
 
 ## Current Status
 
-Static implementation and mock/CLI validation for D-087 through D-092 are complete. The following
-physical checks remain intentionally deferred until the matching PLC/module is connected and the
-user explicitly approves the stated batch.
+No active TODOs are currently tracked. Static implementation, mock/CLI validation, and the approved
+live serial checks for D-087 through D-092 are complete. The final Linux/POSIX evidence was recorded
+on 2026-07-18.
 
-## D-087 through D-092 live serial verification
+## Resolved: D-087 through D-092 live serial verification (2026-07-18)
 
 ### MELSEC iQ-R / `melsec:iq-r`
 
@@ -57,8 +57,9 @@ communicates reliably only when the host selects `HardwareFlowControl::RtsCts` a
 asserts RTS.
 
 Final read-only evidence: `cpu-model` returned `R120PCPU / 0x4844`, and `read-words D100 1` returned
-`0x0000` with normal completion. The Windows RTS/CTS row above is complete. The separate
-`HardwareFlowControl::None` row remains open because this physical setup requires RTS `ON`.
+`0x0000` with normal completion. The Windows RTS/CTS row above is complete. At the end of the
+2026-07-16 FTDI investigation, the separate `HardwareFlowControl::None` row was still open because
+that physical setup requires RTS `ON`; the Linux motherboard-port check closed it on 2026-07-18.
 
 ### Root cause
 
