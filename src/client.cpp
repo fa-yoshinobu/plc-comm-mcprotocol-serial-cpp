@@ -965,6 +965,10 @@ bool MelsecSerialClient::active_operation_outcome_can_be_unknown() const noexcep
 #if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
     case OperationKind::MultiBlockWrite:
 #endif
+#if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
+    case OperationKind::RegisterMonitor:
+    case OperationKind::RegisterExtendedFileRegisterMonitor:
+#endif
 #if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
     case OperationKind::WriteHostBuffer:
 #endif

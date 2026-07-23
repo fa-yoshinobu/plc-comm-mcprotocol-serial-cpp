@@ -7135,6 +7135,46 @@ void test_client_binary_e1_extended_file_register_monitor_roundtrip() {
   assert(!client.busy());
 }
 
+void test_client_monitor_registration_unconfirmed_results_are_outcome_unknown() {
+  const auto monitor_config = make_binary_c4_iqr_config().with_response_timeout_ms(10U);
+  MelsecSerialClient monitor_client;
+  Status status = monitor_client.configure(monitor_config);
+  assert(status.ok());
+
+  const RandomReadWordItem monitor_item {
+      .device = {mcprotocol::serial::DeviceCode::D, 100U}};
+  CallbackCapture monitor_capture;
+  status = monitor_client.async_register_monitor(
+      0U,
+      MonitorRegistration(std::span<const RandomReadWordItem>(&monitor_item, 1), {}),
+      completion_callback,
+      &monitor_capture);
+  assert(status.ok());
+  assert(monitor_client.notify_tx_complete(1U, mcprotocol::serial::ok_status()).ok());
+  monitor_client.poll(1U + monitor_config.timeout().response_timeout_ms);
+  assert(monitor_capture.called);
+  assert(monitor_capture.status.code == StatusCode::OperationOutcomeUnknown);
+
+  const auto extended_config = make_binary_e1_a_config().with_response_timeout_ms(10U);
+  MelsecSerialClient extended_client;
+  status = extended_client.configure(extended_config);
+  assert(status.ok());
+
+  const ExtendedFileRegisterAddress extended_item {2U, 70U};
+  CallbackCapture extended_capture;
+  status = extended_client.async_register_extended_file_register_monitor(
+      20U,
+      ExtendedFileRegisterMonitorRegistration(
+          std::span<const ExtendedFileRegisterAddress>(&extended_item, 1)),
+      completion_callback,
+      &extended_capture);
+  assert(status.ok());
+  assert(extended_client.notify_tx_complete(21U, mcprotocol::serial::ok_status()).ok());
+  extended_client.poll(21U + extended_config.timeout().response_timeout_ms);
+  assert(extended_capture.called);
+  assert(extended_capture.status.code == StatusCode::OperationOutcomeUnknown);
+}
+
 void test_client_remote_reset_completes_when_transmission_completes() {
   const auto config = make_binary_c4_config();
   MelsecSerialClient client;
@@ -9204,6 +9244,7 @@ int main() {
   test_client_e1_rejects_cpu_model();
   test_client_ascii_c1_loopback_roundtrip();
   test_client_binary_e1_extended_file_register_monitor_roundtrip();
+  test_client_monitor_registration_unconfirmed_results_are_outcome_unknown();
   test_client_remote_control_and_password_roundtrips();
   test_client_remote_run_validation_and_unknown_outcome();
   test_client_remote_pause_validation_and_unknown_outcome();

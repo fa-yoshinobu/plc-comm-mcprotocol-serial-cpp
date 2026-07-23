@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Library: Normal and extended file-register monitor registration now return `Status::OperationOutcomeUnknown` when transmission may have completed but the response cannot be confirmed, matching the existing contract for other state-changing commands. Applications must resolve PLC registration state before retrying.
+- Tests: Added monitor-registration coverage for post-transmit timeout and preserved pre-transmit failure classification.
+
 ## [3.2.0] - 2026-07-17
 
 - Release: Bumped library, CMake, PlatformIO, Arduino, public version-header, and install-documentation metadata to `3.2.0`.
