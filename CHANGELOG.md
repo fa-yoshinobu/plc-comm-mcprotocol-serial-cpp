@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Library: Normal and extended file-register monitor registration now return `Status::OperationOutcomeUnknown` when transmission may have completed but the response cannot be confirmed, matching the existing contract for other state-changing commands. Applications must resolve PLC registration state before retrying.
 - Tests: Added monitor-registration coverage for post-transmit timeout and preserved pre-transmit failure classification.
+- Library: Loopback commands snapshot caller data before asynchronous use, checksum generation is bounded without stack-sized scratch storage, and payload-size arithmetic uses checked `size_t` calculations.
+- Library: C24/C2 command headers are assembled at the required dynamic width, and Q/L normal device numbers wider than their wire field are rejected instead of silently dropping high bits.
+- Library: Profile device-range upper bounds are not used as transport send guards; representation and command limits remain enforced.
 
 ## [3.2.0] - 2026-07-17
 
