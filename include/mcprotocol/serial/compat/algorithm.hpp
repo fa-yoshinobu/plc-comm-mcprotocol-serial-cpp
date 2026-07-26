@@ -54,6 +54,16 @@ constexpr InputIt find(InputIt first, InputIt last, const T& value) {
   return first;
 }
 
+template <typename InputIt, typename OutputIt, typename UnaryOperation>
+constexpr OutputIt transform(InputIt first, InputIt last, OutputIt dest, UnaryOperation operation) {
+  while (first != last) {
+    *dest = operation(*first);
+    ++first;
+    ++dest;
+  }
+  return dest;
+}
+
 template <typename InputIt1, typename InputIt2>
 constexpr bool equal(InputIt1 first1, InputIt1 last1, InputIt2 first2) {
   while (first1 != last1) {
