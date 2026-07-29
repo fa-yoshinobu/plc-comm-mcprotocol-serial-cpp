@@ -1,7 +1,7 @@
 # MC Protocol Serial C++ API Reference
 
 This file is generated from Doxygen XML for the public C++ headers.
-Do not edit it manually; run `scripts/generate_api_reference.py` instead.
+Do not edit it manually; run `scripts/update_api_reference.py` instead.
 
 ## Header Inputs
 
