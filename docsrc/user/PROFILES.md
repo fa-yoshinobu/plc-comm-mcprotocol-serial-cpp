@@ -6,6 +6,23 @@ Choose one explicit profile in your application or configuration UI. The library
 
 The supported device inventory is maintained in the shared [MC Protocol Serial supported registers](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/supported-registers/) page.
 
+## Verified hardware available for validation
+
+The maintainer owns the hardware listed below. Communication has been verified
+on this hardware, and it is available for focused reproduction and validation
+when a problem is reported.
+
+"Verified" does not mean that every library feature has been tested on every
+listed PLC or module. Exhaustively testing every combination would require a prohibitive
+amount of work.
+
+| PLC family | Serial hardware owned by the maintainer |
+| --- | --- |
+| MELSEC iQ-R | `RJ71C24-R2`, `RJ71C24-R4` |
+| MELSEC iQ-F | `FX5U-32MR/DS`, `FX5UC-32MT/D` |
+| MELSEC-L | `LJ71C24` |
+| MELSEC-Q | `QJ71C24N` |
+
 ## Explicit selection is required
 
 Always select one concrete `PlcProfile` value before sending real PLC requests.
