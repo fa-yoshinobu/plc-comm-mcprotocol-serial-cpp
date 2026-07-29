@@ -3,6 +3,7 @@
 #include "protocol_predicates.hpp"
 
 #include "mcprotocol/serial/compat/algorithm.hpp"
+#include "mcprotocol/serial/compat/cctype.hpp"
 #include "mcprotocol/serial/compat/cstddef.hpp"
 #include "mcprotocol/serial/compat/cstdint.hpp"
 #include "mcprotocol/serial/compat/cstring.hpp"
@@ -2317,7 +2318,13 @@ Status MelsecSerialClient::async_loopback(
   }
   out_chars_ = out_echoed;
   pending_loopback_size_ = hex_ascii.size();
-  std::copy(hex_ascii.begin(), hex_ascii.end(), pending_loopback_.begin());
+  std::transform(
+      hex_ascii.begin(),
+      hex_ascii.end(),
+      pending_loopback_.begin(),
+      [](char ch) {
+        return static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+      });
 
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_loopback(config_, hex_ascii, request_data_, request_size);

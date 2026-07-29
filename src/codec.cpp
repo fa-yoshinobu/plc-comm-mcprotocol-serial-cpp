@@ -1066,7 +1066,13 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     bool double_word,
     const char* word_message,
     const char* dword_message) noexcept;
-[[nodiscard]] Status validate_bit_device(const DeviceAddress& device, const char* message) noexcept;
+[[nodiscard]] Status validate_plain_device_wire_number(
+    const ProtocolConfig& config,
+    const DeviceAddress& device) noexcept;
+[[nodiscard]] Status validate_bit_device(
+    const ProtocolConfig& config,
+    const DeviceAddress& device,
+    const char* message) noexcept;
 [[nodiscard]] constexpr bool is_valid_bit_value(BitValue value) noexcept;
 [[nodiscard]] bool is_bit_device_code(DeviceCode code) noexcept;
 [[nodiscard]] bool is_c1_word_unit_bit_head(const DeviceAddress& device) noexcept;
@@ -1095,8 +1101,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[maybe_unused]] [[nodiscard]] Status validate_c1_random_write_bit_item(
+    const ProtocolConfig& config,
     const RandomWriteBitItem& item) noexcept {
-  const Status bit_status = validate_bit_device(item.device, "1C random write bits requires bit devices");
+  const Status bit_status = validate_bit_device(config, item.device, "1C random write bits requires bit devices");
   if (!bit_status.ok()) {
     return bit_status;
   }
@@ -1254,7 +1261,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (!is_link_direct_word_device(device.device.code)) {
     return invalid_argument("Link direct word access requires W or SW");
   }
-  return ok_status();
+  return validate_plain_device_wire_number(link_direct_native_wire_config(config), device.device);
 }
 
 [[nodiscard]] Status validate_link_direct_bit_device(
@@ -1269,7 +1276,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (!is_link_direct_bit_device(device.device.code)) {
     return invalid_argument("Link direct bit access requires X, Y, B, or SB");
   }
-  return ok_status();
+  return validate_plain_device_wire_number(link_direct_native_wire_config(config), device.device);
 }
 
 [[maybe_unused]] [[nodiscard]] Status validate_link_direct_random_read_item(
@@ -2000,12 +2007,53 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return true;
 }
 
-[[nodiscard]] Status validate_bit_device(const DeviceAddress& device, const char* message) noexcept {
+// PROFILE_RANGE_NOT_A_TRANSPORT_GUARD:
+// Profile device-range upper bounds are application-layer metadata. The transport validates only
+// syntax/device support and whether the selected wire representation can preserve the address.
+[[nodiscard]] Status validate_plain_device_wire_number(
+    const ProtocolConfig& config,
+    const DeviceAddress& device) noexcept {
+  const DeviceSpec* spec = find_device_spec(device.code);
+  if (spec == nullptr) {
+    return invalid_argument("Device code is not supported");
+  }
+
+  std::uint64_t maximum = 0U;
+  if (is_ascii_mode(config)) {
+    std::size_t digits = ascii_device_number_width(config);
+    if (is_c1_frame(config)) {
+      digits = c1_command_family(config) == C1CommandFamily::AcpuCommon
+                   ? (is_c1_timer_or_counter_device(device.code) ? 3U : 4U)
+                   : (is_c1_timer_or_counter_device(device.code) ? 5U : 6U);
+    }
+    if (spec->hexadecimal) {
+      maximum = digits >= 8U ? 0xFFFFFFFFULL : ((1ULL << (digits * 4U)) - 1ULL);
+    } else {
+      maximum = 1U;
+      for (std::size_t index = 0; index < digits; ++index) {
+        maximum *= 10U;
+      }
+      --maximum;
+    }
+  } else {
+    const std::size_t width = binary_device_number_width(config);
+    maximum = width >= 4U ? 0xFFFFFFFFULL : ((1ULL << (width * 8U)) - 1ULL);
+  }
+
+  return static_cast<std::uint64_t>(device.number) <= maximum
+             ? ok_status()
+             : invalid_argument("Device number cannot be represented by the selected wire format");
+}
+
+[[nodiscard]] Status validate_bit_device(
+    const ProtocolConfig& config,
+    const DeviceAddress& device,
+    const char* message) noexcept {
   const DeviceSpec* spec = find_device_spec(device.code);
   if (spec == nullptr || !spec->bit_device) {
     return invalid_argument(message);
   }
-  return ok_status();
+  return validate_plain_device_wire_number(config, device);
 }
 
 [[nodiscard]] constexpr bool requires_random_dword_access(DeviceCode code) noexcept {
@@ -2195,7 +2243,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (is_iq_r_only_device_code(device.code) && !is_iq_r_series(config)) {
     return invalid_argument(message);
   }
-  return ok_status();
+  return validate_plain_device_wire_number(config, device);
 }
 
 [[nodiscard]] Status validate_random_item_device(
@@ -2227,7 +2275,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (is_long_contact_coil_device(device.code)) {
     return invalid_argument(double_word ? dword_message : word_message);
   }
-  return ok_status();
+  return validate_plain_device_wire_number(config, device);
 }
 
 [[nodiscard]] constexpr bool is_valid_bit_value(BitValue value) noexcept {
@@ -2642,13 +2690,7 @@ Status FrameCodec::encode_success_response(
           return buffer_too_small("ASCII response frame buffer is too small");
         }
         if (is_sum_check_enabled(config)) {
-          std::array<std::uint8_t, kMaxRequestFrameBytes + 1U> sum_bytes {};
-          std::memcpy(sum_bytes.data(), payload_storage.data(), prefix_size);
-          std::memcpy(sum_bytes.data() + prefix_size, response_data.data(), response_data.size());
-          sum_bytes[prefix_size + response_data.size()] = kAsciiEtx;
-          const auto sum = compute_sum_check_ascii(std::span<const std::uint8_t>(
-              sum_bytes.data(),
-              prefix_size + response_data.size() + 1U));
+          const auto sum = compute_sum_check_ascii(writer.written().subspan(1U));
           if (!writer.append(sum)) {
             return buffer_too_small("ASCII response sum-check buffer is too small");
           }
@@ -3898,7 +3940,7 @@ Status encode_batch_read_bits(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  const Status bit_status = validate_bit_device(request.head_device, "Batch read bits requires a bit device");
+  const Status bit_status = validate_bit_device(config, request.head_device, "Batch read bits requires a bit device");
   if (!bit_status.ok()) {
     return bit_status;
   }
@@ -4351,7 +4393,7 @@ Status encode_batch_write_bits(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  const Status bit_status = validate_bit_device(request.head_device, "Batch write bits requires a bit device");
+  const Status bit_status = validate_bit_device(config, request.head_device, "Batch write bits requires a bit device");
   if (!bit_status.ok()) {
     return bit_status;
   }
@@ -4714,18 +4756,20 @@ Status encode_link_direct_random_write_words(
     return invalid_argument("Link direct random write words requires at least one item");
   }
 
+  const ProtocolConfig wire_config = link_direct_native_wire_config(config);
+  const std::size_t weighted_limit = is_iq_r_series(wire_config) ? 960U : 1920U;
+  if (items.size() > 0xFFU) {
+    return invalid_argument("Link direct random write words item count exceeds the wire limit");
+  }
+  if (items.size() > weighted_limit / 12U) {
+    return invalid_argument("Link direct random write words exceeds the supported request size");
+  }
+
   for (const LinkDirectRandomWriteWordItem& item : items) {
     const Status item_status = validate_link_direct_random_write_word_item(config, item);
     if (!item_status.ok()) {
       return item_status;
     }
-  }
-
-  const ProtocolConfig wire_config = link_direct_native_wire_config(config);
-  const std::uint16_t weighted_limit = is_iq_r_series(wire_config) ? 960U : 1920U;
-  const std::uint16_t weighted_size = static_cast<std::uint16_t>(items.size() * 12U);
-  if (weighted_size == 0U || weighted_size > weighted_limit) {
-    return invalid_argument("Link direct random write words exceeds the supported request size");
   }
 
   ByteWriter writer(out_request_data);
@@ -5044,7 +5088,7 @@ Status encode_random_write_bits(
       return buffer_too_small("1E random write bits request buffer is too small");
     }
     for (const RandomWriteBitItem& item : items) {
-      const Status bit_status = validate_bit_device(item.device, "1E random write bits requires bit devices");
+      const Status bit_status = validate_bit_device(config, item.device, "1E random write bits requires bit devices");
       if (!bit_status.ok()) {
         return bit_status;
       }
@@ -5086,7 +5130,7 @@ Status encode_random_write_bits(
       return buffer_too_small("1C random write bits request buffer is too small");
     }
     for (const RandomWriteBitItem& item : items) {
-      const Status bit_status = validate_c1_random_write_bit_item(item);
+      const Status bit_status = validate_c1_random_write_bit_item(config, item);
       if (!bit_status.ok()) {
         return bit_status;
       }
@@ -5104,7 +5148,7 @@ Status encode_random_write_bits(
     return invalid_argument("Random write bits count exceeds supported range");
   }
   for (const RandomWriteBitItem& item : items) {
-    const Status bit_status = validate_bit_device(item.device, "Random write bits requires bit devices");
+    const Status bit_status = validate_bit_device(config, item.device, "Random write bits requires bit devices");
     if (!bit_status.ok()) {
       return bit_status;
     }
@@ -5343,6 +5387,10 @@ Status encode_multi_block_read(
     if (!profile_status.ok()) {
       return profile_status;
     }
+    const Status wire_status = validate_plain_device_wire_number(config, block.head_device);
+    if (!wire_status.ok()) {
+      return wire_status;
+    }
     if (block.bit_block) {
       ++bit_blocks;
     } else {
@@ -5511,6 +5559,10 @@ Status encode_multi_block_write(
         "Multi-block write does not support this device for this PLC profile");
     if (!profile_status.ok()) {
       return profile_status;
+    }
+    const Status wire_status = validate_plain_device_wire_number(config, block.head_device);
+    if (!wire_status.ok()) {
+      return wire_status;
     }
     const Status profile_write_status = validate_profile_plain_write_support(
         config,
@@ -5772,9 +5824,10 @@ Status encode_link_direct_register_monitor(
   if (!append_command_header(patched, config, 0x0801U, extended_word_subcommand(wire_config))) {
     return buffer_too_small("Link direct monitor registration request buffer is too small");
   }
+  const std::size_t command_header_size = request_command_header_size(config);
   if (!patched.append(std::span<const std::uint8_t>(
-          random_request_data.data() + (is_ascii_mode(config) ? 8U : 4U),
-          inner_size - (is_ascii_mode(config) ? 8U : 4U)))) {
+          random_request_data.data() + command_header_size,
+          inner_size - command_header_size))) {
     return buffer_too_small("Link direct monitor registration request buffer is too small");
   }
   out_size = patched.size();
@@ -5876,9 +5929,10 @@ Status encode_register_monitor(
   if (!append_command_header(patched, config, 0x0801U, word_subcommand(config))) {
     return buffer_too_small("Monitor registration request buffer is too small");
   }
+  const std::size_t command_header_size = request_command_header_size(config);
   if (!patched.append(std::span<const std::uint8_t>(
-          random_request_data.data() + (is_ascii_mode(config) ? 8U : 4U),
-          inner_size - (is_ascii_mode(config) ? 8U : 4U)))) {
+          random_request_data.data() + command_header_size,
+          inner_size - command_header_size))) {
     return buffer_too_small("Monitor registration request buffer is too small");
   }
   out_size = patched.size();

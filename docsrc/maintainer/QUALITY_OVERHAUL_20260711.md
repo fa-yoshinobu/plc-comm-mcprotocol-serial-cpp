@@ -1221,3 +1221,49 @@ Acceptance criteria:
 - Claude review: `CLAUDE-MCS-20260712-01` was executed against `ec7f6b9`. All four findings were
   accepted, corrected, self-reviewed, and reverified. The later `a403a4f` commit changed only
   archived review-document references and did not alter runtime, tests, or the public API.
+
+## BH-LIVE-SERIAL-20260729 — Supplemental bug-hunt serial verification
+
+Scope: commit `060e4e7fbc94d4775df9eedbcd2174f996f8b37f`; R120PCPU with RJ71C24-R2
+CH2; `COM3`; `19200 / 8N1`; RTS/CTS; C4 binary Format 5; station `0`; sum check
+enabled; profile `melsec:iq-r`.
+
+Target contract: the current host implementation communicates with the explicitly selected serial
+configuration, sends profile-catalog range exceedances that fit the wire format, and executes the
+normal monitor registration/read path without changing device values.
+
+Acceptance evidence:
+
+- [x] A one-word `D100` read succeeded with value `0x0000`; sum-check-bearing TX and RX frames were
+  exchanged successfully.
+- [x] A one-word `R32768` read was transmitted and the PLC returned end code `0x4031`; no pre-send
+  profile-range rejection occurred.
+- [x] Native monitor registration for `D100`, `D105`, `M100`, and `M105` succeeded. One monitor read
+  returned zero for all four items, and direct verification reads matched. No device value was
+  written. The final monitor registration remains those four devices until replaced or reset.
+- [x] With a `1 ms` response timeout, the same monitor registration emitted exactly one 46-byte TX
+  frame and returned the state-changing-request-transmitted/outcome-unknown classification. A
+  complete 20-byte response arrived too late to confirm the operation within the deadline. No
+  automatic registration retry or subsequent command was transmitted in that session.
+- [x] After closing the timed-out session and waiting one second, a normal-timeout read-only monitor
+  request emitted exactly one 20-byte TX frame and returned eight data bytes. All four values were
+  zero, proving that the PLC had applied the registration while the host had correctly declined to
+  claim success. This follow-up did not register again or write any device value.
+- [x] The repository working tree was clean after the live probes.
+
+Disposition: the normal serial route, enabled sum check, profile-range non-guard, and monitor
+success path passed on the stated hardware. The live timeout probe additionally demonstrated
+post-transmit unknown-outcome classification, no automatic retry, transport-session closure, and
+successful read-only inspection after reopening. Deterministic mock fault injection remains the
+boundary coverage for failure timings that cannot be forced precisely on the live link.
+
+Final release disposition (2026-07-29): accepted. The user explicitly approved using the live
+timeout evidence together with deterministic mock fault injection as REL-012 release evidence. The
+2026-07-18 Linux/POSIX live evidence remains applicable: changes after that evidence affect monitor
+outcome classification, codec validation/encoding, and the bundled algorithm compatibility layer,
+but do not change the POSIX serial configuration or termios backend. The current Windows live probe
+covers the changed monitor/codec path, while mock tests cover exact pre/post-transmit failure
+boundaries. A current Release build plus all four CTest targets (`codec_tests`,
+`standard_header_consumer`, `bundled_algorithm_compat_tests`, and `cli_serial_config_tests`) passed
+again. No additional serial live check is required for REL-012, and final evidence review is
+complete.

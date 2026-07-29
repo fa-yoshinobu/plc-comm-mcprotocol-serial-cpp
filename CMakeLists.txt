@@ -189,6 +189,14 @@ if(BUILD_TESTING)
   target_link_libraries(standard_header_consumer PRIVATE mcprotocol_serial)
 
   add_test(NAME standard_header_consumer COMMAND standard_header_consumer)
+
+  add_executable(bundled_algorithm_compat_tests
+    tests/bundled_algorithm_compat_tests.cpp
+  )
+
+  target_link_libraries(bundled_algorithm_compat_tests PRIVATE mcprotocol_serial)
+
+  add_test(NAME bundled_algorithm_compat_tests COMMAND bundled_algorithm_compat_tests)
 endif()
 
 if(MCPROTOCOL_EFFECTIVE_BUILD_CLI)

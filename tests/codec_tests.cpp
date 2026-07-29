@@ -2700,7 +2700,7 @@ void test_encode_ascii_c1_write_module_buffer_request_shape() {
 
 void test_encode_ascii_c1_loopback_request_shape() {
   const auto config = make_ascii_c1_format4_qna_config();
-  constexpr std::string_view loopback = "ABCDE";
+  constexpr std::string_view loopback = "aBcDe";
   std::array<std::uint8_t, 64> request_data {};
   std::size_t request_size = 0;
   Status status = CommandCodec::encode_loopback(config, std::span<const char>(loopback.data(), loopback.size()), request_data, request_size);
@@ -4609,6 +4609,56 @@ void test_encode_link_direct_random_write_words_binary_iqr_shape() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
+void test_encode_link_direct_random_write_words_rejects_wrapped_sizes() {
+  const LinkDirectRandomWriteWordItem item(
+      LinkDirectDevice(0x0001U, DeviceAddress {mcprotocol::serial::DeviceCode::W, 0x0100U}),
+      0x1234U);
+  auto encode_count = [&](const ProtocolConfig& config, std::size_t count) {
+    const std::vector<LinkDirectRandomWriteWordItem> items(count, item);
+    std::vector<std::uint8_t> request_data(4096U, 0U);
+    std::size_t request_size = 0;
+    return CommandCodec::encode_link_direct_random_write_words(
+        config,
+        std::span<const LinkDirectRandomWriteWordItem>(items.data(), items.size()),
+        request_data,
+        request_size);
+  };
+
+  Status status = encode_count(make_ascii_c4_format4_iqr_config(), 80U);
+  assert(status.ok());
+  status = encode_count(make_ascii_c4_format4_iqr_config(), 81U);
+  assert(status.code == StatusCode::InvalidArgument);
+  status = encode_count(make_binary_c4_config(), 160U);
+  assert(status.ok());
+  status = encode_count(make_binary_c4_config(), 161U);
+  assert(status.code == StatusCode::InvalidArgument);
+  status = encode_count(make_binary_c4_config(), 5462U);
+  assert(status.code == StatusCode::InvalidArgument);
+  status = encode_count(make_binary_c4_config(), 65537U);
+  assert(status.code == StatusCode::InvalidArgument);
+}
+
+void test_ql_normal_device_number_rejects_wire_overflow_without_truncation() {
+  const auto config = make_binary_c4_config();
+  std::array<std::uint8_t, 64> request_data {};
+  std::size_t request_size = 0;
+  Status status = CommandCodec::encode_batch_read_words(
+      config,
+      BatchReadWordsRequest(DeviceAddress {mcprotocol::serial::DeviceCode::D, 0x00FFFFFFU}, 1U),
+      request_data,
+      request_size);
+  assert(status.ok());
+  assert(request_data[4] == 0xFFU && request_data[5] == 0xFFU && request_data[6] == 0xFFU);
+
+  request_size = 123U;
+  status = CommandCodec::encode_batch_read_words(
+      config,
+      BatchReadWordsRequest(DeviceAddress {mcprotocol::serial::DeviceCode::D, 0x01000000U}, 1U),
+      request_data,
+      request_size);
+  assert(status.code == StatusCode::InvalidArgument);
+}
+
 void test_encode_link_direct_random_write_bits_binary_iqr_shape() {
   const auto config = make_binary_c4_iqr_config();
   const std::array<LinkDirectRandomWriteBitItem, 2> items {{
@@ -6002,6 +6052,78 @@ void test_encode_register_monitor_ascii_reuses_random_read_layout() {
              random_read_size - expected_prefix.size()) == 0);
 }
 
+void test_encode_register_monitor_ascii_c2_reuses_compact_command_header() {
+  const auto config = make_ascii_c2_format4_config();
+  const std::array<RandomReadWordItem, 2> items {{
+      {.device = {mcprotocol::serial::DeviceCode::D, 100U}},
+      {.device = {mcprotocol::serial::DeviceCode::M, 105U}},
+  }};
+  std::array<std::uint8_t, 128> random_request {};
+  std::size_t random_size = 0;
+  Status status = CommandCodec::encode_random_read(
+      config,
+      RandomReadRequest(items, {}),
+      random_request,
+      random_size);
+  assert(status.ok());
+  assert(random_request[0] == static_cast<std::uint8_t>('5'));
+
+  std::array<std::uint8_t, 128> monitor_request {};
+  std::size_t monitor_size = 0;
+  status = CommandCodec::encode_register_monitor(
+      config,
+      MonitorRegistration(items, {}),
+      monitor_request,
+      monitor_size);
+  assert(status.ok());
+  assert(monitor_size == random_size);
+  assert(monitor_request[0] == static_cast<std::uint8_t>('8'));
+  assert(std::memcmp(monitor_request.data() + 1U, random_request.data() + 1U, random_size - 1U) == 0);
+}
+
+void test_encode_link_direct_register_monitor_ascii_c2_reuses_compact_command_header() {
+  const auto config = make_ascii_c2_format4_config();
+  const std::array<LinkDirectRandomReadWordItem, 1> items {{
+      LinkDirectRandomReadWordItem(
+          LinkDirectDevice(0x0001U, DeviceAddress {mcprotocol::serial::DeviceCode::W, 0x0100U})),
+  }};
+  std::array<std::uint8_t, 128> random_request {};
+  std::size_t random_size = 0;
+  Status status = CommandCodec::encode_link_direct_random_read(config, items, random_request, random_size);
+  assert(status.ok());
+  assert(random_request[0] == static_cast<std::uint8_t>('5'));
+
+  std::array<std::uint8_t, 128> monitor_request {};
+  std::size_t monitor_size = 0;
+  status = CommandCodec::encode_link_direct_register_monitor(
+      config,
+      LinkDirectMonitorRegistration(items),
+      monitor_request,
+      monitor_size);
+  assert(status.ok());
+  assert(monitor_size == random_size);
+  assert(monitor_request[0] == static_cast<std::uint8_t>('8'));
+  assert(std::memcmp(monitor_request.data() + 1U, random_request.data() + 1U, random_size - 1U) == 0);
+}
+
+void test_encode_success_response_large_sum_check_has_no_fixed_scratch_limit() {
+  const auto config = test_config_with_sum_check(
+      make_ascii_c4_format4_config(),
+      SumCheckMode::Enabled);
+  const std::vector<std::uint8_t> response_data(
+      mcprotocol::serial::kMaxRequestFrameBytes + 64U,
+      static_cast<std::uint8_t>('A'));
+  std::vector<std::uint8_t> frame(response_data.size() + 128U, 0U);
+  std::size_t frame_size = 0;
+  const Status status = FrameCodec::encode_success_response(
+      config,
+      response_data,
+      frame,
+      frame_size);
+  assert(status.ok());
+  assert(frame_size > response_data.size());
+}
+
 void test_encode_register_monitor_binary_iqr_layout() {
   const auto config = make_binary_c4_iqr_config();
   const std::array<mcprotocol::serial::RandomReadWordItem, 2> items {{
@@ -7037,7 +7159,7 @@ void test_client_ascii_c1_loopback_roundtrip() {
 
   std::array<char, 8> echoed {};
   CallbackCapture capture;
-  constexpr std::string_view loopback = "ABCDE";
+  constexpr std::string_view loopback = "aBcDe";
   status = client.async_loopback(
       0,
       std::span<const char>(loopback.data(), loopback.size()),
@@ -9183,6 +9305,8 @@ int main() {
   test_encode_link_direct_batch_write_bits_ascii_iqr_shape();
   test_encode_link_direct_random_read_binary_iqr_shape();
   test_encode_link_direct_random_write_words_binary_iqr_shape();
+  test_encode_link_direct_random_write_words_rejects_wrapped_sizes();
+  test_ql_normal_device_number_rejects_wire_overflow_without_truncation();
   test_encode_link_direct_random_write_bits_binary_iqr_shape();
   test_encode_link_direct_multi_block_read_binary_iqr_shape();
   test_encode_link_direct_multi_block_write_binary_iqr_shape();
@@ -9220,6 +9344,9 @@ int main() {
   test_encode_multi_block_write_binary_bit_blocks_use_lsb_first_word_packing();
   test_encode_multi_block_write_ascii_bit_blocks_use_lsb_first_word_packing();
   test_encode_register_monitor_ascii_reuses_random_read_layout();
+  test_encode_register_monitor_ascii_c2_reuses_compact_command_header();
+  test_encode_link_direct_register_monitor_ascii_c2_reuses_compact_command_header();
+  test_encode_success_response_large_sum_check_has_no_fixed_scratch_limit();
   test_encode_register_monitor_binary_iqr_layout();
   test_encode_register_monitor_binary_iqr_allows_lz_shape();
   test_encode_read_monitor_ascii_matches_manual();
