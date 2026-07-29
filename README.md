@@ -23,7 +23,7 @@ The maintained device and range table is in the shared [MC Protocol Serial suppo
 ```ini
 [env:your-board]
 lib_deps =
-    fa-yoshinobu/mcprotocol-serial-cpp@^3.2.1
+    fa-yoshinobu/mcprotocol-serial-cpp
 build_unflags =
     -std=gnu++11
     -std=gnu++14

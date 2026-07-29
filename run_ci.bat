@@ -60,7 +60,7 @@ call "%PYTHON_EXE%" %PYTHON_ARGS% "%REPO_ROOT%\scripts\check_markdown_links.py"
 if errorlevel 1 goto fail
 
 echo [ci] API reference
-call "%PYTHON_EXE%" %PYTHON_ARGS% "%REPO_ROOT%\scripts\generate_api_reference.py" --title "MC Protocol Serial C++ API Reference" --output docsrc\user\API_REFERENCE.md --input include\mcprotocol_serial.hpp --input include\mcprotocol\serial\types.hpp --input include\mcprotocol\serial\status.hpp --input include\mcprotocol\serial\codec.hpp --input include\mcprotocol\serial\client.hpp --input include\mcprotocol\serial\high_level.hpp --input include\mcprotocol\serial\host_sync.hpp --input include\mcprotocol\serial\posix_serial.hpp --input include\mcprotocol\serial\link_direct.hpp --input include\mcprotocol\serial\qualified_buffer.hpp --input include\mcprotocol\serial\version.hpp --predefine MCPROTOCOL_SERIAL_ENABLE_HOST_API=1 --check
+call "%PYTHON_EXE%" %PYTHON_ARGS% "%REPO_ROOT%\scripts\generate_api_reference.py" --title "MC Protocol Serial C++ API Reference" --output docsrc\user\API_REFERENCE.md --input include\mcprotocol_serial.hpp --input include\mcprotocol\serial\types.hpp --input include\mcprotocol\serial\status.hpp --input include\mcprotocol\serial\codec.hpp --input include\mcprotocol\serial\client.hpp --input include\mcprotocol\serial\high_level.hpp --input include\mcprotocol\serial\host_sync.hpp --input include\mcprotocol\serial\posix_serial.hpp --input include\mcprotocol\serial\link_direct.hpp --input include\mcprotocol\serial\qualified_buffer.hpp --predefine MCPROTOCOL_SERIAL_ENABLE_HOST_API=1 --check
 if errorlevel 1 goto fail
 
 if "%RUN_PLATFORMIO%"=="1" (

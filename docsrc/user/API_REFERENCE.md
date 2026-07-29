@@ -15,7 +15,6 @@ Do not edit it manually; run `scripts/generate_api_reference.py` instead.
 - `include/mcprotocol/serial/posix_serial.hpp`
 - `include/mcprotocol/serial/link_direct.hpp`
 - `include/mcprotocol/serial/qualified_buffer.hpp`
-- `include/mcprotocol/serial/version.hpp`
 
 ### Public Header Macros In `include/mcprotocol/serial/types.hpp`
 
@@ -163,34 +162,6 @@ Do not edit it manually; run `scripts/generate_api_reference.py` instead.
 
 ```cpp
 #define MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 1
-```
-
-### Public Header Macros In `include/mcprotocol/serial/version.hpp`
-
-#### Configuration Macros
-
-#### `MCPROTOCOL_SERIAL_VERSION_MAJOR`
-
-```cpp
-#define MCPROTOCOL_SERIAL_VERSION_MAJOR 3
-```
-
-#### `MCPROTOCOL_SERIAL_VERSION_MINOR`
-
-```cpp
-#define MCPROTOCOL_SERIAL_VERSION_MINOR 2
-```
-
-#### `MCPROTOCOL_SERIAL_VERSION_PATCH`
-
-```cpp
-#define MCPROTOCOL_SERIAL_VERSION_PATCH 1
-```
-
-#### `MCPROTOCOL_SERIAL_VERSION_STRING`
-
-```cpp
-#define MCPROTOCOL_SERIAL_VERSION_STRING "3.2.1"
 ```
 
 ## Namespaces

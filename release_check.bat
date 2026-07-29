@@ -57,7 +57,7 @@ if not defined JSON_VERSION (
 )
 
 echo [2/5] Refreshing generated API reference...
-python scripts\generate_api_reference.py --title "MC Protocol Serial C++ API Reference" --output docsrc\user\API_REFERENCE.md --input include\mcprotocol_serial.hpp --input include\mcprotocol\serial\types.hpp --input include\mcprotocol\serial\status.hpp --input include\mcprotocol\serial\codec.hpp --input include\mcprotocol\serial\client.hpp --input include\mcprotocol\serial\high_level.hpp --input include\mcprotocol\serial\host_sync.hpp --input include\mcprotocol\serial\posix_serial.hpp --input include\mcprotocol\serial\link_direct.hpp --input include\mcprotocol\serial\qualified_buffer.hpp --input include\mcprotocol\serial\version.hpp --predefine MCPROTOCOL_SERIAL_ENABLE_HOST_API=1
+python scripts\generate_api_reference.py --title "MC Protocol Serial C++ API Reference" --output docsrc\user\API_REFERENCE.md --input include\mcprotocol_serial.hpp --input include\mcprotocol\serial\types.hpp --input include\mcprotocol\serial\status.hpp --input include\mcprotocol\serial\codec.hpp --input include\mcprotocol\serial\client.hpp --input include\mcprotocol\serial\high_level.hpp --input include\mcprotocol\serial\host_sync.hpp --input include\mcprotocol\serial\posix_serial.hpp --input include\mcprotocol\serial\link_direct.hpp --input include\mcprotocol\serial\qualified_buffer.hpp --predefine MCPROTOCOL_SERIAL_ENABLE_HOST_API=1
 if %errorlevel% neq 0 (
   echo [ERROR] API reference generation failed.
   exit /b %errorlevel%

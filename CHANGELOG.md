@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Docs: Installation examples no longer pin a library release, and generated API documentation no longer duplicates the current release number; GitHub Releases and registry metadata remain authoritative.
+
 ## [3.2.1] - 2026-07-29
 
 - Release: Bumped library, CMake, PlatformIO, Arduino, public version-header, and install-documentation metadata to `3.2.1`.
