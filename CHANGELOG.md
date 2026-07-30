@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Docs: Installation examples no longer pin a library release, and generated API documentation no longer duplicates the current release number; GitHub Releases and registry metadata remain authoritative.
+- Docs: README documentation links now include the shared Performance and Choosing a Language pages, and package registry metadata was expanded for discoverability. No functional change.
 
 ## [3.2.1] - 2026-07-29
 
