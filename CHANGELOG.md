@@ -17,8 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [3.2.2] - 2026-07-31
 
+- Release: Bumped library, CMake, PlatformIO, Arduino, public version-header, and install-documentation metadata to `3.2.2`. This version supersedes `3.2.1` on the PlatformIO registry, where the `3.2.1` upload remained stuck in registry-side processing; the library code is unchanged from `3.2.1`.
 - Docs: Installation examples no longer pin a library release, and generated API documentation no longer duplicates the current release number; GitHub Releases and registry metadata remain authoritative.
 - Docs: README documentation links now include the shared Performance and Choosing a Language pages, and package registry metadata was expanded for discoverability. No functional change.
 
