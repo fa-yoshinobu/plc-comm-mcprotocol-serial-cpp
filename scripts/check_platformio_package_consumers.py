@@ -14,7 +14,29 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ENVIRONMENTS = ("native-core", "mega2560-core")
+REQUIRED_FILES = (
+    "LICENSE",
+    "README.md",
+    "library.json",
+    "library.properties",
+    "include/mcprotocol_serial.hpp",
+    "examples/platformio_esp32c3_arduino_async/platformio_esp32c3_arduino_async.cpp",
+)
 REQUIRED_SOURCES = ("src/client.cpp", "src/codec.cpp")
+FORBIDDEN_PREFIXES = (
+    ".github/",
+    "docsrc/",
+    "docs/",
+    "internal_docs/",
+    "release-artifacts/",
+    "scripts/",
+    "tests/",
+    "tools/",
+)
+FORBIDDEN_FILES = {
+    "examples/host_sync_polling_reconnect.cpp",
+    "examples/host_sync_quickstart.cpp",
+}
 FORBIDDEN_SOURCE_STEMS = ("host_sync", "posix_serial", "win32_serial")
 SHADOW_HEADERS = (
     "include/algorithm",
@@ -69,9 +91,26 @@ def pack_package(pio: list[str], output_dir: Path) -> Path:
 def check_archive(package: Path) -> None:
     with tarfile.open(package, "r:gz") as archive:
         names = {member.name.removeprefix("./") for member in archive.getmembers()}
-    missing = [source for source in REQUIRED_SOURCES if source not in names]
+    missing = [path for path in (*REQUIRED_FILES, *REQUIRED_SOURCES) if path not in names]
     if missing:
-        raise SystemExit(f"Packed package is missing required sources: {', '.join(missing)}")
+        raise SystemExit(f"Packed package is missing required consumer files: {', '.join(missing)}")
+    forbidden = sorted(
+        name
+        for name in names
+        if any(name.startswith(prefix) for prefix in FORBIDDEN_PREFIXES)
+        or name
+        in {
+            "AGENTS.md",
+            "TODO.md",
+            "release_check.bat",
+            "run_ci.bat",
+            *FORBIDDEN_FILES,
+        }
+    )
+    if forbidden:
+        raise SystemExit(
+            f"Packed package contains repository-only files: {', '.join(forbidden)}"
+        )
     shadowed = [header for header in SHADOW_HEADERS if header in names]
     if shadowed:
         raise SystemExit(
@@ -101,7 +140,7 @@ build_unflags =
     -std=gnu++2a
     -std=gnu++20
 build_flags =
-    -std=gnu++17
+    -std=c++17
 
 [env:native-core]
 platform = native
@@ -206,6 +245,11 @@ def main() -> int:
     parser.add_argument("--package", type=Path, help="existing PlatformIO .tar.gz to verify")
     parser.add_argument("--pio", help="path to the PlatformIO executable")
     parser.add_argument(
+        "--contents-only",
+        action="store_true",
+        help="inspect packed content without compiling consumers",
+    )
+    parser.add_argument(
         "--environment",
         action="append",
         choices=ENVIRONMENTS,
@@ -217,7 +261,9 @@ def main() -> int:
     pio = platformio_command(args.pio)
     environments = tuple(args.environments or ENVIRONMENTS)
 
-    with tempfile.TemporaryDirectory(prefix="mcprotocol-platformio-consumer-") as temp:
+    with tempfile.TemporaryDirectory(
+        prefix=".mcprotocol-platformio-consumer-", dir=ROOT.parent
+    ) as temp:
         temp_dir = Path(temp)
         if args.package:
             package = args.package.resolve()
@@ -227,6 +273,9 @@ def main() -> int:
             package = pack_package(pio, temp_dir / "package")
 
         check_archive(package)
+        if args.contents_only:
+            print("[platformio-consumer] packed-package content checks passed")
+            return 0
         consumer = temp_dir / "consumer"
         write_consumer(consumer, package)
         for environment in environments:

@@ -29,7 +29,6 @@ module_target="${MCPROTOCOL_MODULE_TARGET:-}"
 topology="${MCPROTOCOL_TOPOLOGY:-}"
 self_station="${MCPROTOCOL_SELF_STATION:-}"
 e1_monitoring_timer_ms="${MCPROTOCOL_E1_MONITORING_TIMER_MS:-}"
-inter_byte_timeout_ms="${MCPROTOCOL_INTER_BYTE_TIMEOUT_MS:-}"
 if [[ "${route}" == "multidrop" && "${frame}" != e1-* && -z "${station}" ]]; then
   echo "MCPROTOCOL_STATION is required for a multidrop route" >&2
   exit 2
@@ -105,10 +104,6 @@ fi
 if [[ -n "${e1_monitoring_timer_ms}" ]]; then
   common_args+=(--e1-monitoring-timer-ms "${e1_monitoring_timer_ms}")
 fi
-if [[ -n "${inter_byte_timeout_ms}" ]]; then
-  common_args+=(--inter-byte-timeout-ms "${inter_byte_timeout_ms}")
-fi
-
 end_time=$((SECONDS + duration_sec))
 completed_cycles=0
 

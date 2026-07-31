@@ -48,7 +48,7 @@
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| Some response bytes arrive, then the request fails with an inter-byte timeout. | No RX data chunk reached the library for the configured inactivity interval. This is separate from the fixed total response deadline. | Keep the 250 ms default unless the actual serial/adapter delivery gaps require an explicit positive value. After an unsequenced timeout, reset/drain the transport and reconfigure before another request; do not reuse partial response bytes. |
+| Response bytes keep arriving slowly, but the request still times out. | One absolute deadline covers first TX, drain, every RX chunk, correlation, and decode. Partial progress never restarts it. | Increase the one transaction timeout if the complete operation legitimately needs longer. After any timeout, close/reopen the serial generation and reconfigure; never reuse partial bytes. |
 
 ## A state-changing result is unknown
 

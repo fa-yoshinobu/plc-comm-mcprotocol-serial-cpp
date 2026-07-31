@@ -9,8 +9,19 @@ The public API is designed for host tools and MCU firmware:
 - no exceptions
 - no RTTI
 - no dynamic allocation in the library
-- caller-owned buffers via `std::span`
+- caller-owned buffers via `mcprotocol::serial::Span`
 - transport-agnostic client state machine
+
+`Span<T>` is the library's C++17 non-owning contiguous view. Construct it from pointer/count,
+pointer-pair, a C-array, or a matching `std::array` lvalue. Other containers use the explicit
+`Span<T>(container.data(), container.size())` form; rvalue arrays are rejected so the view cannot
+immediately dangle. A mutable `Span<T>` converts to `Span<const T>`, never the reverse. `try_at`,
+`try_first`, and `try_subspan` report invalid indexes or ranges without producing an invalid view;
+`operator[]` requires `index < size()`.
+
+Raw octets use `mcprotocol::serial::Byte`, not `std::byte`. `Byte` has no implicit integer
+conversion or arithmetic; use `mcprotocol::serial::byte_to_integer<Integer>(value)` when a numeric
+representation is required.
 
 ## Entry paths
 
@@ -90,25 +101,18 @@ encoding rather than inferred from response bytes. Malformed ASCII route hexadec
 as a parse error. Timeout, NAK, malformed input, or mismatch never causes automatic route discovery
 or fallback.
 
-### Response timeout and 1E monitoring timer
+### Absolute transaction timeout and 1E monitoring timer
 
-`TimeoutConfig::response_timeout_ms` is the host communication deadline from successful TX
-completion until the complete response. Its omitted value is 3000 ms for every frame and code mode.
-An explicit value must be 1..2147483647 ms so 32-bit monotonic-clock comparisons remain wrap-safe.
-Receiving a byte does not restart or extend this total deadline. The separate
-`inter_byte_timeout_ms` remains the RX-inactivity limit after response data starts. It defaults to
-250 ms and accepts explicit 1..2147483647 ms values. Zero and larger values are rejected rather
-than treated as immediate timeout or clamped. Each byte/chunk delivered to the library restarts
-only this inactivity deadline. If an OS read or UART callback supplies multiple bytes together,
-the library cannot observe their physical internal spacing; the limit is therefore measured from
-the last received data callback/chunk. A chunk arriving at or after the deadline is not accepted.
+`TimeoutConfig::response_timeout_ms` is the one absolute transaction deadline. Its omitted value
+is 3000 ms for every frame and code mode. Call `notify_tx_started(now_ms)` immediately before the
+first UART write. That same deadline covers partial writes, physical TX drain, all receive chunks,
+response correlation, and complete decode. No byte, chunk, ignored response, or phase transition
+restarts it. An explicit value must be 1..2147483647 ms so 32-bit monotonic-clock comparisons remain
+wrap-safe.
 
-After a timeout on a frame without per-request response identity, `MelsecSerialClient` sets
-`requires_transport_reset()`. Drain or close/reopen the UART and call `configure()` again before a
-new request. This prevents an unidentifiable late response from being accepted by the next
-same-route request. Format2 can remain usable because its automatic block number identifies and
-discards the old response. `PosixSyncClient` closes its owned serial port after a timeout and must
-be opened again.
+Every timeout sets `requires_transport_reset()`, including Format2. Abort, drain, and close/reopen
+the exact UART generation, then call `configure()` before another request. `PosixSyncClient` does
+this retirement itself and must be opened again. The timed-out request is not retried.
 
 The 1E ACPU monitoring timer is a different PLC-side protocol field. It defaults independently to
 4000 ms (`0x0010` in 250 ms wire units). Set it with
@@ -137,8 +141,9 @@ does not expose a normal `--block-no` connection option.
 Public request and item types require their semantic inputs at construction. A missing device,
 address, count/data span, value, target, state, channel, or requested mode change is never replaced
 with D0, address zero, zero/OFF, or another valid operation. Explicit D0, address zero, value zero,
-and `BitValue::Off` remain valid when passed by the caller. Empty request containers and unknown
-enum values are rejected before any transmit frame is made. Receive/output storage types remain
+and Boolean `false` remain valid when passed by the caller. Individual bit inputs use native C++
+`bool` only; packed block words remain `std::uint16_t`. Empty request containers are rejected before
+any transmit frame is made. Receive/output storage types remain
 default constructible.
 
 ```cpp
@@ -378,8 +383,8 @@ spans. `LZ`, `LTN`, `LSTN`, and `LCN` require the DWord path. Link-direct sparse
 monitor APIs are Word-only.
 
 Every random-write item/spec is constructed with both the target and value. There is no default
-constructor and no omitted-value meaning. Explicit Word/DWord zero and `BitValue::Off` are valid;
-missing, empty, out-of-range, or unknown values reject the complete request before transmission.
+constructor and no omitted-value meaning. Explicit Word/DWord zero and Boolean `false` are valid;
+missing, empty, or out-of-range values reject the complete request before transmission.
 The CLI follows the same rule: use `random-write-words D100=0`, `random-write-dwords D200=0`, or
 `random-write-bits M100=0`; a missing `=VALUE` is rejected before the serial device is opened.
 After transmission begins, an unconfirmed random-write result is `OperationOutcomeUnknown`, because
@@ -391,6 +396,17 @@ global signal control, mode switching, and transmission-sequence initialization.
 transport failure, cancellation, malformed response, or other result that cannot confirm the PLC
 state is not reported as a definite pre-send failure. Inspect the target state before deciding what
 to do next; the library does not resend automatically.
+
+| Status | Meaning / retry rule |
+| --- | --- |
+| `Timeout` | The configured absolute deadline expired for a read or before a state change could be ambiguous. Reopen/reset before a later operation. |
+| `Cancelled` | The caller cancelled; this is not a timeout. |
+| `Closed` | A local lifecycle close interrupted/rejected the operation. |
+| `NotConnected` | No configured/open session exists. |
+| `Transport` | Non-timeout local I/O failure. |
+| `Framing` / `Parse` / `SumCheckMismatch` | A response was malformed or invalid. |
+| `PlcError` | The PLC returned a confirmed NG/end code; inspect `plc_error_code`. |
+| `OperationOutcomeUnknown` | A state-changing request may have been sent. Do not retry automatically; inspect `status.cause` (`Timeout`, `Cancelled`, `Closed`, `Transport`, or protocol reason) and verify PLC state. |
 
 Remote RUN always requires two explicit decisions. `RemoteOperationMode` selects whether a RUN
 conflict is handled forcibly. `RemoteRunClearMode` selects whether device state is retained,
@@ -407,14 +423,26 @@ PAUSE returns `OperationOutcomeUnknown`, so inspect the PLC state and do not res
 
 ## Entry path 3: low-level async client
 
-`MelsecSerialClient` owns the protocol state machine but not the UART. Your code configures the client, starts an async request, sends `pending_tx_frame()`, calls `notify_tx_complete(now, status)`, feeds response bytes with `on_rx_bytes()`, and calls `poll()` for timeout handling. The TX status is always explicit: pass `ok_status()` only after the UART confirms physical transmission completion, or pass the actual transport failure/cancellation status.
+`MelsecSerialClient` owns the protocol state machine but not the UART. Your code configures the
+client, starts an async request, calls `notify_tx_started(now)` immediately before its first UART
+write, sends `pending_tx_frame()`, calls `notify_tx_complete(now, status)`, feeds response bytes
+with `on_rx_bytes()`, and calls `poll()` for deadline handling. The TX status is always explicit:
+pass `ok_status()` only after the UART confirms physical transmission completion, or pass the
+actual transport failure/cancellation status.
+
+One instance admits one wire transaction. A second operation returns `Busy` before request-state
+mutation. The class retains caller-owned spans, so it has no internal pending queue. Calls from
+different operating-system threads into the same instance are prohibited; schedule them in the
+caller. Separate instances have independent state and may progress concurrently.
 
 RS-485 direction hooks are optional. Leave both callbacks unset for RS-232 or hardware/driver-
 controlled RS-485. When application-controlled direction is needed, install both `on_tx_begin` and
 `on_tx_end` together; a one-sided hook is rejected. Hooks cannot be replaced while a request is
 busy. If cancellation is requested during TX, the request remains busy until the UART reports
 physical completion or abort with `notify_tx_complete`; only then is `on_tx_end` called exactly
-once and the completion callback released.
+once and the completion callback released. Cancellation before `notify_tx_started()` completes
+immediately as `Cancelled`, invokes no TX hook, and cannot become `OperationOutcomeUnknown` because
+no transport write has started.
 
 This is the path used in the PlatformIO examples.
 
@@ -426,7 +454,7 @@ This is the path used in the PlatformIO examples.
 #include <cstring>
 
 #include "mcprotocol_serial.hpp"
-#include "mcprotocol/serial/span_compat.hpp"
+#include "mcprotocol/serial/span.hpp"
 
 namespace {
 
@@ -470,14 +498,18 @@ int main() {
       BatchReadWordsRequest(
           DeviceAddress {DeviceCode::D, 100U},
           static_cast<std::uint16_t>(words.size())),
-      std::span<std::uint16_t>(words.data(), words.size()),
+      mcprotocol::serial::Span<std::uint16_t>(words.data(), words.size()),
       on_complete,
       &completion);
   if (!status.ok()) {
     return 1;
   }
 
-  const std::span<const std::byte> frame = client.pending_tx_frame();
+  const mcprotocol::serial::Span<const mcprotocol::serial::Byte> frame = client.pending_tx_frame();
+  status = client.notify_tx_started(0);
+  if (!status.ok()) {
+    return 1;
+  }
   // Send `frame` through your UART here.
   (void)frame;
   status = client.notify_tx_complete(1, mcprotocol::serial::ok_status());
@@ -490,16 +522,16 @@ int main() {
   std::size_t response_frame_size = 0;
   status = FrameCodec::encode_success_response(
       protocol,
-      std::span<const std::uint8_t>(response_data.data(), response_data.size()),
+      mcprotocol::serial::Span<const std::uint8_t>(response_data.data(), response_data.size()),
       response_frame,
       response_frame_size);
   if (!status.ok()) {
     return 1;
   }
 
-  std::array<std::byte, mcprotocol::serial::kMaxResponseFrameBytes> rx_frame {};
+  std::array<mcprotocol::serial::Byte, mcprotocol::serial::kMaxResponseFrameBytes> rx_frame {};
   std::memcpy(rx_frame.data(), response_frame.data(), response_frame_size);
-  client.on_rx_bytes(2, std::span<const std::byte>(rx_frame.data(), response_frame_size));
+  client.on_rx_bytes(2, mcprotocol::serial::Span<const mcprotocol::serial::Byte>(rx_frame.data(), response_frame_size));
   client.poll(2);
 
   if (!completion.done || !completion.status.ok()) {
@@ -535,6 +567,27 @@ See [examples/mcu_async_batch_read.cpp](../../examples/mcu_async_batch_read.cpp)
 
 ## Build-time tuning
 
+### Single-request capacity and aggregation
+
+Except for the aggregate described below, every public operation represents exactly one PLC
+request. It never splits an oversized call, retries a smaller count, or grows beyond the selected
+fixed capacities. Admission uses the minimum protocol/profile/wire/request/response/decoder/output
+limit; binary calculations assume every escapable byte expands through DLE stuffing. A request that
+cannot fit returns `InvalidArgument` before TX, while a caller output span that is independently too
+small returns `BufferTooSmall`.
+
+`PosixSyncClient::read_long_state_bits()` is explicitly aggregate when an
+`LTS`/`LTC`/`LSTS`/`LSTC` call requests more than one point. It validates the complete address,
+profile, request, and response plan before the first send; issues one four-word status-block request
+per point in address order; stops at the first failure; and changes caller output only after every
+request succeeds. The result is non-atomic because internal requests can observe different PLC scan
+times. Use a one-point read or a PLC-side snapshot/handshake when the values must share one coherence
+point. `LCS`/`LCC` remain one direct bit request.
+
+Callers that need any other group of independent reads or writes submit explicit operations. Writes
+are never automatically split, because partial completion and outcome-unknown handling must remain
+explicit.
+
 For small firmware builds, use the PlatformIO environments or define the same macros in your own build.
 
 | Tuning area | Macros |
@@ -561,7 +614,10 @@ and are not propagated to applications that link it.
 
 `PosixSerialConfig` has no default constructor. All six connection fields are required and are
 validated before the OS serial handle is opened. Values must match the PLC serial module and host
-adapter; the library does not infer or retry a different setting.
+adapter; the library does not infer or retry a different setting. A successful open replaces the
+port's inherited line behavior: POSIX input/output/local modes are raw, and Win32 preserves only
+documented driver-reserved/provider DCB state. Software flow control and DTR/DSR flow are disabled,
+and RTS is either disabled (`None`) or owned by the OS RTS/CTS handshake (`RtsCts`).
 
 | Field | Type | Example | Notes |
 | --- | --- | --- | --- |

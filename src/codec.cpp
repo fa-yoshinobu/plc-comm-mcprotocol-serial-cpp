@@ -12,6 +12,30 @@
 namespace mcprotocol::serial {
 namespace {
 
+template <typename T>
+[[nodiscard]] Span<T> checked_first(Span<T> input, std::size_t count) noexcept {
+  Span<T> result;
+  (void)input.try_first(count, result);
+  return result;
+}
+
+template <typename T>
+[[nodiscard]] Span<T> checked_subspan(Span<T> input, std::size_t offset) noexcept {
+  Span<T> result;
+  (void)input.try_subspan(offset, result);
+  return result;
+}
+
+template <typename T>
+[[nodiscard]] Span<T> checked_subspan(
+    Span<T> input,
+    std::size_t offset,
+    std::size_t count) noexcept {
+  Span<T> result;
+  (void)input.try_subspan(offset, count, result);
+  return result;
+}
+
 // Constants, lookup tables, and byte-writing primitives.
 
 constexpr std::uint8_t kAsciiEnq = 0x05;
@@ -79,7 +103,7 @@ constexpr std::array<DeviceSpec, 41> kDeviceSpecs {{
 
 class ByteWriter {
  public:
-  explicit ByteWriter(std::span<std::uint8_t> buffer) : buffer_(buffer) {}
+  explicit ByteWriter(mcprotocol::serial::Span<std::uint8_t> buffer) : buffer_(buffer) {}
 
   [[nodiscard]] bool push(std::uint8_t value) noexcept {
     if (size_ >= buffer_.size()) {
@@ -89,7 +113,7 @@ class ByteWriter {
     return true;
   }
 
-  [[nodiscard]] bool append(std::span<const std::uint8_t> bytes) noexcept {
+  [[nodiscard]] bool append(mcprotocol::serial::Span<const std::uint8_t> bytes) noexcept {
     if ((size_ + bytes.size()) > buffer_.size()) {
       return false;
     }
@@ -116,8 +140,8 @@ class ByteWriter {
     return size_;
   }
 
-  [[nodiscard]] std::span<const std::uint8_t> written() const noexcept {
-    return buffer_.first(size_);
+  [[nodiscard]] mcprotocol::serial::Span<const std::uint8_t> written() const noexcept {
+    return checked_first(buffer_, size_);
   }
 
   void clear() noexcept {
@@ -125,7 +149,7 @@ class ByteWriter {
   }
 
  private:
-  std::span<std::uint8_t> buffer_;
+  mcprotocol::serial::Span<std::uint8_t> buffer_;
   std::size_t size_ = 0;
 };
 
@@ -562,7 +586,7 @@ class ByteWriter {
   if (working != 0U) {
     return false;
   }
-  return writer.append(std::span<const std::uint8_t>(digits_buffer.data(), digits));
+  return writer.append(mcprotocol::serial::Span<const std::uint8_t>(digits_buffer.data(), digits));
 }
 
 [[nodiscard]] bool append_ascii_device_code(
@@ -639,10 +663,10 @@ class ByteWriter {
 [[nodiscard]] Status buffer_too_small(const char* message) noexcept;
 [[nodiscard]] Status parse_error(const char* message) noexcept;
 [[nodiscard]] bool parse_ascii_word(
-    std::span<const std::uint8_t> bytes,
+    mcprotocol::serial::Span<const std::uint8_t> bytes,
     std::uint16_t& value) noexcept;
 [[nodiscard]] bool parse_binary_word(
-    std::span<const std::uint8_t> bytes,
+    mcprotocol::serial::Span<const std::uint8_t> bytes,
     std::size_t offset,
     std::uint16_t& value) noexcept;
 
@@ -862,8 +886,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     default:
       return invalid_argument("Global signal target must be current, x1a, or x1b");
   }
-  if (request.value != BitValue::Off && request.value != BitValue::On) {
-    return invalid_argument("Global signal value must be BitValue::Off or BitValue::On");
+  if (request.value != false && request.value != true) {
+    return invalid_argument("Global signal value must be false or true");
   }
   return ok_status();
 }
@@ -1165,7 +1189,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
       c1_command_family(config) == C1CommandFamily::AcpuCommon
           ? (is_c1_timer_or_counter_device(device.code) ? 3U : 4U)
           : (is_c1_timer_or_counter_device(device.code) ? 5U : 6U);
-  return writer.append(std::span<const std::uint8_t>(
+  return writer.append(mcprotocol::serial::Span<const std::uint8_t>(
              reinterpret_cast<const std::uint8_t*>(symbol),
              code_width)) &&
          append_ascii_device_number(writer, device.number, number_width, spec->hexadecimal);
@@ -1206,8 +1230,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[maybe_unused]] [[nodiscard]] bool c1_monitor_uses_bit_units(
-    std::span<const RandomReadWordItem> word_items,
-    std::span<const RandomReadDWordItem> dword_items) noexcept {
+    mcprotocol::serial::Span<const RandomReadWordItem> word_items,
+    mcprotocol::serial::Span<const RandomReadDWordItem> dword_items) noexcept {
   if (!dword_items.empty()) {
     return false;
   }
@@ -1224,7 +1248,14 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] constexpr DeviceCode qualified_device_code(
     const QualifiedBufferWordDevice& device) noexcept {
-  return device.kind == QualifiedBufferDeviceKind::HG ? DeviceCode::HG : DeviceCode::G;
+  switch (device.kind) {
+    case QualifiedBufferDeviceKind::G:
+      return DeviceCode::G;
+    case QualifiedBufferDeviceKind::HG:
+      return DeviceCode::HG;
+    default:
+      return static_cast<DeviceCode>(0xFFU);
+  }
 }
 
 [[nodiscard]] constexpr bool is_link_direct_bit_device(DeviceCode code) noexcept {
@@ -1320,6 +1351,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_extended_word_device(
     const ProtocolConfig& config,
     const QualifiedBufferWordDevice& device) noexcept {
+  if (device.kind != QualifiedBufferDeviceKind::G && device.kind != QualifiedBufferDeviceKind::HG) {
+    return invalid_argument("Qualified buffer device kind must be G or HG");
+  }
   if (device.kind == QualifiedBufferDeviceKind::HG) {
     const PlcSeries series = plc_series_from_profile(config.plc_profile());
     if (series == PlcSeries::IQ_F) {
@@ -1335,7 +1369,27 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (is_ascii_mode(config) && device.module_number > 0x0FFFU) {
     return invalid_argument("ASCII device extension specification must be in range 0x000..0xFFF");
   }
-  return ok_status();
+  return validate_plain_device_wire_number(
+      qualified_native_wire_config(config, device),
+      DeviceAddress(qualified_device_code(device), device.word_address));
+}
+
+[[nodiscard]] Status validate_extended_word_range(
+    const ProtocolConfig& config,
+    const QualifiedBufferWordDevice& device,
+    std::size_t points) noexcept {
+  const Status device_status = validate_extended_word_device(config, device);
+  if (!device_status.ok() || points == 0U) {
+    return device_status;
+  }
+  const std::uint64_t end_address =
+      static_cast<std::uint64_t>(device.word_address) + points - 1U;
+  if (end_address > 0xFFFFFFFFULL) {
+    return invalid_argument("Qualified buffer word range exceeds the 32-bit address space");
+  }
+  return validate_plain_device_wire_number(
+      qualified_native_wire_config(config, device),
+      DeviceAddress(qualified_device_code(device), static_cast<std::uint32_t>(end_address)));
 }
 
 [[nodiscard]] bool append_extension_specification_ascii(
@@ -1461,8 +1515,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status parse_word_values_response(
     const ProtocolConfig& config,
     std::uint16_t points,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
     const char* ascii_error_prefix,
     const char* binary_error_prefix) noexcept {
   if (out_words.size() < points) {
@@ -1473,7 +1527,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
       return parse_error(ascii_error_prefix);
     }
     for (std::size_t index = 0; index < points; ++index) {
-      if (!parse_ascii_word(response_data.subspan(index * 4U, 4U), out_words[index])) {
+      if (!parse_ascii_word(checked_subspan(response_data, index * 4U, 4U), out_words[index])) {
         return parse_error("Failed to parse ASCII word payload");
       }
     }
@@ -1491,7 +1545,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
-[[nodiscard]] std::uint8_t compute_sum_check_byte(std::span<const std::uint8_t> bytes) noexcept {
+[[nodiscard]] std::uint8_t compute_sum_check_byte(mcprotocol::serial::Span<const std::uint8_t> bytes) noexcept {
   std::uint32_t total = 0;
   for (const std::uint8_t byte : bytes) {
     total += byte;
@@ -1500,14 +1554,14 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] std::array<std::uint8_t, 2> compute_sum_check_ascii(
-    std::span<const std::uint8_t> bytes) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> bytes) noexcept {
   const auto sum = compute_sum_check_byte(bytes);
   return {nibble_to_ascii(static_cast<std::uint8_t>((sum >> 4U) & 0x0FU)), nibble_to_ascii(sum & 0x0FU)};
 }
 
 [[nodiscard]] bool verify_ascii_sum(
-    std::span<const std::uint8_t> payload,
-    std::span<const std::uint8_t> received_sum) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> payload,
+    mcprotocol::serial::Span<const std::uint8_t> received_sum) noexcept {
   if (received_sum.size() != 2U) {
     return false;
   }
@@ -1637,7 +1691,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] bool parse_ascii_hex(
-    std::span<const std::uint8_t> text,
+    mcprotocol::serial::Span<const std::uint8_t> text,
     std::uint32_t& value) noexcept {
   value = 0;
   for (const std::uint8_t byte : text) {
@@ -1651,7 +1705,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] bool parse_ascii_word(
-    std::span<const std::uint8_t> text,
+    mcprotocol::serial::Span<const std::uint8_t> text,
     std::uint16_t& value) noexcept {
   std::uint32_t parsed = 0;
   if (!parse_ascii_hex(text, parsed) || parsed > 0xFFFFU) {
@@ -1662,13 +1716,13 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[maybe_unused]] [[nodiscard]] bool parse_ascii_dword(
-    std::span<const std::uint8_t> text,
+    mcprotocol::serial::Span<const std::uint8_t> text,
     std::uint32_t& value) noexcept {
   return parse_ascii_hex(text, value);
 }
 
 [[nodiscard]] bool parse_binary_word(
-    std::span<const std::uint8_t> bytes,
+    mcprotocol::serial::Span<const std::uint8_t> bytes,
     std::size_t offset,
     std::uint16_t& value) noexcept {
   if ((offset + 2U) > bytes.size()) {
@@ -1679,7 +1733,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[maybe_unused]] [[nodiscard]] bool parse_binary_dword(
-    std::span<const std::uint8_t> bytes,
+    mcprotocol::serial::Span<const std::uint8_t> bytes,
     std::size_t offset,
     std::uint32_t& value) noexcept {
   if ((offset + 4U) > bytes.size()) {
@@ -1798,9 +1852,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] bool append_bit_units_ascii(
     ByteWriter& writer,
-    std::span<const BitValue> bits) noexcept {
+    mcprotocol::serial::Span<const BitValue> bits) noexcept {
   for (const BitValue bit : bits) {
-    if (!writer.push(bit == BitValue::On ? static_cast<std::uint8_t>('1')
+    if (!writer.push(bit == true ? static_cast<std::uint8_t>('1')
                                          : static_cast<std::uint8_t>('0'))) {
       return false;
     }
@@ -1810,10 +1864,10 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] bool append_bit_units_binary(
     ByteWriter& writer,
-    std::span<const BitValue> bits) noexcept {
+    mcprotocol::serial::Span<const BitValue> bits) noexcept {
   for (std::size_t index = 0; index < bits.size(); index += 2U) {
-    const std::uint8_t high = bits[index] == BitValue::On ? 0x10U : 0x00U;
-    const std::uint8_t low = ((index + 1U) < bits.size() && bits[index + 1U] == BitValue::On) ? 0x01U : 0x00U;
+    const std::uint8_t high = bits[index] == true ? 0x10U : 0x00U;
+    const std::uint8_t low = ((index + 1U) < bits.size() && bits[index + 1U] == true) ? 0x01U : 0x00U;
     if (!writer.push(static_cast<std::uint8_t>(low | high))) {
       return false;
     }
@@ -1823,11 +1877,11 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] bool append_batch_write_bits_binary(
     ByteWriter& writer,
-    std::span<const BitValue> bits) noexcept {
+    mcprotocol::serial::Span<const BitValue> bits) noexcept {
   if (bits.size() == 1U) {
     // General binary bit-packing rule:
     // a single-point 1401 bit write carries the addressed value in the high nibble.
-    return writer.push(bits[0] == BitValue::On ? 0x10U : 0x00U);
+    return writer.push(bits[0] == true ? 0x10U : 0x00U);
   }
   return append_bit_units_binary(writer, bits);
 }
@@ -1835,7 +1889,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] DeviceAddress effective_batch_write_bits_head_device(
     const ProtocolConfig& config,
     const DeviceAddress& head_device,
-    std::span<const BitValue> bits) noexcept {
+    mcprotocol::serial::Span<const BitValue> bits) noexcept {
   (void)config;
   (void)bits;
   return head_device;
@@ -1852,14 +1906,14 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[maybe_unused]] [[nodiscard]] bool append_word_units_from_bits_ascii(
     ByteWriter& writer,
-    std::span<const BitValue> bits) noexcept {
+    mcprotocol::serial::Span<const BitValue> bits) noexcept {
   if ((bits.size() % 16U) != 0U) {
     return false;
   }
   for (std::size_t offset = 0; offset < bits.size(); offset += 16U) {
     std::uint16_t value = 0;
     for (std::size_t index = 0; index < 16U; ++index) {
-      if (bits[offset + index] == BitValue::On) {
+      if (bits[offset + index] == true) {
         value = static_cast<std::uint16_t>(value | (1U << index));
       }
     }
@@ -1872,14 +1926,14 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[maybe_unused]] [[nodiscard]] bool append_word_units_from_bits_binary_direct(
     ByteWriter& writer,
-    std::span<const BitValue> bits) noexcept {
+    mcprotocol::serial::Span<const BitValue> bits) noexcept {
   if ((bits.size() % 16U) != 0U) {
     return false;
   }
   for (std::size_t offset = 0; offset < bits.size(); offset += 16U) {
     std::uint16_t value = 0;
     for (std::size_t index = 0; index < 16U; ++index) {
-      if (bits[offset + index] == BitValue::On) {
+      if (bits[offset + index] == true) {
         // Manual-backed binary word-unit bit packing uses bit0 -> LSB for the head device.
         value = static_cast<std::uint16_t>(value | (1U << index));
       }
@@ -1894,7 +1948,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] bool append_word_data(
     ByteWriter& writer,
     const ProtocolConfig& config,
-    std::span<const std::uint16_t> words) noexcept {
+    mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
   for (const std::uint16_t value : words) {
     if (is_ascii_mode(config)) {
       if (!append_word_data_ascii(writer, value)) {
@@ -1910,8 +1964,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[maybe_unused]] [[nodiscard]] bool append_byte_data(
     ByteWriter& writer,
     const ProtocolConfig& config,
-    std::span<const std::byte> bytes) noexcept {
-  for (const std::byte value : bytes) {
+    mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes) noexcept {
+  for (const mcprotocol::serial::Byte value : bytes) {
     if (is_ascii_mode(config)) {
       if (!append_ascii_hex(writer, static_cast<std::uint8_t>(value), 2)) {
         return false;
@@ -1926,18 +1980,18 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status encode_frame_payload_ascii(
     const ProtocolConfig& config,
     FrameCodecContext context,
-    std::span<const std::uint8_t> request_data,
-    std::span<std::uint8_t> out_payload,
+    mcprotocol::serial::Span<const std::uint8_t> request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_payload,
     std::size_t& out_size) noexcept {
   ByteWriter payload_writer(out_payload);
   if (is_e1_frame(config)) {
     if (request_data.size() < 2U) {
       return invalid_argument("1E request data must begin with a command subheader");
     }
-    if (!payload_writer.append(request_data.first(2U)) ||
+    if (!payload_writer.append(checked_first(request_data, 2U)) ||
         !append_ascii_hex(payload_writer, config.route().pc_no(), 2U) ||
         !append_ascii_hex(payload_writer, e1_acpu_monitoring_timer(config), 4U) ||
-        !payload_writer.append(request_data.subspan(2U))) {
+        !payload_writer.append(checked_subspan(request_data, 2U))) {
       return buffer_too_small("1E ASCII frame payload buffer is too small");
     }
     out_size = payload_writer.size();
@@ -1968,8 +2022,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] Status encode_frame_payload_binary(
     const ProtocolConfig& config,
-    std::span<const std::uint8_t> request_data,
-    std::span<std::uint8_t> out_payload,
+    mcprotocol::serial::Span<const std::uint8_t> request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_payload,
     std::size_t& out_size) noexcept {
   ByteWriter payload_writer(out_payload);
   if (is_e1_frame(config)) {
@@ -1979,7 +2033,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     if (!payload_writer.push(request_data[0]) ||
         !payload_writer.push(static_cast<std::uint8_t>(config.route().pc_no())) ||
         !payload_writer.append_le16(e1_acpu_monitoring_timer(config)) ||
-        !payload_writer.append(request_data.subspan(1U))) {
+        !payload_writer.append(checked_subspan(request_data, 1U))) {
       return buffer_too_small("1E binary frame payload buffer is too small");
     }
     out_size = payload_writer.size();
@@ -1998,7 +2052,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] bool append_ascii_response_data(
     RawResponseFrame& frame,
-    std::span<const std::uint8_t> bytes) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> bytes) noexcept {
   if (bytes.size() > frame.response_data.size()) {
     return false;
   }
@@ -2279,12 +2333,23 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] constexpr bool is_valid_bit_value(BitValue value) noexcept {
-  return value == BitValue::Off || value == BitValue::On;
+  return value == false || value == true;
+}
+
+[[nodiscard]] Status validate_bit_values(
+    mcprotocol::serial::Span<const BitValue> values,
+    const char* message) noexcept {
+  for (const BitValue value : values) {
+    if (!is_valid_bit_value(value)) {
+      return invalid_argument(message);
+    }
+  }
+  return ok_status();
 }
 
 [[nodiscard]] Status validate_request_data_size(
     const ProtocolConfig& config,
-    std::span<const std::uint8_t> request_data) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> request_data) noexcept {
   if (is_ascii_mode(config)) {
     return request_data.size() <= kMaxRequestDataBytes ? ok_status()
                                                        : buffer_too_small("ASCII request data exceeds maximum size");
@@ -2295,7 +2360,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[maybe_unused]] [[nodiscard]] Status validate_loopback_chars(
     const ProtocolConfig& config,
-    std::span<const char> hex_ascii) noexcept {
+    mcprotocol::serial::Span<const char> hex_ascii) noexcept {
   const std::size_t max_length = is_c1_frame(config) ? 254U : kMaxLoopbackBytes;
   if (hex_ascii.empty() || hex_ascii.size() > max_length) {
     return invalid_argument(
@@ -2382,7 +2447,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return writer.push(kAsciiCr) && writer.push(kAsciiLf);
 }
 
-[[nodiscard]] bool has_ascii_crlf(std::span<const std::uint8_t> bytes, std::size_t offset) noexcept {
+[[nodiscard]] bool has_ascii_crlf(mcprotocol::serial::Span<const std::uint8_t> bytes, std::size_t offset) noexcept {
   return bytes.size() >= (offset + 2U) && bytes[offset] == kAsciiCr && bytes[offset + 1U] == kAsciiLf;
 }
 
@@ -2406,10 +2471,6 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
 
   if (!is_wrap_safe_timeout_ms(config.timeout().response_timeout_ms)) {
     return invalid_argument("Response timeout must be in range 1..2147483647 ms");
-  }
-
-  if (!is_wrap_safe_timeout_ms(config.timeout().inter_byte_timeout_ms)) {
-    return invalid_argument("Inter-byte timeout must be in range 1..2147483647 ms");
   }
 
   if (!config.e1_monitoring_timer().is_valid()) {
@@ -2509,10 +2570,94 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
   return ok_status();
 }
 
+Status FrameCodec::validate_request_capacity(
+    const ProtocolConfig& config,
+    std::size_t request_data_size) noexcept {
+  const Status config_status = validate_config(config);
+  if (!config_status.ok()) {
+    return config_status;
+  }
+  if (request_data_size > kMaxRequestDataBytes) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "Single-request payload exceeds the configured request-data capacity");
+  }
+
+  std::size_t wire_size = 0U;
+  if (is_e1_frame(config)) {
+    const std::size_t e1_overhead = is_ascii_mode(config) ? 6U : 3U;
+    wire_size = request_data_size + e1_overhead;
+  } else if (is_ascii_mode(config)) {
+    const std::size_t payload_prefix = is_c1_frame(config)
+                                           ? 4U
+                                           : ascii_block_number_length(config) +
+                                                 ascii_header_length(config.frame_kind());
+    const std::size_t envelope = 1U +
+                                 (is_ascii_enq_family(config) ? 0U : 1U) +
+                                 (is_sum_check_enabled(config) ? 2U : 0U) +
+                                 (uses_ascii_crlf(config) ? 2U : 0U);
+    wire_size = payload_prefix + request_data_size + envelope;
+  } else {
+    const std::size_t unescaped_payload =
+        2U + 1U + binary_route_length(config.frame_kind()) + request_data_size;
+    wire_size = 4U + (2U * unescaped_payload) +
+                (is_sum_check_enabled(config) ? 2U : 0U);
+  }
+
+  return wire_size <= kMaxRequestFrameBytes
+             ? ok_status()
+             : make_status(
+                   StatusCode::InvalidArgument,
+                   "Single request exceeds the configured worst-case transmitted-frame capacity");
+}
+
+Status FrameCodec::validate_response_capacity(
+    const ProtocolConfig& config,
+    std::size_t response_data_size) noexcept {
+  const Status config_status = validate_config(config);
+  if (!config_status.ok()) {
+    return config_status;
+  }
+  if (response_data_size > kMaxResponseFrameBytes) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "Single-request response payload exceeds the configured decoder capacity");
+  }
+
+  std::size_t wire_size = 0U;
+  if (is_e1_frame(config)) {
+    wire_size = response_data_size + (is_ascii_mode(config) ? 4U : 2U);
+  } else if (is_ascii_mode(config)) {
+    const std::size_t prefix =
+        1U + ascii_block_number_length(config) + ascii_header_length(config.frame_kind());
+    if (is_ascii_enq_family(config)) {
+      wire_size = prefix + response_data_size + 1U +
+                  (is_sum_check_enabled(config) ? 2U : 0U) +
+                  (uses_ascii_crlf(config) ? 2U : 0U);
+    } else {
+      wire_size = prefix + ascii_success_end_code(config.frame_kind()).size() +
+                  response_data_size + 1U +
+                  (is_sum_check_enabled(config) && response_data_size != 0U ? 2U : 0U);
+    }
+  } else {
+    const std::size_t unescaped_payload =
+        2U + 1U + binary_route_length(config.frame_kind()) + 2U + 2U +
+        response_data_size;
+    wire_size = 4U + (2U * unescaped_payload) +
+                (is_sum_check_enabled(config) ? 2U : 0U);
+  }
+
+  return wire_size <= kMaxResponseFrameBytes
+             ? ok_status()
+             : make_status(
+                   StatusCode::InvalidArgument,
+                   "Single request exceeds the configured worst-case received-frame capacity");
+}
+
 Status FrameCodec::encode_request(
     const ProtocolConfig& config,
-    std::span<const std::uint8_t> request_data,
-    std::span<std::uint8_t> out_frame,
+    mcprotocol::serial::Span<const std::uint8_t> request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_frame,
     std::size_t& out_size) noexcept {
   return encode_request(config, FrameCodecContext::none(), request_data, out_frame, out_size);
 }
@@ -2520,8 +2665,8 @@ Status FrameCodec::encode_request(
 Status FrameCodec::encode_request(
     const ProtocolConfig& config,
     FrameCodecContext context,
-    std::span<const std::uint8_t> request_data,
-    std::span<std::uint8_t> out_frame,
+    mcprotocol::serial::Span<const std::uint8_t> request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_frame,
     std::size_t& out_size) noexcept {
   out_size = 0U;
   const Status config_status = validate_config(config);
@@ -2536,6 +2681,10 @@ Status FrameCodec::encode_request(
   const Status request_status = validate_request_data_size(config, request_data);
   if (!request_status.ok()) {
     return request_status;
+  }
+  const Status capacity_status = validate_request_capacity(config, request_data.size());
+  if (!capacity_status.ok()) {
+    return capacity_status;
   }
 
   std::array<std::uint8_t, kMaxRequestFrameBytes> payload_storage {};
@@ -2564,17 +2713,17 @@ Status FrameCodec::encode_request(
   ByteWriter frame_writer(out_frame);
   if (is_ascii_mode(config)) {
     if (is_ascii_enq_family(config)) {
-      if (!frame_writer.push(kAsciiEnq) || !frame_writer.append(std::span<const std::uint8_t>(payload_storage.data(), payload_size))) {
+      if (!frame_writer.push(kAsciiEnq) || !frame_writer.append(mcprotocol::serial::Span<const std::uint8_t>(payload_storage.data(), payload_size))) {
         return buffer_too_small("ASCII request frame buffer is too small");
       }
       if (is_sum_check_enabled(config)) {
-        const auto sum = compute_sum_check_ascii(std::span<const std::uint8_t>(payload_storage.data(), payload_size));
+        const auto sum = compute_sum_check_ascii(mcprotocol::serial::Span<const std::uint8_t>(payload_storage.data(), payload_size));
         if (!frame_writer.append(sum)) {
           return buffer_too_small("ASCII request sum-check buffer is too small");
         }
       }
     } else {
-      if (!frame_writer.push(kAsciiStx) || !frame_writer.append(std::span<const std::uint8_t>(payload_storage.data(), payload_size)) ||
+      if (!frame_writer.push(kAsciiStx) || !frame_writer.append(mcprotocol::serial::Span<const std::uint8_t>(payload_storage.data(), payload_size)) ||
           !frame_writer.push(kAsciiEtx)) {
         return buffer_too_small("ASCII request frame buffer is too small");
       }
@@ -2582,7 +2731,7 @@ Status FrameCodec::encode_request(
         std::array<std::uint8_t, kMaxRequestFrameBytes + 1U> sum_bytes {};
         std::memcpy(sum_bytes.data(), payload_storage.data(), payload_size);
         sum_bytes[payload_size] = kAsciiEtx;
-        const auto sum = compute_sum_check_ascii(std::span<const std::uint8_t>(sum_bytes.data(), payload_size + 1U));
+        const auto sum = compute_sum_check_ascii(mcprotocol::serial::Span<const std::uint8_t>(sum_bytes.data(), payload_size + 1U));
         if (!frame_writer.append(sum)) {
           return buffer_too_small("ASCII request sum-check buffer is too small");
         }
@@ -2596,7 +2745,7 @@ Status FrameCodec::encode_request(
     ByteWriter payload_writer(binary_payload);
     const std::uint16_t byte_count = static_cast<std::uint16_t>(payload_size);
     if (!payload_writer.append_le16(byte_count) ||
-        !payload_writer.append(std::span<const std::uint8_t>(payload_storage.data(), payload_size))) {
+        !payload_writer.append(mcprotocol::serial::Span<const std::uint8_t>(payload_storage.data(), payload_size))) {
       return buffer_too_small("Binary payload buffer is too small");
     }
 
@@ -2631,8 +2780,8 @@ Status FrameCodec::encode_request(
 
 Status FrameCodec::encode_success_response(
     const ProtocolConfig& config,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint8_t> out_frame,
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint8_t> out_frame,
     std::size_t& out_size) noexcept {
   return encode_success_response(
       config,
@@ -2645,8 +2794,8 @@ Status FrameCodec::encode_success_response(
 Status FrameCodec::encode_success_response(
     const ProtocolConfig& config,
     FrameCodecContext context,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint8_t> out_frame,
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint8_t> out_frame,
     std::size_t& out_size) noexcept {
   out_size = 0U;
   const Status config_status = validate_config(config);
@@ -2679,18 +2828,18 @@ Status FrameCodec::encode_success_response(
     if (is_ascii_enq_family(config)) {
       if (response_data.empty()) {
         if (!writer.push(kAsciiAck) ||
-            !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size))) {
+            !writer.append(mcprotocol::serial::Span<const std::uint8_t>(payload_storage.data(), prefix_size))) {
           return buffer_too_small("ASCII response frame buffer is too small");
         }
       } else {
         if (!writer.push(kAsciiStx) ||
-            !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
+            !writer.append(mcprotocol::serial::Span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
             !writer.append(response_data) ||
             !writer.push(kAsciiEtx)) {
           return buffer_too_small("ASCII response frame buffer is too small");
         }
         if (is_sum_check_enabled(config)) {
-          const auto sum = compute_sum_check_ascii(writer.written().subspan(1U));
+          const auto sum = compute_sum_check_ascii(checked_subspan(writer.written(), 1U));
           if (!writer.append(sum)) {
             return buffer_too_small("ASCII response sum-check buffer is too small");
           }
@@ -2699,7 +2848,7 @@ Status FrameCodec::encode_success_response(
     } else {
       const std::string_view end_code = ascii_success_end_code(config.frame_kind());
       if (!writer.push(kAsciiStx) ||
-          !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
+          !writer.append(mcprotocol::serial::Span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
           !append_text_bytes(writer, end_code) ||
           !writer.append(response_data) ||
           !writer.push(kAsciiEtx)) {
@@ -2707,7 +2856,7 @@ Status FrameCodec::encode_success_response(
       }
       if (is_sum_check_enabled(config) && !response_data.empty()) {
         const auto written = writer.written();
-        const auto sum = compute_sum_check_ascii(written.subspan(1));
+        const auto sum = compute_sum_check_ascii(checked_subspan(written, 1));
         if (!writer.append(sum)) {
           return buffer_too_small("ASCII response sum-check buffer is too small");
         }
@@ -2766,7 +2915,7 @@ Status FrameCodec::encode_success_response(
 Status FrameCodec::encode_error_response(
     const ProtocolConfig& config,
     std::uint16_t error_code,
-    std::span<std::uint8_t> out_frame,
+    mcprotocol::serial::Span<std::uint8_t> out_frame,
     std::size_t& out_size) noexcept {
   return encode_error_response(
       config,
@@ -2780,7 +2929,7 @@ Status FrameCodec::encode_error_response(
     const ProtocolConfig& config,
     FrameCodecContext context,
     std::uint16_t error_code,
-    std::span<std::uint8_t> out_frame,
+    mcprotocol::serial::Span<std::uint8_t> out_frame,
     std::size_t& out_size) noexcept {
   out_size = 0U;
   const Status config_status = validate_config(config);
@@ -2814,7 +2963,7 @@ Status FrameCodec::encode_error_response(
     if (is_ascii_enq_family(config)) {
       const std::string_view end_code = ascii_error_end_code(config.frame_kind());
       if (!writer.push(kAsciiNak) ||
-          !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size))) {
+          !writer.append(mcprotocol::serial::Span<const std::uint8_t>(payload_storage.data(), prefix_size))) {
         return buffer_too_small("ASCII error response frame buffer is too small");
       }
       if (!is_c1_frame(config) && !append_text_bytes(writer, end_code)) {
@@ -2826,7 +2975,7 @@ Status FrameCodec::encode_error_response(
     } else {
       const std::string_view end_code = ascii_error_end_code(config.frame_kind());
       if (!writer.push(kAsciiStx) ||
-          !writer.append(std::span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
+          !writer.append(mcprotocol::serial::Span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
           !append_text_bytes(writer, end_code) ||
           !append_ascii_hex(writer, error_code, error_width) ||
           !writer.push(kAsciiEtx)) {
@@ -2883,54 +3032,54 @@ Status FrameCodec::encode_error_response(
 
 DecodeResult FrameCodec::decode_response(
     const ProtocolConfig& config,
-    std::span<const std::uint8_t> bytes) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> bytes) noexcept {
   return decode_response(config, FrameCodecContext::none(), bytes);
 }
 
 DecodeResult FrameCodec::decode_response(
     const ProtocolConfig& config,
     FrameCodecContext context,
-    std::span<const std::uint8_t> bytes) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> bytes) noexcept {
   const Status config_status = validate_config(config);
   if (!config_status.ok()) {
     return DecodeResult {
-        .status = DecodeStatus::Error,
-        .frame = RawResponseFrame {},
-        .error = config_status,
-        .bytes_consumed = 0,
+        DecodeStatus::Error,
+        RawResponseFrame {},
+        config_status,
+        0,
     };
   }
   const Status context_status = validate_frame_context(config, context);
   if (!context_status.ok()) {
     return DecodeResult {
-        .status = DecodeStatus::Error,
-        .frame = RawResponseFrame {},
-        .error = context_status,
-        .bytes_consumed = 0,
+        DecodeStatus::Error,
+        RawResponseFrame {},
+        context_status,
+        0,
     };
   }
 
   if (bytes.empty()) {
-    return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+    return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
   }
 
   if (uses_format2_block_number(config)) {
     if (bytes.size() < 3U) {
       return DecodeResult {
-          .status = DecodeStatus::Incomplete,
-          .frame = RawResponseFrame {},
-          .error = ok_status(),
-          .bytes_consumed = 0,
+          DecodeStatus::Incomplete,
+          RawResponseFrame {},
+          ok_status(),
+          0,
       };
     }
     std::uint32_t parsed_block_number = 0U;
-    if (!parse_ascii_hex(bytes.subspan(1U, 2U), parsed_block_number) ||
+    if (!parse_ascii_hex(checked_subspan(bytes, 1U, 2U), parsed_block_number) ||
         parsed_block_number > 0xFFU) {
       return DecodeResult {
-          .status = DecodeStatus::Error,
-          .frame = RawResponseFrame {},
-          .error = parse_error("Failed to parse ASCII Format2 block number"),
-          .bytes_consumed = 3U,
+          DecodeStatus::Error,
+          RawResponseFrame {},
+          parse_error("Failed to parse ASCII Format2 block number"),
+          3U,
       };
     }
     const std::uint8_t actual_block_number = static_cast<std::uint8_t>(parsed_block_number);
@@ -2955,28 +3104,28 @@ DecodeResult FrameCodec::decode_response(
     const std::size_t route_end = route_offset + route_size;
     if (bytes.size() < route_end) {
       return DecodeResult {
-          .status = DecodeStatus::Incomplete,
-          .frame = RawResponseFrame {},
-          .error = ok_status(),
-          .bytes_consumed = 0,
+          DecodeStatus::Incomplete,
+          RawResponseFrame {},
+          ok_status(),
+          0,
       };
     }
 
     if (frame_id_size != 0U) {
       std::uint32_t parsed_frame_id = 0U;
-      if (!parse_ascii_hex(bytes.subspan(1U + block_size, frame_id_size), parsed_frame_id) ||
+      if (!parse_ascii_hex(checked_subspan(bytes, 1U + block_size, frame_id_size), parsed_frame_id) ||
           parsed_frame_id != frame_id(config.frame_kind())) {
         return DecodeResult {
-            .status = DecodeStatus::Error,
-            .frame = RawResponseFrame {},
-            .error = parse_error("ASCII response frame ID does not match protocol"),
-            .bytes_consumed = route_end,
+            DecodeStatus::Error,
+            RawResponseFrame {},
+            parse_error("ASCII response frame ID does not match protocol"),
+            route_end,
         };
       }
     }
 
     auto parse_route_field = [&](std::size_t offset, std::size_t width, std::uint32_t& value) noexcept {
-      return parse_ascii_hex(bytes.subspan(route_offset + offset, width), value);
+      return parse_ascii_hex(checked_subspan(bytes, route_offset + offset, width), value);
     };
 
     std::uint32_t station = 0U;
@@ -3051,10 +3200,10 @@ DecodeResult FrameCodec::decode_response(
 
     if (!route_parse_ok) {
       return DecodeResult {
-          .status = DecodeStatus::Error,
-          .frame = RawResponseFrame {},
-          .error = parse_error("Failed to parse ASCII response route identity"),
-          .bytes_consumed = route_end,
+          DecodeStatus::Error,
+          RawResponseFrame {},
+          parse_error("Failed to parse ASCII response route identity"),
+          route_end,
       };
     }
 
@@ -3079,16 +3228,16 @@ DecodeResult FrameCodec::decode_response(
     RawResponseFrame frame {};
     if (is_ascii_mode(config)) {
       if (bytes.size() < 4U) {
-        return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+        return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
       }
 
       std::uint32_t end_code = 0;
-      if (!parse_ascii_hex(bytes.subspan(2U, 2U), end_code) || end_code > 0xFFU) {
+      if (!parse_ascii_hex(checked_subspan(bytes, 2U, 2U), end_code) || end_code > 0xFFU) {
         return DecodeResult {
-            .status = DecodeStatus::Error,
-            .frame = RawResponseFrame {},
-            .error = parse_error("Failed to parse 1E ASCII end code"),
-            .bytes_consumed = 4U,
+            DecodeStatus::Error,
+            RawResponseFrame {},
+            parse_error("Failed to parse 1E ASCII end code"),
+            4U,
         };
       }
 
@@ -3097,57 +3246,57 @@ DecodeResult FrameCodec::decode_response(
         frame.response_size = bytes.size() - 4U;
         if (frame.response_size > frame.response_data.size()) {
           return DecodeResult {
-              .status = DecodeStatus::Error,
-              .frame = RawResponseFrame {},
-              .error = buffer_too_small("1E ASCII response payload is too large"),
-              .bytes_consumed = bytes.size(),
+              DecodeStatus::Error,
+              RawResponseFrame {},
+              buffer_too_small("1E ASCII response payload is too large"),
+              bytes.size(),
           };
         }
         if (frame.response_size != 0U) {
           std::memcpy(frame.response_data.data(), bytes.data() + 4U, frame.response_size);
         }
         return DecodeResult {
-            .status = DecodeStatus::Complete,
-            .frame = frame,
-            .error = ok_status(),
-            .bytes_consumed = bytes.size(),
+            DecodeStatus::Complete,
+            frame,
+            ok_status(),
+            bytes.size(),
         };
       }
 
       frame.type = ResponseType::PlcError;
       if (end_code == 0x5BU) {
         if (bytes.size() < 6U) {
-          return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+          return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
         }
         std::uint32_t abnormal = 0;
-        if (!parse_ascii_hex(bytes.subspan(4U, 2U), abnormal) || abnormal > 0xFFU) {
+        if (!parse_ascii_hex(checked_subspan(bytes, 4U, 2U), abnormal) || abnormal > 0xFFU) {
           return DecodeResult {
-              .status = DecodeStatus::Error,
-              .frame = RawResponseFrame {},
-              .error = parse_error("Failed to parse 1E ASCII abnormal code"),
-              .bytes_consumed = 6U,
+              DecodeStatus::Error,
+              RawResponseFrame {},
+              parse_error("Failed to parse 1E ASCII abnormal code"),
+              6U,
           };
         }
         frame.error_code = static_cast<std::uint16_t>((end_code << 8U) | abnormal);
         return DecodeResult {
-            .status = DecodeStatus::Complete,
-            .frame = frame,
-            .error = ok_status(),
-            .bytes_consumed = 6U,
+            DecodeStatus::Complete,
+            frame,
+            ok_status(),
+            6U,
         };
       }
 
       frame.error_code = static_cast<std::uint16_t>(end_code);
       return DecodeResult {
-          .status = DecodeStatus::Complete,
-          .frame = frame,
-          .error = ok_status(),
-          .bytes_consumed = 4U,
+          DecodeStatus::Complete,
+          frame,
+          ok_status(),
+          4U,
       };
     }
 
     if (bytes.size() < 2U) {
-      return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+      return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
     }
 
     const std::uint8_t end_code = bytes[1];
@@ -3156,43 +3305,43 @@ DecodeResult FrameCodec::decode_response(
       frame.response_size = bytes.size() - 2U;
       if (frame.response_size > frame.response_data.size()) {
         return DecodeResult {
-            .status = DecodeStatus::Error,
-            .frame = RawResponseFrame {},
-            .error = buffer_too_small("1E binary response payload is too large"),
-            .bytes_consumed = bytes.size(),
+            DecodeStatus::Error,
+            RawResponseFrame {},
+            buffer_too_small("1E binary response payload is too large"),
+            bytes.size(),
         };
       }
       if (frame.response_size != 0U) {
         std::memcpy(frame.response_data.data(), bytes.data() + 2U, frame.response_size);
       }
       return DecodeResult {
-          .status = DecodeStatus::Complete,
-          .frame = frame,
-          .error = ok_status(),
-          .bytes_consumed = bytes.size(),
+          DecodeStatus::Complete,
+          frame,
+          ok_status(),
+          bytes.size(),
       };
     }
 
     frame.type = ResponseType::PlcError;
     if (end_code == 0x5BU) {
       if (bytes.size() < 3U) {
-        return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+        return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
       }
       frame.error_code = static_cast<std::uint16_t>((static_cast<std::uint16_t>(end_code) << 8U) | bytes[2]);
       return DecodeResult {
-          .status = DecodeStatus::Complete,
-          .frame = frame,
-          .error = ok_status(),
-          .bytes_consumed = 3U,
+          DecodeStatus::Complete,
+          frame,
+          ok_status(),
+          3U,
       };
     }
 
     frame.error_code = end_code;
     return DecodeResult {
-        .status = DecodeStatus::Complete,
-        .frame = frame,
-        .error = ok_status(),
-        .bytes_consumed = 2U,
+        DecodeStatus::Complete,
+        frame,
+        ok_status(),
+        2U,
     };
   }
 
@@ -3203,16 +3352,21 @@ DecodeResult FrameCodec::decode_response(
     if (is_ascii_enq_family(config)) {
       if (bytes[0] == kAsciiAck) {
         if (bytes.size() < (prefix_size + terminator_size)) {
-          return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+          return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
         }
         if (terminator_size != 0U && !has_ascii_crlf(bytes, prefix_size)) {
-          return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+          return DecodeResult {
+              DecodeStatus::Error,
+              RawResponseFrame {},
+              framing_error("ASCII Format1/2/4 ACK must end with CRLF"),
+              prefix_size + terminator_size,
+          };
         }
         return DecodeResult {
-            .status = DecodeStatus::Complete,
-            .frame = RawResponseFrame {.type = ResponseType::SuccessNoData, .response_size = 0, .error_code = 0},
-            .error = ok_status(),
-            .bytes_consumed = prefix_size + terminator_size,
+            DecodeStatus::Complete,
+            RawResponseFrame {ResponseType::SuccessNoData, 0, 0},
+            ok_status(),
+            prefix_size + terminator_size,
         };
       }
 
@@ -3227,94 +3381,104 @@ DecodeResult FrameCodec::decode_response(
 
         const std::size_t error_offset = prefix_size + end_code_width;
         if (bytes.size() < (error_offset + error_width + terminator_size)) {
-          return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+          return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
         }
         if (terminator_size != 0U && !has_ascii_crlf(bytes, error_offset + error_width)) {
-          return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+          return DecodeResult {
+              DecodeStatus::Error,
+              RawResponseFrame {},
+              framing_error("ASCII Format1/2/4 NAK must end with CRLF"),
+              error_offset + error_width + terminator_size,
+          };
         }
         std::uint32_t parsed_error = 0;
-        if (!parse_ascii_hex(bytes.subspan(error_offset, error_width), parsed_error) || parsed_error > 0xFFFFU) {
+        if (!parse_ascii_hex(checked_subspan(bytes, error_offset, error_width), parsed_error) || parsed_error > 0xFFFFU) {
           return DecodeResult {
-              .status = DecodeStatus::Error,
-              .frame = RawResponseFrame {},
-              .error = parse_error("Failed to parse ASCII Format1/2/4 error code"),
-              .bytes_consumed = error_offset + error_width + terminator_size,
+              DecodeStatus::Error,
+              RawResponseFrame {},
+              parse_error("Failed to parse ASCII Format1/2/4 error code"),
+              error_offset + error_width + terminator_size,
           };
         }
         return DecodeResult {
-            .status = DecodeStatus::Complete,
-            .frame = RawResponseFrame {
-                .type = ResponseType::PlcError,
-                .response_size = 0,
-                .error_code = static_cast<std::uint16_t>(parsed_error),
+            DecodeStatus::Complete,
+            RawResponseFrame {
+                ResponseType::PlcError,
+                0,
+                static_cast<std::uint16_t>(parsed_error),
             },
-            .error = ok_status(),
-            .bytes_consumed = error_offset + error_width + terminator_size,
+            ok_status(),
+            error_offset + error_width + terminator_size,
         };
       }
 
       if (bytes[0] != kAsciiStx) {
         return DecodeResult {
-            .status = DecodeStatus::Error,
-            .frame = RawResponseFrame {},
-            .error = framing_error("ASCII Format1/2/4 response must begin with ACK, NAK, or STX"),
-            .bytes_consumed = 1,
+            DecodeStatus::Error,
+            RawResponseFrame {},
+            framing_error("ASCII Format1/2/4 response must begin with ACK, NAK, or STX"),
+            1,
         };
       }
 
       if (bytes.size() < prefix_size) {
-        return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+        return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
       }
 
       const auto etx_it = std::find(bytes.begin() + static_cast<std::ptrdiff_t>(prefix_size), bytes.end(), kAsciiEtx);
       if (etx_it == bytes.end()) {
-        return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+        return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
       }
 
       const std::size_t etx_index = static_cast<std::size_t>(std::distance(bytes.begin(), etx_it));
       const std::size_t checksum_size = is_sum_check_enabled(config) ? 2U : 0U;
       const std::size_t total_size = etx_index + 1U + checksum_size + terminator_size;
       if (bytes.size() < total_size) {
-        return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+        return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
       }
       if (terminator_size != 0U && !has_ascii_crlf(bytes, etx_index + 1U + checksum_size)) {
-        return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+        return DecodeResult {
+            DecodeStatus::Error,
+            RawResponseFrame {},
+            framing_error("ASCII Format1/2/4 data response must end with CRLF"),
+            total_size,
+        };
       }
 
       if (is_sum_check_enabled(config) &&
-          !verify_ascii_sum(bytes.subspan(1, etx_index), bytes.subspan(etx_index + 1U, 2U))) {
+          !verify_ascii_sum(checked_subspan(bytes, 1, etx_index), checked_subspan(bytes, etx_index + 1U, 2U))) {
         return DecodeResult {
-            .status = DecodeStatus::Error,
-            .frame = RawResponseFrame {},
-            .error = sum_error("ASCII Format1/2/4 checksum mismatch"),
-            .bytes_consumed = total_size,
+            DecodeStatus::Error,
+            RawResponseFrame {},
+            sum_error("ASCII Format1/2/4 checksum mismatch"),
+            total_size,
         };
       }
 
       RawResponseFrame frame;
       frame.type = ResponseType::SuccessData;
-      if (!append_ascii_response_data(frame, bytes.subspan(prefix_size, etx_index - prefix_size))) {
+      if (!append_ascii_response_data(frame, checked_subspan(bytes, prefix_size, etx_index - prefix_size))) {
         return DecodeResult {
-            .status = DecodeStatus::Error,
-            .frame = RawResponseFrame {},
-            .error = buffer_too_small("ASCII Format1/2/4 response payload is too large"),
-            .bytes_consumed = total_size,
+            DecodeStatus::Error,
+            RawResponseFrame {},
+            buffer_too_small("ASCII Format1/2/4 response payload is too large"),
+            total_size,
         };
       }
       return DecodeResult {
-          .status = DecodeStatus::Complete,
-          .frame = frame,
-          .error = ok_status(),
-          .bytes_consumed = total_size,
+          DecodeStatus::Complete,
+          frame,
+          ok_status(),
+          total_size,
       };
     }
 
     if (bytes[0] != kAsciiStx) {
       return DecodeResult {
-          .status = DecodeStatus::Error,
-          .frame = RawResponseFrame {},
-          .error = framing_error("ASCII Format3 response must begin with STX"),
-          .bytes_consumed = 1,
+          DecodeStatus::Error,
+          RawResponseFrame {},
+          framing_error("ASCII Format3 response must begin with STX"),
+          1,
       };
     }
 
@@ -3333,7 +3497,7 @@ DecodeResult FrameCodec::decode_response(
       return width;
     }();
     if (bytes.size() < (prefix_size + minimum_end_code_width)) {
-      return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+      return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
     }
 
     bool success_match = false;
@@ -3359,17 +3523,17 @@ DecodeResult FrameCodec::decode_response(
       end_code_width = alt_error_end_code.size();
     } else {
       return DecodeResult {
-          .status = DecodeStatus::Error,
-          .frame = RawResponseFrame {},
-          .error = parse_error("ASCII Format3 response must contain a valid end code"),
-          .bytes_consumed = bytes.size(),
+          DecodeStatus::Error,
+          RawResponseFrame {},
+          parse_error("ASCII Format3 response must contain a valid end code"),
+          bytes.size(),
       };
     }
 
     const std::size_t content_offset = prefix_size + end_code_width;
     const auto etx_it = std::find(bytes.begin() + static_cast<std::ptrdiff_t>(content_offset), bytes.end(), kAsciiEtx);
     if (etx_it == bytes.end()) {
-      return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+      return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
     }
 
     const std::size_t etx_index = static_cast<std::size_t>(std::distance(bytes.begin(), etx_it));
@@ -3378,33 +3542,33 @@ DecodeResult FrameCodec::decode_response(
       const bool has_data = etx_index > content_offset;
       const std::size_t checksum_size = (is_sum_check_enabled(config) && has_data) ? 2U : 0U;
       if (bytes.size() < (etx_index + 1U + checksum_size)) {
-        return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+        return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
       }
       if (checksum_size != 0U &&
-          !verify_ascii_sum(bytes.subspan(1, etx_index), bytes.subspan(etx_index + 1U, 2U))) {
+          !verify_ascii_sum(checked_subspan(bytes, 1, etx_index), checked_subspan(bytes, etx_index + 1U, 2U))) {
         return DecodeResult {
-            .status = DecodeStatus::Error,
-            .frame = RawResponseFrame {},
-            .error = sum_error("ASCII Format3 checksum mismatch"),
-            .bytes_consumed = etx_index + 1U + checksum_size,
+            DecodeStatus::Error,
+            RawResponseFrame {},
+            sum_error("ASCII Format3 checksum mismatch"),
+            etx_index + 1U + checksum_size,
         };
       }
       RawResponseFrame frame;
       frame.type = has_data ? ResponseType::SuccessData : ResponseType::SuccessNoData;
       if (has_data &&
-          !append_ascii_response_data(frame, bytes.subspan(content_offset, etx_index - content_offset))) {
+          !append_ascii_response_data(frame, checked_subspan(bytes, content_offset, etx_index - content_offset))) {
         return DecodeResult {
-            .status = DecodeStatus::Error,
-            .frame = RawResponseFrame {},
-            .error = buffer_too_small("ASCII Format3 response payload is too large"),
-            .bytes_consumed = etx_index + 1U + checksum_size,
+            DecodeStatus::Error,
+            RawResponseFrame {},
+            buffer_too_small("ASCII Format3 response payload is too large"),
+            etx_index + 1U + checksum_size,
         };
       }
       return DecodeResult {
-          .status = DecodeStatus::Complete,
-          .frame = frame,
-          .error = ok_status(),
-          .bytes_consumed = etx_index + 1U + checksum_size,
+          DecodeStatus::Complete,
+          frame,
+          ok_status(),
+          etx_index + 1U + checksum_size,
       };
     }
 
@@ -3413,37 +3577,37 @@ DecodeResult FrameCodec::decode_response(
         (error_match && end_code_width == alt_error_end_code.size() && !alt_error_end_code.empty()) ? 2U
                                                                                                       : ascii_error_code_width(config);
     if ((etx_index - content_offset) != format3_error_width ||
-        !parse_ascii_hex(bytes.subspan(content_offset, format3_error_width), parsed_error) ||
+        !parse_ascii_hex(checked_subspan(bytes, content_offset, format3_error_width), parsed_error) ||
         parsed_error > 0xFFFFU) {
       return DecodeResult {
-          .status = DecodeStatus::Error,
-          .frame = RawResponseFrame {},
-          .error = parse_error("Failed to parse ASCII Format3 error code"),
-          .bytes_consumed = etx_index + 1U,
+          DecodeStatus::Error,
+          RawResponseFrame {},
+          parse_error("Failed to parse ASCII Format3 error code"),
+          etx_index + 1U,
       };
     }
     return DecodeResult {
-        .status = DecodeStatus::Complete,
-        .frame = RawResponseFrame {
-            .type = ResponseType::PlcError,
-            .response_size = 0,
-            .error_code = static_cast<std::uint16_t>(parsed_error),
+        DecodeStatus::Complete,
+        RawResponseFrame {
+            ResponseType::PlcError,
+            0,
+            static_cast<std::uint16_t>(parsed_error),
         },
-        .error = ok_status(),
-        .bytes_consumed = etx_index + 1U,
+        ok_status(),
+        etx_index + 1U,
     };
   }
 
   if (bytes.size() < 4U) {
-    return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+    return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
   }
 
   if (bytes[0] != kBinaryDle || bytes[1] != kAsciiStx) {
     return DecodeResult {
-        .status = DecodeStatus::Error,
-        .frame = RawResponseFrame {},
-        .error = framing_error("Binary Format5 response must begin with DLE STX"),
-        .bytes_consumed = 1,
+        DecodeStatus::Error,
+        RawResponseFrame {},
+        framing_error("Binary Format5 response must begin with DLE STX"),
+        1,
     };
   }
 
@@ -3456,10 +3620,10 @@ DecodeResult FrameCodec::decode_response(
     if (byte != kBinaryDle) {
       if (payload_size >= payload.size()) {
         return DecodeResult {
-            .status = DecodeStatus::Error,
-            .frame = RawResponseFrame {},
-            .error = buffer_too_small("Binary response payload is too large"),
-            .bytes_consumed = index,
+            DecodeStatus::Error,
+            RawResponseFrame {},
+            buffer_too_small("Binary response payload is too large"),
+            index,
         };
       }
       payload[payload_size++] = byte;
@@ -3468,16 +3632,16 @@ DecodeResult FrameCodec::decode_response(
     }
 
     if ((index + 1U) >= bytes.size()) {
-      return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+      return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
     }
 
     if (bytes[index + 1U] == kBinaryDle) {
       if (payload_size >= payload.size()) {
         return DecodeResult {
-            .status = DecodeStatus::Error,
-            .frame = RawResponseFrame {},
-            .error = buffer_too_small("Binary response payload is too large"),
-            .bytes_consumed = index,
+            DecodeStatus::Error,
+            RawResponseFrame {},
+            buffer_too_small("Binary response payload is too large"),
+            index,
         };
       }
       payload[payload_size++] = kBinaryDle;
@@ -3492,48 +3656,48 @@ DecodeResult FrameCodec::decode_response(
     }
 
     return DecodeResult {
-        .status = DecodeStatus::Error,
-        .frame = RawResponseFrame {},
-        .error = framing_error("Unexpected DLE sequence in binary response"),
-        .bytes_consumed = index + 1U,
+        DecodeStatus::Error,
+        RawResponseFrame {},
+        framing_error("Unexpected DLE sequence in binary response"),
+        index + 1U,
     };
   }
 
   if (!found_tail) {
-    return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+    return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
   }
 
   const std::size_t checksum_size = is_sum_check_enabled(config) ? 2U : 0U;
   if (bytes.size() < (index + checksum_size)) {
-    return DecodeResult {.status = DecodeStatus::Incomplete, .frame = RawResponseFrame {}, .error = ok_status(), .bytes_consumed = 0};
+    return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
   }
 
   if (is_sum_check_enabled(config) &&
-      !verify_ascii_sum(std::span<const std::uint8_t>(payload.data(), payload_size), bytes.subspan(index, 2U))) {
+      !verify_ascii_sum(mcprotocol::serial::Span<const std::uint8_t>(payload.data(), payload_size), checked_subspan(bytes, index, 2U))) {
     return DecodeResult {
-        .status = DecodeStatus::Error,
-        .frame = RawResponseFrame {},
-        .error = sum_error("Binary response checksum mismatch"),
-        .bytes_consumed = index + checksum_size,
+        DecodeStatus::Error,
+        RawResponseFrame {},
+        sum_error("Binary response checksum mismatch"),
+        index + checksum_size,
     };
   }
 
   if (payload_size < 2U) {
     return DecodeResult {
-        .status = DecodeStatus::Error,
-        .frame = RawResponseFrame {},
-        .error = parse_error("Binary response payload is shorter than byte count"),
-        .bytes_consumed = index + checksum_size,
+        DecodeStatus::Error,
+        RawResponseFrame {},
+        parse_error("Binary response payload is shorter than byte count"),
+        index + checksum_size,
     };
   }
 
   const std::uint16_t declared_count = static_cast<std::uint16_t>(payload[0] | (payload[1] << 8U));
   if (declared_count != static_cast<std::uint16_t>(payload_size - 2U)) {
     return DecodeResult {
-        .status = DecodeStatus::Error,
-        .frame = RawResponseFrame {},
-        .error = framing_error("Binary response byte count does not match payload size"),
-        .bytes_consumed = index + checksum_size,
+        DecodeStatus::Error,
+        RawResponseFrame {},
+        framing_error("Binary response byte count does not match payload size"),
+        index + checksum_size,
     };
   }
 
@@ -3541,19 +3705,19 @@ DecodeResult FrameCodec::decode_response(
   const std::size_t minimum_body_size = 2U + 1U + route_size + 2U + 2U;
   if (payload_size < minimum_body_size) {
     return DecodeResult {
-        .status = DecodeStatus::Error,
-        .frame = RawResponseFrame {},
-        .error = parse_error("Binary response payload is shorter than a valid frame"),
-        .bytes_consumed = index + checksum_size,
+        DecodeStatus::Error,
+        RawResponseFrame {},
+        parse_error("Binary response payload is shorter than a valid frame"),
+        index + checksum_size,
     };
   }
 
   if (payload[2] != frame_id(config.frame_kind())) {
     return DecodeResult {
-        .status = DecodeStatus::Error,
-        .frame = RawResponseFrame {},
-        .error = parse_error("Binary response frame ID does not match protocol"),
-        .bytes_consumed = index + checksum_size,
+        DecodeStatus::Error,
+        RawResponseFrame {},
+        parse_error("Binary response frame ID does not match protocol"),
+        index + checksum_size,
     };
   }
 
@@ -3578,10 +3742,10 @@ DecodeResult FrameCodec::decode_response(
       static_cast<std::uint16_t>(payload[response_id_offset] | (payload[response_id_offset + 1U] << 8U));
   if (response_id != 0xFFFFU) {
     return DecodeResult {
-        .status = DecodeStatus::Error,
-        .frame = RawResponseFrame {},
-        .error = parse_error("Binary response ID must be 0xFFFF"),
-        .bytes_consumed = index + checksum_size,
+        DecodeStatus::Error,
+        RawResponseFrame {},
+        parse_error("Binary response ID must be 0xFFFF"),
+        index + checksum_size,
     };
   }
 
@@ -3603,11 +3767,11 @@ DecodeResult FrameCodec::decode_response(
   }
 
   return DecodeResult {
-      .status = DecodeStatus::Complete,
-      .frame = frame,
-      .error = ok_status(),
-      .bytes_consumed = index + checksum_size,
-      .response_identity_mismatch = route_identity_mismatch,
+      DecodeStatus::Complete,
+      frame,
+      ok_status(),
+      index + checksum_size,
+      route_identity_mismatch,
   };
 }
 
@@ -3618,7 +3782,7 @@ namespace CommandCodec {
 Status encode_batch_read_words(
     const ProtocolConfig& config,
     const BatchReadWordsRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -3696,7 +3860,7 @@ Status encode_batch_read_words(
 Status encode_read_extended_file_register_words(
     const ProtocolConfig& config,
     const ExtendedFileRegisterBatchReadWordsRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -3757,7 +3921,7 @@ Status encode_read_extended_file_register_words(
 Status encode_direct_read_extended_file_register_words(
     const ProtocolConfig& config,
     const ExtendedFileRegisterDirectBatchReadWordsRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -3820,7 +3984,7 @@ Status encode_extended_batch_read_words(
     const ProtocolConfig& config,
     const QualifiedBufferWordDevice& device,
     std::uint16_t points,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -3836,7 +4000,7 @@ Status encode_extended_batch_read_words(
   if (points == 0U || points > kMaxBatchWordPoints) {
     return invalid_argument("Extended batch read words points must be in range 1..960");
   }
-  const Status device_status = validate_extended_word_device(config, device);
+  const Status device_status = validate_extended_word_range(config, device, points);
   if (!device_status.ok()) {
     return device_status;
   }
@@ -3855,7 +4019,7 @@ Status encode_link_direct_batch_read_words(
     const ProtocolConfig& config,
     const LinkDirectDevice& device,
     std::uint16_t points,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -3888,8 +4052,8 @@ Status encode_link_direct_batch_read_words(
 Status parse_batch_read_words_response(
     const ProtocolConfig& config,
     const BatchReadWordsRequest& request,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   return parse_word_values_response(
       config,
       request.points,
@@ -3902,8 +4066,8 @@ Status parse_batch_read_words_response(
 Status parse_read_extended_file_register_words_response(
     const ProtocolConfig& config,
     std::uint16_t points,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   return parse_word_values_response(
       config,
       points,
@@ -3916,8 +4080,8 @@ Status parse_read_extended_file_register_words_response(
 Status parse_extended_batch_read_words_response(
     const ProtocolConfig& config,
     std::uint16_t points,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   return parse_word_values_response(
       config,
       points,
@@ -3930,7 +4094,7 @@ Status parse_extended_batch_read_words_response(
 Status encode_batch_read_bits(
     const ProtocolConfig& config,
     const BatchReadBitsRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4008,7 +4172,7 @@ Status encode_link_direct_batch_read_bits(
     const ProtocolConfig& config,
     const LinkDirectDevice& device,
     std::uint16_t points,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4048,8 +4212,8 @@ Status encode_link_direct_batch_read_bits(
 Status parse_batch_read_bits_response(
     const ProtocolConfig& config,
     const BatchReadBitsRequest& request,
-    std::span<const std::uint8_t> response_data,
-    std::span<BitValue> out_bits) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   if (out_bits.size() < request.points) {
     return buffer_too_small("Batch read bits output buffer is too small");
   }
@@ -4062,9 +4226,9 @@ Status parse_batch_read_bits_response(
     }
     for (std::size_t index = 0; index < request.points; ++index) {
       if (response_data[index] == '0') {
-        out_bits[index] = BitValue::Off;
+        out_bits[index] = false;
       } else if (response_data[index] == '1') {
-        out_bits[index] = BitValue::On;
+        out_bits[index] = true;
       } else {
         return parse_error("Batch read bits ASCII payload contains an invalid bit");
       }
@@ -4082,7 +4246,7 @@ Status parse_batch_read_bits_response(
     if (nibble > 1U) {
       return parse_error("Batch read bits binary payload contains an invalid bit nibble");
     }
-    out_bits[0] = nibble == 0U ? BitValue::Off : BitValue::On;
+    out_bits[0] = nibble == 0U ? false : true;
     return ok_status();
   }
   for (std::size_t index = 0; index < request.points; ++index) {
@@ -4092,7 +4256,7 @@ Status parse_batch_read_bits_response(
     if (nibble > 1U) {
       return parse_error("Batch read bits binary payload contains an invalid bit nibble");
     }
-    out_bits[index] = nibble == 0U ? BitValue::Off : BitValue::On;
+    out_bits[index] = nibble == 0U ? false : true;
   }
   return ok_status();
 }
@@ -4100,7 +4264,7 @@ Status parse_batch_read_bits_response(
 Status encode_batch_write_words(
     const ProtocolConfig& config,
     const BatchWriteWordsRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4182,7 +4346,7 @@ Status encode_batch_write_words(
 Status encode_write_extended_file_register_words(
     const ProtocolConfig& config,
     const ExtendedFileRegisterBatchWriteWordsRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4245,7 +4409,7 @@ Status encode_write_extended_file_register_words(
 Status encode_direct_write_extended_file_register_words(
     const ProtocolConfig& config,
     const ExtendedFileRegisterDirectBatchWriteWordsRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4309,8 +4473,8 @@ Status encode_direct_write_extended_file_register_words(
 Status encode_link_direct_batch_write_words(
     const ProtocolConfig& config,
     const LinkDirectDevice& device,
-    std::span<const std::uint16_t> words,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const std::uint16_t> words,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4346,8 +4510,8 @@ Status encode_link_direct_batch_write_words(
 Status encode_extended_batch_write_words(
     const ProtocolConfig& config,
     const QualifiedBufferWordDevice& device,
-    std::span<const std::uint16_t> words,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const std::uint16_t> words,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4364,7 +4528,7 @@ Status encode_extended_batch_write_words(
   if (words.empty() || words.size() > max_points) {
     return invalid_argument("Extended batch write words count exceeds supported range for the current buffer/configuration");
   }
-  const Status device_status = validate_extended_word_device(config, device);
+  const Status device_status = validate_extended_word_range(config, device, words.size());
   if (!device_status.ok()) {
     return device_status;
   }
@@ -4383,7 +4547,7 @@ Status encode_extended_batch_write_words(
 Status encode_batch_write_bits(
     const ProtocolConfig& config,
     const BatchWriteBitsRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4410,6 +4574,11 @@ Status encode_batch_write_bits(
       "Batch write bits does not support this device for this PLC profile");
   if (!profile_write_status.ok()) {
     return profile_write_status;
+  }
+  const Status values_status =
+      validate_bit_values(request.bits, "Batch write bits values must be false or true");
+  if (!values_status.ok()) {
+    return values_status;
   }
   if (is_c1_frame(config) && !is_c1_supported_device(request.head_device.code)) {
     return invalid_argument("1C batch write bits does not support this device");
@@ -4473,8 +4642,8 @@ Status encode_batch_write_bits(
 Status encode_link_direct_batch_write_bits(
     const ProtocolConfig& config,
     const LinkDirectDevice& device,
-    std::span<const BitValue> bits,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const BitValue> bits,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4495,6 +4664,12 @@ Status encode_link_direct_batch_write_bits(
   const Status device_status = validate_link_direct_bit_device(config, device);
   if (!device_status.ok()) {
     return device_status;
+  }
+  const Status values_status = validate_bit_values(
+      bits,
+      "Link direct batch write bits values must be false or true");
+  if (!values_status.ok()) {
+    return values_status;
   }
   const DeviceAddress effective_head =
       effective_batch_write_bits_head_device(config, device.device, bits);
@@ -4520,8 +4695,8 @@ Status encode_link_direct_batch_write_bits(
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
 Status encode_link_direct_random_read(
     const ProtocolConfig& config,
-    std::span<const LinkDirectRandomReadWordItem> word_items,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const LinkDirectRandomReadWordItem> word_items,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4570,7 +4745,7 @@ Status encode_link_direct_random_read(
 Status encode_random_read(
     const ProtocolConfig& config,
     const RandomReadRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4637,8 +4812,8 @@ Status encode_random_read(
 #else
 Status encode_link_direct_random_read(
     const ProtocolConfig& config,
-    std::span<const LinkDirectRandomReadWordItem> word_items,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const LinkDirectRandomReadWordItem> word_items,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4654,7 +4829,7 @@ Status encode_link_direct_random_read(
 Status encode_random_read(
     const ProtocolConfig& config,
     const RandomReadRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4672,9 +4847,9 @@ Status encode_random_read(
 Status parse_random_read_response(
     const ProtocolConfig& config,
     const RandomReadRequest& request,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint16_t> out_words,
-    std::span<std::uint32_t> out_dwords) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint32_t> out_dwords) noexcept {
   if (out_words.size() < request.word_items.size() ||
       out_dwords.size() < request.dword_items.size()) {
     return buffer_too_small("Random read output buffers are too small");
@@ -4691,7 +4866,7 @@ Status parse_random_read_response(
   for (std::size_t index = 0; index < request.word_items.size(); ++index) {
     if (is_ascii_mode(config)) {
       std::uint32_t value = 0U;
-      if (!parse_ascii_dword(response_data.subspan(cursor, 4U), value)) {
+      if (!parse_ascii_dword(checked_subspan(response_data, cursor, 4U), value)) {
         return parse_error("Failed to parse random read ASCII word value");
       }
       out_words[index] = static_cast<std::uint16_t>(value);
@@ -4707,7 +4882,7 @@ Status parse_random_read_response(
   }
   for (std::size_t index = 0; index < request.dword_items.size(); ++index) {
     if (is_ascii_mode(config)) {
-      if (!parse_ascii_dword(response_data.subspan(cursor, 8U), out_dwords[index])) {
+      if (!parse_ascii_dword(checked_subspan(response_data, cursor, 8U), out_dwords[index])) {
         return parse_error("Failed to parse random read ASCII double-word value");
       }
       cursor += 8U;
@@ -4724,9 +4899,9 @@ Status parse_random_read_response(
 Status parse_random_read_response(
     const ProtocolConfig& config,
     const RandomReadRequest& request,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint16_t> out_words,
-    std::span<std::uint32_t> out_dwords) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint32_t> out_dwords) noexcept {
   (void)config;
   (void)request;
   (void)response_data;
@@ -4739,8 +4914,8 @@ Status parse_random_read_response(
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
 Status encode_link_direct_random_write_words(
     const ProtocolConfig& config,
-    std::span<const LinkDirectRandomWriteWordItem> items,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const LinkDirectRandomWriteWordItem> items,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4793,9 +4968,9 @@ Status encode_link_direct_random_write_words(
 
 Status encode_random_write_words(
     const ProtocolConfig& config,
-    std::span<const RandomWriteWordItem> word_items,
-    std::span<const RandomWriteDWordItem> dword_items,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const RandomWriteWordItem> word_items,
+    mcprotocol::serial::Span<const RandomWriteDWordItem> dword_items,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -4933,8 +5108,8 @@ Status encode_random_write_words(
 
 Status encode_random_write_extended_file_register_words(
     const ProtocolConfig& config,
-    std::span<const ExtendedFileRegisterRandomWriteWordItem> items,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const ExtendedFileRegisterRandomWriteWordItem> items,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5006,8 +5181,8 @@ Status encode_random_write_extended_file_register_words(
 #else
 Status encode_link_direct_random_write_words(
     const ProtocolConfig& config,
-    std::span<const LinkDirectRandomWriteWordItem> items,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const LinkDirectRandomWriteWordItem> items,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5022,9 +5197,9 @@ Status encode_link_direct_random_write_words(
 
 Status encode_random_write_words(
     const ProtocolConfig& config,
-    std::span<const RandomWriteWordItem> word_items,
-    std::span<const RandomWriteDWordItem> dword_items,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const RandomWriteWordItem> word_items,
+    mcprotocol::serial::Span<const RandomWriteDWordItem> dword_items,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5040,8 +5215,8 @@ Status encode_random_write_words(
 
 Status encode_random_write_extended_file_register_words(
     const ProtocolConfig& config,
-    std::span<const ExtendedFileRegisterRandomWriteWordItem> items,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const ExtendedFileRegisterRandomWriteWordItem> items,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5058,8 +5233,8 @@ Status encode_random_write_extended_file_register_words(
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
 Status encode_random_write_bits(
     const ProtocolConfig& config,
-    std::span<const RandomWriteBitItem> items,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const RandomWriteBitItem> items,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5111,9 +5286,9 @@ Status encode_random_write_bits(
       }
       if (!append_e1_device_reference(writer, config, item.device) ||
           !(is_ascii_mode(config)
-                ? writer.push(item.value == BitValue::On ? static_cast<std::uint8_t>('1')
+                ? writer.push(item.value == true ? static_cast<std::uint8_t>('1')
                                                          : static_cast<std::uint8_t>('0'))
-                : writer.push(item.value == BitValue::On ? 0x01U : 0x00U))) {
+                : writer.push(item.value == true ? 0x01U : 0x00U))) {
         return buffer_too_small("1E random write bits request buffer is too small");
       }
     }
@@ -5135,7 +5310,7 @@ Status encode_random_write_bits(
         return bit_status;
       }
       if (!append_c1_device_reference(writer, config, item.device) ||
-          !writer.push(item.value == BitValue::On ? static_cast<std::uint8_t>('1')
+          !writer.push(item.value == true ? static_cast<std::uint8_t>('1')
                                                   : static_cast<std::uint8_t>('0'))) {
         return buffer_too_small("1C random write bits request buffer is too small");
       }
@@ -5177,7 +5352,7 @@ Status encode_random_write_bits(
     if (!append_random_write_bit_device_reference(writer, config, item.device)) {
       return buffer_too_small("Random write bits request buffer is too small");
     }
-    const std::uint16_t bit_value = item.value == BitValue::On ? 0x0001U : 0x0000U;
+    const std::uint16_t bit_value = item.value == true ? 0x0001U : 0x0000U;
     const bool ok = is_ascii_mode(config)
                         ? (is_iq_r_series(config) ? append_word_data_ascii(writer, bit_value)
                                                   : append_ascii_hex(writer, bit_value, 2U))
@@ -5193,8 +5368,8 @@ Status encode_random_write_bits(
 
 Status encode_link_direct_random_write_bits(
     const ProtocolConfig& config,
-    std::span<const LinkDirectRandomWriteBitItem> items,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const LinkDirectRandomWriteBitItem> items,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5235,7 +5410,7 @@ Status encode_link_direct_random_write_bits(
     if (!append_link_direct_device_reference(writer, wire_config, item.device)) {
       return buffer_too_small("Link direct random write bits request buffer is too small");
     }
-    const std::uint16_t bit_value = item.value == BitValue::On ? 0x0001U : 0x0000U;
+    const std::uint16_t bit_value = item.value == true ? 0x0001U : 0x0000U;
     const bool ok = is_ascii_mode(config)
                         ? (is_iq_r_series(wire_config) ? append_word_data_ascii(writer, bit_value)
                                                        : append_ascii_hex(writer, bit_value, 2U))
@@ -5251,8 +5426,8 @@ Status encode_link_direct_random_write_bits(
 #else
 Status encode_random_write_bits(
     const ProtocolConfig& config,
-    std::span<const RandomWriteBitItem> items,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const RandomWriteBitItem> items,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5267,8 +5442,8 @@ Status encode_random_write_bits(
 
 Status encode_link_direct_random_write_bits(
     const ProtocolConfig& config,
-    std::span<const LinkDirectRandomWriteBitItem> items,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const LinkDirectRandomWriteBitItem> items,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5288,7 +5463,7 @@ Status encode_link_direct_random_write_bits(
 Status encode_link_direct_multi_block_read(
     const ProtocolConfig& config,
     const LinkDirectMultiBlockReadRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5354,7 +5529,7 @@ Status encode_link_direct_multi_block_read(
 Status encode_multi_block_read(
     const ProtocolConfig& config,
     const MultiBlockReadRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5429,11 +5604,11 @@ Status encode_multi_block_read(
 
 Status parse_multi_block_read_response(
     const ProtocolConfig& config,
-    std::span<const MultiBlockReadBlock> blocks,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint16_t> out_words,
-    std::span<BitValue> out_bits,
-    std::span<MultiBlockReadBlockResult> out_results) noexcept {
+    mcprotocol::serial::Span<const MultiBlockReadBlock> blocks,
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<BitValue> out_bits,
+    mcprotocol::serial::Span<MultiBlockReadBlockResult> out_results) noexcept {
   if (out_results.size() < blocks.size()) {
     return buffer_too_small("Multi-block read result metadata buffer is too small");
   }
@@ -5468,15 +5643,15 @@ Status parse_multi_block_read_response(
       continue;
     }
     out_results[index] = MultiBlockReadBlockResult {
-        .bit_block = false,
-        .head_device = blocks[index].head_device,
-        .points = blocks[index].points,
-        .data_offset = static_cast<std::uint16_t>(word_offset),
-        .data_count = blocks[index].points,
+        false,
+        blocks[index].head_device,
+        blocks[index].points,
+        static_cast<std::uint16_t>(word_offset),
+        blocks[index].points,
     };
     for (std::size_t point = 0; point < blocks[index].points; ++point) {
       if (is_ascii_mode(config)) {
-        if (!parse_ascii_word(response_data.subspan(cursor, 4U), out_words[word_offset + point])) {
+        if (!parse_ascii_word(checked_subspan(response_data, cursor, 4U), out_words[word_offset + point])) {
           return parse_error("Failed to parse multi-block read ASCII word data");
         }
         cursor += 4U;
@@ -5495,16 +5670,16 @@ Status parse_multi_block_read_response(
       continue;
     }
     out_results[index] = MultiBlockReadBlockResult {
-        .bit_block = true,
-        .head_device = blocks[index].head_device,
-        .points = blocks[index].points,
-        .data_offset = static_cast<std::uint16_t>(bit_offset),
-        .data_count = static_cast<std::uint16_t>(blocks[index].points * 16U),
+        true,
+        blocks[index].head_device,
+        blocks[index].points,
+        static_cast<std::uint16_t>(bit_offset),
+        static_cast<std::uint16_t>(blocks[index].points * 16U),
     };
     for (std::size_t point = 0; point < blocks[index].points; ++point) {
       std::uint16_t packed_word = 0;
       if (is_ascii_mode(config)) {
-        if (!parse_ascii_word(response_data.subspan(cursor, 4U), packed_word)) {
+        if (!parse_ascii_word(checked_subspan(response_data, cursor, 4U), packed_word)) {
           return parse_error("Failed to parse multi-block read ASCII bit data");
         }
         cursor += 4U;
@@ -5516,7 +5691,7 @@ Status parse_multi_block_read_response(
       }
       for (std::size_t bit = 0; bit < 16U; ++bit) {
         out_bits[bit_offset + (point * 16U) + bit] =
-            ((packed_word >> bit) & 0x01U) != 0U ? BitValue::On : BitValue::Off;
+            ((packed_word >> bit) & 0x01U) != 0U ? true : false;
       }
     }
     bit_offset += blocks[index].points * 16U;
@@ -5527,7 +5702,7 @@ Status parse_multi_block_read_response(
 Status encode_multi_block_write(
     const ProtocolConfig& config,
     const MultiBlockWriteRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5574,6 +5749,12 @@ Status encode_multi_block_write(
     if (block.bit_block) {
       if (block.bits.size() != static_cast<std::size_t>(block.points) * 16U) {
         return invalid_argument("Bit block write data must contain points * 16 entries");
+      }
+      const Status values_status = validate_bit_values(
+          block.bits,
+          "Multi-block write bit values must be false or true");
+      if (!values_status.ok()) {
+        return values_status;
       }
       ++bit_blocks;
     } else {
@@ -5627,7 +5808,7 @@ Status encode_multi_block_write(
 Status encode_link_direct_multi_block_write(
     const ProtocolConfig& config,
     const LinkDirectMultiBlockWriteRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5659,6 +5840,12 @@ Status encode_link_direct_multi_block_write(
     if (block.bit_block) {
       if (block.bits.size() != static_cast<std::size_t>(block.points) * 16U) {
         return invalid_argument("Link direct bit block write data must contain points * 16 entries");
+      }
+      const Status values_status = validate_bit_values(
+          block.bits,
+          "Link direct multi-block write bit values must be false or true");
+      if (!values_status.ok()) {
+        return values_status;
       }
       ++bit_blocks;
     } else {
@@ -5711,7 +5898,7 @@ Status encode_link_direct_multi_block_write(
 Status encode_link_direct_multi_block_read(
     const ProtocolConfig& config,
     const LinkDirectMultiBlockReadRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5727,7 +5914,7 @@ Status encode_link_direct_multi_block_read(
 Status encode_multi_block_read(
     const ProtocolConfig& config,
     const MultiBlockReadRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5742,11 +5929,11 @@ Status encode_multi_block_read(
 
 Status parse_multi_block_read_response(
     const ProtocolConfig& config,
-    std::span<const MultiBlockReadBlock> blocks,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint16_t> out_words,
-    std::span<BitValue> out_bits,
-    std::span<MultiBlockReadBlockResult> out_results) noexcept {
+    mcprotocol::serial::Span<const MultiBlockReadBlock> blocks,
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<BitValue> out_bits,
+    mcprotocol::serial::Span<MultiBlockReadBlockResult> out_results) noexcept {
   (void)config;
   (void)blocks;
   (void)response_data;
@@ -5759,7 +5946,7 @@ Status parse_multi_block_read_response(
 Status encode_multi_block_write(
     const ProtocolConfig& config,
     const MultiBlockWriteRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5775,7 +5962,7 @@ Status encode_multi_block_write(
 Status encode_link_direct_multi_block_write(
     const ProtocolConfig& config,
     const LinkDirectMultiBlockWriteRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5795,7 +5982,7 @@ Status encode_link_direct_multi_block_write(
 Status encode_link_direct_register_monitor(
     const ProtocolConfig& config,
     const LinkDirectMonitorRegistration& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5825,7 +6012,7 @@ Status encode_link_direct_register_monitor(
     return buffer_too_small("Link direct monitor registration request buffer is too small");
   }
   const std::size_t command_header_size = request_command_header_size(config);
-  if (!patched.append(std::span<const std::uint8_t>(
+  if (!patched.append(mcprotocol::serial::Span<const std::uint8_t>(
           random_request_data.data() + command_header_size,
           inner_size - command_header_size))) {
     return buffer_too_small("Link direct monitor registration request buffer is too small");
@@ -5837,7 +6024,7 @@ Status encode_link_direct_register_monitor(
 Status encode_register_monitor(
     const ProtocolConfig& config,
     const MonitorRegistration& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -5930,7 +6117,7 @@ Status encode_register_monitor(
     return buffer_too_small("Monitor registration request buffer is too small");
   }
   const std::size_t command_header_size = request_command_header_size(config);
-  if (!patched.append(std::span<const std::uint8_t>(
+  if (!patched.append(mcprotocol::serial::Span<const std::uint8_t>(
           random_request_data.data() + command_header_size,
           inner_size - command_header_size))) {
     return buffer_too_small("Monitor registration request buffer is too small");
@@ -5942,7 +6129,7 @@ Status encode_register_monitor(
 Status encode_register_extended_file_register_monitor(
     const ProtocolConfig& config,
     const ExtendedFileRegisterMonitorRegistration& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6010,7 +6197,7 @@ Status encode_register_extended_file_register_monitor(
 
 Status encode_read_monitor(
     const ProtocolConfig& config,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6038,7 +6225,7 @@ Status encode_read_monitor(
 Status encode_read_monitor(
     const ProtocolConfig& config,
     const MonitorRegistration& registration,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6106,8 +6293,8 @@ Status encode_read_monitor(
 
 Status encode_read_extended_file_register_monitor(
     const ProtocolConfig& config,
-    std::span<const ExtendedFileRegisterAddress> items,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const ExtendedFileRegisterAddress> items,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6166,13 +6353,31 @@ Status encode_read_extended_file_register_monitor(
 Status parse_read_monitor_response(
     const ProtocolConfig& config,
     const MonitorRegistration& registration,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint16_t> out_words,
-    std::span<std::uint32_t> out_dwords) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint32_t> out_dwords) noexcept {
   if ((is_c1_frame(config) || is_e1_frame(config)) && c1_monitor_uses_bit_units(
           registration.word_items, registration.dword_items)) {
     if (out_words.size() < registration.word_items.size()) {
       return buffer_too_small("Monitor output buffer is too small");
+    }
+    if (is_e1_frame(config) && !is_ascii_mode(config)) {
+      const std::size_t expected_size = (registration.word_items.size() + 1U) / 2U;
+      if (response_data.size() != expected_size) {
+        return parse_error("1E bit-unit monitor binary response length mismatch");
+      }
+      for (std::size_t index = 0; index < registration.word_items.size(); ++index) {
+        const std::uint8_t packed = response_data[index / 2U];
+        const std::uint8_t nibble =
+            (index % 2U) == 0U
+                ? static_cast<std::uint8_t>((packed >> 4U) & 0x0FU)
+                : static_cast<std::uint8_t>(packed & 0x0FU);
+        if (nibble > 1U) {
+          return parse_error("1E bit-unit monitor binary payload contains an invalid bit nibble");
+        }
+        out_words[index] = nibble;
+      }
+      return ok_status();
     }
     const std::size_t expected_size =
         is_e1_frame(config)
@@ -6207,9 +6412,9 @@ Status parse_read_monitor_response(
 
 Status parse_read_extended_file_register_monitor_response(
     const ProtocolConfig& config,
-    std::span<const ExtendedFileRegisterAddress> items,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<const ExtendedFileRegisterAddress> items,
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   return parse_word_values_response(
       config,
       static_cast<std::uint16_t>(items.size()),
@@ -6222,7 +6427,7 @@ Status parse_read_extended_file_register_monitor_response(
 Status encode_link_direct_register_monitor(
     const ProtocolConfig& config,
     const LinkDirectMonitorRegistration& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6238,7 +6443,7 @@ Status encode_link_direct_register_monitor(
 Status encode_register_monitor(
     const ProtocolConfig& config,
     const MonitorRegistration& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6254,7 +6459,7 @@ Status encode_register_monitor(
 Status encode_register_extended_file_register_monitor(
     const ProtocolConfig& config,
     const ExtendedFileRegisterMonitorRegistration& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6269,7 +6474,7 @@ Status encode_register_extended_file_register_monitor(
 
 Status encode_read_monitor(
     const ProtocolConfig& config,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6284,7 +6489,7 @@ Status encode_read_monitor(
 Status encode_read_monitor(
     const ProtocolConfig& config,
     const MonitorRegistration& registration,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6299,8 +6504,8 @@ Status encode_read_monitor(
 
 Status encode_read_extended_file_register_monitor(
     const ProtocolConfig& config,
-    std::span<const ExtendedFileRegisterAddress> items,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const ExtendedFileRegisterAddress> items,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6316,9 +6521,9 @@ Status encode_read_extended_file_register_monitor(
 Status parse_read_monitor_response(
     const ProtocolConfig& config,
     const MonitorRegistration& registration,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint16_t> out_words,
-    std::span<std::uint32_t> out_dwords) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint32_t> out_dwords) noexcept {
   (void)config;
   (void)registration;
   (void)response_data;
@@ -6329,9 +6534,9 @@ Status parse_read_monitor_response(
 
 Status parse_read_extended_file_register_monitor_response(
     const ProtocolConfig& config,
-    std::span<const ExtendedFileRegisterAddress> items,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<const ExtendedFileRegisterAddress> items,
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   (void)config;
   (void)items;
   (void)response_data;
@@ -6345,7 +6550,7 @@ Status parse_read_extended_file_register_monitor_response(
 Status encode_read_user_frame(
     const ProtocolConfig& config,
     const UserFrameReadRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6371,7 +6576,7 @@ Status encode_read_user_frame(
 
 Status parse_read_user_frame_response(
     const ProtocolConfig& config,
-    std::span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
     UserFrameRegistrationData& out_data) noexcept {
   const Status config_status = validate_user_frame_command_config(config);
   if (!config_status.ok()) {
@@ -6385,8 +6590,8 @@ Status parse_read_user_frame_response(
     std::uint32_t registration_parsed = 0U;
     std::uint32_t frame_parsed = 0U;
     if (response_data.size() < 8U ||
-        !parse_ascii_hex(response_data.first(4U), registration_parsed) ||
-        !parse_ascii_hex(response_data.subspan(4U, 4U), frame_parsed) ||
+        !parse_ascii_hex(checked_first(response_data, 4U), registration_parsed) ||
+        !parse_ascii_hex(checked_subspan(response_data, 4U, 4U), frame_parsed) ||
         registration_parsed > 0xFFFFU ||
         frame_parsed > 0xFFFFU) {
       return parse_error("Failed to parse ASCII user-frame response counts");
@@ -6421,12 +6626,12 @@ Status parse_read_user_frame_response(
   if (is_ascii_mode(config)) {
     for (std::size_t index = 0; index < registration_data_bytes; ++index) {
       std::uint32_t byte_value = 0U;
-      if (!parse_ascii_hex(response_data.subspan(payload_offset + (index * 2U), 2U), byte_value) ||
+      if (!parse_ascii_hex(checked_subspan(response_data, payload_offset + (index * 2U), 2U), byte_value) ||
           byte_value > 0xFFU) {
         return parse_error("Failed to parse ASCII user-frame registration data");
       }
       out_data.registration_data[index] =
-          static_cast<std::byte>(static_cast<unsigned char>(byte_value));
+          static_cast<mcprotocol::serial::Byte>(static_cast<unsigned char>(byte_value));
     }
   } else {
     std::memcpy(out_data.registration_data.data(), response_data.data() + payload_offset, registration_data_bytes);
@@ -6437,7 +6642,7 @@ Status parse_read_user_frame_response(
 Status encode_write_user_frame(
     const ProtocolConfig& config,
     const UserFrameWriteRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6467,7 +6672,7 @@ Status encode_write_user_frame(
 Status encode_delete_user_frame(
     const ProtocolConfig& config,
     const UserFrameDeleteRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6496,7 +6701,7 @@ Status encode_delete_user_frame(
 Status encode_control_global_signal(
     const ProtocolConfig& config,
     const GlobalSignalControlRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6515,7 +6720,7 @@ Status encode_control_global_signal(
 
   const std::uint16_t specification =
       static_cast<std::uint16_t>(static_cast<std::uint8_t>(request.target));
-  const std::uint16_t subcommand = request.value == BitValue::On ? 0x0001U : 0x0000U;
+  const std::uint16_t subcommand = request.value == true ? 0x0001U : 0x0000U;
 
   ByteWriter writer(out_request_data);
   if (!append_command_header(writer, config, 0x1618U, subcommand) ||
@@ -6529,7 +6734,7 @@ Status encode_control_global_signal(
 Status encode_switch_serial_module_mode(
     const ProtocolConfig& config,
     const SerialModuleModeSwitchRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6570,7 +6775,7 @@ Status encode_switch_serial_module_mode(
 
 Status encode_initialize_transmission_sequence(
     const ProtocolConfig& config,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6597,7 +6802,7 @@ Status encode_initialize_transmission_sequence(
 Status encode_read_host_buffer(
     const ProtocolConfig& config,
     const HostBufferReadRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6639,8 +6844,8 @@ Status encode_read_host_buffer(
 Status parse_read_host_buffer_response(
     const ProtocolConfig& config,
     const HostBufferReadRequest& request,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   return parse_batch_read_words_response(
       config,
       BatchReadWordsRequest(DeviceAddress {DeviceCode::D, 0U}, request.word_length),
@@ -6651,7 +6856,7 @@ Status parse_read_host_buffer_response(
 Status encode_write_host_buffer(
     const ProtocolConfig& config,
     const HostBufferWriteRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6694,7 +6899,7 @@ Status encode_write_host_buffer(
 Status encode_read_host_buffer(
     const ProtocolConfig& config,
     const HostBufferReadRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6710,8 +6915,8 @@ Status encode_read_host_buffer(
 Status parse_read_host_buffer_response(
     const ProtocolConfig& config,
     const HostBufferReadRequest& request,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   (void)config;
   (void)request;
   (void)response_data;
@@ -6722,7 +6927,7 @@ Status parse_read_host_buffer_response(
 Status encode_write_host_buffer(
     const ProtocolConfig& config,
     const HostBufferWriteRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6740,7 +6945,7 @@ Status encode_write_host_buffer(
 Status encode_read_module_buffer(
     const ProtocolConfig& config,
     const ModuleBufferReadRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6759,6 +6964,10 @@ Status encode_read_module_buffer(
   if (is_e1_frame(config)) {
     if (request.bytes == 0U || request.bytes > 256U) {
       return invalid_argument("1E module buffer read byte count must be in range 1..256");
+    }
+    if (request.start_address > 0xFFFFFFU || request.module_number > 0x00FFU ||
+        (static_cast<std::uint64_t>(request.start_address) + request.bytes) > 0x1000000ULL) {
+      return invalid_argument("1E module buffer read address/module/range exceeds the wire fields");
     }
     ByteWriter writer(out_request_data);
     const std::uint8_t encoded_length =
@@ -6781,6 +6990,10 @@ Status encode_read_module_buffer(
     if (request.bytes == 0U || request.bytes > 128U) {
       return invalid_argument("1C module buffer read byte count must be in range 1..128");
     }
+    if (request.start_address > 0xFFFFFU || request.module_number > 0x00FFU ||
+        (static_cast<std::uint64_t>(request.start_address) + request.bytes) > 0x100000ULL) {
+      return invalid_argument("1C module buffer read address/module/range exceeds the wire fields");
+    }
     ByteWriter writer(out_request_data);
     const bool ok = append_c1_command(writer, config, kC1ReadModuleBufferCommand) &&
                     append_ascii_hex(writer, request.start_address, 5U) &&
@@ -6794,6 +7007,9 @@ Status encode_read_module_buffer(
   }
   if (request.bytes < 2U || request.bytes > 1920U) {
     return invalid_argument("Module buffer read byte count must be in range 2..1920");
+  }
+  if ((static_cast<std::uint64_t>(request.start_address) + request.bytes) > 0x100000000ULL) {
+    return invalid_argument("Module buffer read range exceeds the 32-bit address space");
   }
   ByteWriter writer(out_request_data);
   const bool ok = append_command_header(writer, config, 0x0601U, 0x0000U) &&
@@ -6811,8 +7027,8 @@ Status encode_read_module_buffer(
 Status parse_read_module_buffer_response(
     const ProtocolConfig& config,
     const ModuleBufferReadRequest& request,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::byte> out_bytes) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<mcprotocol::serial::Byte> out_bytes) noexcept {
   if (out_bytes.size() < request.bytes) {
     return buffer_too_small("Module buffer output buffer is too small");
   }
@@ -6822,10 +7038,10 @@ Status parse_read_module_buffer_response(
     }
     for (std::size_t index = 0; index < request.bytes; ++index) {
       std::uint32_t byte_value = 0;
-      if (!parse_ascii_hex(response_data.subspan(index * 2U, 2U), byte_value) || byte_value > 0xFFU) {
+      if (!parse_ascii_hex(checked_subspan(response_data, index * 2U, 2U), byte_value) || byte_value > 0xFFU) {
         return parse_error("Failed to parse module buffer ASCII response");
       }
-      out_bytes[index] = static_cast<std::byte>(byte_value);
+      out_bytes[index] = static_cast<mcprotocol::serial::Byte>(byte_value);
     }
     return ok_status();
   }
@@ -6839,7 +7055,7 @@ Status parse_read_module_buffer_response(
 Status encode_write_module_buffer(
     const ProtocolConfig& config,
     const ModuleBufferWriteRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6858,6 +7074,10 @@ Status encode_write_module_buffer(
   if (is_e1_frame(config)) {
     if (request.bytes.empty() || request.bytes.size() > 256U) {
       return invalid_argument("1E module buffer write byte count must be in range 1..256");
+    }
+    if (request.start_address > 0xFFFFFFU || request.module_number > 0x00FFU ||
+        (static_cast<std::uint64_t>(request.start_address) + request.bytes.size()) > 0x1000000ULL) {
+      return invalid_argument("1E module buffer write address/module/range exceeds the wire fields");
     }
     ByteWriter writer(out_request_data);
     const std::uint8_t encoded_length =
@@ -6881,6 +7101,10 @@ Status encode_write_module_buffer(
     if (request.bytes.empty() || request.bytes.size() > 128U) {
       return invalid_argument("1C module buffer write byte count must be in range 1..128");
     }
+    if (request.start_address > 0xFFFFFU || request.module_number > 0x00FFU ||
+        (static_cast<std::uint64_t>(request.start_address) + request.bytes.size()) > 0x100000ULL) {
+      return invalid_argument("1C module buffer write address/module/range exceeds the wire fields");
+    }
     ByteWriter writer(out_request_data);
     const bool ok = append_c1_command(writer, config, kC1WriteModuleBufferCommand) &&
                     append_ascii_hex(writer, request.start_address, 5U) &&
@@ -6895,6 +7119,9 @@ Status encode_write_module_buffer(
   }
   if (request.bytes.size() < 2U || request.bytes.size() > 1920U) {
     return invalid_argument("Module buffer write byte count must be in range 2..1920");
+  }
+  if ((static_cast<std::uint64_t>(request.start_address) + request.bytes.size()) > 0x100000000ULL) {
+    return invalid_argument("Module buffer write range exceeds the 32-bit address space");
   }
   ByteWriter writer(out_request_data);
   const bool ok = append_command_header(writer, config, 0x1601U, 0x0000U) &&
@@ -6913,7 +7140,7 @@ Status encode_write_module_buffer(
 Status encode_read_module_buffer(
     const ProtocolConfig& config,
     const ModuleBufferReadRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6929,8 +7156,8 @@ Status encode_read_module_buffer(
 Status parse_read_module_buffer_response(
     const ProtocolConfig& config,
     const ModuleBufferReadRequest& request,
-    std::span<const std::uint8_t> response_data,
-    std::span<std::byte> out_bytes) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<mcprotocol::serial::Byte> out_bytes) noexcept {
   (void)config;
   (void)request;
   (void)response_data;
@@ -6941,7 +7168,7 @@ Status parse_read_module_buffer_response(
 Status encode_write_module_buffer(
     const ProtocolConfig& config,
     const ModuleBufferWriteRequest& request,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6960,7 +7187,7 @@ Status encode_write_module_buffer(
 #if MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS
 Status encode_read_cpu_model(
     const ProtocolConfig& config,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -6981,7 +7208,7 @@ Status encode_read_cpu_model(
 
 Status parse_read_cpu_model_response(
     const ProtocolConfig& config,
-    std::span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
     CpuModelInfo& out_info) noexcept {
   if (is_ascii_mode(config)) {
     if (response_data.size() < 20U) {
@@ -6990,7 +7217,7 @@ Status parse_read_cpu_model_response(
     std::memset(out_info.model_name.data(), 0, out_info.model_name.size());
     std::memcpy(out_info.model_name.data(), response_data.data(), kCpuModelNameLength);
     trim_right_spaces(out_info.model_name);
-    if (!parse_ascii_word(response_data.subspan(16U, 4U), out_info.model_code)) {
+    if (!parse_ascii_word(checked_subspan(response_data, 16U, 4U), out_info.model_code)) {
       return parse_error("Failed to parse ASCII CPU model code");
     }
     return ok_status();
@@ -7007,7 +7234,7 @@ Status parse_read_cpu_model_response(
 #else
 Status encode_read_cpu_model(
     const ProtocolConfig& config,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -7021,7 +7248,7 @@ Status encode_read_cpu_model(
 
 Status parse_read_cpu_model_response(
     const ProtocolConfig& config,
-    std::span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
     CpuModelInfo& out_info) noexcept {
   (void)config;
   (void)response_data;
@@ -7034,7 +7261,7 @@ Status encode_remote_run(
     const ProtocolConfig& config,
     RemoteOperationMode mode,
     RemoteRunClearMode clear_mode,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   out_size = 0U;
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -7071,7 +7298,7 @@ Status encode_remote_run(
 
 Status encode_remote_stop(
     const ProtocolConfig& config,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -7095,7 +7322,7 @@ Status encode_remote_stop(
 Status encode_remote_pause(
     const ProtocolConfig& config,
     RemoteOperationMode mode,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   out_size = 0U;
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -7125,7 +7352,7 @@ Status encode_remote_pause(
 
 Status encode_remote_latch_clear(
     const ProtocolConfig& config,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -7148,7 +7375,7 @@ Status encode_remote_latch_clear(
 
 Status encode_remote_reset(
     const ProtocolConfig& config,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -7172,7 +7399,7 @@ Status encode_remote_reset(
 Status encode_unlock_remote_password(
     const ProtocolConfig& config,
     std::string_view remote_password,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -7208,7 +7435,7 @@ Status encode_unlock_remote_password(
 Status encode_lock_remote_password(
     const ProtocolConfig& config,
     std::string_view remote_password,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -7243,7 +7470,7 @@ Status encode_lock_remote_password(
 
 Status encode_clear_error_information(
     const ProtocolConfig& config,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -7271,8 +7498,8 @@ Status encode_clear_error_information(
 #if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
 Status encode_loopback(
     const ProtocolConfig& config,
-    std::span<const char> hex_ascii,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const char> hex_ascii,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -7334,20 +7561,20 @@ Status encode_loopback(
 
 Status parse_loopback_response(
     const ProtocolConfig& config,
-    std::span<const std::uint8_t> response_data,
-    std::span<char> out_echoed) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<char> out_echoed) noexcept {
   std::size_t payload_length = 0;
   std::size_t payload_offset = 0;
   if (is_c1_frame(config)) {
     std::uint32_t ascii_length = 0;
-    if (response_data.size() < 2U || !parse_ascii_hex(response_data.first(2U), ascii_length)) {
+    if (response_data.size() < 2U || !parse_ascii_hex(checked_first(response_data, 2U), ascii_length)) {
       return parse_error("Failed to parse 1C loopback response length");
     }
     payload_length = ascii_length;
     payload_offset = 2U;
   } else if (is_ascii_mode(config)) {
     std::uint32_t ascii_length = 0;
-    if (response_data.size() < 4U || !parse_ascii_hex(response_data.first(4U), ascii_length)) {
+    if (response_data.size() < 4U || !parse_ascii_hex(checked_first(response_data, 4U), ascii_length)) {
       return parse_error("Failed to parse ASCII loopback response length");
     }
     payload_length = ascii_length;
@@ -7377,8 +7604,8 @@ Status parse_loopback_response(
 #else
 Status encode_loopback(
     const ProtocolConfig& config,
-    std::span<const char> hex_ascii,
-    std::span<std::uint8_t> out_request_data,
+    mcprotocol::serial::Span<const char> hex_ascii,
+    mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
@@ -7393,8 +7620,8 @@ Status encode_loopback(
 
 Status parse_loopback_response(
     const ProtocolConfig& config,
-    std::span<const std::uint8_t> response_data,
-    std::span<char> out_echoed) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> response_data,
+    mcprotocol::serial::Span<char> out_echoed) noexcept {
   (void)config;
   (void)response_data;
   (void)out_echoed;

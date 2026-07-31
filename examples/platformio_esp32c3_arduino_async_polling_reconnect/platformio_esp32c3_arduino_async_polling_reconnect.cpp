@@ -5,7 +5,7 @@
 #include "mcprotocol/serial/compat/cstdint.hpp"
 
 #include "mcprotocol_serial.hpp"
-#include "mcprotocol/serial/span_compat.hpp"
+#include "mcprotocol/serial/span.hpp"
 
 #ifndef MCPROTOCOL_EXAMPLE_PLC_BAUD
 #define MCPROTOCOL_EXAMPLE_PLC_BAUD 19200
@@ -128,11 +128,16 @@ void pump_uart_tx(std::uint32_t now_ms) {
     return;
   }
 
-  const std::span<const std::byte> frame = g_app.client.pending_tx_frame();
+  const mcprotocol::serial::Span<const mcprotocol::serial::Byte> frame = g_app.client.pending_tx_frame();
   if (frame.empty()) {
     return;
   }
 
+  const Status tx_start_status = g_app.client.notify_tx_started(now_ms);
+  if (!tx_start_status.ok()) {
+    on_request_complete(&g_app, tx_start_status);
+    return;
+  }
   const std::size_t written = g_plc_serial.write(
       reinterpret_cast<const std::uint8_t*>(frame.data()),
       frame.size());
@@ -162,8 +167,8 @@ void pump_uart_rx(std::uint32_t now_ms) {
 
     g_app.client.on_rx_bytes(
         now_ms,
-        std::span<const std::byte>(
-            reinterpret_cast<const std::byte*>(rx_chunk.data()),
+        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
+            reinterpret_cast<const mcprotocol::serial::Byte*>(rx_chunk.data()),
             bytes_read));
   }
 }
@@ -182,7 +187,7 @@ void start_read_if_due(std::uint32_t now_ms) {
   const Status status = g_app.client.async_batch_read_words(
       now_ms,
       BatchReadWordsRequest(kHeadDevice, static_cast<std::uint16_t>(g_app.out_words.size())),
-      std::span<std::uint16_t>(g_app.out_words.data(), g_app.out_words.size()),
+      mcprotocol::serial::Span<std::uint16_t>(g_app.out_words.data(), g_app.out_words.size()),
       on_request_complete,
       &g_app);
   if (!status.ok()) {

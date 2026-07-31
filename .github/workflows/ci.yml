@@ -26,6 +26,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake doxygen ninja-build
+          python -m pip install platformio
 
       - name: Check mirrored release metadata
         run: python3 scripts/sync_release_metadata.py --check
@@ -44,6 +45,10 @@ jobs:
 
       - name: Check API reference
         run: python3 scripts/update_api_reference.py --check
+
+      - name: Verify self-contained source archive
+        shell: pwsh
+        run: ./scripts/check_source_archive.ps1
 
   windows-host-build:
     runs-on: windows-latest
@@ -67,6 +72,23 @@ jobs:
 
       - name: Run tests
         run: ctest --test-dir build -C Release --output-on-failure
+
+  clang-strict-cxx17:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Configure strict Clang C++17
+        env:
+          CXX: clang++
+        run: cmake -S . -B build-clang -DBUILD_TESTING=ON
+
+      - name: Build library, tests, examples, tools, and public-header consumers
+        run: cmake --build build-clang
+
+      - name: Run tests
+        run: ctest --test-dir build-clang --output-on-failure
 
   platformio-package:
     runs-on: ubuntu-latest

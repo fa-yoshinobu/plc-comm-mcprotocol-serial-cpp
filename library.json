@@ -43,7 +43,7 @@
       "-<posix_serial.cpp>"
     ],
     "flags": [
-      "-std=gnu++17",
+      "-std=c++17",
       "-fno-exceptions",
       "-fno-rtti"
     ]
@@ -62,6 +62,8 @@
       "CMakeLists.txt",
       "docsrc",
       "docs",
+      "examples/host_sync_polling_reconnect.cpp",
+      "examples/host_sync_quickstart.cpp",
       "examples/linux_cli",
       "internal_docs",
       "platformio.ini",

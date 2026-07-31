@@ -2,9 +2,17 @@ cmake_minimum_required(VERSION 3.20)
 
 project(mcprotocol_serial_cpp VERSION 3.2.2 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Apply the conformance mode to every translation unit in this project,
+# including tests, examples, tools, and standalone public-header consumers.
+if(MSVC)
+  add_compile_options(/permissive- /Zc:__cplusplus)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  add_compile_options(-pedantic-errors)
+endif()
 
 option(MCPROTOCOL_BUILD_EXAMPLES "Build compile-checked example programs" ON)
 option(MCPROTOCOL_BUILD_HOST_SUPPORT "Build host-side serial backends and synchronous helpers" ON)
@@ -113,6 +121,8 @@ endif()
 
 add_library(mcprotocol_serial ${MCPROTOCOL_SERIAL_SOURCES})
 
+target_compile_features(mcprotocol_serial PUBLIC cxx_std_17)
+
 if(MCPROTOCOL_EFFECTIVE_BUILD_HOST_SUPPORT)
   target_compile_definitions(mcprotocol_serial
     PUBLIC
@@ -160,11 +170,12 @@ endif()
 include(CTest)
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
-if(NOT MCPROTOCOL_FEATURE_PROFILE_NORMALIZED STREQUAL "full" AND BUILD_TESTING)
+set(MCPROTOCOL_SERIAL_BUILD_TESTING ${BUILD_TESTING})
+if(NOT MCPROTOCOL_FEATURE_PROFILE_NORMALIZED STREQUAL "full" AND MCPROTOCOL_SERIAL_BUILD_TESTING)
   message(STATUS
     "MCPROTOCOL_FEATURE_PROFILE=${MCPROTOCOL_FEATURE_PROFILE_NORMALIZED} is treated as core-only; "
-    "BUILD_TESTING will be disabled.")
-  set(BUILD_TESTING OFF CACHE BOOL "Build the testing tree." FORCE)
+    "mcprotocol-serial tests will be disabled without changing the parent BUILD_TESTING setting.")
+  set(MCPROTOCOL_SERIAL_BUILD_TESTING OFF)
 endif()
 
 if(Python3_Interpreter_FOUND)
@@ -173,7 +184,7 @@ else()
   set(MCPROTOCOL_PYTHON_EXECUTABLE python3)
 endif()
 
-if(BUILD_TESTING)
+if(MCPROTOCOL_SERIAL_BUILD_TESTING)
   add_executable(codec_tests
     tests/codec_tests.cpp
   )
@@ -206,7 +217,7 @@ if(MCPROTOCOL_EFFECTIVE_BUILD_CLI)
 
   target_link_libraries(mcprotocol_cli PRIVATE mcprotocol_serial)
 
-  if(BUILD_TESTING AND Python3_Interpreter_FOUND)
+  if(MCPROTOCOL_SERIAL_BUILD_TESTING AND Python3_Interpreter_FOUND)
     add_test(
       NAME cli_serial_config_tests
       COMMAND ${Python3_EXECUTABLE}

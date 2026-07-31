@@ -6,7 +6,7 @@ This library speaks MELSEC serial MC Protocol from host tools and MCU firmware. 
 
 | Requirement | Notes |
 | --- | --- |
-| C++ standard | C++17 for PlatformIO package use. The repository CMake build uses C++20. |
+| C++ standard | Strict ISO C++17 for PlatformIO packages, the repository CMake build, tests, CLI, and examples. |
 | Build system | PlatformIO for MCU projects, or CMake for host examples and local integration. |
 | Serial interface | RS-232C or RS-485 hardware that matches your PLC serial module. |
 | PLC settings | Baud rate, parity, stop bits, frame type, and station number must match the PLC module settings. |
@@ -23,7 +23,7 @@ build_unflags =
     -std=gnu++11
     -std=gnu++14
 build_flags =
-    -std=gnu++17
+    -std=c++17
 ```
 
 This package is the MCU-oriented, transport-agnostic core. It compiles `client.cpp` and

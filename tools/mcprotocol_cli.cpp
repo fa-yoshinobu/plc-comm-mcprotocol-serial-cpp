@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <optional>
-#include "mcprotocol/serial/span_compat.hpp"
+#include "mcprotocol/serial/span.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
 
 #include "mcprotocol/serial/client.hpp"
@@ -19,6 +19,16 @@
 #include "../src/protocol_predicates.hpp"
 
 namespace {
+
+template <typename T>
+[[nodiscard]] mcprotocol::serial::Span<T> checked_subspan(
+    mcprotocol::serial::Span<T> input,
+    std::size_t offset,
+    std::size_t count) noexcept {
+  mcprotocol::serial::Span<T> result;
+  (void)input.try_subspan(offset, count, result);
+  return result;
+}
 
 bool g_dump_frames = false;
 
@@ -586,9 +596,8 @@ void print_usage() {
       "  --topology TOPOLOGY        Required for 2C/3C/4C multidrop: standard (normal/1:n) | mn\n"
       "  --self-station N           Required only for mn topology (0..31)\n"
       "  --sum-check on|off         Required for C1/C2/C3/C4; rejected for fixed 1E\n"
-      "  --response-timeout-ms N    Total response timeout after TX (default: 3000)\n"
+      "  --response-timeout-ms N    Absolute first-TX-through-decode timeout (default: 3000)\n"
       "  --e1-monitoring-timer-ms N PLC-side 1E timer in exact 250 ms units (default: 4000)\n"
-      "  --inter-byte-timeout-ms N  Inter-byte timeout in milliseconds (default: 250)\n"
       "\n"
       "Notes:\n"
       "  remote-run requires both conflict mode and clear mode; neither is inferred.\n"
@@ -657,7 +666,7 @@ void print_usage() {
 
 [[nodiscard]] bool parse_hex_byte_string(
     std::string_view text,
-    std::span<std::byte> out_bytes,
+    mcprotocol::serial::Span<mcprotocol::serial::Byte> out_bytes,
     std::size_t& out_size) {
   out_size = 0U;
   if (text.empty() || (text.size() % 2U) != 0U) {
@@ -685,7 +694,7 @@ void print_usage() {
     if (upper < 0 || lower < 0) {
       return false;
     }
-    out_bytes[index] = std::byte {static_cast<std::uint8_t>((upper << 4U) | lower)};
+    out_bytes[index] = mcprotocol::serial::Byte {static_cast<std::uint8_t>((upper << 4U) | lower)};
   }
   out_size = byte_count;
   return true;
@@ -1240,9 +1249,9 @@ void print_usage() {
 
   BitValue value {};
   if (value_text == "0") {
-    value = BitValue::Off;
+    value = false;
   } else if (value_text == "1") {
-    value = BitValue::On;
+    value = true;
   } else {
     return false;
   }
@@ -1278,7 +1287,7 @@ void print_usage() {
 
 [[nodiscard]] bool parse_csv_u16_values(
     std::string_view text,
-    std::span<std::uint16_t> storage,
+    mcprotocol::serial::Span<std::uint16_t> storage,
     std::size_t& out_count) {
   out_count = 0U;
   while (!text.empty()) {
@@ -1302,7 +1311,7 @@ void print_usage() {
 
 [[nodiscard]] bool parse_link_direct_multi_block_write_word_spec(
     std::string_view text,
-    std::span<std::uint16_t> storage,
+    mcprotocol::serial::Span<std::uint16_t> storage,
     std::size_t& out_count,
     LinkDirectDevice& out_device) {
   std::string_view device_text;
@@ -1319,16 +1328,16 @@ void print_usage() {
 
 [[nodiscard]] bool parse_link_direct_bit_string(
     std::string_view text,
-    std::span<BitValue> storage,
+    mcprotocol::serial::Span<BitValue> storage,
     std::size_t& out_count) {
   if (text.empty() || (text.size() % 16U) != 0U || text.size() > storage.size()) {
     return false;
   }
   for (std::size_t index = 0; index < text.size(); ++index) {
     if (text[index] == '0') {
-      storage[index] = BitValue::Off;
+      storage[index] = false;
     } else if (text[index] == '1') {
-      storage[index] = BitValue::On;
+      storage[index] = true;
     } else {
       return false;
     }
@@ -1339,7 +1348,7 @@ void print_usage() {
 
 [[nodiscard]] bool parse_link_direct_multi_block_write_bit_spec(
     std::string_view text,
-    std::span<BitValue> storage,
+    mcprotocol::serial::Span<BitValue> storage,
     std::size_t& out_count,
     LinkDirectDevice& out_device) {
   std::string_view device_text;
@@ -1487,12 +1496,6 @@ void print_usage() {
       }
       options.protocol_input.e1_monitoring_timer = E1MonitoringTimer::milliseconds(value);
       options.e1_monitoring_timer_specified = true;
-    } else if (arg == "--inter-byte-timeout-ms" && (index + 1) < argc) {
-      std::uint32_t value = 0;
-      if (!parse_u32(argv[++index], value)) {
-        return false;
-      }
-      options.protocol_input.timeout.inter_byte_timeout_ms = value;
     } else if (!arg.empty() && arg.front() != '-') {
       if (arg == "cpu-model" || arg == "read-cpu-model") {
         options.command = CommandKind::CpuModel;
@@ -1881,7 +1884,7 @@ void print_usage() {
       }
       for (int index = 0; index < options.command_argc; ++index) {
         LinkDirectRandomWriteBitItem item(
-            LinkDirectDevice {0U, DeviceAddress {DeviceCode::D, 0U}}, BitValue::Off);
+            LinkDirectDevice {0U, DeviceAddress {DeviceCode::D, 0U}}, false);
         if (!parse_link_direct_random_write_bit_item(options.command_argv[index], item)) {
           return false;
         }
@@ -1926,7 +1929,7 @@ void print_usage() {
         return false;
       }
       for (int index = 0; index < options.command_argc; ++index) {
-        RandomWriteBitItem item(DeviceAddress {DeviceCode::M, 0U}, BitValue::Off);
+        RandomWriteBitItem item(DeviceAddress {DeviceCode::M, 0U}, false);
         if (!parse_bit_write_arg(options.command_argv[index], item)) {
           return false;
         }
@@ -1961,11 +1964,15 @@ void on_tx_end(void* user) {
     return status;
   }
 
-  std::array<std::byte, 256> drain_buffer {};
+  std::array<mcprotocol::serial::Byte, 256> drain_buffer {};
   int quiet_polls = 0;
   while (quiet_polls < 2) {
     std::size_t bytes_read = 0;
-    status = port.read_some(drain_buffer, 30, bytes_read);
+    status = port.read_some_until(drain_buffer, now_ms() + 30U, bytes_read);
+    if (status.code == StatusCode::Timeout) {
+      ++quiet_polls;
+      continue;
+    }
     if (!status.ok()) {
       return status;
     }
@@ -1978,43 +1985,43 @@ void on_tx_end(void* user) {
   return mcprotocol::serial::ok_status();
 }
 
-[[nodiscard]] std::span<const std::byte> as_const_byte_span(std::span<const std::uint8_t> bytes) noexcept {
+[[nodiscard]] mcprotocol::serial::Span<const mcprotocol::serial::Byte> as_const_byte_span(mcprotocol::serial::Span<const std::uint8_t> bytes) noexcept {
   return {
-      reinterpret_cast<const std::byte*>(bytes.data()),
+      reinterpret_cast<const mcprotocol::serial::Byte*>(bytes.data()),
       bytes.size(),
   };
 }
 
-void dump_frame_bytes(std::string_view label, std::span<const std::byte> bytes) {
+void dump_frame_bytes(std::string_view label, mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes) {
   std::fprintf(stderr, "%.*s[%zu] hex:", static_cast<int>(label.size()), label.data(), bytes.size());
-  for (const std::byte value : bytes) {
-    std::fprintf(stderr, " %02X", static_cast<unsigned>(std::to_integer<std::uint8_t>(value)));
+  for (const mcprotocol::serial::Byte value : bytes) {
+    std::fprintf(stderr, " %02X", static_cast<unsigned>(mcprotocol::serial::byte_to_integer<std::uint8_t>(value)));
   }
   std::fprintf(stderr, "\n%.*s[%zu] ascii:", static_cast<int>(label.size()), label.data(), bytes.size());
-  for (const std::byte value : bytes) {
-    const unsigned char ch = std::to_integer<unsigned char>(value);
+  for (const mcprotocol::serial::Byte value : bytes) {
+    const unsigned char ch = mcprotocol::serial::byte_to_integer<unsigned char>(value);
     std::fputc(std::isprint(ch) ? static_cast<int>(ch) : '.', stderr);
   }
   std::fputc('\n', stderr);
 }
 
-void print_hex_bytes(std::span<const std::byte> bytes) {
-  for (const std::byte value : bytes) {
-    std::printf("%02X", static_cast<unsigned>(std::to_integer<std::uint8_t>(value)));
+void print_hex_bytes(mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes) {
+  for (const mcprotocol::serial::Byte value : bytes) {
+    std::printf("%02X", static_cast<unsigned>(mcprotocol::serial::byte_to_integer<std::uint8_t>(value)));
   }
 }
 
 [[nodiscard]] bool parse_c24_recovery_kind(
     std::string_view arg,
-    std::byte& out_control_code,
+    mcprotocol::serial::Byte& out_control_code,
     std::string_view& out_name) {
   if (equals_ignore_case(arg, "eot")) {
-    out_control_code = std::byte {0x04U};
+    out_control_code = mcprotocol::serial::Byte {0x04U};
     out_name = "EOT";
     return true;
   }
   if (equals_ignore_case(arg, "cl")) {
-    out_control_code = std::byte {0x0CU};
+    out_control_code = mcprotocol::serial::Byte {0x0CU};
     out_name = "CL";
     return true;
   }
@@ -2024,17 +2031,17 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
 [[nodiscard]] Status run_c24_recovery(
     PosixSerialPort& port,
     bool rts_toggle,
-    std::byte control_code,
+    mcprotocol::serial::Byte control_code,
     bool dump_frames = false) {
   Status status = discard_stale_rx(port);
   if (!status.ok()) {
     return status;
   }
 
-  const std::array<std::byte, 3> control_frame {
+  const std::array<mcprotocol::serial::Byte, 3> control_frame {
       control_code,
-      std::byte {0x0DU},
-      std::byte {0x0AU},
+      mcprotocol::serial::Byte {0x0DU},
+      mcprotocol::serial::Byte {0x0AU},
   };
 
   if (rts_toggle) {
@@ -2045,12 +2052,15 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
   }
 
   if (dump_frames || g_dump_frames) {
-    dump_frame_bytes("tx", std::span<const std::byte>(control_frame.data(), control_frame.size()));
+    dump_frame_bytes("tx", mcprotocol::serial::Span<const mcprotocol::serial::Byte>(control_frame.data(), control_frame.size()));
   }
 
-  status = port.write_all(std::span<const std::byte>(control_frame.data(), control_frame.size()));
+  const std::uint32_t transaction_deadline_ms = now_ms() + 3000U;
+  status = port.write_all_until(
+      mcprotocol::serial::Span<const mcprotocol::serial::Byte>(control_frame.data(), control_frame.size()),
+      transaction_deadline_ms);
   if (status.ok()) {
-    status = port.drain_tx();
+    status = port.drain_tx_until(transaction_deadline_ms);
   }
 
   if (rts_toggle) {
@@ -2079,9 +2089,15 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
   if (dump_frames || g_dump_frames) {
     dump_frame_bytes("tx", client.pending_tx_frame());
   }
-  status = port.write_all(client.pending_tx_frame());
+  const std::uint32_t transaction_start_ms = now_ms();
+  status = client.notify_tx_started(transaction_start_ms);
+  if (!status.ok()) {
+    return status;
+  }
+  const std::uint32_t transaction_deadline_ms = client.transaction_deadline_ms();
+  status = port.write_all_until(client.pending_tx_frame(), transaction_deadline_ms);
   if (status.ok()) {
-    status = port.drain_tx();
+    status = port.drain_tx_until(transaction_deadline_ms);
   }
 
   Status notify_status = client.notify_tx_complete(now_ms(), status);
@@ -2092,19 +2108,19 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
     return status;
   }
 
-  std::array<std::byte, 256> rx_buffer {};
+  std::array<mcprotocol::serial::Byte, 256> rx_buffer {};
   while (!state.done) {
     std::size_t bytes_read = 0;
-    status = port.read_some(rx_buffer, 50, bytes_read);
+    status = port.read_some_until(rx_buffer, transaction_deadline_ms, bytes_read);
     if (!status.ok()) {
       client.cancel();
       return status;
     }
     if (bytes_read != 0U) {
       if (dump_frames || g_dump_frames) {
-        dump_frame_bytes("rx", std::span<const std::byte>(rx_buffer.data(), bytes_read));
+        dump_frame_bytes("rx", mcprotocol::serial::Span<const mcprotocol::serial::Byte>(rx_buffer.data(), bytes_read));
       }
-      client.on_rx_bytes(now_ms(), std::span<const std::byte>(rx_buffer.data(), bytes_read));
+      client.on_rx_bytes(now_ms(), mcprotocol::serial::Span<const mcprotocol::serial::Byte>(rx_buffer.data(), bytes_read));
     }
     client.poll(now_ms());
   }
@@ -2116,7 +2132,7 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
     const ProtocolConfig& config,
     PosixSerialPort& port,
     bool rts_toggle,
-    std::span<const std::uint8_t> request_data,
+    mcprotocol::serial::Span<const std::uint8_t> request_data,
     mcprotocol::serial::RawResponseFrame& out_frame,
     bool dump_frames = false) {
   static std::uint8_t next_raw_format2_block_number = 0U;
@@ -2149,7 +2165,7 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
     return status;
   }
 
-  const std::span<const std::uint8_t> tx_bytes(tx_frame.data(), tx_size);
+  const mcprotocol::serial::Span<const std::uint8_t> tx_bytes(tx_frame.data(), tx_size);
   if (dump_frames || g_dump_frames) {
     dump_frame_bytes("tx", as_const_byte_span(tx_bytes));
   }
@@ -2161,9 +2177,11 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
     }
   }
 
-  status = port.write_all(as_const_byte_span(tx_bytes));
+  const std::uint32_t transaction_deadline_ms =
+      now_ms() + config.timeout().response_timeout_ms;
+  status = port.write_all_until(as_const_byte_span(tx_bytes), transaction_deadline_ms);
   if (status.ok()) {
-    status = port.drain_tx();
+    status = port.drain_tx_until(transaction_deadline_ms);
   }
 
   if (rts_toggle) {
@@ -2178,25 +2196,18 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
 
   std::array<std::uint8_t, mcprotocol::serial::kMaxResponseFrameBytes> rx_frame {};
   std::size_t rx_size = 0;
-  const std::uint32_t response_deadline_ms = now_ms() + config.timeout().response_timeout_ms;
-  std::uint32_t inter_byte_deadline_ms = response_deadline_ms;
-  bool saw_rx = false;
 
-  std::array<std::byte, 256> rx_chunk {};
+  std::array<mcprotocol::serial::Byte, 256> rx_chunk {};
   while (true) {
     const std::uint32_t current_ms = now_ms();
-    const bool response_expired = deadline_reached(current_ms, response_deadline_ms);
-    const bool inter_byte_expired =
-        saw_rx && deadline_reached(current_ms, inter_byte_deadline_ms);
-    if (response_expired || inter_byte_expired) {
+    if (deadline_reached(current_ms, transaction_deadline_ms)) {
       return mcprotocol::serial::make_status(
           StatusCode::Timeout,
-          inter_byte_expired ? "Timed out while waiting for the rest of the response"
-                             : "Total response deadline expired");
+          "Absolute transaction deadline expired");
     }
 
     std::size_t bytes_read = 0;
-    status = port.read_some(rx_chunk, 50, bytes_read);
+    status = port.read_some_until(rx_chunk, transaction_deadline_ms, bytes_read);
     if (!status.ok()) {
       return status;
     }
@@ -2205,19 +2216,13 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
     }
 
     const std::uint32_t received_ms = now_ms();
-    const bool response_expired_after_read =
-        deadline_reached(received_ms, response_deadline_ms);
-    const bool inter_byte_expired_after_read =
-        saw_rx && deadline_reached(received_ms, inter_byte_deadline_ms);
-    if (response_expired_after_read || inter_byte_expired_after_read) {
+    if (deadline_reached(received_ms, transaction_deadline_ms)) {
       return mcprotocol::serial::make_status(
           StatusCode::Timeout,
-          inter_byte_expired_after_read
-              ? "Timed out while waiting for the rest of the response"
-              : "Total response deadline expired");
+          "Absolute transaction deadline expired");
     }
 
-    const std::span<const std::byte> rx_chunk_bytes(rx_chunk.data(), bytes_read);
+    const mcprotocol::serial::Span<const mcprotocol::serial::Byte> rx_chunk_bytes(rx_chunk.data(), bytes_read);
     if (dump_frames || g_dump_frames) {
       dump_frame_bytes("rx", rx_chunk_bytes);
     }
@@ -2230,19 +2235,16 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
         reinterpret_cast<const std::uint8_t*>(rx_chunk_bytes.data()),
         bytes_read);
     rx_size += bytes_read;
-    saw_rx = true;
-    inter_byte_deadline_ms = received_ms + config.timeout().inter_byte_timeout_ms;
 
     const mcprotocol::serial::DecodeResult decode =
         mcprotocol::serial::FrameCodec::decode_response(
             config,
             frame_context,
-            std::span<const std::uint8_t>(rx_frame.data(), rx_size));
+            mcprotocol::serial::Span<const std::uint8_t>(rx_frame.data(), rx_size));
     if (decode.response_identity_mismatch && decode.bytes_consumed != 0U) {
       const std::size_t remaining = rx_size - decode.bytes_consumed;
       std::memmove(rx_frame.data(), rx_frame.data() + decode.bytes_consumed, remaining);
       rx_size = remaining;
-      saw_rx = remaining != 0U;
       continue;
     }
     if (decode.status == mcprotocol::serial::DecodeStatus::Complete) {
@@ -2277,7 +2279,7 @@ void print_hex_bytes(std::span<const std::byte> bytes) {
       config,
       port,
       rts_toggle,
-      std::span<const std::uint8_t>(request_data.data(), request_size),
+      mcprotocol::serial::Span<const std::uint8_t>(request_data.data(), request_size),
       out_frame,
       dump_frames);
 }
@@ -2322,11 +2324,11 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
 
 [[nodiscard]] bool parse_bit_value(std::string_view text, BitValue& out_value) {
   if (text == "0" || text == "off" || text == "OFF") {
-    out_value = BitValue::Off;
+    out_value = false;
     return true;
   }
   if (text == "1" || text == "on" || text == "ON") {
-    out_value = BitValue::On;
+    out_value = true;
     return true;
   }
   return false;
@@ -2377,7 +2379,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
   std::printf("%.*s=%u raw=0x%04X\n",
               static_cast<int>(label.size()),
               label.data(),
-              mcprotocol::serial::sparse_native_requested_bit_value(raw_value) == BitValue::On ? 1U : 0U,
+              mcprotocol::serial::sparse_native_requested_bit_value(raw_value) == true ? 1U : 0U,
               static_cast<unsigned>(mcprotocol::serial::sparse_native_mask_word(raw_value)));
 }
 
@@ -2417,7 +2419,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     return false;
   }
   DeviceAddress device(DeviceCode::D, 0U);
-  BitValue value = BitValue::Off;
+  BitValue value = false;
   if (!parse_device_address(text.substr(0, equal_pos), device) ||
       !parse_bit_value(text.substr(equal_pos + 1U), value)) {
     return false;
@@ -2491,7 +2493,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     PosixSerialPort& port,
     CommandState& command_state,
     const DeviceAddress& head_device,
-    std::span<const std::uint16_t> values) {
+    mcprotocol::serial::Span<const std::uint16_t> values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2511,7 +2513,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     PosixSerialPort& port,
     CommandState& command_state,
     const ExtendedFileRegisterBatchReadWordsRequest& request,
-    std::span<std::uint16_t> out_values) {
+    mcprotocol::serial::Span<std::uint16_t> out_values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2532,7 +2534,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     PosixSerialPort& port,
     CommandState& command_state,
     const ExtendedFileRegisterDirectBatchReadWordsRequest& request,
-    std::span<std::uint16_t> out_values) {
+    mcprotocol::serial::Span<std::uint16_t> out_values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2590,7 +2592,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const ExtendedFileRegisterRandomWriteWordItem> items) {
+    mcprotocol::serial::Span<const ExtendedFileRegisterRandomWriteWordItem> items) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2610,7 +2612,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     PosixSerialPort& port,
     CommandState& command_state,
     const ExtendedFileRegisterMonitorRegistration& request,
-    std::span<std::uint16_t> out_values) {
+    mcprotocol::serial::Span<std::uint16_t> out_values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2646,7 +2648,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     CommandState& command_state,
     const QualifiedBufferWordDevice& device,
     std::uint16_t points,
-    std::span<std::uint16_t> out_values) {
+    mcprotocol::serial::Span<std::uint16_t> out_values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2668,7 +2670,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     PosixSerialPort& port,
     CommandState& command_state,
     const QualifiedBufferWordDevice& device,
-    std::span<const std::uint16_t> values) {
+    mcprotocol::serial::Span<const std::uint16_t> values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2690,7 +2692,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     CommandState& command_state,
     const DeviceAddress& head_device,
     std::uint16_t points,
-    std::span<std::uint16_t> out_values) {
+    mcprotocol::serial::Span<std::uint16_t> out_values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2712,7 +2714,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     CommandState& command_state,
     const LinkDirectDevice& device,
     std::uint16_t points,
-    std::span<std::uint16_t> out_values) {
+    mcprotocol::serial::Span<std::uint16_t> out_values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2741,7 +2743,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
   const Status start_status = client.async_batch_read_words(
       now_ms(),
       BatchReadWordsRequest(device, 1),
-      std::span<std::uint16_t>(&out_value, 1U),
+      mcprotocol::serial::Span<std::uint16_t>(&out_value, 1U),
       request_complete,
       &command_state);
   if (!start_status.ok()) {
@@ -2762,7 +2764,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
   const Status start_status = client.async_batch_read_bits(
       now_ms(),
       BatchReadBitsRequest(device, 1),
-      std::span<BitValue>(&out_value, 1U),
+      mcprotocol::serial::Span<BitValue>(&out_value, 1U),
       request_complete,
       &command_state);
   if (!start_status.ok()) {
@@ -2777,7 +2779,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     CommandState& command_state,
     const DeviceAddress& head_device,
     std::uint16_t points,
-    std::span<BitValue> out_values) {
+    mcprotocol::serial::Span<BitValue> out_values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2799,7 +2801,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     CommandState& command_state,
     const DeviceAddress& head_device,
     std::uint16_t points,
-    std::span<BitValue> out_values) {
+    mcprotocol::serial::Span<BitValue> out_values) {
   if (points == 0U) {
     return mcprotocol::serial::make_status(
         StatusCode::InvalidArgument,
@@ -2836,14 +2838,14 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
         command_state,
         DeviceAddress {spec.base_code, head_device.number + static_cast<std::uint32_t>(index)},
         static_cast<std::uint16_t>(status_block.size()),
-        std::span<std::uint16_t>(status_block.data(), status_block.size()));
+        mcprotocol::serial::Span<std::uint16_t>(status_block.data(), status_block.size()));
     if (!status.ok()) {
       return status;
     }
 
     status = decode_long_state_bit(
         spec,
-        std::span<const std::uint16_t>(status_block.data(), status_block.size()),
+        mcprotocol::serial::Span<const std::uint16_t>(status_block.data(), status_block.size()),
         out_values[index]);
     if (!status.ok()) {
       return status;
@@ -2859,7 +2861,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     CommandState& command_state,
     const LinkDirectDevice& device,
     std::uint16_t points,
-    std::span<BitValue> out_values) {
+    mcprotocol::serial::Span<BitValue> out_values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2891,7 +2893,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     PosixSerialPort& port,
     CommandState& command_state,
     const LinkDirectDevice& device,
-    std::span<const std::uint16_t> values) {
+    mcprotocol::serial::Span<const std::uint16_t> values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2912,7 +2914,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     PosixSerialPort& port,
     CommandState& command_state,
     const DeviceAddress& head_device,
-    std::span<const BitValue> values) {
+    mcprotocol::serial::Span<const BitValue> values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2942,7 +2944,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     PosixSerialPort& port,
     CommandState& command_state,
     const LinkDirectDevice& device,
-    std::span<const BitValue> values) {
+    mcprotocol::serial::Span<const BitValue> values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2962,8 +2964,8 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const LinkDirectRandomReadWordItem> items,
-    std::span<std::uint16_t> out_values) {
+    mcprotocol::serial::Span<const LinkDirectRandomReadWordItem> items,
+    mcprotocol::serial::Span<std::uint16_t> out_values) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -2983,12 +2985,12 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const LinkDirectRandomReadWordItem> items,
-    std::span<std::uint32_t> out_values) {
+    mcprotocol::serial::Span<const LinkDirectRandomReadWordItem> items,
+    mcprotocol::serial::Span<std::uint32_t> out_values) {
   std::array<std::uint16_t, mcprotocol::serial::kMaxRandomAccessItems> words {};
   const Status status = run_link_direct_random_read(
       client, port, command_state, items,
-      std::span<std::uint16_t>(words.data(), out_values.size()));
+      mcprotocol::serial::Span<std::uint16_t>(words.data(), out_values.size()));
   if (status.ok()) {
     for (std::size_t index = 0; index < out_values.size(); ++index) {
       out_values[index] = words[index];
@@ -3001,7 +3003,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const RandomWriteWordItem> items) {
+    mcprotocol::serial::Span<const RandomWriteWordItem> items) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -3021,7 +3023,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const RandomWriteDWordItem> items) {
+    mcprotocol::serial::Span<const RandomWriteDWordItem> items) {
   command_state.done = false;
   command_state.status = Status {};
   const Status start_status = client.async_random_write_words(
@@ -3036,7 +3038,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const LinkDirectRandomWriteWordItem> items) {
+    mcprotocol::serial::Span<const LinkDirectRandomWriteWordItem> items) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -3055,10 +3057,10 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const RandomReadWordItem> word_items,
-    std::span<const RandomReadDWordItem> dword_items,
-    std::span<std::uint16_t> out_words,
-    std::span<std::uint32_t> out_dwords) {
+    mcprotocol::serial::Span<const RandomReadWordItem> word_items,
+    mcprotocol::serial::Span<const RandomReadDWordItem> dword_items,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint32_t> out_dwords) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -3079,12 +3081,12 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const RandomReadWordItem> items,
-    std::span<std::uint32_t> out_values) {
+    mcprotocol::serial::Span<const RandomReadWordItem> items,
+    mcprotocol::serial::Span<std::uint32_t> out_values) {
   std::array<std::uint16_t, mcprotocol::serial::kMaxRandomAccessItems> words {};
   const Status status = run_random_read(
       client, port, command_state, items, {},
-      std::span<std::uint16_t>(words.data(), out_values.size()), {});
+      mcprotocol::serial::Span<std::uint16_t>(words.data(), out_values.size()), {});
   if (status.ok()) {
     for (std::size_t index = 0; index < out_values.size(); ++index) {
       out_values[index] = words[index];
@@ -3097,7 +3099,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const LinkDirectRandomWriteBitItem> items) {
+    mcprotocol::serial::Span<const LinkDirectRandomWriteBitItem> items) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -3116,7 +3118,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const RandomWriteBitItem> items) {
+    mcprotocol::serial::Span<const RandomWriteBitItem> items) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -3136,9 +3138,9 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     PosixSerialPort& port,
     CommandState& command_state,
     const LinkDirectMultiBlockReadRequest& request,
-    std::span<std::uint16_t> out_words,
-    std::span<BitValue> out_bits,
-    std::span<MultiBlockReadBlockResult> out_results) {
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<BitValue> out_bits,
+    mcprotocol::serial::Span<MultiBlockReadBlockResult> out_results) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -3161,9 +3163,9 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     PosixSerialPort& port,
     CommandState& command_state,
     const MultiBlockReadRequest& request,
-    std::span<std::uint16_t> out_words,
-    std::span<BitValue> out_bits,
-    std::span<MultiBlockReadBlockResult> out_results) {
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<BitValue> out_bits,
+    mcprotocol::serial::Span<MultiBlockReadBlockResult> out_results) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -3223,7 +3225,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const LinkDirectRandomReadWordItem> items) {
+    mcprotocol::serial::Span<const LinkDirectRandomReadWordItem> items) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -3242,8 +3244,8 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const RandomReadWordItem> word_items,
-    std::span<const RandomReadDWordItem> dword_items) {
+    mcprotocol::serial::Span<const RandomReadWordItem> word_items,
+    mcprotocol::serial::Span<const RandomReadDWordItem> dword_items) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -3262,7 +3264,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<const RandomReadWordItem> items) {
+    mcprotocol::serial::Span<const RandomReadWordItem> items) {
   return run_register_monitor(client, port, command_state, items, {});
 }
 
@@ -3270,8 +3272,8 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<std::uint16_t> out_words,
-    std::span<std::uint32_t> out_dwords) {
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint32_t> out_dwords) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -3291,11 +3293,11 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     MelsecSerialClient& client,
     PosixSerialPort& port,
     CommandState& command_state,
-    std::span<std::uint32_t> out_values) {
+    mcprotocol::serial::Span<std::uint32_t> out_values) {
   std::array<std::uint16_t, mcprotocol::serial::kMaxMonitorItems> words {};
   const Status status = run_read_monitor(
       client, port, command_state,
-      std::span<std::uint16_t>(words.data(), out_values.size()), {});
+      mcprotocol::serial::Span<std::uint16_t>(words.data(), out_values.size()), {});
   if (status.ok()) {
     for (std::size_t index = 0; index < out_values.size(); ++index) {
       out_values[index] = words[index];
@@ -3309,7 +3311,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     PosixSerialPort& port,
     CommandState& command_state,
     const HostBufferReadRequest& request,
-    std::span<std::uint16_t> out_words) {
+    mcprotocol::serial::Span<std::uint16_t> out_words) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -3330,7 +3332,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     PosixSerialPort& port,
     CommandState& command_state,
     const ModuleBufferReadRequest& request,
-    std::span<std::byte> out_bytes) {
+    mcprotocol::serial::Span<mcprotocol::serial::Byte> out_bytes) {
   command_state.done = false;
   command_state.status = Status {};
 
@@ -3429,9 +3431,9 @@ int main(int argc, char** argv) {
   if (options.command != CommandKind::RecoverC24) {
     if (options.rts_toggle) {
       status = client.set_rs485_hooks(Rs485Hooks {
-          .on_tx_begin = on_tx_begin,
-          .on_tx_end = on_tx_end,
-          .user = &port,
+          on_tx_begin,
+          on_tx_end,
+          &port,
       });
       if (!status.ok()) {
         print_status_error("Invalid RS-485 hook configuration", status);
@@ -3621,7 +3623,7 @@ int main(int argc, char** argv) {
 
       status = client.async_control_global_signal(
           now_ms(),
-          GlobalSignalControlRequest(target, (turn_on ? mcprotocol::serial::BitValue::On : mcprotocol::serial::BitValue::Off)),
+          GlobalSignalControlRequest(target, (turn_on ? true : false)),
           request_complete,
           &command_state);
       if (!status.ok()) {
@@ -3660,7 +3662,7 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::RecoverC24: {
-      std::byte control_code {};
+      mcprotocol::serial::Byte control_code {};
       std::string_view control_name;
       const std::string_view requested_kind(options.command_argv[0]);
       if (!parse_c24_recovery_kind(requested_kind, control_code, control_name)) {
@@ -3683,8 +3685,8 @@ int main(int argc, char** argv) {
       const char* loopback_text = options.command_argv[0];
       status = client.async_loopback(
           now_ms(),
-          std::span<const char>(loopback_text, std::strlen(loopback_text)),
-          std::span<char>(echoed.data(), echoed.size()),
+          mcprotocol::serial::Span<const char>(loopback_text, std::strlen(loopback_text)),
+          mcprotocol::serial::Span<char>(echoed.data(), echoed.size()),
           request_complete,
           &command_state);
       if (!status.ok()) {
@@ -3732,7 +3734,7 @@ int main(int argc, char** argv) {
                   static_cast<unsigned>(data.registration_data_bytes),
                   static_cast<unsigned>(data.frame_bytes));
       std::printf("registration-data=");
-      print_hex_bytes(std::span<const std::byte>(data.registration_data.data(), data.registration_data_bytes));
+      print_hex_bytes(mcprotocol::serial::Span<const mcprotocol::serial::Byte>(data.registration_data.data(), data.registration_data_bytes));
       std::printf("\n");
       return 0;
     }
@@ -3756,11 +3758,11 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<std::byte, mcprotocol::serial::kMaxUserFrameRegistrationBytes> registration_data {};
+      std::array<mcprotocol::serial::Byte, mcprotocol::serial::kMaxUserFrameRegistrationBytes> registration_data {};
       std::size_t registration_size = 0U;
       if (!parse_hex_byte_string(
               registration_arg,
-              std::span<std::byte>(registration_data.data(), registration_data.size()),
+              mcprotocol::serial::Span<mcprotocol::serial::Byte>(registration_data.data(), registration_data.size()),
               registration_size)) {
         std::fprintf(stderr, "Invalid user-frame registration data: %.*s\n",
                      static_cast<int>(registration_arg.size()),
@@ -3770,7 +3772,7 @@ int main(int argc, char** argv) {
 
       status = client.async_write_user_frame(
           now_ms(),
-          UserFrameWriteRequest(static_cast<std::uint16_t>(frame_no), static_cast<std::uint16_t>(frame_bytes), std::span<const std::byte>(registration_data.data(), registration_size)),
+          UserFrameWriteRequest(static_cast<std::uint16_t>(frame_no), static_cast<std::uint16_t>(frame_bytes), mcprotocol::serial::Span<const mcprotocol::serial::Byte>(registration_data.data(), registration_size)),
           request_complete,
           &command_state);
       if (!status.ok()) {
@@ -3824,7 +3826,7 @@ int main(int argc, char** argv) {
       std::size_t failure_count = 0;
       for (const ProbeTarget& target : kProbeTargets) {
         if (is_bit_device(target.device.code)) {
-          BitValue bit = BitValue::Off;
+          BitValue bit = false;
           status = run_batch_read_bit(client, port, command_state, target.device, bit);
           if (!status.ok()) {
             print_probe_status(target.label, status);
@@ -3834,7 +3836,7 @@ int main(int argc, char** argv) {
           std::printf("%-5.*s %u\n",
                       static_cast<int>(target.label.size()),
                       target.label.data(),
-                      bit == BitValue::On ? 1U : 0U);
+                      bit == true ? 1U : 0U);
         } else {
           std::uint16_t word = 0;
           status = run_batch_read_word(client, port, command_state, target.device, word);
@@ -3860,7 +3862,7 @@ int main(int argc, char** argv) {
       std::size_t failure_count = 0;
       for (const ProbeTarget& target : kProbeWriteTargets) {
         if (is_bit_device(target.device.code)) {
-          BitValue original = BitValue::Off;
+          BitValue original = false;
           status = run_batch_read_bit(client, port, command_state, target.device, original);
           if (!status.ok()) {
             print_probe_write_status(target.label, "read", status);
@@ -3868,7 +3870,7 @@ int main(int argc, char** argv) {
             continue;
           }
 
-          const BitValue test_value = original == BitValue::On ? BitValue::Off : BitValue::On;
+          const BitValue test_value = original == true ? false : true;
           status = run_batch_write_bit(client, port, command_state, target.device, test_value);
           if (!status.ok()) {
             print_probe_write_status(target.label, "write", status);
@@ -3876,7 +3878,7 @@ int main(int argc, char** argv) {
             continue;
           }
 
-          BitValue readback = BitValue::Off;
+          BitValue readback = false;
           status = run_batch_read_bit(client, port, command_state, target.device, readback);
           if (!status.ok()) {
             print_probe_write_status(target.label, "verify", status);
@@ -3887,8 +3889,8 @@ int main(int argc, char** argv) {
             std::printf("%-5.*s verify mismatch wrote=%u read=%u\n",
                         static_cast<int>(target.label.size()),
                         target.label.data(),
-                        test_value == BitValue::On ? 1U : 0U,
-                        readback == BitValue::On ? 1U : 0U);
+                        test_value == true ? 1U : 0U,
+                        readback == true ? 1U : 0U);
             ++failure_count;
             continue;
           }
@@ -3900,7 +3902,7 @@ int main(int argc, char** argv) {
             continue;
           }
 
-          BitValue restored = BitValue::Off;
+          BitValue restored = false;
           status = run_batch_read_bit(client, port, command_state, target.device, restored);
           if (!status.ok()) {
             print_probe_write_status(target.label, "re-read", status);
@@ -3911,8 +3913,8 @@ int main(int argc, char** argv) {
             std::printf("%-5.*s restore mismatch expected=%u read=%u\n",
                         static_cast<int>(target.label.size()),
                         target.label.data(),
-                        original == BitValue::On ? 1U : 0U,
-                        restored == BitValue::On ? 1U : 0U);
+                        original == true ? 1U : 0U,
+                        restored == true ? 1U : 0U);
             ++failure_count;
             continue;
           }
@@ -3920,9 +3922,9 @@ int main(int argc, char** argv) {
           std::printf("%-5.*s ok %u->%u->%u\n",
                       static_cast<int>(target.label.size()),
                       target.label.data(),
-                      original == BitValue::On ? 1U : 0U,
-                      test_value == BitValue::On ? 1U : 0U,
-                      restored == BitValue::On ? 1U : 0U);
+                      original == true ? 1U : 0U,
+                      test_value == true ? 1U : 0U,
+                      restored == true ? 1U : 0U);
         } else {
           std::uint16_t original = 0;
           status = run_batch_read_word(client, port, command_state, target.device, original);
@@ -4012,8 +4014,8 @@ int main(int argc, char** argv) {
       };
 
       const auto verify_random_word_values = [](std::string_view label,
-                                                std::span<const std::uint16_t> expected,
-                                                std::span<const std::uint32_t> actual) -> bool {
+                                                mcprotocol::serial::Span<const std::uint16_t> expected,
+                                                mcprotocol::serial::Span<const std::uint32_t> actual) -> bool {
         for (std::size_t index = 0; index < expected.size(); ++index) {
           const std::uint16_t actual_word = static_cast<std::uint16_t>(actual[index] & 0xFFFFU);
           if (actual_word != expected[index]) {
@@ -4030,8 +4032,8 @@ int main(int argc, char** argv) {
       };
 
       const auto verify_random_bit_values = [](std::string_view label,
-                                               std::span<const BitValue> expected,
-                                               std::span<const std::uint32_t> actual) -> bool {
+                                               mcprotocol::serial::Span<const BitValue> expected,
+                                               mcprotocol::serial::Span<const std::uint32_t> actual) -> bool {
         for (std::size_t index = 0; index < expected.size(); ++index) {
           const BitValue actual_bit = mcprotocol::serial::sparse_native_requested_bit_value(actual[index]);
           if (actual_bit != expected[index]) {
@@ -4039,8 +4041,8 @@ int main(int argc, char** argv) {
                         static_cast<int>(label.size()),
                         label.data(),
                         index,
-                        expected[index] == BitValue::On ? 1U : 0U,
-                        actual_bit == BitValue::On ? 1U : 0U,
+                        expected[index] == true ? 1U : 0U,
+                        actual_bit == true ? 1U : 0U,
                         static_cast<unsigned>(mcprotocol::serial::sparse_native_mask_word(actual[index])));
             return false;
           }
@@ -4054,7 +4056,7 @@ int main(int argc, char** argv) {
           command_state,
           kWordHeadDevice,
           static_cast<std::uint16_t>(contiguous_words.size()),
-          std::span<std::uint16_t>(contiguous_words.data(), contiguous_words.size()));
+          mcprotocol::serial::Span<std::uint16_t>(contiguous_words.data(), contiguous_words.size()));
       if (!status.ok()) {
         print_status_error("probe-random-read contiguous word baseline failed", status);
         return 1;
@@ -4069,17 +4071,17 @@ int main(int argc, char** argv) {
           command_state,
           kBitHeadDevice,
           static_cast<std::uint16_t>(contiguous_bits.size()),
-          std::span<BitValue>(contiguous_bits.data(), contiguous_bits.size()));
+          mcprotocol::serial::Span<BitValue>(contiguous_bits.data(), contiguous_bits.size()));
       if (!status.ok()) {
         print_status_error("probe-random-read contiguous bit baseline failed", status);
         return 1;
       }
       std::printf("batch-read-bits=ok contiguous M100=%u M105=%u\n",
-                  contiguous_bits.front() == BitValue::On ? 1U : 0U,
-                  contiguous_bits.back() == BitValue::On ? 1U : 0U);
+                  contiguous_bits.front() == true ? 1U : 0U,
+                  contiguous_bits.back() == true ? 1U : 0U);
 
       const std::array<RandomReadWordItem, 1> word_single_items {{
-          {.device = DeviceAddress {DeviceCode::D, 100U}},
+          {DeviceAddress {DeviceCode::D, 100U}},
       }};
       const std::array<std::uint16_t, 1> word_single_expected {{
           contiguous_words[0],
@@ -4090,14 +4092,14 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomReadWordItem>(word_single_items.data(), word_single_items.size()),
-          std::span<std::uint32_t>(word_single_values.data(), word_single_values.size()));
+          mcprotocol::serial::Span<const RandomReadWordItem>(word_single_items.data(), word_single_items.size()),
+          mcprotocol::serial::Span<std::uint32_t>(word_single_values.data(), word_single_values.size()));
       if (!status.ok()) {
         print_probe_status_line("random-read-word-single", status);
       } else if (!verify_random_word_values(
                      "random-read-word-single",
-                     std::span<const std::uint16_t>(word_single_expected.data(), word_single_expected.size()),
-                     std::span<const std::uint32_t>(word_single_values.data(), word_single_values.size()))) {
+                     mcprotocol::serial::Span<const std::uint16_t>(word_single_expected.data(), word_single_expected.size()),
+                     mcprotocol::serial::Span<const std::uint32_t>(word_single_values.data(), word_single_values.size()))) {
         std::printf("random-read-word-single=skip verify-mismatch\n");
       } else {
         word_single_ok = true;
@@ -4105,8 +4107,8 @@ int main(int argc, char** argv) {
       }
 
       const std::array<RandomReadWordItem, 2> word_dense_items {{
-          {.device = DeviceAddress {DeviceCode::D, 100U}},
-          {.device = DeviceAddress {DeviceCode::D, 101U}},
+          {DeviceAddress {DeviceCode::D, 100U}},
+          {DeviceAddress {DeviceCode::D, 101U}},
       }};
       const std::array<std::uint16_t, 2> word_dense_expected {{
           contiguous_words[0],
@@ -4118,14 +4120,14 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomReadWordItem>(word_dense_items.data(), word_dense_items.size()),
-          std::span<std::uint32_t>(word_dense_values.data(), word_dense_values.size()));
+          mcprotocol::serial::Span<const RandomReadWordItem>(word_dense_items.data(), word_dense_items.size()),
+          mcprotocol::serial::Span<std::uint32_t>(word_dense_values.data(), word_dense_values.size()));
       if (!status.ok()) {
         print_probe_status_line("random-read-word-dense", status);
       } else if (!verify_random_word_values(
                      "random-read-word-dense",
-                     std::span<const std::uint16_t>(word_dense_expected.data(), word_dense_expected.size()),
-                     std::span<const std::uint32_t>(word_dense_values.data(), word_dense_values.size()))) {
+                     mcprotocol::serial::Span<const std::uint16_t>(word_dense_expected.data(), word_dense_expected.size()),
+                     mcprotocol::serial::Span<const std::uint32_t>(word_dense_values.data(), word_dense_values.size()))) {
         std::printf("random-read-word-dense=skip verify-mismatch\n");
       } else {
         word_dense_ok = true;
@@ -4133,8 +4135,8 @@ int main(int argc, char** argv) {
       }
 
       const std::array<RandomReadWordItem, 2> word_sparse_items {{
-          {.device = DeviceAddress {DeviceCode::D, 100U}},
-          {.device = DeviceAddress {DeviceCode::D, 105U}},
+          {DeviceAddress {DeviceCode::D, 100U}},
+          {DeviceAddress {DeviceCode::D, 105U}},
       }};
       const std::array<std::uint16_t, 2> word_sparse_expected {{
           contiguous_words[0],
@@ -4146,14 +4148,14 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomReadWordItem>(word_sparse_items.data(), word_sparse_items.size()),
-          std::span<std::uint32_t>(word_sparse_values.data(), word_sparse_values.size()));
+          mcprotocol::serial::Span<const RandomReadWordItem>(word_sparse_items.data(), word_sparse_items.size()),
+          mcprotocol::serial::Span<std::uint32_t>(word_sparse_values.data(), word_sparse_values.size()));
       if (!status.ok()) {
         print_probe_status_line("random-read-word-sparse", status);
       } else if (!verify_random_word_values(
                      "random-read-word-sparse",
-                     std::span<const std::uint16_t>(word_sparse_expected.data(), word_sparse_expected.size()),
-                     std::span<const std::uint32_t>(word_sparse_values.data(), word_sparse_values.size()))) {
+                     mcprotocol::serial::Span<const std::uint16_t>(word_sparse_expected.data(), word_sparse_expected.size()),
+                     mcprotocol::serial::Span<const std::uint32_t>(word_sparse_values.data(), word_sparse_values.size()))) {
         std::printf("random-read-word-sparse=skip verify-mismatch\n");
       } else {
         word_sparse_ok = true;
@@ -4161,7 +4163,7 @@ int main(int argc, char** argv) {
       }
 
       const std::array<RandomReadWordItem, 1> bit_single_items {{
-          {.device = DeviceAddress {DeviceCode::M, 100U}},
+          {DeviceAddress {DeviceCode::M, 100U}},
       }};
       const std::array<BitValue, 1> bit_single_expected {{
           contiguous_bits[0],
@@ -4172,14 +4174,14 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomReadWordItem>(bit_single_items.data(), bit_single_items.size()),
-          std::span<std::uint32_t>(bit_single_values.data(), bit_single_values.size()));
+          mcprotocol::serial::Span<const RandomReadWordItem>(bit_single_items.data(), bit_single_items.size()),
+          mcprotocol::serial::Span<std::uint32_t>(bit_single_values.data(), bit_single_values.size()));
       if (!status.ok()) {
         print_probe_status_line("random-read-bit-single", status);
       } else if (!verify_random_bit_values(
                      "random-read-bit-single",
-                     std::span<const BitValue>(bit_single_expected.data(), bit_single_expected.size()),
-                     std::span<const std::uint32_t>(bit_single_values.data(), bit_single_values.size()))) {
+                     mcprotocol::serial::Span<const BitValue>(bit_single_expected.data(), bit_single_expected.size()),
+                     mcprotocol::serial::Span<const std::uint32_t>(bit_single_values.data(), bit_single_values.size()))) {
         std::printf("random-read-bit-single=skip verify-mismatch\n");
       } else {
         bit_single_ok = true;
@@ -4187,8 +4189,8 @@ int main(int argc, char** argv) {
       }
 
       const std::array<RandomReadWordItem, 2> bit_dense_items {{
-          {.device = DeviceAddress {DeviceCode::M, 100U}},
-          {.device = DeviceAddress {DeviceCode::M, 101U}},
+          {DeviceAddress {DeviceCode::M, 100U}},
+          {DeviceAddress {DeviceCode::M, 101U}},
       }};
       const std::array<BitValue, 2> bit_dense_expected {{
           contiguous_bits[0],
@@ -4200,14 +4202,14 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomReadWordItem>(bit_dense_items.data(), bit_dense_items.size()),
-          std::span<std::uint32_t>(bit_dense_values.data(), bit_dense_values.size()));
+          mcprotocol::serial::Span<const RandomReadWordItem>(bit_dense_items.data(), bit_dense_items.size()),
+          mcprotocol::serial::Span<std::uint32_t>(bit_dense_values.data(), bit_dense_values.size()));
       if (!status.ok()) {
         print_probe_status_line("random-read-bit-dense", status);
       } else if (!verify_random_bit_values(
                      "random-read-bit-dense",
-                     std::span<const BitValue>(bit_dense_expected.data(), bit_dense_expected.size()),
-                     std::span<const std::uint32_t>(bit_dense_values.data(), bit_dense_values.size()))) {
+                     mcprotocol::serial::Span<const BitValue>(bit_dense_expected.data(), bit_dense_expected.size()),
+                     mcprotocol::serial::Span<const std::uint32_t>(bit_dense_values.data(), bit_dense_values.size()))) {
         std::printf("random-read-bit-dense=skip verify-mismatch\n");
       } else {
         bit_dense_ok = true;
@@ -4215,8 +4217,8 @@ int main(int argc, char** argv) {
       }
 
       const std::array<RandomReadWordItem, 2> bit_sparse_items {{
-          {.device = DeviceAddress {DeviceCode::M, 100U}},
-          {.device = DeviceAddress {DeviceCode::M, 105U}},
+          {DeviceAddress {DeviceCode::M, 100U}},
+          {DeviceAddress {DeviceCode::M, 105U}},
       }};
       const std::array<BitValue, 2> bit_sparse_expected {{
           contiguous_bits[0],
@@ -4228,14 +4230,14 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomReadWordItem>(bit_sparse_items.data(), bit_sparse_items.size()),
-          std::span<std::uint32_t>(bit_sparse_values.data(), bit_sparse_values.size()));
+          mcprotocol::serial::Span<const RandomReadWordItem>(bit_sparse_items.data(), bit_sparse_items.size()),
+          mcprotocol::serial::Span<std::uint32_t>(bit_sparse_values.data(), bit_sparse_values.size()));
       if (!status.ok()) {
         print_probe_status_line("random-read-bit-sparse", status);
       } else if (!verify_random_bit_values(
                      "random-read-bit-sparse",
-                     std::span<const BitValue>(bit_sparse_expected.data(), bit_sparse_expected.size()),
-                     std::span<const std::uint32_t>(bit_sparse_values.data(), bit_sparse_values.size()))) {
+                     mcprotocol::serial::Span<const BitValue>(bit_sparse_expected.data(), bit_sparse_expected.size()),
+                     mcprotocol::serial::Span<const std::uint32_t>(bit_sparse_values.data(), bit_sparse_values.size()))) {
         std::printf("random-read-bit-sparse=skip verify-mismatch\n");
       } else {
         bit_sparse_ok = true;
@@ -4258,8 +4260,8 @@ int main(int argc, char** argv) {
       bool backups_valid = false;
 
       const auto verify_words = [](std::string_view context,
-                                   std::span<const std::uint16_t> expected,
-                                   std::span<const std::uint16_t> actual) -> bool {
+                                   mcprotocol::serial::Span<const std::uint16_t> expected,
+                                   mcprotocol::serial::Span<const std::uint16_t> actual) -> bool {
         for (std::size_t index = 0; index < expected.size(); ++index) {
           if (actual[index] != expected[index]) {
             std::printf("%.*s-mismatch[%zu] expected=0x%04X read=0x%04X\n",
@@ -4294,7 +4296,7 @@ int main(int argc, char** argv) {
             port,
             command_state,
             kHeadDevice,
-            std::span<const std::uint16_t>(backup_words.data(), backup_words.size()));
+            mcprotocol::serial::Span<const std::uint16_t>(backup_words.data(), backup_words.size()));
         if (!status.ok()) {
           print_status_error("probe-random-write-words restore failed", status);
           return false;
@@ -4308,7 +4310,7 @@ int main(int argc, char** argv) {
           command_state,
           kHeadDevice,
           static_cast<std::uint16_t>(backup_words.size()),
-          std::span<std::uint16_t>(backup_words.data(), backup_words.size()));
+          mcprotocol::serial::Span<std::uint16_t>(backup_words.data(), backup_words.size()));
       if (!status.ok()) {
         print_status_error("probe-random-write-words backup failed", status);
         return 1;
@@ -4340,7 +4342,7 @@ int main(int argc, char** argv) {
           port,
           command_state,
           kHeadDevice,
-          std::span<const std::uint16_t>(dense_pattern.data(), dense_pattern.size()));
+          mcprotocol::serial::Span<const std::uint16_t>(dense_pattern.data(), dense_pattern.size()));
       if (!status.ok()) {
         print_probe_status_line("batch-write-words", status);
       } else {
@@ -4350,7 +4352,7 @@ int main(int argc, char** argv) {
             command_state,
             kHeadDevice,
             static_cast<std::uint16_t>(contiguous_verify.size()),
-            std::span<std::uint16_t>(contiguous_verify.data(), contiguous_verify.size()));
+            mcprotocol::serial::Span<std::uint16_t>(contiguous_verify.data(), contiguous_verify.size()));
         if (!status.ok()) {
           print_probe_status_line("batch-write-words-verify", status);
         } else if (!verify_words("batch-write-words", dense_pattern, contiguous_verify)) {
@@ -4374,7 +4376,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomWriteWordItem>(single_item.data(), single_item.size()));
+          mcprotocol::serial::Span<const RandomWriteWordItem>(single_item.data(), single_item.size()));
       if (!status.ok()) {
         print_probe_status_line("random-write-words-single", status);
       } else {
@@ -4384,7 +4386,7 @@ int main(int argc, char** argv) {
             command_state,
             kHeadDevice,
             static_cast<std::uint16_t>(single_verify.size()),
-            std::span<std::uint16_t>(single_verify.data(), single_verify.size()));
+            mcprotocol::serial::Span<std::uint16_t>(single_verify.data(), single_verify.size()));
         if (!status.ok()) {
           print_probe_status_line("random-write-words-single-verify", status);
         } else if (!verify_words("random-write-words-single", single_expected, single_verify)) {
@@ -4410,7 +4412,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomWriteWordItem>(dense_items.data(), dense_items.size()));
+          mcprotocol::serial::Span<const RandomWriteWordItem>(dense_items.data(), dense_items.size()));
       if (!status.ok()) {
         print_probe_status_line("random-write-words-dense", status);
       } else {
@@ -4420,7 +4422,7 @@ int main(int argc, char** argv) {
             command_state,
             kHeadDevice,
             static_cast<std::uint16_t>(dense_verify.size()),
-            std::span<std::uint16_t>(dense_verify.data(), dense_verify.size()));
+            mcprotocol::serial::Span<std::uint16_t>(dense_verify.data(), dense_verify.size()));
         if (!status.ok()) {
           print_probe_status_line("random-write-words-dense-verify", status);
         } else if (!verify_words("random-write-words-dense", dense_expected, dense_verify)) {
@@ -4446,7 +4448,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomWriteWordItem>(sparse_items.data(), sparse_items.size()));
+          mcprotocol::serial::Span<const RandomWriteWordItem>(sparse_items.data(), sparse_items.size()));
       if (!status.ok()) {
         print_probe_status_line("random-write-words-sparse", status);
       } else {
@@ -4456,7 +4458,7 @@ int main(int argc, char** argv) {
             command_state,
             kHeadDevice,
             static_cast<std::uint16_t>(sparse_verify.size()),
-            std::span<std::uint16_t>(sparse_verify.data(), sparse_verify.size()));
+            mcprotocol::serial::Span<std::uint16_t>(sparse_verify.data(), sparse_verify.size()));
         if (!status.ok()) {
           print_probe_status_line("random-write-words-sparse-verify", status);
         } else if (!verify_words("random-write-words-sparse", sparse_expected, sparse_verify)) {
@@ -4478,7 +4480,7 @@ int main(int argc, char** argv) {
           command_state,
           kHeadDevice,
           static_cast<std::uint16_t>(restore_verify.size()),
-          std::span<std::uint16_t>(restore_verify.data(), restore_verify.size()));
+          mcprotocol::serial::Span<std::uint16_t>(restore_verify.data(), restore_verify.size()));
       if (!status.ok()) {
         print_status_error("probe-random-write-words restore verify failed", status);
         return 1;
@@ -4501,20 +4503,20 @@ int main(int argc, char** argv) {
       bool backups_valid = false;
 
       const auto verify_bits = [](std::string_view context,
-                                  std::span<const BitValue> expected,
-                                  std::span<const BitValue> actual) -> bool {
-        const auto pack_word = [](std::span<const BitValue> bits) -> std::uint16_t {
+                                  mcprotocol::serial::Span<const BitValue> expected,
+                                  mcprotocol::serial::Span<const BitValue> actual) -> bool {
+        const auto pack_word = [](mcprotocol::serial::Span<const BitValue> bits) -> std::uint16_t {
           std::uint16_t value = 0;
           for (std::size_t bit = 0; bit < bits.size() && bit < 16U; ++bit) {
-            if (bits[bit] == BitValue::On) {
+            if (bits[bit] == true) {
               value = static_cast<std::uint16_t>(value | (1U << (15U - bit)));
             }
           }
           return value;
         };
-        const auto print_bit_string = [](std::span<const BitValue> bits) {
+        const auto print_bit_string = [](mcprotocol::serial::Span<const BitValue> bits) {
           for (std::size_t index = 0; index < bits.size(); ++index) {
-            std::printf("%c", bits[index] == BitValue::On ? '1' : '0');
+            std::printf("%c", bits[index] == true ? '1' : '0');
             if (((index + 1U) % 4U) == 0U && (index + 1U) != bits.size()) {
               std::printf("_");
             }
@@ -4526,12 +4528,12 @@ int main(int argc, char** argv) {
                         static_cast<int>(context.size()),
                         context.data(),
                         index,
-                        expected[index] == BitValue::On ? 1U : 0U,
-                        actual[index] == BitValue::On ? 1U : 0U);
+                        expected[index] == true ? 1U : 0U,
+                        actual[index] == true ? 1U : 0U);
             if ((expected.size() % 16U) == 0U) {
               const std::size_t word_index = index / 16U;
-              const auto expected_word = pack_word(expected.subspan(word_index * 16U, 16U));
-              const auto actual_word = pack_word(actual.subspan(word_index * 16U, 16U));
+              const auto expected_word = pack_word(checked_subspan(expected, word_index * 16U, 16U));
+              const auto actual_word = pack_word(checked_subspan(actual, word_index * 16U, 16U));
               std::printf(" expected-word[%zu]=0x%04X read-word[%zu]=0x%04X",
                           word_index,
                           expected_word,
@@ -4573,7 +4575,7 @@ int main(int argc, char** argv) {
             port,
             command_state,
             kHeadDevice,
-            std::span<const BitValue>(backup_bits.data(), backup_bits.size()));
+            mcprotocol::serial::Span<const BitValue>(backup_bits.data(), backup_bits.size()));
         if (!status.ok()) {
           print_status_error("probe-random-write-bits restore failed", status);
           return false;
@@ -4587,7 +4589,7 @@ int main(int argc, char** argv) {
           command_state,
           kHeadDevice,
           static_cast<std::uint16_t>(backup_bits.size()),
-          std::span<BitValue>(backup_bits.data(), backup_bits.size()));
+          mcprotocol::serial::Span<BitValue>(backup_bits.data(), backup_bits.size()));
       if (!status.ok()) {
         print_status_error("probe-random-write-bits backup failed", status);
         return 1;
@@ -4595,17 +4597,17 @@ int main(int argc, char** argv) {
       backups_valid = true;
 
       const std::array<BitValue, 16> dense_pattern {{
-          BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
-          BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
-          BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
-          BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
+          true, false, true, false,
+          true, false, true, false,
+          true, false, true, false,
+          true, false, true, false,
       }};
       const std::array<std::size_t, 4> sparse_offsets {0U, 5U, 10U, 15U};
       const std::array<BitValue, 4> sparse_values {{
-          BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
+          true, false, true, false,
       }};
       const std::size_t single_offset = 0U;
-      const BitValue single_value = BitValue::On;
+      const BitValue single_value = true;
       std::array<BitValue, 16> dense_verify {};
       std::array<BitValue, 16> sparse_verify {};
       std::array<BitValue, 16> single_verify {};
@@ -4622,7 +4624,7 @@ int main(int argc, char** argv) {
           port,
           command_state,
           kHeadDevice,
-          std::span<const BitValue>(dense_pattern.data(), dense_pattern.size()));
+          mcprotocol::serial::Span<const BitValue>(dense_pattern.data(), dense_pattern.size()));
       if (!status.ok()) {
         print_probe_status_line("batch-write-bits", status);
       } else {
@@ -4632,7 +4634,7 @@ int main(int argc, char** argv) {
             command_state,
             kHeadDevice,
             static_cast<std::uint16_t>(dense_verify.size()),
-            std::span<BitValue>(dense_verify.data(), dense_verify.size()));
+            mcprotocol::serial::Span<BitValue>(dense_verify.data(), dense_verify.size()));
         if (!status.ok()) {
           print_probe_status_line("batch-write-bits-verify", status);
         } else if (!verify_bits("batch-write-bits", dense_pattern, dense_verify)) {
@@ -4648,7 +4650,7 @@ int main(int argc, char** argv) {
       }
 
       auto dense_items = mcprotocol::serial::detail::make_filled_array<RandomWriteBitItem, 16>(
-          RandomWriteBitItem(DeviceAddress {DeviceCode::M, 0U}, BitValue::Off));
+          RandomWriteBitItem(DeviceAddress {DeviceCode::M, 0U}, false));
       for (std::size_t index = 0; index < dense_items.size(); ++index) {
         dense_items[index].device = DeviceAddress {DeviceCode::M, 100U + static_cast<std::uint32_t>(index)};
         dense_items[index].value = dense_pattern[index];
@@ -4659,7 +4661,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomWriteBitItem>(dense_items.data(), dense_items.size()));
+          mcprotocol::serial::Span<const RandomWriteBitItem>(dense_items.data(), dense_items.size()));
       if (!status.ok()) {
         print_probe_status_line("random-write-bits-dense", status);
       } else {
@@ -4669,7 +4671,7 @@ int main(int argc, char** argv) {
             command_state,
             kHeadDevice,
             static_cast<std::uint16_t>(dense_verify.size()),
-            std::span<BitValue>(dense_verify.data(), dense_verify.size()));
+            mcprotocol::serial::Span<BitValue>(dense_verify.data(), dense_verify.size()));
         if (!status.ok()) {
           print_probe_status_line("random-write-bits-dense-verify", status);
         } else if (!verify_bits("random-write-bits-dense", dense_pattern, dense_verify)) {
@@ -4695,7 +4697,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomWriteBitItem>(single_item.data(), single_item.size()));
+          mcprotocol::serial::Span<const RandomWriteBitItem>(single_item.data(), single_item.size()));
       if (!status.ok()) {
         print_probe_status_line("random-write-bits-single", status);
       } else {
@@ -4705,7 +4707,7 @@ int main(int argc, char** argv) {
             command_state,
             kHeadDevice,
             static_cast<std::uint16_t>(single_verify.size()),
-            std::span<BitValue>(single_verify.data(), single_verify.size()));
+            mcprotocol::serial::Span<BitValue>(single_verify.data(), single_verify.size()));
         if (!status.ok()) {
           print_probe_status_line("random-write-bits-single-verify", status);
         } else if (!verify_bits("random-write-bits-single", single_expected, single_verify)) {
@@ -4721,7 +4723,7 @@ int main(int argc, char** argv) {
       }
 
       auto sparse_items = mcprotocol::serial::detail::make_filled_array<RandomWriteBitItem, 4>(
-          RandomWriteBitItem(DeviceAddress {DeviceCode::M, 0U}, BitValue::Off));
+          RandomWriteBitItem(DeviceAddress {DeviceCode::M, 0U}, false));
       for (std::size_t index = 0; index < sparse_items.size(); ++index) {
         sparse_items[index].device = DeviceAddress {DeviceCode::M, 100U + static_cast<std::uint32_t>(sparse_offsets[index])};
         sparse_items[index].value = sparse_values[index];
@@ -4732,7 +4734,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomWriteBitItem>(sparse_items.data(), sparse_items.size()));
+          mcprotocol::serial::Span<const RandomWriteBitItem>(sparse_items.data(), sparse_items.size()));
       if (!status.ok()) {
         print_probe_status_line("random-write-bits-sparse", status);
       } else {
@@ -4742,7 +4744,7 @@ int main(int argc, char** argv) {
             command_state,
             kHeadDevice,
             static_cast<std::uint16_t>(sparse_verify.size()),
-            std::span<BitValue>(sparse_verify.data(), sparse_verify.size()));
+            mcprotocol::serial::Span<BitValue>(sparse_verify.data(), sparse_verify.size()));
         if (!status.ok()) {
           print_probe_status_line("random-write-bits-sparse-verify", status);
         } else if (!verify_bits("random-write-bits-sparse", sparse_expected, sparse_verify)) {
@@ -4764,7 +4766,7 @@ int main(int argc, char** argv) {
           command_state,
           kHeadDevice,
           static_cast<std::uint16_t>(restore_verify.size()),
-          std::span<BitValue>(restore_verify.data(), restore_verify.size()));
+          mcprotocol::serial::Span<BitValue>(restore_verify.data(), restore_verify.size()));
       if (!status.ok()) {
         print_status_error("probe-random-write-bits restore verify failed", status);
         return 1;
@@ -4820,8 +4822,8 @@ int main(int argc, char** argv) {
 
       const auto verify_word_block = [](std::string_view context,
                                         std::string_view label,
-                                        std::span<const std::uint16_t> expected,
-                                        std::span<const std::uint16_t> actual) -> bool {
+                                        mcprotocol::serial::Span<const std::uint16_t> expected,
+                                        mcprotocol::serial::Span<const std::uint16_t> actual) -> bool {
         for (std::size_t index = 0; index < expected.size(); ++index) {
           if (actual[index] != expected[index]) {
             std::printf("%.*s-mismatch=%.*s[%zu] expected=0x%04X read=0x%04X\n",
@@ -4839,12 +4841,12 @@ int main(int argc, char** argv) {
       };
       const auto verify_bit_block = [](std::string_view context,
                                        std::string_view label,
-                                       std::span<const BitValue> expected,
-                                       std::span<const BitValue> actual) -> bool {
-        const auto pack_word = [](std::span<const BitValue> bits) -> std::uint16_t {
+                                       mcprotocol::serial::Span<const BitValue> expected,
+                                       mcprotocol::serial::Span<const BitValue> actual) -> bool {
+        const auto pack_word = [](mcprotocol::serial::Span<const BitValue> bits) -> std::uint16_t {
           std::uint16_t value = 0;
           for (std::size_t bit = 0; bit < bits.size() && bit < 16U; ++bit) {
-            if (bits[bit] == BitValue::On) {
+            if (bits[bit] == true) {
               value = static_cast<std::uint16_t>(value | (1U << (15U - bit)));
             }
           }
@@ -4858,12 +4860,12 @@ int main(int argc, char** argv) {
                         static_cast<int>(label.size()),
                         label.data(),
                         index,
-                        expected[index] == BitValue::On ? 1U : 0U,
-                        actual[index] == BitValue::On ? 1U : 0U);
+                        expected[index] == true ? 1U : 0U,
+                        actual[index] == true ? 1U : 0U);
             if ((expected.size() % 16U) == 0U) {
               const std::size_t word_index = index / 16U;
-              const auto expected_word = pack_word(expected.subspan(word_index * 16U, 16U));
-              const auto actual_word = pack_word(actual.subspan(word_index * 16U, 16U));
+              const auto expected_word = pack_word(checked_subspan(expected, word_index * 16U, 16U));
+              const auto actual_word = pack_word(checked_subspan(actual, word_index * 16U, 16U));
               std::printf(" expected-word[%zu]=0x%04X read-word[%zu]=0x%04X",
                           word_index,
                           expected_word,
@@ -4886,7 +4888,7 @@ int main(int argc, char** argv) {
             port,
             command_state,
             kWordBlockADevice,
-            std::span<const std::uint16_t>(backup_word_block_a.data(), backup_word_block_a.size()));
+            mcprotocol::serial::Span<const std::uint16_t>(backup_word_block_a.data(), backup_word_block_a.size()));
         if (!status.ok()) {
           print_status_error("probe-multi-block restore words A failed", status);
           return false;
@@ -4896,7 +4898,7 @@ int main(int argc, char** argv) {
             port,
             command_state,
             kWordBlockBDevice,
-            std::span<const std::uint16_t>(backup_word_block_b.data(), backup_word_block_b.size()));
+            mcprotocol::serial::Span<const std::uint16_t>(backup_word_block_b.data(), backup_word_block_b.size()));
         if (!status.ok()) {
           print_status_error("probe-multi-block restore words B failed", status);
           return false;
@@ -4906,7 +4908,7 @@ int main(int argc, char** argv) {
             port,
             command_state,
             kBitBlockADevice,
-            std::span<const BitValue>(backup_bit_block_a.data(), backup_bit_block_a.size()));
+            mcprotocol::serial::Span<const BitValue>(backup_bit_block_a.data(), backup_bit_block_a.size()));
         if (!status.ok()) {
           print_status_error("probe-multi-block restore bits A failed", status);
           return false;
@@ -4916,7 +4918,7 @@ int main(int argc, char** argv) {
             port,
             command_state,
             kBitBlockBDevice,
-            std::span<const BitValue>(backup_bit_block_b.data(), backup_bit_block_b.size()));
+            mcprotocol::serial::Span<const BitValue>(backup_bit_block_b.data(), backup_bit_block_b.size()));
         if (!status.ok()) {
           print_status_error("probe-multi-block restore bits B failed", status);
           return false;
@@ -4930,7 +4932,7 @@ int main(int argc, char** argv) {
           command_state,
           kWordBlockADevice,
           static_cast<std::uint16_t>(backup_word_block_a.size()),
-          std::span<std::uint16_t>(backup_word_block_a.data(), backup_word_block_a.size()));
+          mcprotocol::serial::Span<std::uint16_t>(backup_word_block_a.data(), backup_word_block_a.size()));
       if (!status.ok()) {
         print_status_error("probe-multi-block backup words A failed", status);
         return 1;
@@ -4941,7 +4943,7 @@ int main(int argc, char** argv) {
           command_state,
           kWordBlockBDevice,
           static_cast<std::uint16_t>(backup_word_block_b.size()),
-          std::span<std::uint16_t>(backup_word_block_b.data(), backup_word_block_b.size()));
+          mcprotocol::serial::Span<std::uint16_t>(backup_word_block_b.data(), backup_word_block_b.size()));
       if (!status.ok()) {
         print_status_error("probe-multi-block backup words B failed", status);
         return 1;
@@ -4952,7 +4954,7 @@ int main(int argc, char** argv) {
           command_state,
           kBitBlockADevice,
           static_cast<std::uint16_t>(backup_bit_block_a.size()),
-          std::span<BitValue>(backup_bit_block_a.data(), backup_bit_block_a.size()));
+          mcprotocol::serial::Span<BitValue>(backup_bit_block_a.data(), backup_bit_block_a.size()));
       if (!status.ok()) {
         print_status_error("probe-multi-block backup bits A failed", status);
         return 1;
@@ -4963,7 +4965,7 @@ int main(int argc, char** argv) {
           command_state,
           kBitBlockBDevice,
           static_cast<std::uint16_t>(backup_bit_block_b.size()),
-          std::span<BitValue>(backup_bit_block_b.data(), backup_bit_block_b.size()));
+          mcprotocol::serial::Span<BitValue>(backup_bit_block_b.data(), backup_bit_block_b.size()));
       if (!status.ok()) {
         print_status_error("probe-multi-block backup bits B failed", status);
         return 1;
@@ -4996,22 +4998,22 @@ int main(int argc, char** argv) {
       const std::array<MultiBlockReadBlock, 1> read_bit_block_b_only {{
           MultiBlockReadBlock(kBitBlockBDevice, 2U, true),
       }};
-      const std::span<const MultiBlockReadBlock> selected_read_blocks =
+      const mcprotocol::serial::Span<const MultiBlockReadBlock> selected_read_blocks =
           probe_mode == ProbeMultiBlockMode::WordOnly
-              ? std::span<const MultiBlockReadBlock>(read_word_blocks.data(), read_word_blocks.size())
+              ? mcprotocol::serial::Span<const MultiBlockReadBlock>(read_word_blocks.data(), read_word_blocks.size())
               : (probe_mode == ProbeMultiBlockMode::BitOnly
-                     ? std::span<const MultiBlockReadBlock>(read_bit_blocks.data(), read_bit_blocks.size())
+                     ? mcprotocol::serial::Span<const MultiBlockReadBlock>(read_bit_blocks.data(), read_bit_blocks.size())
                      : (probe_mode == ProbeMultiBlockMode::WordA
-                            ? std::span<const MultiBlockReadBlock>(read_word_block_a_only.data(), read_word_block_a_only.size())
+                            ? mcprotocol::serial::Span<const MultiBlockReadBlock>(read_word_block_a_only.data(), read_word_block_a_only.size())
                             : (probe_mode == ProbeMultiBlockMode::WordB
-                                   ? std::span<const MultiBlockReadBlock>(read_word_block_b_only.data(), read_word_block_b_only.size())
+                                   ? mcprotocol::serial::Span<const MultiBlockReadBlock>(read_word_block_b_only.data(), read_word_block_b_only.size())
                                    : (probe_mode == ProbeMultiBlockMode::BitA
-                                          ? std::span<const MultiBlockReadBlock>(read_bit_block_a_only.data(),
+                                          ? mcprotocol::serial::Span<const MultiBlockReadBlock>(read_bit_block_a_only.data(),
                                                                                   read_bit_block_a_only.size())
                                           : (probe_mode == ProbeMultiBlockMode::BitB
-                                                 ? std::span<const MultiBlockReadBlock>(read_bit_block_b_only.data(),
+                                                 ? mcprotocol::serial::Span<const MultiBlockReadBlock>(read_bit_block_b_only.data(),
                                                                                          read_bit_block_b_only.size())
-                                                 : std::span<const MultiBlockReadBlock>(read_mixed_blocks.data(),
+                                                 : mcprotocol::serial::Span<const MultiBlockReadBlock>(read_mixed_blocks.data(),
                                                                                          read_mixed_blocks.size()))))));
 
       std::array<std::uint16_t, 5> multi_read_words {};
@@ -5024,9 +5026,9 @@ int main(int argc, char** argv) {
           port,
           command_state,
           MultiBlockReadRequest(selected_read_blocks),
-          std::span<std::uint16_t>(multi_read_words.data(), include_words ? multi_read_words.size() : 0U),
-          std::span<BitValue>(multi_read_bits.data(), include_bits ? multi_read_bits.size() : 0U),
-          std::span<MultiBlockReadBlockResult>(multi_read_results.data(), selected_read_blocks.size()));
+          mcprotocol::serial::Span<std::uint16_t>(multi_read_words.data(), include_words ? multi_read_words.size() : 0U),
+          mcprotocol::serial::Span<BitValue>(multi_read_bits.data(), include_bits ? multi_read_bits.size() : 0U),
+          mcprotocol::serial::Span<MultiBlockReadBlockResult>(multi_read_results.data(), selected_read_blocks.size()));
       if (!status.ok()) {
         std::printf("multi-block-read=skip ");
         if (status.code == StatusCode::PlcError) {
@@ -5043,7 +5045,7 @@ int main(int argc, char** argv) {
               "multi-block-read",
               "words-a",
               backup_word_block_a,
-              std::span<const std::uint16_t>(multi_read_words.data() + word_cursor, backup_word_block_a.size()));
+              mcprotocol::serial::Span<const std::uint16_t>(multi_read_words.data() + word_cursor, backup_word_block_a.size()));
           word_cursor += backup_word_block_a.size();
         }
         if (matches_backup && verify_word_b) {
@@ -5051,7 +5053,7 @@ int main(int argc, char** argv) {
               "multi-block-read",
               "words-b",
               backup_word_block_b,
-              std::span<const std::uint16_t>(multi_read_words.data() + word_cursor,
+              mcprotocol::serial::Span<const std::uint16_t>(multi_read_words.data() + word_cursor,
                                              backup_word_block_b.size()));
           word_cursor += backup_word_block_b.size();
         }
@@ -5060,7 +5062,7 @@ int main(int argc, char** argv) {
               "multi-block-read",
               "bits-a",
               backup_bit_block_a,
-              std::span<const BitValue>(multi_read_bits.data() + bit_cursor, backup_bit_block_a.size()));
+              mcprotocol::serial::Span<const BitValue>(multi_read_bits.data() + bit_cursor, backup_bit_block_a.size()));
           bit_cursor += backup_bit_block_a.size();
         }
         if (matches_backup && verify_bit_b) {
@@ -5068,7 +5070,7 @@ int main(int argc, char** argv) {
               "multi-block-read",
               "bits-b",
               backup_bit_block_b,
-              std::span<const BitValue>(multi_read_bits.data() + bit_cursor, backup_bit_block_b.size()));
+              mcprotocol::serial::Span<const BitValue>(multi_read_bits.data() + bit_cursor, backup_bit_block_b.size()));
         }
         if (!matches_backup) {
           std::printf("multi-block-read=skip verify-mismatch\n");
@@ -5081,95 +5083,95 @@ int main(int argc, char** argv) {
       const std::array<std::uint16_t, 2> test_word_block_a {0x1357U, 0x2468U};
       const std::array<std::uint16_t, 3> test_word_block_b {0x1111U, 0x2222U, 0x3333U};
       const std::array<BitValue, 16> test_bit_block_a {{
-          BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
-          BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
-          BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
-          BitValue::On, BitValue::Off, BitValue::On, BitValue::Off,
+          true, false, true, false,
+          true, false, true, false,
+          true, false, true, false,
+          true, false, true, false,
       }};
       const std::array<BitValue, 32> test_bit_block_b {{
-          BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
-          BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
-          BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
-          BitValue::Off, BitValue::Off, BitValue::Off, BitValue::Off,
-          BitValue::Off, BitValue::Off, BitValue::Off, BitValue::On,
-          BitValue::Off, BitValue::Off, BitValue::On, BitValue::Off,
-          BitValue::Off, BitValue::Off, BitValue::On, BitValue::On,
-          BitValue::Off, BitValue::On, BitValue::Off, BitValue::Off,
+          false, false, false, false,
+          false, false, false, false,
+          false, false, false, false,
+          false, false, false, false,
+          false, false, false, true,
+          false, false, true, false,
+          false, false, true, true,
+          false, true, false, false,
       }};
       const std::array<MultiBlockWriteBlock, 2> write_word_blocks {{
           MultiBlockWriteBlock(
               kWordBlockADevice,
               static_cast<std::uint16_t>(test_word_block_a.size()),
-              std::span<const std::uint16_t>(test_word_block_a.data(), test_word_block_a.size())),
+              mcprotocol::serial::Span<const std::uint16_t>(test_word_block_a.data(), test_word_block_a.size())),
           MultiBlockWriteBlock(
               kWordBlockBDevice,
               static_cast<std::uint16_t>(test_word_block_b.size()),
-              std::span<const std::uint16_t>(test_word_block_b.data(), test_word_block_b.size())),
+              mcprotocol::serial::Span<const std::uint16_t>(test_word_block_b.data(), test_word_block_b.size())),
       }};
       const std::array<MultiBlockWriteBlock, 2> write_bit_blocks {{
           MultiBlockWriteBlock(
               kBitBlockADevice, 1U,
-              std::span<const BitValue>(test_bit_block_a.data(), test_bit_block_a.size())),
+              mcprotocol::serial::Span<const BitValue>(test_bit_block_a.data(), test_bit_block_a.size())),
           MultiBlockWriteBlock(
               kBitBlockBDevice, 2U,
-              std::span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())),
+              mcprotocol::serial::Span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())),
       }};
       const std::array<MultiBlockWriteBlock, 4> write_mixed_blocks {{
           MultiBlockWriteBlock(
               kWordBlockADevice,
               static_cast<std::uint16_t>(test_word_block_a.size()),
-              std::span<const std::uint16_t>(test_word_block_a.data(), test_word_block_a.size())),
+              mcprotocol::serial::Span<const std::uint16_t>(test_word_block_a.data(), test_word_block_a.size())),
           MultiBlockWriteBlock(
               kWordBlockBDevice,
               static_cast<std::uint16_t>(test_word_block_b.size()),
-              std::span<const std::uint16_t>(test_word_block_b.data(), test_word_block_b.size())),
+              mcprotocol::serial::Span<const std::uint16_t>(test_word_block_b.data(), test_word_block_b.size())),
           MultiBlockWriteBlock(
               kBitBlockADevice, 1U,
-              std::span<const BitValue>(test_bit_block_a.data(), test_bit_block_a.size())),
+              mcprotocol::serial::Span<const BitValue>(test_bit_block_a.data(), test_bit_block_a.size())),
           MultiBlockWriteBlock(
               kBitBlockBDevice, 2U,
-              std::span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())),
+              mcprotocol::serial::Span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())),
       }};
       const std::array<MultiBlockWriteBlock, 1> write_word_block_a_only {{
           MultiBlockWriteBlock(
               kWordBlockADevice,
               static_cast<std::uint16_t>(test_word_block_a.size()),
-              std::span<const std::uint16_t>(test_word_block_a.data(), test_word_block_a.size())),
+              mcprotocol::serial::Span<const std::uint16_t>(test_word_block_a.data(), test_word_block_a.size())),
       }};
       const std::array<MultiBlockWriteBlock, 1> write_word_block_b_only {{
           MultiBlockWriteBlock(
               kWordBlockBDevice,
               static_cast<std::uint16_t>(test_word_block_b.size()),
-              std::span<const std::uint16_t>(test_word_block_b.data(), test_word_block_b.size())),
+              mcprotocol::serial::Span<const std::uint16_t>(test_word_block_b.data(), test_word_block_b.size())),
       }};
       const std::array<MultiBlockWriteBlock, 1> write_bit_block_a_only {{
           MultiBlockWriteBlock(
               kBitBlockADevice, 1U,
-              std::span<const BitValue>(test_bit_block_a.data(), test_bit_block_a.size())),
+              mcprotocol::serial::Span<const BitValue>(test_bit_block_a.data(), test_bit_block_a.size())),
       }};
       const std::array<MultiBlockWriteBlock, 1> write_bit_block_b_only {{
           MultiBlockWriteBlock(
               kBitBlockBDevice, 2U,
-              std::span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())),
+              mcprotocol::serial::Span<const BitValue>(test_bit_block_b.data(), test_bit_block_b.size())),
       }};
-      const std::span<const MultiBlockWriteBlock> selected_write_blocks =
+      const mcprotocol::serial::Span<const MultiBlockWriteBlock> selected_write_blocks =
           probe_mode == ProbeMultiBlockMode::WordOnly
-              ? std::span<const MultiBlockWriteBlock>(write_word_blocks.data(), write_word_blocks.size())
+              ? mcprotocol::serial::Span<const MultiBlockWriteBlock>(write_word_blocks.data(), write_word_blocks.size())
               : (probe_mode == ProbeMultiBlockMode::BitOnly
-                     ? std::span<const MultiBlockWriteBlock>(write_bit_blocks.data(), write_bit_blocks.size())
+                     ? mcprotocol::serial::Span<const MultiBlockWriteBlock>(write_bit_blocks.data(), write_bit_blocks.size())
                      : (probe_mode == ProbeMultiBlockMode::WordA
-                            ? std::span<const MultiBlockWriteBlock>(write_word_block_a_only.data(),
+                            ? mcprotocol::serial::Span<const MultiBlockWriteBlock>(write_word_block_a_only.data(),
                                                                     write_word_block_a_only.size())
                             : (probe_mode == ProbeMultiBlockMode::WordB
-                                   ? std::span<const MultiBlockWriteBlock>(write_word_block_b_only.data(),
+                                   ? mcprotocol::serial::Span<const MultiBlockWriteBlock>(write_word_block_b_only.data(),
                                                                            write_word_block_b_only.size())
                                    : (probe_mode == ProbeMultiBlockMode::BitA
-                                          ? std::span<const MultiBlockWriteBlock>(write_bit_block_a_only.data(),
+                                          ? mcprotocol::serial::Span<const MultiBlockWriteBlock>(write_bit_block_a_only.data(),
                                                                                   write_bit_block_a_only.size())
                                           : (probe_mode == ProbeMultiBlockMode::BitB
-                                                 ? std::span<const MultiBlockWriteBlock>(write_bit_block_b_only.data(),
+                                                 ? mcprotocol::serial::Span<const MultiBlockWriteBlock>(write_bit_block_b_only.data(),
                                                                                         write_bit_block_b_only.size())
-                                                 : std::span<const MultiBlockWriteBlock>(write_mixed_blocks.data(),
+                                                 : mcprotocol::serial::Span<const MultiBlockWriteBlock>(write_mixed_blocks.data(),
                                                                                          write_mixed_blocks.size()))))));
 
       bool multi_write_ok = false;
@@ -5198,7 +5200,7 @@ int main(int argc, char** argv) {
               command_state,
               kWordBlockADevice,
               static_cast<std::uint16_t>(verify_word_block_a.size()),
-              std::span<std::uint16_t>(verify_word_block_a.data(), verify_word_block_a.size()));
+              mcprotocol::serial::Span<std::uint16_t>(verify_word_block_a.data(), verify_word_block_a.size()));
         }
         if (status.ok() && include_words) {
           status = run_batch_read_words_group(
@@ -5207,7 +5209,7 @@ int main(int argc, char** argv) {
               command_state,
               kWordBlockBDevice,
               static_cast<std::uint16_t>(verify_word_block_b.size()),
-              std::span<std::uint16_t>(verify_word_block_b.data(), verify_word_block_b.size()));
+              mcprotocol::serial::Span<std::uint16_t>(verify_word_block_b.data(), verify_word_block_b.size()));
         }
         if (status.ok() && include_bits) {
           status = run_batch_read_bits_group(
@@ -5216,7 +5218,7 @@ int main(int argc, char** argv) {
               command_state,
               kBitBlockADevice,
               static_cast<std::uint16_t>(verify_bit_block_a.size()),
-              std::span<BitValue>(verify_bit_block_a.data(), verify_bit_block_a.size()));
+              mcprotocol::serial::Span<BitValue>(verify_bit_block_a.data(), verify_bit_block_a.size()));
         }
         if (status.ok() && include_bits) {
           status = run_batch_read_bits_group(
@@ -5225,7 +5227,7 @@ int main(int argc, char** argv) {
               command_state,
               kBitBlockBDevice,
               static_cast<std::uint16_t>(verify_bit_block_b.size()),
-              std::span<BitValue>(verify_bit_block_b.data(), verify_bit_block_b.size()));
+              mcprotocol::serial::Span<BitValue>(verify_bit_block_b.data(), verify_bit_block_b.size()));
         }
 
         bool matches_test = status.ok();
@@ -5274,7 +5276,7 @@ int main(int argc, char** argv) {
           command_state,
           kWordBlockADevice,
           static_cast<std::uint16_t>(restore_word_block_a.size()),
-          std::span<std::uint16_t>(restore_word_block_a.data(), restore_word_block_a.size()));
+          mcprotocol::serial::Span<std::uint16_t>(restore_word_block_a.data(), restore_word_block_a.size()));
       if (!status.ok()) {
         print_status_error("probe-multi-block restore verify words A failed", status);
         return 1;
@@ -5285,7 +5287,7 @@ int main(int argc, char** argv) {
           command_state,
           kWordBlockBDevice,
           static_cast<std::uint16_t>(restore_word_block_b.size()),
-          std::span<std::uint16_t>(restore_word_block_b.data(), restore_word_block_b.size()));
+          mcprotocol::serial::Span<std::uint16_t>(restore_word_block_b.data(), restore_word_block_b.size()));
       if (!status.ok()) {
         print_status_error("probe-multi-block restore verify words B failed", status);
         return 1;
@@ -5296,7 +5298,7 @@ int main(int argc, char** argv) {
           command_state,
           kBitBlockADevice,
           static_cast<std::uint16_t>(restore_bit_block_a.size()),
-          std::span<BitValue>(restore_bit_block_a.data(), restore_bit_block_a.size()));
+          mcprotocol::serial::Span<BitValue>(restore_bit_block_a.data(), restore_bit_block_a.size()));
       if (!status.ok()) {
         print_status_error("probe-multi-block restore verify bits A failed", status);
         return 1;
@@ -5307,7 +5309,7 @@ int main(int argc, char** argv) {
           command_state,
           kBitBlockBDevice,
           static_cast<std::uint16_t>(restore_bit_block_b.size()),
-          std::span<BitValue>(restore_bit_block_b.data(), restore_bit_block_b.size()));
+          mcprotocol::serial::Span<BitValue>(restore_bit_block_b.data(), restore_bit_block_b.size()));
       if (!status.ok()) {
         print_status_error("probe-multi-block restore verify bits B failed", status);
         return 1;
@@ -5354,10 +5356,10 @@ int main(int argc, char** argv) {
       }
 
       const std::array<RandomReadWordItem, 4> items {{
-          {.device = {mcprotocol::serial::DeviceCode::D, 100}},
-          {.device = {mcprotocol::serial::DeviceCode::D, 105}},
-          {.device = {mcprotocol::serial::DeviceCode::M, 100}},
-          {.device = {mcprotocol::serial::DeviceCode::M, 105}},
+          {{mcprotocol::serial::DeviceCode::D, 100}},
+          {{mcprotocol::serial::DeviceCode::D, 105}},
+          {{mcprotocol::serial::DeviceCode::M, 100}},
+          {{mcprotocol::serial::DeviceCode::M, 105}},
       }};
 
       std::array<std::uint32_t, items.size()> monitor_values {};
@@ -5365,7 +5367,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomReadWordItem>(items.data(), items.size()));
+          mcprotocol::serial::Span<const RandomReadWordItem>(items.data(), items.size()));
       if (!status.ok()) {
         std::printf("probe-monitor: skip register ");
         if (status.code == StatusCode::PlcError) {
@@ -5380,7 +5382,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<std::uint32_t>(monitor_values.data(), monitor_values.size()));
+          mcprotocol::serial::Span<std::uint32_t>(monitor_values.data(), monitor_values.size()));
       if (!status.ok()) {
         std::printf("probe-monitor: skip read ");
         if (status.code == StatusCode::PlcError) {
@@ -5393,8 +5395,8 @@ int main(int argc, char** argv) {
 
       std::uint16_t expected_d100 = 0;
       std::uint16_t expected_d105 = 0;
-      BitValue expected_m100 = BitValue::Off;
-      BitValue expected_m105 = BitValue::Off;
+      BitValue expected_m100 = false;
+      BitValue expected_m105 = false;
 
       status = run_batch_read_word(client, port, command_state, items[0].device, expected_d100);
       if (status.ok()) {
@@ -5414,13 +5416,13 @@ int main(int argc, char** argv) {
       const std::array<std::uint32_t, items.size()> expected_values {
           expected_d100,
           expected_d105,
-          expected_m100 == BitValue::On ? 1U : 0U,
-          expected_m105 == BitValue::On ? 1U : 0U,
+          expected_m100 == true ? 1U : 0U,
+          expected_m105 == true ? 1U : 0U,
       };
       for (std::size_t index = 0; index < expected_values.size(); ++index) {
         const bool bit_item = is_bit_device(items[index].device.code);
         const std::uint32_t actual_value =
-            bit_item ? (mcprotocol::serial::sparse_native_requested_bit_value(monitor_values[index]) == BitValue::On ? 1U : 0U)
+            bit_item ? (mcprotocol::serial::sparse_native_requested_bit_value(monitor_values[index]) == true ? 1U : 0U)
                      : monitor_values[index];
         if (actual_value != expected_values[index]) {
           if (bit_item) {
@@ -5442,9 +5444,9 @@ int main(int argc, char** argv) {
       std::printf("probe-monitor=ok mode=native D100=%u D105=%u M100=%u(raw=0x%04X) M105=%u(raw=0x%04X)\n",
                   static_cast<unsigned>(monitor_values[0]),
                   static_cast<unsigned>(monitor_values[1]),
-                  mcprotocol::serial::sparse_native_requested_bit_value(monitor_values[2]) == BitValue::On ? 1U : 0U,
+                  mcprotocol::serial::sparse_native_requested_bit_value(monitor_values[2]) == true ? 1U : 0U,
                   static_cast<unsigned>(mcprotocol::serial::sparse_native_mask_word(monitor_values[2])),
-                  mcprotocol::serial::sparse_native_requested_bit_value(monitor_values[3]) == BitValue::On ? 1U : 0U,
+                  mcprotocol::serial::sparse_native_requested_bit_value(monitor_values[3]) == true ? 1U : 0U,
                   static_cast<unsigned>(mcprotocol::serial::sparse_native_mask_word(monitor_values[3])));
       return 0;
     }
@@ -5456,7 +5458,7 @@ int main(int argc, char** argv) {
           port,
           command_state,
           HostBufferReadRequest(0U, 1U),
-          std::span<std::uint16_t>(words.data(), words.size()));
+          mcprotocol::serial::Span<std::uint16_t>(words.data(), words.size()));
       if (!status.ok()) {
         std::printf("probe-host-buffer: skip ");
         if (status.code == StatusCode::PlcError) {
@@ -5471,13 +5473,13 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ProbeModuleBuffer: {
-      std::array<std::byte, 2> bytes {};
+      std::array<mcprotocol::serial::Byte, 2> bytes {};
       status = run_read_module_buffer(
           client,
           port,
           command_state,
           ModuleBufferReadRequest(0U, static_cast<std::uint16_t>(bytes.size()), 0U),
-          std::span<std::byte>(bytes.data(), bytes.size()));
+          mcprotocol::serial::Span<mcprotocol::serial::Byte>(bytes.data(), bytes.size()));
       if (!status.ok()) {
         std::printf("probe-module-buffer: skip ");
         if (status.code == StatusCode::PlcError) {
@@ -5509,7 +5511,7 @@ int main(int argc, char** argv) {
             port,
             command_state,
             HostBufferReadRequest(start_address, 1U),
-            std::span<std::uint16_t>(original.data(), original.size()));
+            mcprotocol::serial::Span<std::uint16_t>(original.data(), original.size()));
         if (!status.ok()) {
           print_status_error("probe-write-host-buffer backup failed", status);
           return 1;
@@ -5522,7 +5524,7 @@ int main(int argc, char** argv) {
             client,
             port,
             command_state,
-            HostBufferWriteRequest(start_address, std::span<const std::uint16_t>(test_value.data(), test_value.size())));
+            HostBufferWriteRequest(start_address, mcprotocol::serial::Span<const std::uint16_t>(test_value.data(), test_value.size())));
         if (!status.ok()) {
           if (!recorded_skip_status) {
             first_skip_status = status;
@@ -5537,7 +5539,7 @@ int main(int argc, char** argv) {
             port,
             command_state,
             HostBufferReadRequest(start_address, 1U),
-            std::span<std::uint16_t>(verify.data(), verify.size()));
+            mcprotocol::serial::Span<std::uint16_t>(verify.data(), verify.size()));
         if (!status.ok()) {
           print_status_error("probe-write-host-buffer verify failed", status);
           return 1;
@@ -5556,7 +5558,7 @@ int main(int argc, char** argv) {
             client,
             port,
             command_state,
-            HostBufferWriteRequest(start_address, std::span<const std::uint16_t>(original.data(), original.size())));
+            HostBufferWriteRequest(start_address, mcprotocol::serial::Span<const std::uint16_t>(original.data(), original.size())));
         if (!status.ok()) {
           print_status_error("probe-write-host-buffer restore failed", status);
           return 1;
@@ -5568,7 +5570,7 @@ int main(int argc, char** argv) {
             port,
             command_state,
             HostBufferReadRequest(start_address, 1U),
-            std::span<std::uint16_t>(restored.data(), restored.size()));
+            mcprotocol::serial::Span<std::uint16_t>(restored.data(), restored.size()));
         if (!status.ok()) {
           print_status_error("probe-write-host-buffer re-read failed", status);
           return 1;
@@ -5610,27 +5612,27 @@ int main(int argc, char** argv) {
     }
 
     case CommandKind::ProbeWriteModuleBuffer: {
-      std::array<std::byte, 2> original {};
+      std::array<mcprotocol::serial::Byte, 2> original {};
       status = run_read_module_buffer(
           client,
           port,
           command_state,
           ModuleBufferReadRequest(0U, static_cast<std::uint16_t>(original.size()), 0U),
-          std::span<std::byte>(original.data(), original.size()));
+          mcprotocol::serial::Span<mcprotocol::serial::Byte>(original.data(), original.size()));
       if (!status.ok()) {
         print_status_error("probe-write-module-buffer backup failed", status);
         return 1;
       }
 
-      const std::array<std::byte, 2> test_value {
-          static_cast<std::byte>(static_cast<unsigned>(original[0]) ^ 0x55U),
-          static_cast<std::byte>(static_cast<unsigned>(original[1]) ^ 0xAAU),
+      const std::array<mcprotocol::serial::Byte, 2> test_value {
+          static_cast<mcprotocol::serial::Byte>(static_cast<unsigned>(original[0]) ^ 0x55U),
+          static_cast<mcprotocol::serial::Byte>(static_cast<unsigned>(original[1]) ^ 0xAAU),
       };
       status = run_write_module_buffer(
           client,
           port,
           command_state,
-          ModuleBufferWriteRequest(0U, 0U, std::span<const std::byte>(test_value.data(), test_value.size())));
+          ModuleBufferWriteRequest(0U, 0U, mcprotocol::serial::Span<const mcprotocol::serial::Byte>(test_value.data(), test_value.size())));
       if (!status.ok()) {
         std::printf("probe-write-module-buffer: skip ");
         if (status.code == StatusCode::PlcError) {
@@ -5641,13 +5643,13 @@ int main(int argc, char** argv) {
         return 1;
       }
 
-      std::array<std::byte, 2> verify {};
+      std::array<mcprotocol::serial::Byte, 2> verify {};
       status = run_read_module_buffer(
           client,
           port,
           command_state,
           ModuleBufferReadRequest(0U, static_cast<std::uint16_t>(verify.size()), 0U),
-          std::span<std::byte>(verify.data(), verify.size()));
+          mcprotocol::serial::Span<mcprotocol::serial::Byte>(verify.data(), verify.size()));
       if (!status.ok()) {
         print_status_error("probe-write-module-buffer verify failed", status);
         return 1;
@@ -5665,19 +5667,19 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ModuleBufferWriteRequest(0U, 0U, std::span<const std::byte>(original.data(), original.size())));
+          ModuleBufferWriteRequest(0U, 0U, mcprotocol::serial::Span<const mcprotocol::serial::Byte>(original.data(), original.size())));
       if (!status.ok()) {
         print_status_error("probe-write-module-buffer restore failed", status);
         return 1;
       }
 
-      std::array<std::byte, 2> restored {};
+      std::array<mcprotocol::serial::Byte, 2> restored {};
       status = run_read_module_buffer(
           client,
           port,
           command_state,
           ModuleBufferReadRequest(0U, static_cast<std::uint16_t>(restored.size()), 0U),
-          std::span<std::byte>(restored.data(), restored.size()));
+          mcprotocol::serial::Span<mcprotocol::serial::Byte>(restored.data(), restored.size()));
       if (!status.ok()) {
         print_status_error("probe-write-module-buffer re-read failed", status);
         return 1;
@@ -5720,7 +5722,7 @@ int main(int argc, char** argv) {
           port,
           command_state,
           HostBufferReadRequest(start_address, static_cast<std::uint16_t>(word_length)),
-          std::span<std::uint16_t>(words.data(), static_cast<std::size_t>(word_length)));
+          mcprotocol::serial::Span<std::uint16_t>(words.data(), static_cast<std::size_t>(word_length)));
       if (!status.ok()) {
         print_status_error("read-host-buffer request failed", status);
         return 1;
@@ -5758,7 +5760,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          HostBufferWriteRequest(start_address, std::span<const std::uint16_t>(words.data(), static_cast<std::size_t>(word_count))));
+          HostBufferWriteRequest(start_address, mcprotocol::serial::Span<const std::uint16_t>(words.data(), static_cast<std::size_t>(word_count))));
       if (!status.ok()) {
         print_status_error("write-host-buffer request failed", status);
         return 1;
@@ -5783,13 +5785,13 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<std::byte, 1920> bytes {};
+      std::array<mcprotocol::serial::Byte, 1920> bytes {};
       status = run_read_module_buffer(
           client,
           port,
           command_state,
           ModuleBufferReadRequest(start_address, static_cast<std::uint16_t>(byte_length), static_cast<std::uint16_t>(module_number)),
-          std::span<std::byte>(bytes.data(), static_cast<std::size_t>(byte_length)));
+          mcprotocol::serial::Span<mcprotocol::serial::Byte>(bytes.data(), static_cast<std::size_t>(byte_length)));
       if (!status.ok()) {
         print_status_error("read-module-buffer request failed", status);
         return 1;
@@ -5833,13 +5835,13 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<std::byte, 1920> bytes {};
+      std::array<mcprotocol::serial::Byte, 1920> bytes {};
       status = run_read_module_buffer(
           client,
           port,
           command_state,
           request,
-          std::span<std::byte>(bytes.data(), static_cast<std::size_t>(points * 2U)));
+          mcprotocol::serial::Span<mcprotocol::serial::Byte>(bytes.data(), static_cast<std::size_t>(points * 2U)));
       if (!status.ok()) {
         print_status_error("read-qualified-words request failed", status);
         return 1;
@@ -5847,8 +5849,8 @@ int main(int argc, char** argv) {
 
       std::array<std::uint16_t, 960> words {};
       status = decode_qualified_buffer_word_values(
-          std::span<const std::byte>(bytes.data(), static_cast<std::size_t>(points * 2U)),
-          std::span<std::uint16_t>(words.data(), points));
+          mcprotocol::serial::Span<const mcprotocol::serial::Byte>(bytes.data(), static_cast<std::size_t>(points * 2U)),
+          mcprotocol::serial::Span<std::uint16_t>(words.data(), points));
       if (!status.ok()) {
         print_status_error("Failed to decode read-qualified-words response", status);
         return 1;
@@ -5892,7 +5894,7 @@ int main(int argc, char** argv) {
           command_state,
           device,
           static_cast<std::uint16_t>(points),
-          std::span<std::uint16_t>(words.data(), points));
+          mcprotocol::serial::Span<std::uint16_t>(words.data(), points));
       if (!status.ok()) {
         print_status_error("read-native-qualified-words request failed", status);
         return 1;
@@ -5921,7 +5923,7 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      std::array<std::byte, 1920> bytes {};
+      std::array<mcprotocol::serial::Byte, 1920> bytes {};
       const int byte_count = options.command_argc - 2;
       if (byte_count < 2 || byte_count > static_cast<int>(bytes.size())) {
         std::fprintf(stderr, "Invalid write-module-buffer byte count\n");
@@ -5933,14 +5935,14 @@ int main(int argc, char** argv) {
           std::fprintf(stderr, "Invalid write-module-buffer byte: %s\n", options.command_argv[index + 2]);
           return 2;
         }
-        bytes[static_cast<std::size_t>(index)] = static_cast<std::byte>(value);
+        bytes[static_cast<std::size_t>(index)] = static_cast<mcprotocol::serial::Byte>(value);
       }
 
       status = run_write_module_buffer(
           client,
           port,
           command_state,
-          ModuleBufferWriteRequest(start_address, static_cast<std::uint16_t>(module_number), std::span<const std::byte>(bytes.data(), static_cast<std::size_t>(byte_count))));
+          ModuleBufferWriteRequest(start_address, static_cast<std::uint16_t>(module_number), mcprotocol::serial::Span<const mcprotocol::serial::Byte>(bytes.data(), static_cast<std::size_t>(byte_count))));
       if (!status.ok()) {
         print_status_error("write-module-buffer request failed", status);
         return 1;
@@ -5979,13 +5981,13 @@ int main(int argc, char** argv) {
         words[static_cast<std::size_t>(index)] = static_cast<std::uint16_t>(value);
       }
 
-      std::array<std::byte, 1920> byte_storage {};
+      std::array<mcprotocol::serial::Byte, 1920> byte_storage {};
       ModuleBufferWriteRequest request(0U, 0U, {});
       std::size_t byte_count = 0U;
       status = make_qualified_buffer_write_words_request(
           device,
-          std::span<const std::uint16_t>(words.data(), static_cast<std::size_t>(word_count)),
-          std::span<std::byte>(byte_storage),
+          mcprotocol::serial::Span<const std::uint16_t>(words.data(), static_cast<std::size_t>(word_count)),
+          mcprotocol::serial::Span<mcprotocol::serial::Byte>(byte_storage),
           request,
           byte_count);
       if (!status.ok()) {
@@ -6032,7 +6034,7 @@ int main(int argc, char** argv) {
           port,
           command_state,
           device,
-          std::span<const std::uint16_t>(words.data(), static_cast<std::size_t>(word_count)));
+          mcprotocol::serial::Span<const std::uint16_t>(words.data(), static_cast<std::size_t>(word_count)));
       if (!status.ok()) {
         print_status_error("write-native-qualified-words request failed", status);
         return 1;
@@ -6063,7 +6065,7 @@ int main(int argc, char** argv) {
       status = client.async_batch_read_words(
           now_ms(),
           BatchReadWordsRequest(device, static_cast<std::uint16_t>(points)),
-          std::span<std::uint16_t>(words.data(), points),
+          mcprotocol::serial::Span<std::uint16_t>(words.data(), points),
           request_complete,
           &command_state);
       if (!status.ok()) {
@@ -6108,7 +6110,7 @@ int main(int argc, char** argv) {
           port,
           command_state,
           ExtendedFileRegisterBatchReadWordsRequest(address, static_cast<std::uint16_t>(points)),
-          std::span<std::uint16_t>(words.data(), points));
+          mcprotocol::serial::Span<std::uint16_t>(words.data(), points));
       if (!status.ok()) {
         print_status_error("read-file-register request failed", status);
         return 1;
@@ -6148,7 +6150,7 @@ int main(int argc, char** argv) {
           port,
           command_state,
           ExtendedFileRegisterDirectBatchReadWordsRequest(head_device_number, static_cast<std::uint16_t>(points)),
-          std::span<std::uint16_t>(words.data(), points));
+          mcprotocol::serial::Span<std::uint16_t>(words.data(), points));
       if (!status.ok()) {
         print_status_error("read-file-register-direct request failed", status);
         return 1;
@@ -6183,7 +6185,7 @@ int main(int argc, char** argv) {
           command_state,
           device,
           static_cast<std::uint16_t>(points),
-          std::span<std::uint16_t>(words.data(), points));
+          mcprotocol::serial::Span<std::uint16_t>(words.data(), points));
       if (!status.ok()) {
         print_status_error("read-link-direct-words request failed", status);
         return 1;
@@ -6224,7 +6226,7 @@ int main(int argc, char** argv) {
       status = client.async_batch_read_bits(
           now_ms(),
           BatchReadBitsRequest(device, static_cast<std::uint16_t>(points)),
-          std::span<BitValue>(bits.data(), points),
+          mcprotocol::serial::Span<BitValue>(bits.data(), points),
           request_complete,
           &command_state);
       if (!status.ok()) {
@@ -6237,7 +6239,7 @@ int main(int argc, char** argv) {
         return 1;
       }
       for (std::uint32_t index = 0; index < points; ++index) {
-        std::printf("[%u] %u\n", index, bits[index] == BitValue::On ? 1U : 0U);
+        std::printf("[%u] %u\n", index, bits[index] == true ? 1U : 0U);
       }
       return 0;
     }
@@ -6267,13 +6269,13 @@ int main(int argc, char** argv) {
           command_state,
           device,
           static_cast<std::uint16_t>(points),
-          std::span<BitValue>(bits.data(), points));
+          mcprotocol::serial::Span<BitValue>(bits.data(), points));
       if (!status.ok()) {
         print_status_error("read-long-state-bits request failed", status);
         return 1;
       }
       for (std::uint32_t index = 0; index < points; ++index) {
-        std::printf("[%u] %u\n", index, bits[index] == BitValue::On ? 1U : 0U);
+        std::printf("[%u] %u\n", index, bits[index] == true ? 1U : 0U);
       }
       return 0;
     }
@@ -6302,13 +6304,13 @@ int main(int argc, char** argv) {
           command_state,
           device,
           static_cast<std::uint16_t>(points),
-          std::span<BitValue>(bits.data(), points));
+          mcprotocol::serial::Span<BitValue>(bits.data(), points));
       if (!status.ok()) {
         print_status_error("read-link-direct-bits request failed", status);
         return 1;
       }
       for (std::uint32_t index = 0; index < points; ++index) {
-        std::printf("[%u] %u\n", index, bits[index] == BitValue::On ? 1U : 0U);
+        std::printf("[%u] %u\n", index, bits[index] == true ? 1U : 0U);
       }
       return 0;
     }
@@ -6343,7 +6345,7 @@ int main(int argc, char** argv) {
           port,
           command_state,
           device,
-          std::span<const std::uint16_t>(words.data(), static_cast<std::size_t>(word_count)));
+          mcprotocol::serial::Span<const std::uint16_t>(words.data(), static_cast<std::size_t>(word_count)));
       if (!status.ok()) {
         print_status_error("write-link-direct-words request failed", status);
         return 1;
@@ -6371,9 +6373,9 @@ int main(int argc, char** argv) {
       for (int index = 0; index < bit_count; ++index) {
         const std::string_view value_arg(options.command_argv[index + 1]);
         if (value_arg == "0") {
-          bits[static_cast<std::size_t>(index)] = BitValue::Off;
+          bits[static_cast<std::size_t>(index)] = false;
         } else if (value_arg == "1") {
-          bits[static_cast<std::size_t>(index)] = BitValue::On;
+          bits[static_cast<std::size_t>(index)] = true;
         } else {
           std::fprintf(stderr, "Invalid write-link-direct-bits value: %s\n", options.command_argv[index + 1]);
           return 2;
@@ -6385,7 +6387,7 @@ int main(int argc, char** argv) {
           port,
           command_state,
           device,
-          std::span<const BitValue>(bits.data(), static_cast<std::size_t>(bit_count)));
+          mcprotocol::serial::Span<const BitValue>(bits.data(), static_cast<std::size_t>(bit_count)));
       if (!status.ok()) {
         print_status_error("write-link-direct-bits request failed", status);
         return 1;
@@ -6419,8 +6421,8 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const LinkDirectRandomReadWordItem>(items.data(), static_cast<std::size_t>(options.command_argc)),
-          std::span<std::uint32_t>(values.data(), static_cast<std::size_t>(options.command_argc)));
+          mcprotocol::serial::Span<const LinkDirectRandomReadWordItem>(items.data(), static_cast<std::size_t>(options.command_argc)),
+          mcprotocol::serial::Span<std::uint32_t>(values.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
         print_status_error("random-read-link-direct request failed", status);
         return 1;
@@ -6463,7 +6465,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const LinkDirectRandomWriteWordItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
+          mcprotocol::serial::Span<const LinkDirectRandomWriteWordItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
         print_status_error("random-write-link-direct-words request failed", status);
         return 1;
@@ -6485,7 +6487,7 @@ int main(int argc, char** argv) {
           LinkDirectRandomWriteBitItem,
           kMaxRandomWriteBitItems>(
           LinkDirectRandomWriteBitItem(
-              LinkDirectDevice {0U, DeviceAddress {DeviceCode::B, 0U}}, BitValue::Off));
+              LinkDirectDevice {0U, DeviceAddress {DeviceCode::B, 0U}}, false));
       for (int index = 0; index < options.command_argc; ++index) {
         if (!parse_link_direct_random_write_bit_item(
                 options.command_argv[index],
@@ -6499,7 +6501,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const LinkDirectRandomWriteBitItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
+          mcprotocol::serial::Span<const LinkDirectRandomWriteBitItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
         print_status_error("random-write-link-direct-bits request failed", status);
         return 1;
@@ -6547,12 +6549,12 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          LinkDirectMultiBlockReadRequest(std::span<const LinkDirectMultiBlockReadBlock>(
+          LinkDirectMultiBlockReadRequest(mcprotocol::serial::Span<const LinkDirectMultiBlockReadBlock>(
                   blocks.data(),
                   static_cast<std::size_t>(options.command_argc))),
-          std::span<std::uint16_t>(words.data(), total_words),
-          std::span<BitValue>(bits.data(), bits.size()),
-          std::span<MultiBlockReadBlockResult>(results.data(), static_cast<std::size_t>(options.command_argc)));
+          mcprotocol::serial::Span<std::uint16_t>(words.data(), total_words),
+          mcprotocol::serial::Span<BitValue>(bits.data(), bits.size()),
+          mcprotocol::serial::Span<MultiBlockReadBlockResult>(results.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
         print_status_error("multi-block-read-link-direct-words request failed", status);
         return 1;
@@ -6611,12 +6613,12 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          LinkDirectMultiBlockReadRequest(std::span<const LinkDirectMultiBlockReadBlock>(
+          LinkDirectMultiBlockReadRequest(mcprotocol::serial::Span<const LinkDirectMultiBlockReadBlock>(
                   blocks.data(),
                   static_cast<std::size_t>(options.command_argc))),
-          std::span<std::uint16_t>(words.data(), words.size()),
-          std::span<BitValue>(bits.data(), total_bit_values),
-          std::span<MultiBlockReadBlockResult>(results.data(), static_cast<std::size_t>(options.command_argc)));
+          mcprotocol::serial::Span<std::uint16_t>(words.data(), words.size()),
+          mcprotocol::serial::Span<BitValue>(bits.data(), total_bit_values),
+          mcprotocol::serial::Span<MultiBlockReadBlockResult>(results.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
         print_status_error("multi-block-read-link-direct-bits request failed", status);
         return 1;
@@ -6628,7 +6630,7 @@ int main(int argc, char** argv) {
           std::printf("%s[%u]=%u\n",
                       options.command_argv[block_index],
                       static_cast<unsigned>(bit_index),
-                      bits[static_cast<std::size_t>(result.data_offset + bit_index)] == BitValue::On ? 1U : 0U);
+                      bits[static_cast<std::size_t>(result.data_offset + bit_index)] == true ? 1U : 0U);
         }
       }
       return 0;
@@ -6647,7 +6649,7 @@ int main(int argc, char** argv) {
           mcprotocol::serial::kMaxMultiBlockCount>(
           LinkDirectMultiBlockWriteBlock(
               LinkDirectDevice {0U, DeviceAddress {DeviceCode::D, 0U}}, 0U,
-              std::span<const std::uint16_t> {}));
+              mcprotocol::serial::Span<const std::uint16_t> {}));
       std::array<std::uint16_t, 960> word_pool {};
       std::size_t word_offset = 0U;
       for (int index = 0; index < options.command_argc; ++index) {
@@ -6655,7 +6657,7 @@ int main(int argc, char** argv) {
         std::size_t count = 0U;
         if (!parse_link_direct_multi_block_write_word_spec(
                 options.command_argv[index],
-                std::span<std::uint16_t>(word_pool.data() + word_offset, word_pool.size() - word_offset),
+                mcprotocol::serial::Span<std::uint16_t>(word_pool.data() + word_offset, word_pool.size() - word_offset),
                 count,
                 device)) {
           std::fprintf(stderr, "Invalid multi-block-write-link-direct-words block: %s\n", options.command_argv[index]);
@@ -6664,7 +6666,7 @@ int main(int argc, char** argv) {
         blocks[static_cast<std::size_t>(index)] = LinkDirectMultiBlockWriteBlock(
             device,
             static_cast<std::uint16_t>(count),
-            std::span<const std::uint16_t>(word_pool.data() + word_offset, count));
+            mcprotocol::serial::Span<const std::uint16_t>(word_pool.data() + word_offset, count));
         word_offset += count;
       }
 
@@ -6672,7 +6674,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          LinkDirectMultiBlockWriteRequest(std::span<const LinkDirectMultiBlockWriteBlock>(
+          LinkDirectMultiBlockWriteRequest(mcprotocol::serial::Span<const LinkDirectMultiBlockWriteBlock>(
                   blocks.data(),
                   static_cast<std::size_t>(options.command_argc))));
       if (!status.ok()) {
@@ -6696,7 +6698,7 @@ int main(int argc, char** argv) {
           mcprotocol::serial::kMaxMultiBlockCount>(
           LinkDirectMultiBlockWriteBlock(
               LinkDirectDevice {0U, DeviceAddress {DeviceCode::D, 0U}}, 0U,
-              std::span<const BitValue> {}));
+              mcprotocol::serial::Span<const BitValue> {}));
       std::array<BitValue, 960U * 16U> bit_pool {};
       std::size_t bit_offset = 0U;
       for (int index = 0; index < options.command_argc; ++index) {
@@ -6704,7 +6706,7 @@ int main(int argc, char** argv) {
         std::size_t count = 0U;
         if (!parse_link_direct_multi_block_write_bit_spec(
                 options.command_argv[index],
-                std::span<BitValue>(bit_pool.data() + bit_offset, bit_pool.size() - bit_offset),
+                mcprotocol::serial::Span<BitValue>(bit_pool.data() + bit_offset, bit_pool.size() - bit_offset),
                 count,
                 device)) {
           std::fprintf(stderr, "Invalid multi-block-write-link-direct-bits block: %s\n", options.command_argv[index]);
@@ -6713,7 +6715,7 @@ int main(int argc, char** argv) {
         blocks[static_cast<std::size_t>(index)] = LinkDirectMultiBlockWriteBlock(
             device,
             static_cast<std::uint16_t>(count / 16U),
-            std::span<const BitValue>(bit_pool.data() + bit_offset, count));
+            mcprotocol::serial::Span<const BitValue>(bit_pool.data() + bit_offset, count));
         bit_offset += count;
       }
 
@@ -6721,7 +6723,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          LinkDirectMultiBlockWriteRequest(std::span<const LinkDirectMultiBlockWriteBlock>(
+          LinkDirectMultiBlockWriteRequest(mcprotocol::serial::Span<const LinkDirectMultiBlockWriteBlock>(
                   blocks.data(),
                   static_cast<std::size_t>(options.command_argc))));
       if (!status.ok()) {
@@ -6755,10 +6757,10 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ExtendedFileRegisterMonitorRegistration(std::span<const ExtendedFileRegisterAddress>(
+          ExtendedFileRegisterMonitorRegistration(mcprotocol::serial::Span<const ExtendedFileRegisterAddress>(
                   items.data(),
                   static_cast<std::size_t>(options.command_argc))),
-          std::span<std::uint16_t>(values.data(), static_cast<std::size_t>(options.command_argc)));
+          mcprotocol::serial::Span<std::uint16_t>(values.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
         print_status_error("monitor-file-register request failed", status);
         return 1;
@@ -6793,7 +6795,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const LinkDirectRandomReadWordItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
+          mcprotocol::serial::Span<const LinkDirectRandomReadWordItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
         print_status_error("monitor-link-direct register failed", status);
         return 1;
@@ -6804,7 +6806,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<std::uint32_t>(values.data(), static_cast<std::size_t>(options.command_argc)));
+          mcprotocol::serial::Span<std::uint32_t>(values.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
         print_status_error("monitor-link-direct read failed", status);
         return 1;
@@ -6865,9 +6867,9 @@ int main(int argc, char** argv) {
       std::array<std::uint32_t, mcprotocol::serial::kMaxRandomAccessItems> dword_values {};
       status = client.async_random_read(
           now_ms(),
-          RandomReadRequest(std::span<const RandomReadWordItem>(word_items.data(), word_count), std::span<const RandomReadDWordItem>(dword_items.data(), dword_count)),
-          std::span<std::uint16_t>(word_values.data(), word_count),
-          std::span<std::uint32_t>(dword_values.data(), dword_count),
+          RandomReadRequest(mcprotocol::serial::Span<const RandomReadWordItem>(word_items.data(), word_count), mcprotocol::serial::Span<const RandomReadDWordItem>(dword_items.data(), dword_count)),
+          mcprotocol::serial::Span<std::uint16_t>(word_values.data(), word_count),
+          mcprotocol::serial::Span<std::uint32_t>(dword_values.data(), dword_count),
           request_complete,
           &command_state);
       if (!status.ok()) {
@@ -6920,7 +6922,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomWriteWordItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
+          mcprotocol::serial::Span<const RandomWriteWordItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
         print_status_error("random-write-words request failed", status);
         return 1;
@@ -6948,7 +6950,7 @@ int main(int argc, char** argv) {
       }
       status = run_random_write_dwords(
           client, port, command_state,
-          std::span<const RandomWriteDWordItem>(
+          mcprotocol::serial::Span<const RandomWriteDWordItem>(
               items.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
         print_status_error("random-write-dwords request failed", status);
@@ -6984,7 +6986,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const ExtendedFileRegisterRandomWriteWordItem>(
+          mcprotocol::serial::Span<const ExtendedFileRegisterRandomWriteWordItem>(
               items.data(),
               static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
@@ -7005,7 +7007,7 @@ int main(int argc, char** argv) {
       auto items = mcprotocol::serial::detail::make_filled_array<
           RandomWriteBitItem,
           kMaxRandomWriteBitItems>(
-          RandomWriteBitItem(DeviceAddress {DeviceCode::M, 0U}, BitValue::Off));
+          RandomWriteBitItem(DeviceAddress {DeviceCode::M, 0U}, false));
       for (int index = 0; index < options.command_argc; ++index) {
         if (!parse_bit_write_arg(options.command_argv[index], items[static_cast<std::size_t>(index)])) {
           std::fprintf(stderr, "Invalid random-write-bits item: %s\n", options.command_argv[index]);
@@ -7017,7 +7019,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          std::span<const RandomWriteBitItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
+          mcprotocol::serial::Span<const RandomWriteBitItem>(items.data(), static_cast<std::size_t>(options.command_argc)));
       if (!status.ok()) {
         print_status_error("random-write-bits request failed", status);
         return 1;
@@ -7043,7 +7045,7 @@ int main(int argc, char** argv) {
             port,
             command_state,
             group_head,
-            std::span<const std::uint16_t>(group_values.data(), group_size));
+            mcprotocol::serial::Span<const std::uint16_t>(group_values.data(), group_size));
         if (!status.ok()) {
           print_status_error("write-words request failed", status);
           return false;
@@ -7117,7 +7119,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ExtendedFileRegisterBatchWriteWordsRequest(head_address, std::span<const std::uint16_t>(
+          ExtendedFileRegisterBatchWriteWordsRequest(head_address, mcprotocol::serial::Span<const std::uint16_t>(
                   words.data(),
                   static_cast<std::size_t>(word_count))));
       if (!status.ok()) {
@@ -7162,7 +7164,7 @@ int main(int argc, char** argv) {
           client,
           port,
           command_state,
-          ExtendedFileRegisterDirectBatchWriteWordsRequest(head_device_number, std::span<const std::uint16_t>(
+          ExtendedFileRegisterDirectBatchWriteWordsRequest(head_device_number, mcprotocol::serial::Span<const std::uint16_t>(
                   words.data(),
                   static_cast<std::size_t>(word_count))));
       if (!status.ok()) {
@@ -7190,7 +7192,7 @@ int main(int argc, char** argv) {
             port,
             command_state,
             group_head,
-            std::span<const BitValue>(group_values.data(), group_size));
+            mcprotocol::serial::Span<const BitValue>(group_values.data(), group_size));
         if (!status.ok()) {
           print_status_error("write-bits request failed", status);
           return false;
@@ -7201,7 +7203,7 @@ int main(int argc, char** argv) {
       };
 
       for (int index = 0; index < options.command_argc; ++index) {
-        RandomWriteBitItem item(DeviceAddress {DeviceCode::M, 0U}, BitValue::Off);
+        RandomWriteBitItem item(DeviceAddress {DeviceCode::M, 0U}, false);
         if (!parse_bit_write_arg(options.command_argv[index], item)) {
           std::fprintf(stderr, "Invalid write-bits item: %s\n", options.command_argv[index]);
           return 2;

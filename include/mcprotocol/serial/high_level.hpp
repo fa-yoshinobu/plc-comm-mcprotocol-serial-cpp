@@ -5,7 +5,7 @@
 #include "mcprotocol/serial/compat/cstdint.hpp"
 
 #include "mcprotocol/serial/detail/parse_helpers.hpp"
-#include "mcprotocol/serial/span_compat.hpp"
+#include "mcprotocol/serial/span.hpp"
 #include "mcprotocol/serial/status.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
 #include "mcprotocol/serial/types.hpp"
@@ -276,17 +276,21 @@ struct LongStateReadSpec {
 /// \brief Decodes the contact/coil bit from a long-family 4-word status block.
 [[nodiscard]] inline Status decode_long_state_bit(
     const LongStateReadSpec& spec,
-    std::span<const std::uint16_t> status_block_words,
+    mcprotocol::serial::Span<const std::uint16_t> status_block_words,
     BitValue& out_value) noexcept {
   if (status_block_words.size() < 4U) {
     return make_status(StatusCode::BufferTooSmall, "Long state status block requires 4 words");
+  }
+
+  if (spec.kind != LongStateReadKind::Contact && spec.kind != LongStateReadKind::Coil) {
+    return make_status(StatusCode::InvalidArgument, "Long state read kind is invalid");
   }
 
   const std::uint16_t status_word = status_block_words[2];
   const std::uint16_t mask =
       spec.kind == LongStateReadKind::Contact ? static_cast<std::uint16_t>(0x0002U)
                                               : static_cast<std::uint16_t>(0x0001U);
-  out_value = (status_word & mask) == 0U ? BitValue::Off : BitValue::On;
+  out_value = (status_word & mask) == 0U ? false : true;
   return ok_status();
 }
 
@@ -321,7 +325,7 @@ struct LongStateReadSpec {
 /// \brief Builds a contiguous word-write request from a string address such as `D100`.
 [[nodiscard]] inline Status make_batch_write_words_request(
     std::string_view head_device,
-    std::span<const std::uint16_t> words,
+    mcprotocol::serial::Span<const std::uint16_t> words,
     BatchWriteWordsRequest& out_request) noexcept {
   DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(head_device, parsed);
@@ -335,7 +339,7 @@ struct LongStateReadSpec {
 /// \brief Builds a contiguous bit-write request from a string address such as `M100`.
 [[nodiscard]] inline Status make_batch_write_bits_request(
     std::string_view head_device,
-    std::span<const BitValue> bits,
+    mcprotocol::serial::Span<const BitValue> bits,
     BatchWriteBitsRequest& out_request) noexcept {
   DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(head_device, parsed);
@@ -405,10 +409,10 @@ struct LongStateReadSpec {
     std::string_view device,
     BitValue value,
     RandomWriteBitItem& out_item) noexcept {
-  if (value != BitValue::Off && value != BitValue::On) {
+  if (value != false && value != true) {
     return make_status(
         StatusCode::InvalidArgument,
-        "Random write bit value must be BitValue::Off or BitValue::On");
+        "Random write bit value must be false or true");
   }
   DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(device, parsed);
@@ -424,10 +428,10 @@ struct LongStateReadSpec {
 /// Use this when you want `0403` style sparse addressing without hand-filling the explicit-width
 /// Word and DWord item types.
 [[nodiscard]] inline Status make_random_read_request(
-    std::span<const RandomReadWordSpec> word_specs,
-    std::span<const RandomReadDWordSpec> dword_specs,
-    std::span<RandomReadWordItem> out_word_items,
-    std::span<RandomReadDWordItem> out_dword_items,
+    mcprotocol::serial::Span<const RandomReadWordSpec> word_specs,
+    mcprotocol::serial::Span<const RandomReadDWordSpec> dword_specs,
+    mcprotocol::serial::Span<RandomReadWordItem> out_word_items,
+    mcprotocol::serial::Span<RandomReadDWordItem> out_dword_items,
     RandomReadRequest& out_request) noexcept {
   if (out_word_items.size() < word_specs.size() ||
       out_dword_items.size() < dword_specs.size()) {
@@ -450,8 +454,8 @@ struct LongStateReadSpec {
   }
 
   out_request = RandomReadRequest(
-      std::span<const RandomReadWordItem>(out_word_items.data(), word_specs.size()),
-      std::span<const RandomReadDWordItem>(out_dword_items.data(), dword_specs.size()));
+      mcprotocol::serial::Span<const RandomReadWordItem>(out_word_items.data(), word_specs.size()),
+      mcprotocol::serial::Span<const RandomReadDWordItem>(out_dword_items.data(), dword_specs.size()));
   return ok_status();
 }
 
@@ -460,10 +464,10 @@ struct LongStateReadSpec {
 /// The resulting payload is intended for `0801`. Readback still happens through the normal monitor
 /// read API.
 [[nodiscard]] inline Status make_monitor_registration(
-    std::span<const RandomReadWordSpec> word_specs,
-    std::span<const RandomReadDWordSpec> dword_specs,
-    std::span<RandomReadWordItem> out_word_items,
-    std::span<RandomReadDWordItem> out_dword_items,
+    mcprotocol::serial::Span<const RandomReadWordSpec> word_specs,
+    mcprotocol::serial::Span<const RandomReadDWordSpec> dword_specs,
+    mcprotocol::serial::Span<RandomReadWordItem> out_word_items,
+    mcprotocol::serial::Span<RandomReadDWordItem> out_dword_items,
     MonitorRegistration& out_request) noexcept {
   RandomReadRequest request({}, {});
   const Status status = make_random_read_request(
@@ -478,9 +482,9 @@ struct LongStateReadSpec {
 
 /// \brief Builds sparse random word-write items from string-address specs.
 [[nodiscard]] inline Status make_random_write_word_items(
-    std::span<const RandomWriteWordSpec> specs,
-    std::span<RandomWriteWordItem> out_items,
-    std::span<const RandomWriteWordItem>& out_item_view) noexcept {
+    mcprotocol::serial::Span<const RandomWriteWordSpec> specs,
+    mcprotocol::serial::Span<RandomWriteWordItem> out_items,
+    mcprotocol::serial::Span<const RandomWriteWordItem>& out_item_view) noexcept {
   if (out_items.size() < specs.size()) {
     return make_status(StatusCode::BufferTooSmall, "Random write word output item buffer is too small");
   }
@@ -495,15 +499,15 @@ struct LongStateReadSpec {
     }
   }
 
-  out_item_view = std::span<const RandomWriteWordItem>(out_items.data(), specs.size());
+  out_item_view = mcprotocol::serial::Span<const RandomWriteWordItem>(out_items.data(), specs.size());
   return ok_status();
 }
 
 /// \brief Builds sparse explicit double-word write items from string-address specs.
 [[nodiscard]] inline Status make_random_write_dword_items(
-    std::span<const RandomWriteDWordSpec> specs,
-    std::span<RandomWriteDWordItem> out_items,
-    std::span<const RandomWriteDWordItem>& out_item_view) noexcept {
+    mcprotocol::serial::Span<const RandomWriteDWordSpec> specs,
+    mcprotocol::serial::Span<RandomWriteDWordItem> out_items,
+    mcprotocol::serial::Span<const RandomWriteDWordItem>& out_item_view) noexcept {
   if (out_items.size() < specs.size()) {
     return make_status(StatusCode::BufferTooSmall, "Random write dword output item buffer is too small");
   }
@@ -514,15 +518,15 @@ struct LongStateReadSpec {
       return status;
     }
   }
-  out_item_view = std::span<const RandomWriteDWordItem>(out_items.data(), specs.size());
+  out_item_view = mcprotocol::serial::Span<const RandomWriteDWordItem>(out_items.data(), specs.size());
   return ok_status();
 }
 
 /// \brief Builds sparse random bit-write items from string-address specs.
 [[nodiscard]] inline Status make_random_write_bit_items(
-    std::span<const RandomWriteBitSpec> specs,
-    std::span<RandomWriteBitItem> out_items,
-    std::span<const RandomWriteBitItem>& out_item_view) noexcept {
+    mcprotocol::serial::Span<const RandomWriteBitSpec> specs,
+    mcprotocol::serial::Span<RandomWriteBitItem> out_items,
+    mcprotocol::serial::Span<const RandomWriteBitItem>& out_item_view) noexcept {
   if (out_items.size() < specs.size()) {
     return make_status(StatusCode::BufferTooSmall, "Random write bit output item buffer is too small");
   }
@@ -535,7 +539,7 @@ struct LongStateReadSpec {
     }
   }
 
-  out_item_view = std::span<const RandomWriteBitItem>(out_items.data(), specs.size());
+  out_item_view = mcprotocol::serial::Span<const RandomWriteBitItem>(out_items.data(), specs.size());
   return ok_status();
 }
 

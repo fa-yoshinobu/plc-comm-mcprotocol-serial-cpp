@@ -4,7 +4,7 @@
 #include "mcprotocol/serial/compat/cstdint.hpp"
 
 #include "mcprotocol/serial/detail/parse_helpers.hpp"
-#include "mcprotocol/serial/span_compat.hpp"
+#include "mcprotocol/serial/span.hpp"
 #include "mcprotocol/serial/status.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
 #include "mcprotocol/serial/types.hpp"
@@ -74,10 +74,10 @@ struct LinkDirectMultiBlockReadBlock {
 struct LinkDirectMultiBlockReadRequest {
   LinkDirectMultiBlockReadRequest() = delete;
   constexpr explicit LinkDirectMultiBlockReadRequest(
-      std::span<const LinkDirectMultiBlockReadBlock> request_blocks) noexcept
+      mcprotocol::serial::Span<const LinkDirectMultiBlockReadBlock> request_blocks) noexcept
       : blocks(request_blocks) {}
 
-  std::span<const LinkDirectMultiBlockReadBlock> blocks;
+  mcprotocol::serial::Span<const LinkDirectMultiBlockReadBlock> blocks;
 };
 
 /// \brief One `Jn\\...` block used by native multi-block write.
@@ -87,8 +87,8 @@ struct LinkDirectMultiBlockWriteBlock {
       LinkDirectDevice first_device,
       std::uint16_t point_count,
       bool use_bit_block,
-      std::span<const std::uint16_t> write_words,
-      std::span<const BitValue> write_bits) noexcept
+      mcprotocol::serial::Span<const std::uint16_t> write_words,
+      mcprotocol::serial::Span<const BitValue> write_bits) noexcept
       : head_device(first_device),
         points(point_count),
         bit_block(use_bit_block),
@@ -97,39 +97,39 @@ struct LinkDirectMultiBlockWriteBlock {
   constexpr LinkDirectMultiBlockWriteBlock(
       LinkDirectDevice first_device,
       std::uint16_t point_count,
-      std::span<const std::uint16_t> write_words) noexcept
+      mcprotocol::serial::Span<const std::uint16_t> write_words) noexcept
       : LinkDirectMultiBlockWriteBlock(first_device, point_count, false, write_words, {}) {}
   constexpr LinkDirectMultiBlockWriteBlock(
       LinkDirectDevice first_device,
       std::uint16_t point_count,
-      std::span<const BitValue> write_bits) noexcept
+      mcprotocol::serial::Span<const BitValue> write_bits) noexcept
       : LinkDirectMultiBlockWriteBlock(first_device, point_count, true, {}, write_bits) {}
 
   LinkDirectDevice head_device;
   std::uint16_t points;
   bool bit_block;
-  std::span<const std::uint16_t> words;
-  std::span<const BitValue> bits;
+  mcprotocol::serial::Span<const std::uint16_t> words;
+  mcprotocol::serial::Span<const BitValue> bits;
 };
 
 /// \brief `Jn\\...` native multi-block write request.
 struct LinkDirectMultiBlockWriteRequest {
   LinkDirectMultiBlockWriteRequest() = delete;
   constexpr explicit LinkDirectMultiBlockWriteRequest(
-      std::span<const LinkDirectMultiBlockWriteBlock> request_blocks) noexcept
+      mcprotocol::serial::Span<const LinkDirectMultiBlockWriteBlock> request_blocks) noexcept
       : blocks(request_blocks) {}
 
-  std::span<const LinkDirectMultiBlockWriteBlock> blocks;
+  mcprotocol::serial::Span<const LinkDirectMultiBlockWriteBlock> blocks;
 };
 
 /// \brief `Jn\\...` monitor registration payload (`0801` + device extension specification).
 struct LinkDirectMonitorRegistration {
   LinkDirectMonitorRegistration() = delete;
   constexpr explicit LinkDirectMonitorRegistration(
-      std::span<const LinkDirectRandomReadWordItem> monitor_items) noexcept
+      mcprotocol::serial::Span<const LinkDirectRandomReadWordItem> monitor_items) noexcept
       : word_items(monitor_items) {}
 
-  std::span<const LinkDirectRandomReadWordItem> word_items;
+  mcprotocol::serial::Span<const LinkDirectRandomReadWordItem> word_items;
 };
 
 namespace link_direct_detail {

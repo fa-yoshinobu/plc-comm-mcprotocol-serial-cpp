@@ -5,7 +5,7 @@
 #include <cstring>
 
 #include "mcprotocol/serial/client.hpp"
-#include "mcprotocol/serial/span_compat.hpp"
+#include "mcprotocol/serial/span.hpp"
 
 namespace {
 
@@ -25,7 +25,7 @@ using mcprotocol::serial::SumCheckMode;
 struct ExampleApp {
   MelsecSerialClient client;
   std::array<std::uint16_t, 2> out_words {};
-  std::array<std::byte, mcprotocol::serial::kMaxResponseFrameBytes> rx_chunk {};
+  std::array<mcprotocol::serial::Byte, mcprotocol::serial::kMaxResponseFrameBytes> rx_chunk {};
   std::size_t rx_chunk_size = 0;
   bool tx_started = false;
   bool tx_completed = false;
@@ -50,7 +50,7 @@ void on_request_complete(void* user, Status status) {
   app->completion_status = status;
 }
 
-void uart_start_tx_async(ExampleApp& app, std::span<const std::byte> frame) {
+void uart_start_tx_async(ExampleApp& app, mcprotocol::serial::Span<const mcprotocol::serial::Byte> frame) {
   // A real UART driver would start DMA or interrupt-driven transmission here.
   (void)frame;
   app.tx_started = true;
@@ -63,7 +63,7 @@ void simulate_plc_response(ExampleApp& app, const ProtocolConfig& config) {
   std::size_t response_frame_size = 0;
   const Status status = FrameCodec::encode_success_response(
       config,
-      std::span<const std::uint8_t>(response_data.data(), response_data.size()),
+      mcprotocol::serial::Span<const std::uint8_t>(response_data.data(), response_data.size()),
       response_frame,
       response_frame_size);
   if (!status.ok()) {
@@ -94,7 +94,7 @@ int main() {
   status = app.client.async_batch_read_words(
       0,
       BatchReadWordsRequest({mcprotocol::serial::DeviceCode::D, 100}, static_cast<std::uint16_t>(app.out_words.size())),
-      std::span<std::uint16_t>(app.out_words.data(), app.out_words.size()),
+      mcprotocol::serial::Span<std::uint16_t>(app.out_words.data(), app.out_words.size()),
       on_request_complete,
       &app);
   if (!status.ok()) {
@@ -102,6 +102,11 @@ int main() {
     return 1;
   }
 
+  status = app.client.notify_tx_started(0U);
+  if (!status.ok()) {
+    std::fprintf(stderr, "notify_tx_started failed: %s\n", status.message);
+    return 1;
+  }
   uart_start_tx_async(app, app.client.pending_tx_frame());
 
   for (std::uint32_t tick = 1; tick <= 4 && !app.request_done; ++tick) {
@@ -120,7 +125,7 @@ int main() {
       // Feed received bytes back to the state machine.
       app.client.on_rx_bytes(
           tick,
-          std::span<const std::byte>(app.rx_chunk.data(), app.rx_chunk_size));
+          mcprotocol::serial::Span<const mcprotocol::serial::Byte>(app.rx_chunk.data(), app.rx_chunk_size));
       app.rx_ready = false;
     }
 

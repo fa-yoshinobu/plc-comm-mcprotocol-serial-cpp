@@ -17,6 +17,7 @@ MARKDOWN_PATHS = [
     REPO_ROOT / "examples",
 ]
 LINK_RE = re.compile(r"(?<!\!)\[[^\]]*\]\(([^)]+)\)")
+FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 
 
 def iter_markdown_files() -> list[Path]:
@@ -40,10 +41,33 @@ def should_skip(target: str) -> bool:
     )
 
 
+def without_fenced_code(text: str) -> str:
+    """Remove fenced code so C++ expressions such as operator[](x) are not links."""
+    output: list[str] = []
+    fence_character = ""
+    fence_length = 0
+    for line in text.splitlines():
+        match = FENCE_RE.match(line)
+        if match:
+            marker = match.group(1)
+            if not fence_character:
+                fence_character = marker[0]
+                fence_length = len(marker)
+            elif marker[0] == fence_character and len(marker) >= fence_length:
+                fence_character = ""
+                fence_length = 0
+            output.append("")
+        elif fence_character:
+            output.append("")
+        else:
+            output.append(line)
+    return "\n".join(output)
+
+
 def main() -> int:
     errors: list[str] = []
     for markdown_file in iter_markdown_files():
-        text = markdown_file.read_text(encoding="utf-8")
+        text = without_fenced_code(markdown_file.read_text(encoding="utf-8"))
         for raw_target in LINK_RE.findall(text):
             target = raw_target.strip()
             if should_skip(target):

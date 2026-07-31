@@ -118,45 +118,45 @@ class PosixSyncClient {
   [[nodiscard]] Status read_words(
       std::string_view head_device,
       std::uint16_t points,
-      std::span<std::uint16_t> out_words) noexcept;
+      mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
   /// \brief Reads contiguous words synchronously using `out_words.size()` as the point count.
   [[nodiscard]] Status read_words(
       std::string_view head_device,
-      std::span<std::uint16_t> out_words) noexcept;
+      mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
   /// \brief Reads extended file-register words synchronously.
   [[nodiscard]] Status read_extended_file_register_words(
       const ExtendedFileRegisterBatchReadWordsRequest& request,
-      std::span<std::uint16_t> out_words) noexcept;
+      mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
   /// \brief Reads direct extended file-register words synchronously.
   [[nodiscard]] Status direct_read_extended_file_register_words(
       const ExtendedFileRegisterDirectBatchReadWordsRequest& request,
-      std::span<std::uint16_t> out_words) noexcept;
+      mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
   /// \brief Reads contiguous bits synchronously from a string address such as `M100`.
   [[nodiscard]] Status read_bits(
       std::string_view head_device,
       std::uint16_t points,
-      std::span<BitValue> out_bits) noexcept;
+      mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
   /// \brief Reads contiguous bits synchronously using `out_bits.size()` as the point count.
   [[nodiscard]] Status read_bits(
       std::string_view head_device,
-      std::span<BitValue> out_bits) noexcept;
+      mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
   /// \brief Reads contiguous `Jn\\...` link-direct words synchronously.
   [[nodiscard]] Status read_link_direct_words(
       std::string_view head_device,
       std::uint16_t points,
-      std::span<std::uint16_t> out_words) noexcept;
+      mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
   /// \brief Reads contiguous `Jn\\...` link-direct bits synchronously.
   [[nodiscard]] Status read_link_direct_bits(
       std::string_view head_device,
       std::uint16_t points,
-      std::span<BitValue> out_bits) noexcept;
+      mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
   /// \brief Reads native-qualified `Un\\Gn` or `Un\\HGn` words.
   ///
@@ -165,23 +165,29 @@ class PosixSyncClient {
   [[nodiscard]] Status read_native_qualified_words(
       std::string_view head_device,
       std::uint16_t points,
-      std::span<std::uint16_t> out_words) noexcept;
+      mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
   /// \brief Reads long timer/counter contact or coil states through the dedicated status-block path.
+  ///
+  /// `LTS`/`LTC`/`LSTS`/`LSTC` with more than one point are explicitly aggregate reads: one
+  /// four-word status-block request is issued per point, in address order. The complete plan is
+  /// validated before transmission, the result is non-atomic across PLC scan times, and caller
+  /// output is changed only after every internal request succeeds. `LCS`/`LCC` use one direct bit
+  /// request and are not split.
   [[nodiscard]] Status read_long_state_bits(
       std::string_view head_device,
       std::uint16_t points,
-      std::span<BitValue> out_bits) noexcept;
+      mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
   /// \brief Reads long timer/counter states using `out_bits.size()` as the point count.
   [[nodiscard]] Status read_long_state_bits(
       std::string_view head_device,
-      std::span<BitValue> out_bits) noexcept;
+      mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
   /// \brief Writes contiguous words synchronously to a string address such as `D100`.
   [[nodiscard]] Status write_words(
       std::string_view head_device,
-      std::span<const std::uint16_t> words) noexcept;
+      mcprotocol::serial::Span<const std::uint16_t> words) noexcept;
 
   /// \brief Writes extended file-register words synchronously.
   [[nodiscard]] Status write_extended_file_register_words(
@@ -194,17 +200,17 @@ class PosixSyncClient {
   /// \brief Writes contiguous bits synchronously to a string address such as `M100`.
   [[nodiscard]] Status write_bits(
       std::string_view head_device,
-      std::span<const BitValue> bits) noexcept;
+      mcprotocol::serial::Span<const BitValue> bits) noexcept;
 
   /// \brief Writes contiguous `Jn\\...` link-direct words synchronously.
   [[nodiscard]] Status write_link_direct_words(
       std::string_view head_device,
-      std::span<const std::uint16_t> words) noexcept;
+      mcprotocol::serial::Span<const std::uint16_t> words) noexcept;
 
   /// \brief Writes contiguous `Jn\\...` link-direct bits synchronously.
   [[nodiscard]] Status write_link_direct_bits(
       std::string_view head_device,
-      std::span<const BitValue> bits) noexcept;
+      mcprotocol::serial::Span<const BitValue> bits) noexcept;
 
   /// \brief Writes native-qualified `Un\\Gn` or `Un\\HGn` words.
   ///
@@ -212,14 +218,14 @@ class PosixSyncClient {
   /// The `1601` helper route is profile/target-specific and may be rejected.
   [[nodiscard]] Status write_native_qualified_words(
       std::string_view head_device,
-      std::span<const std::uint16_t> words) noexcept;
+      mcprotocol::serial::Span<const std::uint16_t> words) noexcept;
 
   /// \brief Reads sparse Word and DWord items synchronously from explicit-width specs.
   [[nodiscard]] Status random_read(
-      std::span<const highlevel::RandomReadWordSpec> word_items,
-      std::span<const highlevel::RandomReadDWordSpec> dword_items,
-      std::span<std::uint16_t> out_words,
-      std::span<std::uint32_t> out_dwords) noexcept;
+      mcprotocol::serial::Span<const highlevel::RandomReadWordSpec> word_items,
+      mcprotocol::serial::Span<const highlevel::RandomReadDWordSpec> dword_items,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<std::uint32_t> out_dwords) noexcept;
 
   /// \brief Reads one sparse Word item synchronously from a string address.
   [[nodiscard]] Status random_read_word(
@@ -236,18 +242,18 @@ class PosixSyncClient {
   /// Each spec requires an explicit value. A result that cannot be confirmed after transmission is
   /// reported as `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
   [[nodiscard]] Status random_write_words(
-      std::span<const highlevel::RandomWriteWordSpec> items) noexcept;
+      mcprotocol::serial::Span<const highlevel::RandomWriteWordSpec> items) noexcept;
 
   /// \brief Writes sparse DWord items synchronously from string-address specs.
   ///
   /// Each spec requires an explicit value. A result that cannot be confirmed after transmission is
   /// reported as `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
   [[nodiscard]] Status random_write_dwords(
-      std::span<const highlevel::RandomWriteDWordSpec> items) noexcept;
+      mcprotocol::serial::Span<const highlevel::RandomWriteDWordSpec> items) noexcept;
 
   /// \brief Writes extended file-register words randomly.
   [[nodiscard]] Status random_write_extended_file_register_words(
-      std::span<const ExtendedFileRegisterRandomWriteWordItem> items) noexcept;
+      mcprotocol::serial::Span<const ExtendedFileRegisterRandomWriteWordItem> items) noexcept;
 
   /// \brief Writes one sparse Word item synchronously from a string address.
   [[nodiscard]] Status random_write_word(
@@ -264,7 +270,7 @@ class PosixSyncClient {
   /// Each spec requires an explicit `Off` or `On`. A result that cannot be confirmed after
   /// transmission is `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
   [[nodiscard]] Status random_write_bits(
-      std::span<const highlevel::RandomWriteBitSpec> items) noexcept;
+      mcprotocol::serial::Span<const highlevel::RandomWriteBitSpec> items) noexcept;
 
   /// \brief Writes one sparse bit item synchronously from a string address.
   [[nodiscard]] Status random_write_bit(
@@ -273,8 +279,8 @@ class PosixSyncClient {
 
   /// \brief Registers sparse Word and DWord monitor items from explicit-width specs.
   [[nodiscard]] Status register_monitor(
-      std::span<const highlevel::RandomReadWordSpec> word_items,
-      std::span<const highlevel::RandomReadDWordSpec> dword_items) noexcept;
+      mcprotocol::serial::Span<const highlevel::RandomReadWordSpec> word_items,
+      mcprotocol::serial::Span<const highlevel::RandomReadDWordSpec> dword_items) noexcept;
 
   /// \brief Registers one sparse Word monitor item synchronously.
   [[nodiscard]] Status register_monitor_word(std::string_view device) noexcept;
@@ -288,12 +294,12 @@ class PosixSyncClient {
 
   /// \brief Reads the most recently registered Word and DWord monitor items synchronously.
   [[nodiscard]] Status read_monitor(
-      std::span<std::uint16_t> out_words,
-      std::span<std::uint32_t> out_dwords) noexcept;
+      mcprotocol::serial::Span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<std::uint32_t> out_dwords) noexcept;
 
   /// \brief Reads the most recently registered extended file-register monitor items synchronously.
   [[nodiscard]] Status read_extended_file_register_monitor(
-      std::span<std::uint16_t> out_words) noexcept;
+      mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
  private:
   struct CompletionState {
@@ -308,7 +314,7 @@ class PosixSyncClient {
   PosixSerialPort port_ {};
   MelsecSerialClient client_ {};
   ProtocolConfig protocol_config_ = ProtocolConfig::unconfigured_for_storage();
-  std::array<std::byte, kMaxResponseFrameBytes> rx_buffer_ {};
+  std::array<mcprotocol::serial::Byte, kMaxResponseFrameBytes> rx_buffer_ {};
   CompletionState completion_ {};
 };
 

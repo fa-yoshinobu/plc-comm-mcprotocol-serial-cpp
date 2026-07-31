@@ -8,7 +8,7 @@
 #include "mcprotocol/serial/detail/fixed_item_array.hpp"
 #include "mcprotocol/serial/link_direct.hpp"
 #include "mcprotocol/serial/qualified_buffer.hpp"
-#include "mcprotocol/serial/span_compat.hpp"
+#include "mcprotocol/serial/span.hpp"
 
 /// \file client.hpp
 /// \brief Asynchronous request-execution state machine for serial MC protocol traffic.
@@ -28,16 +28,20 @@ namespace mcprotocol::serial {
 /// The intended MCU-side workflow is:
 /// 1. call `configure()`
 /// 2. start an `async_*` request
-/// 3. transmit `pending_tx_frame()` with the board UART layer
-/// 4. call `notify_tx_complete(now_ms, transport_status)` when TX finishes or aborts
-/// 5. feed received bytes with `on_rx_bytes()`
-/// 6. call `poll()` from the main loop or scheduler for timeout handling
+/// 3. call `notify_tx_started(now_ms)` immediately before the first UART write
+/// 4. transmit `pending_tx_frame()` with the board UART layer
+/// 5. call `notify_tx_complete(now_ms, transport_status)` when TX finishes or aborts
+/// 6. feed received bytes with `on_rx_bytes()`
+/// 7. call `poll()` from the main loop or scheduler for deadline handling
 ///
 /// Output spans passed to `async_*` requests must remain valid until the completion callback fires.
 /// Only one request may be active. A second enabled `async_*` request returns `Busy` before
 /// changing the active request's output storage, request metadata, or monitor state.
-/// Cancelling during TX records the cancellation but does not complete the request until the UART
-/// reports physical TX completion or abort through `notify_tx_complete()`.
+/// Same-instance calls from different operating-system threads are prohibited; the caller owns
+/// scheduling. Separate instances are independent and may progress concurrently.
+/// Cancelling before `notify_tx_started()` completes immediately as `Cancelled`. Cancelling during
+/// TX records the cancellation but does not complete the request until the UART reports physical
+/// TX completion or abort through `notify_tx_complete()`.
 /// After transmission may have begun, any unconfirmed state-changing command completes as
 /// `OperationOutcomeUnknown`; the client never retries it automatically.
 class MelsecSerialClient {
@@ -66,7 +70,16 @@ class MelsecSerialClient {
   /// families cannot safely distinguish a same-route late response from the next request.
   [[nodiscard]] bool requires_transport_reset() const noexcept;
   /// \brief Returns the encoded frame that should be sent to the UART layer.
-  [[nodiscard]] std::span<const std::byte> pending_tx_frame() const noexcept;
+  [[nodiscard]] mcprotocol::serial::Span<const mcprotocol::serial::Byte> pending_tx_frame() const noexcept;
+
+  /// \brief Starts the one absolute TX/drain/RX transaction deadline.
+  ///
+  /// Call this immediately before the first transport write attempt. The same deadline remains in
+  /// force through physical drain, receive, correlation, and decode. It is never restarted by
+  /// partial progress. Calling it more than once for a request is rejected.
+  [[nodiscard]] Status notify_tx_started(std::uint32_t now_ms) noexcept;
+  /// \brief Returns the active absolute deadline, or zero before TX start / with no active request.
+  [[nodiscard]] std::uint32_t transaction_deadline_ms() const noexcept;
 
   /// \brief Advances the state machine after the transport finished or aborted the pending TX.
   ///
@@ -77,20 +90,21 @@ class MelsecSerialClient {
       Status transport_status) noexcept;
 
   /// \brief Feeds received bytes into the response decoder.
-  void on_rx_bytes(std::uint32_t now_ms, std::span<const std::byte> bytes) noexcept;
+  void on_rx_bytes(std::uint32_t now_ms, mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes) noexcept;
   /// \brief Checks timeouts for the current in-flight request.
   void poll(std::uint32_t now_ms) noexcept;
   /// \brief Requests cancellation of the in-flight request.
   ///
-  /// During TX, completion is deferred until `notify_tx_complete()` confirms that physical TX has
-  /// completed or stopped, so an active RS-485 direction hook can always be released exactly once.
+  /// Before TX starts, cancellation completes immediately. During TX, completion is deferred until
+  /// `notify_tx_complete()` confirms that physical TX has completed or stopped, so an active
+  /// RS-485 direction hook can always be released exactly once.
   void cancel() noexcept;
 
   /// \brief Starts contiguous word read (`0401`).
   [[nodiscard]] Status async_batch_read_words(
       std::uint32_t now_ms,
       const BatchReadWordsRequest& request,
-      std::span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -98,7 +112,7 @@ class MelsecSerialClient {
   [[nodiscard]] Status async_read_extended_file_register_words(
       std::uint32_t now_ms,
       const ExtendedFileRegisterBatchReadWordsRequest& request,
-      std::span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -106,7 +120,7 @@ class MelsecSerialClient {
   [[nodiscard]] Status async_direct_read_extended_file_register_words(
       std::uint32_t now_ms,
       const ExtendedFileRegisterDirectBatchReadWordsRequest& request,
-      std::span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -115,7 +129,7 @@ class MelsecSerialClient {
       std::uint32_t now_ms,
       const LinkDirectDevice& device,
       std::uint16_t points,
-      std::span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -123,7 +137,7 @@ class MelsecSerialClient {
   [[nodiscard]] Status async_batch_read_bits(
       std::uint32_t now_ms,
       const BatchReadBitsRequest& request,
-      std::span<BitValue> out_bits,
+      mcprotocol::serial::Span<BitValue> out_bits,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -132,7 +146,7 @@ class MelsecSerialClient {
       std::uint32_t now_ms,
       const LinkDirectDevice& device,
       std::uint16_t points,
-      std::span<BitValue> out_bits,
+      mcprotocol::serial::Span<BitValue> out_bits,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -161,7 +175,7 @@ class MelsecSerialClient {
   [[nodiscard]] Status async_link_direct_batch_write_words(
       std::uint32_t now_ms,
       const LinkDirectDevice& device,
-      std::span<const std::uint16_t> words,
+      mcprotocol::serial::Span<const std::uint16_t> words,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -176,7 +190,7 @@ class MelsecSerialClient {
   [[nodiscard]] Status async_link_direct_batch_write_bits(
       std::uint32_t now_ms,
       const LinkDirectDevice& device,
-      std::span<const BitValue> bits,
+      mcprotocol::serial::Span<const BitValue> bits,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -185,7 +199,7 @@ class MelsecSerialClient {
       std::uint32_t now_ms,
       const QualifiedBufferWordDevice& device,
       std::uint16_t points,
-      std::span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -193,7 +207,7 @@ class MelsecSerialClient {
   [[nodiscard]] Status async_extended_batch_write_words(
       std::uint32_t now_ms,
       const QualifiedBufferWordDevice& device,
-      std::span<const std::uint16_t> words,
+      mcprotocol::serial::Span<const std::uint16_t> words,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -201,16 +215,16 @@ class MelsecSerialClient {
   [[nodiscard]] Status async_random_read(
       std::uint32_t now_ms,
       const RandomReadRequest& request,
-      std::span<std::uint16_t> out_words,
-      std::span<std::uint32_t> out_dwords,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<std::uint32_t> out_dwords,
       CompletionHandler callback,
       void* user) noexcept;
 
   /// \brief Starts native `Jn\\...` random read (`0403` + device extension specification).
   [[nodiscard]] Status async_link_direct_random_read(
       std::uint32_t now_ms,
-      std::span<const LinkDirectRandomReadWordItem> word_items,
-      std::span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<const LinkDirectRandomReadWordItem> word_items,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -221,15 +235,15 @@ class MelsecSerialClient {
   /// library never retries the write.
   [[nodiscard]] Status async_random_write_words(
       std::uint32_t now_ms,
-      std::span<const RandomWriteWordItem> word_items,
-      std::span<const RandomWriteDWordItem> dword_items,
+      mcprotocol::serial::Span<const RandomWriteWordItem> word_items,
+      mcprotocol::serial::Span<const RandomWriteDWordItem> dword_items,
       CompletionHandler callback,
       void* user) noexcept;
 
   /// \brief Starts extended file-register random word write.
   [[nodiscard]] Status async_random_write_extended_file_register_words(
       std::uint32_t now_ms,
-      std::span<const ExtendedFileRegisterRandomWriteWordItem> items,
+      mcprotocol::serial::Span<const ExtendedFileRegisterRandomWriteWordItem> items,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -239,7 +253,7 @@ class MelsecSerialClient {
   /// `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
   [[nodiscard]] Status async_link_direct_random_write_words(
       std::uint32_t now_ms,
-      std::span<const LinkDirectRandomWriteWordItem> items,
+      mcprotocol::serial::Span<const LinkDirectRandomWriteWordItem> items,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -249,7 +263,7 @@ class MelsecSerialClient {
   /// `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
   [[nodiscard]] Status async_random_write_bits(
       std::uint32_t now_ms,
-      std::span<const RandomWriteBitItem> items,
+      mcprotocol::serial::Span<const RandomWriteBitItem> items,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -259,7 +273,7 @@ class MelsecSerialClient {
   /// `StatusCode::OperationOutcomeUnknown` and is never retried automatically.
   [[nodiscard]] Status async_link_direct_random_write_bits(
       std::uint32_t now_ms,
-      std::span<const LinkDirectRandomWriteBitItem> items,
+      mcprotocol::serial::Span<const LinkDirectRandomWriteBitItem> items,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -267,9 +281,9 @@ class MelsecSerialClient {
   [[nodiscard]] Status async_multi_block_read(
       std::uint32_t now_ms,
       const MultiBlockReadRequest& request,
-      std::span<std::uint16_t> out_words,
-      std::span<BitValue> out_bits,
-      std::span<MultiBlockReadBlockResult> out_results,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<BitValue> out_bits,
+      mcprotocol::serial::Span<MultiBlockReadBlockResult> out_results,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -281,9 +295,9 @@ class MelsecSerialClient {
   [[nodiscard]] Status async_link_direct_multi_block_read(
       std::uint32_t now_ms,
       const LinkDirectMultiBlockReadRequest& request,
-      std::span<std::uint16_t> out_words,
-      std::span<BitValue> out_bits,
-      std::span<MultiBlockReadBlockResult> out_results,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<BitValue> out_bits,
+      mcprotocol::serial::Span<MultiBlockReadBlockResult> out_results,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -325,15 +339,15 @@ class MelsecSerialClient {
   /// \brief Starts monitor read (`0802`) using the most recent registration.
   [[nodiscard]] Status async_read_monitor(
       std::uint32_t now_ms,
-      std::span<std::uint16_t> out_words,
-      std::span<std::uint32_t> out_dwords,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<std::uint32_t> out_dwords,
       CompletionHandler callback,
       void* user) noexcept;
 
   /// \brief Starts extended file-register monitor read.
   [[nodiscard]] Status async_read_extended_file_register_monitor(
       std::uint32_t now_ms,
-      std::span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -341,7 +355,7 @@ class MelsecSerialClient {
   [[nodiscard]] Status async_read_host_buffer(
       std::uint32_t now_ms,
       const HostBufferReadRequest& request,
-      std::span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -356,7 +370,7 @@ class MelsecSerialClient {
   [[nodiscard]] Status async_read_module_buffer(
       std::uint32_t now_ms,
       const ModuleBufferReadRequest& request,
-      std::span<std::byte> out_bytes,
+      mcprotocol::serial::Span<mcprotocol::serial::Byte> out_bytes,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -481,8 +495,8 @@ class MelsecSerialClient {
   /// \brief Starts loopback using hexadecimal ASCII payload bytes.
   [[nodiscard]] Status async_loopback(
       std::uint32_t now_ms,
-      std::span<const char> hex_ascii,
-      std::span<char> out_echoed,
+      mcprotocol::serial::Span<const char> hex_ascii,
+      mcprotocol::serial::Span<char> out_echoed,
       CompletionHandler callback,
       void* user) noexcept;
 
@@ -554,8 +568,9 @@ class MelsecSerialClient {
   [[nodiscard]] Status validate_request_admission() const noexcept;
 
   [[nodiscard]] std::uint8_t expected_e1_response_subheader() const noexcept;
-  [[nodiscard]] std::size_t expected_e1_success_response_data_size() const noexcept;
-  [[nodiscard]] Status handle_response(std::span<const std::uint8_t> response_data) noexcept;
+  [[nodiscard]] std::size_t expected_success_response_data_size(
+      OperationKind operation) const noexcept;
+  [[nodiscard]] Status handle_response(mcprotocol::serial::Span<const std::uint8_t> response_data) noexcept;
   [[nodiscard]] Status active_timeout_status(const char* timeout_message) const noexcept;
   [[nodiscard]] Status active_transport_failure_status(Status transport_status) const noexcept;
   [[nodiscard]] Status active_unconfirmed_failure_status(Status failure_status) const noexcept;
@@ -570,12 +585,12 @@ class MelsecSerialClient {
   bool busy_ = false;
   bool transport_reset_required_ = false;
   bool awaiting_write_complete_ = false;
+  bool tx_started_ = false;
   bool cancel_requested_during_tx_ = false;
   OperationKind operation_ = OperationKind::None;
   CompletionHandler callback_ = nullptr;
   void* callback_user_ = nullptr;
   std::uint32_t response_deadline_ms_ = 0;
-  std::uint32_t inter_byte_deadline_ms_ = 0;
   std::uint8_t next_format2_block_number_ = 0;
   std::uint8_t active_format2_block_number_ = 0;
   bool active_format2_block_number_valid_ = false;
@@ -601,20 +616,20 @@ class MelsecSerialClient {
   ModuleBufferReadRequest module_buffer_read_request_ {0U, 0U, 0U};
 #endif
 
-  std::span<std::uint16_t> out_words_ {};
-  std::span<BitValue> out_bits_ {};
+  mcprotocol::serial::Span<std::uint16_t> out_words_ {};
+  mcprotocol::serial::Span<BitValue> out_bits_ {};
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS || MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
-  std::span<std::uint16_t> out_random_words_ {};
-  std::span<std::uint32_t> out_random_dwords_ {};
+  mcprotocol::serial::Span<std::uint16_t> out_random_words_ {};
+  mcprotocol::serial::Span<std::uint32_t> out_random_dwords_ {};
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
-  std::span<std::byte> out_bytes_ {};
+  mcprotocol::serial::Span<mcprotocol::serial::Byte> out_bytes_ {};
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
-  std::span<char> out_chars_ {};
+  mcprotocol::serial::Span<char> out_chars_ {};
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
-  std::span<MultiBlockReadBlockResult> out_block_results_ {};
+  mcprotocol::serial::Span<MultiBlockReadBlockResult> out_block_results_ {};
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS
   CpuModelInfo* out_cpu_model_ = nullptr;

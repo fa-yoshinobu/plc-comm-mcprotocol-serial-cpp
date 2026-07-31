@@ -4,7 +4,7 @@
 #include "mcprotocol/serial/compat/cstdint.hpp"
 
 #include "mcprotocol/serial/status.hpp"
-#include "mcprotocol/serial/span_compat.hpp"
+#include "mcprotocol/serial/span.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
 #include "mcprotocol/serial/types.hpp"
 
@@ -117,7 +117,10 @@ class PosixSerialPort {
   PosixSerialPort(const PosixSerialPort&) = delete;
   PosixSerialPort& operator=(const PosixSerialPort&) = delete;
 
-  /// \brief Opens and configures the serial port.
+  /// \brief Opens the serial port and replaces all inherited line settings with `config`.
+  ///
+  /// Software flow control is disabled. RTS/CTS is disabled for `None` and owned by the OS
+  /// RTS/CTS handshake for `RtsCts`. Input/output/local modes use raw, nonblocking-read settings.
   [[nodiscard]] Status open(const PosixSerialConfig& config) noexcept;
   /// \brief Closes the serial port if it is open.
   void close() noexcept;
@@ -127,17 +130,19 @@ class PosixSerialPort {
   /// \brief Returns the native handle value, or `-1` when closed.
   [[nodiscard]] std::intptr_t native_handle() const noexcept;
 
-  /// \brief Writes the entire byte range before returning.
-  [[nodiscard]] Status write_all(std::span<const std::byte> bytes) noexcept;
-  /// \brief Reads up to `buffer.size()` bytes with a timeout.
-  [[nodiscard]] Status read_some(
-      std::span<std::byte> buffer,
-      int timeout_ms,
+  /// \brief Writes the entire byte range without exceeding `absolute_deadline_ms`.
+  [[nodiscard]] Status write_all_until(
+      mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes,
+      std::uint32_t absolute_deadline_ms) noexcept;
+  /// \brief Reads up to `buffer.size()` bytes without exceeding the same transaction deadline.
+  [[nodiscard]] Status read_some_until(
+      mcprotocol::serial::Span<mcprotocol::serial::Byte> buffer,
+      std::uint32_t absolute_deadline_ms,
       std::size_t& out_size) noexcept;
   /// \brief Drops unread RX data that is already buffered by the driver.
   [[nodiscard]] Status flush_rx() noexcept;
-  /// \brief Waits until queued TX data has physically drained.
-  [[nodiscard]] Status drain_tx() noexcept;
+  /// \brief Waits until queued TX data has physically drained, bounded by the transaction deadline.
+  [[nodiscard]] Status drain_tx_until(std::uint32_t absolute_deadline_ms) noexcept;
   /// \brief Sets the RTS line when the underlying driver supports it.
   [[nodiscard]] Status set_rts(bool enabled) noexcept;
 

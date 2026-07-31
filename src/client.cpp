@@ -11,6 +11,20 @@
 namespace mcprotocol::serial {
 namespace {
 
+template <typename T>
+[[nodiscard]] Span<T> checked_first(Span<T> input, std::size_t count) noexcept {
+  Span<T> result;
+  (void)input.try_first(count, result);
+  return result;
+}
+
+template <typename T>
+[[nodiscard]] Span<T> checked_subspan(Span<T> input, std::size_t offset) noexcept {
+  Span<T> result;
+  (void)input.try_subspan(offset, result);
+  return result;
+}
+
 [[nodiscard]] constexpr Status remote_reset_request_sent_status() noexcept {
   return make_status(
       StatusCode::Ok,
@@ -43,18 +57,18 @@ namespace {
 #endif
 }
 
-[[nodiscard]] std::span<const std::uint8_t> as_u8_span(std::span<const std::byte> bytes) noexcept {
+[[nodiscard]] mcprotocol::serial::Span<const std::uint8_t> as_u8_span(mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes) noexcept {
   return {
       reinterpret_cast<const std::uint8_t*>(bytes.data()),
       bytes.size(),
   };
 }
 
-[[nodiscard]] std::span<const std::byte> as_const_byte_span(
+[[nodiscard]] mcprotocol::serial::Span<const mcprotocol::serial::Byte> as_const_byte_span(
     const std::array<std::uint8_t, kMaxRequestFrameBytes>& bytes,
     std::size_t size) noexcept {
   return {
-      reinterpret_cast<const std::byte*>(bytes.data()),
+      reinterpret_cast<const mcprotocol::serial::Byte*>(bytes.data()),
       size,
   };
 }
@@ -137,7 +151,7 @@ struct StreamDecodeResult {
     FrameCodecContext frame_context,
     std::uint8_t e1_response_subheader,
     std::size_t e1_success_response_data_size,
-    std::span<const std::uint8_t> bytes) noexcept {
+    mcprotocol::serial::Span<const std::uint8_t> bytes) noexcept {
   StreamDecodeResult result {};
   if (bytes.empty()) {
     return result;
@@ -183,10 +197,10 @@ struct StreamDecodeResult {
           if (upper < 0 || lower < 0) {
             result.status = DecodeStatus::Error;
             result.decode = DecodeResult {
-                .status = DecodeStatus::Error,
-                .frame = RawResponseFrame {},
-                .error = make_status(StatusCode::Parse, "Failed to parse 1E ASCII end code"),
-                .bytes_consumed = 4U,
+                DecodeStatus::Error,
+                RawResponseFrame {},
+                make_status(StatusCode::Parse, "Failed to parse 1E ASCII end code"),
+                4U,
             };
             return result;
           }
@@ -201,7 +215,7 @@ struct StreamDecodeResult {
             return result;
           }
           DecodeResult candidate =
-              FrameCodec::decode_response(config, frame_context, bytes.first(total_size));
+              FrameCodec::decode_response(config, frame_context, checked_first(bytes, total_size));
           candidate.bytes_consumed = total_size;
           result.status = candidate.status;
           result.decode = candidate;
@@ -234,7 +248,7 @@ struct StreamDecodeResult {
         return result;
       }
       DecodeResult candidate =
-          FrameCodec::decode_response(config, frame_context, bytes.first(total_size));
+          FrameCodec::decode_response(config, frame_context, checked_first(bytes, total_size));
       candidate.bytes_consumed = total_size;
       result.status = candidate.status;
       result.decode = candidate;
@@ -260,7 +274,7 @@ struct StreamDecodeResult {
       result.discard_prefix = offset;
     }
 
-    DecodeResult candidate = FrameCodec::decode_response(config, frame_context, bytes.subspan(offset));
+    DecodeResult candidate = FrameCodec::decode_response(config, frame_context, checked_subspan(bytes, offset));
     if (candidate.response_identity_mismatch && candidate.bytes_consumed != 0U) {
       result.discard_prefix = offset + candidate.bytes_consumed;
       return result;
@@ -321,6 +335,13 @@ Status MelsecSerialClient::configure(const ProtocolConfig& config) noexcept {
   transport_reset_required_ = false;
   active_format2_block_number_ = 0U;
   active_format2_block_number_valid_ = false;
+#if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
+  monitor_word_item_count_ = 0U;
+  monitor_dword_item_count_ = 0U;
+  monitor_registered_ = false;
+  extended_file_register_monitor_item_count_ = 0U;
+  extended_file_register_monitor_registered_ = false;
+#endif
   return ok_status();
 }
 
@@ -347,8 +368,27 @@ bool MelsecSerialClient::requires_transport_reset() const noexcept {
   return transport_reset_required_;
 }
 
-std::span<const std::byte> MelsecSerialClient::pending_tx_frame() const noexcept {
+mcprotocol::serial::Span<const mcprotocol::serial::Byte> MelsecSerialClient::pending_tx_frame() const noexcept {
   return as_const_byte_span(tx_frame_, tx_frame_size_);
+}
+
+Status MelsecSerialClient::notify_tx_started(std::uint32_t now_ms) noexcept {
+  if (!busy_ || !awaiting_write_complete_) {
+    return make_status(StatusCode::InvalidArgument, "No pending transmission can be started");
+  }
+  if (tx_started_) {
+    return make_status(StatusCode::InvalidArgument, "Transmission start was already notified");
+  }
+  tx_started_ = true;
+  response_deadline_ms_ = now_ms + config_.timeout().response_timeout_ms;
+  if (rs485_hooks_.on_tx_begin != nullptr) {
+    rs485_hooks_.on_tx_begin(rs485_hooks_.user);
+  }
+  return ok_status();
+}
+
+std::uint32_t MelsecSerialClient::transaction_deadline_ms() const noexcept {
+  return busy_ && tx_started_ ? response_deadline_ms_ : 0U;
 }
 
 Status MelsecSerialClient::notify_tx_complete(
@@ -358,9 +398,26 @@ Status MelsecSerialClient::notify_tx_complete(
     return make_status(StatusCode::InvalidArgument, "No pending transmit completion is expected");
   }
 
+  if (!tx_started_) {
+    if (transport_status.ok()) {
+      return make_status(
+          StatusCode::InvalidArgument,
+          "notify_tx_started must be called before successful transmit completion");
+    }
+    awaiting_write_complete_ = false;
+    complete(transport_status);
+    return ok_status();
+  }
+
   awaiting_write_complete_ = false;
   if (rs485_hooks_.on_tx_end != nullptr) {
     rs485_hooks_.on_tx_end(rs485_hooks_.user);
+  }
+
+  if (deadline_reached(now_ms, response_deadline_ms_)) {
+    transport_reset_required_ = true;
+    complete(active_timeout_status("The absolute transaction deadline expired during transmission"));
+    return ok_status();
   }
 
   if (!transport_status.ok()) {
@@ -384,29 +441,21 @@ Status MelsecSerialClient::notify_tx_complete(
     return ok_status();
   }
 
-  response_deadline_ms_ = now_ms + config_.timeout().response_timeout_ms;
-  inter_byte_deadline_ms_ = now_ms + config_.timeout().inter_byte_timeout_ms;
   return ok_status();
 }
 
 void MelsecSerialClient::on_rx_bytes(
     std::uint32_t now_ms,
-    std::span<const std::byte> bytes) noexcept {
+    mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes) noexcept {
   if (!busy_ || awaiting_write_complete_ || bytes.empty()) {
     return;
   }
 
   if (deadline_reached(now_ms, response_deadline_ms_)) {
-    transport_reset_required_ = !active_format2_block_number_valid_;
+    transport_reset_required_ = true;
     complete(active_timeout_status("Timed out while waiting for a response"));
     return;
   }
-  if (rx_frame_size_ != 0U && deadline_reached(now_ms, inter_byte_deadline_ms_)) {
-    transport_reset_required_ = !active_format2_block_number_valid_;
-    complete(active_timeout_status("Timed out while waiting for the rest of the response"));
-    return;
-  }
-
   const auto incoming = as_u8_span(bytes);
   if ((rx_frame_size_ + incoming.size()) > rx_frame_.size()) {
     transport_reset_required_ = !active_format2_block_number_valid_;
@@ -417,8 +466,6 @@ void MelsecSerialClient::on_rx_bytes(
 
   std::memcpy(rx_frame_.data() + rx_frame_size_, incoming.data(), incoming.size());
   rx_frame_size_ += incoming.size();
-  inter_byte_deadline_ms_ = now_ms + config_.timeout().inter_byte_timeout_ms;
-
   for (;;) {
     const StreamDecodeResult stream_decode = decode_stream_buffer(
         config_,
@@ -426,8 +473,8 @@ void MelsecSerialClient::on_rx_bytes(
             ? FrameCodecContext::format2(active_format2_block_number_)
             : FrameCodecContext::none(),
         expected_e1_response_subheader(),
-        expected_e1_success_response_data_size(),
-        std::span<const std::uint8_t>(rx_frame_.data(), rx_frame_size_));
+        expected_success_response_data_size(operation_),
+        mcprotocol::serial::Span<const std::uint8_t>(rx_frame_.data(), rx_frame_size_));
     if (stream_decode.discard_prefix != 0U) {
       discard_rx_prefix(rx_frame_, rx_frame_size_, stream_decode.discard_prefix);
       if (rx_frame_size_ == 0U) {
@@ -455,7 +502,7 @@ void MelsecSerialClient::on_rx_bytes(
     }
 
     const Status parse_status = handle_response(
-        std::span<const std::uint8_t>(
+        mcprotocol::serial::Span<const std::uint8_t>(
             stream_decode.decode.frame.response_data.data(),
             stream_decode.decode.frame.response_size));
     if (!parse_status.ok() && active_operation_outcome_can_be_unknown()) {
@@ -467,27 +514,15 @@ void MelsecSerialClient::on_rx_bytes(
 }
 
 void MelsecSerialClient::poll(std::uint32_t now_ms) noexcept {
-  if (!busy_ || awaiting_write_complete_) {
+  if (!busy_ || !tx_started_) {
     return;
   }
-
-  if (rx_frame_size_ == 0U) {
-    if (deadline_reached(now_ms, response_deadline_ms_)) {
-      transport_reset_required_ = !active_format2_block_number_valid_;
-      complete(active_timeout_status("Timed out while waiting for a response"));
-    }
-    return;
-  }
-
-  if (deadline_reached(now_ms, inter_byte_deadline_ms_)) {
-    transport_reset_required_ = !active_format2_block_number_valid_;
-    complete(active_timeout_status("Timed out while waiting for the rest of the response"));
-    return;
-  }
-
   if (deadline_reached(now_ms, response_deadline_ms_)) {
-    transport_reset_required_ = !active_format2_block_number_valid_;
-    complete(active_timeout_status("Timed out while waiting for a response"));
+    transport_reset_required_ = true;
+    if (awaiting_write_complete_ && rs485_hooks_.on_tx_end != nullptr) {
+      rs485_hooks_.on_tx_end(rs485_hooks_.user);
+    }
+    complete(active_timeout_status("The absolute transaction deadline expired"));
   }
 }
 
@@ -496,6 +531,10 @@ void MelsecSerialClient::cancel() noexcept {
     return;
   }
   if (awaiting_write_complete_) {
+    if (!tx_started_) {
+      complete(cancelled_status());
+      return;
+    }
     cancel_requested_during_tx_ = true;
     return;
   }
@@ -503,18 +542,18 @@ void MelsecSerialClient::cancel() noexcept {
   if (active_operation_outcome_can_be_unknown() && !awaiting_write_complete_) {
     switch (operation_) {
       case OperationKind::RemoteRun:
-        complete(make_status(
-            StatusCode::OperationOutcomeUnknown,
+        complete(make_outcome_unknown_status(
+            StatusCode::Cancelled,
             "Remote RUN was transmitted but response waiting was cancelled; PLC RUN state is unknown"));
         break;
       case OperationKind::RemotePause:
-        complete(make_status(
-            StatusCode::OperationOutcomeUnknown,
+        complete(make_outcome_unknown_status(
+            StatusCode::Cancelled,
             "Remote PAUSE was transmitted but response waiting was cancelled; PLC PAUSE state is unknown"));
         break;
       default:
-        complete(make_status(
-            StatusCode::OperationOutcomeUnknown,
+        complete(make_outcome_unknown_status(
+            StatusCode::Cancelled,
             "A state-changing request was transmitted but response waiting was cancelled; PLC state is unknown"));
         break;
     }
@@ -550,11 +589,16 @@ Status MelsecSerialClient::start_request(
   const Status encode_status = FrameCodec::encode_request(
       config_,
       frame_context,
-      std::span<const std::uint8_t>(request_data_.data(), request_data_size),
+      mcprotocol::serial::Span<const std::uint8_t>(request_data_.data(), request_data_size),
       tx_frame_,
       encoded_size);
   if (!encode_status.ok()) {
     return encode_status;
+  }
+  const Status response_capacity_status = FrameCodec::validate_response_capacity(
+      config_, expected_success_response_data_size(operation));
+  if (!response_capacity_status.ok()) {
+    return response_capacity_status;
   }
 
   active_format2_block_number_valid_ = format2;
@@ -565,18 +609,26 @@ Status MelsecSerialClient::start_request(
 
   tx_frame_size_ = encoded_size;
   rx_frame_size_ = 0;
-  response_deadline_ms_ = 0;
-  inter_byte_deadline_ms_ = 0;
+  response_deadline_ms_ = 0U;
   callback_ = callback;
   callback_user_ = user;
   busy_ = true;
   awaiting_write_complete_ = true;
+  tx_started_ = false;
   cancel_requested_during_tx_ = false;
   operation_ = operation;
 
-  if (rs485_hooks_.on_tx_begin != nullptr) {
-    rs485_hooks_.on_tx_begin(rs485_hooks_.user);
+#if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
+  if (operation == OperationKind::RegisterMonitor) {
+    monitor_word_item_count_ = 0U;
+    monitor_dword_item_count_ = 0U;
+    monitor_registered_ = false;
+  } else if (operation == OperationKind::RegisterExtendedFileRegisterMonitor) {
+    extended_file_register_monitor_item_count_ = 0U;
+    extended_file_register_monitor_registered_ = false;
   }
+#endif
+
   return ok_status();
 }
 
@@ -643,9 +695,10 @@ std::uint8_t MelsecSerialClient::expected_e1_response_subheader() const noexcept
   }
 }
 
-std::size_t MelsecSerialClient::expected_e1_success_response_data_size() const noexcept {
+std::size_t MelsecSerialClient::expected_success_response_data_size(
+    OperationKind operation) const noexcept {
   const std::size_t ascii_word_size = config_.code_mode() == CodeMode::Ascii ? 4U : 2U;
-  switch (operation_) {
+  switch (operation) {
     case OperationKind::BatchReadWords:
       return static_cast<std::size_t>(batch_read_words_request_.points) * ascii_word_size;
     case OperationKind::ReadExtendedFileRegisterWords:
@@ -655,23 +708,41 @@ std::size_t MelsecSerialClient::expected_e1_success_response_data_size() const n
     case OperationKind::BatchReadBits:
       if (config_.code_mode() == CodeMode::Ascii) {
         return static_cast<std::size_t>(batch_read_bits_request_.points) +
-               ((batch_read_bits_request_.points % 2U) == 0U ? 0U : 1U);
+               (config_.frame_kind() == FrameKind::E1 &&
+                        (batch_read_bits_request_.points % 2U) != 0U
+                    ? 1U
+                    : 0U);
       }
       return static_cast<std::size_t>((batch_read_bits_request_.points + 1U) / 2U);
+    case OperationKind::ExtendedBatchReadWords:
+      return static_cast<std::size_t>(extended_batch_words_points_) * ascii_word_size;
     case OperationKind::BatchWriteWords:
     case OperationKind::WriteExtendedFileRegisterWords:
     case OperationKind::DirectWriteExtendedFileRegisterWords:
     case OperationKind::BatchWriteBits:
     case OperationKind::ExtendedBatchWriteWords:
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+    case OperationKind::RandomRead:
+      return (pending_random_word_item_count_ * ascii_word_size) +
+             (pending_random_dword_item_count_ * ascii_word_size * 2U);
     case OperationKind::RandomWriteWords:
     case OperationKind::RandomWriteExtendedFileRegisterWords:
     case OperationKind::RandomWriteBits:
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
+    case OperationKind::MultiBlockRead: {
+      std::size_t response_size = 0U;
+      for (std::size_t index = 0; index < pending_multi_block_count_; ++index) {
+        response_size += static_cast<std::size_t>(pending_multi_blocks_[index].points) *
+                         ascii_word_size;
+      }
+      return response_size;
+    }
     case OperationKind::MultiBlockWrite:
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
+    case OperationKind::ReadHostBuffer:
+      return static_cast<std::size_t>(host_buffer_read_request_.word_length) * ascii_word_size;
     case OperationKind::WriteHostBuffer:
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
@@ -705,14 +776,30 @@ std::size_t MelsecSerialClient::expected_e1_success_response_data_size() const n
 #endif
 #if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
     case OperationKind::ReadModuleBuffer:
-      return module_buffer_read_request_.bytes;
+      return static_cast<std::size_t>(module_buffer_read_request_.bytes) *
+             (config_.code_mode() == CodeMode::Ascii ? 2U : 1U);
+#endif
+    case OperationKind::ReadUserFrame:
+      return config_.code_mode() == CodeMode::Ascii
+                 ? 8U + (kMaxUserFrameRegistrationBytes * 2U)
+                 : 4U + kMaxUserFrameRegistrationBytes;
+#if MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS
+    case OperationKind::ReadCpuModel:
+      return config_.code_mode() == CodeMode::Ascii ? 20U : 18U;
+#endif
+#if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
+    case OperationKind::Loopback:
+      return pending_loopback_size_ +
+             (config_.frame_kind() == FrameKind::C1
+                  ? 2U
+                  : (config_.code_mode() == CodeMode::Ascii ? 4U : 2U));
 #endif
     default:
       return 0U;
   }
 }
 
-Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> response_data) noexcept {
+Status MelsecSerialClient::handle_response(mcprotocol::serial::Span<const std::uint8_t> response_data) noexcept {
   switch (operation_) {
     case OperationKind::BatchReadWords:
       return CommandCodec::parse_batch_read_words_response(
@@ -790,9 +877,9 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
       return CommandCodec::parse_random_read_response(
           config_,
           RandomReadRequest(
-              std::span<const RandomReadWordItem>(
+              mcprotocol::serial::Span<const RandomReadWordItem>(
                   pending_random_word_items_.data(), pending_random_word_item_count_),
-              std::span<const RandomReadDWordItem>(
+              mcprotocol::serial::Span<const RandomReadDWordItem>(
                   pending_random_dword_items_.data(), pending_random_dword_item_count_)),
           response_data,
           out_random_words_,
@@ -802,7 +889,7 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
     case OperationKind::MultiBlockRead:
       return CommandCodec::parse_multi_block_read_response(
           config_,
-          std::span<const MultiBlockReadBlock>(pending_multi_blocks_.data(), pending_multi_block_count_),
+          mcprotocol::serial::Span<const MultiBlockReadBlock>(pending_multi_blocks_.data(), pending_multi_block_count_),
           response_data,
           out_words_,
           out_bits_,
@@ -842,9 +929,9 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
       return CommandCodec::parse_read_monitor_response(
           config_,
           MonitorRegistration(
-              std::span<const RandomReadWordItem>(
+              mcprotocol::serial::Span<const RandomReadWordItem>(
                   monitor_word_items_.data(), monitor_word_item_count_),
-              std::span<const RandomReadDWordItem>(
+              mcprotocol::serial::Span<const RandomReadDWordItem>(
                   monitor_dword_items_.data(), monitor_dword_item_count_)),
           response_data,
           out_random_words_,
@@ -852,7 +939,7 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
     case OperationKind::ReadExtendedFileRegisterMonitor:
       return CommandCodec::parse_read_extended_file_register_monitor_response(
           config_,
-          std::span<const ExtendedFileRegisterAddress>(
+          mcprotocol::serial::Span<const ExtendedFileRegisterAddress>(
               extended_file_register_monitor_items_.data(),
               extended_file_register_monitor_item_count_),
           response_data,
@@ -910,7 +997,7 @@ Status MelsecSerialClient::handle_response(std::span<const std::uint8_t> respons
 
 Status MelsecSerialClient::validate_request_admission() const noexcept {
   if (!configured_) {
-    return make_status(StatusCode::InvalidArgument, "Client must be configured before use");
+    return make_status(StatusCode::NotConnected, "Client must be configured before use");
   }
   if (busy_) {
     return make_status(StatusCode::Busy, "Only one request can be in flight at a time");
@@ -925,8 +1012,8 @@ Status MelsecSerialClient::validate_request_admission() const noexcept {
 
 Status MelsecSerialClient::active_timeout_status(const char* timeout_message) const noexcept {
   if (active_operation_outcome_can_be_unknown()) {
-    return make_status(
-        StatusCode::OperationOutcomeUnknown,
+    return make_outcome_unknown_status(
+        StatusCode::Timeout,
         "A state-changing request was transmitted but no confirmed response was received; PLC state is unknown");
   }
   return make_status(StatusCode::Timeout, timeout_message);
@@ -934,8 +1021,8 @@ Status MelsecSerialClient::active_timeout_status(const char* timeout_message) co
 
 Status MelsecSerialClient::active_transport_failure_status(Status transport_status) const noexcept {
   if (active_operation_outcome_can_be_unknown()) {
-    return make_status(
-        StatusCode::OperationOutcomeUnknown,
+    return make_outcome_unknown_status(
+        transport_status.code,
         "A state-changing request may have started before transport failure; PLC state is unknown");
   }
   return transport_status;
@@ -944,8 +1031,8 @@ Status MelsecSerialClient::active_transport_failure_status(Status transport_stat
 Status MelsecSerialClient::active_unconfirmed_failure_status(Status failure_status) const noexcept {
   if (active_operation_outcome_can_be_unknown() && !failure_status.ok() &&
       failure_status.code != StatusCode::PlcError) {
-    return make_status(
-        StatusCode::OperationOutcomeUnknown,
+    return make_outcome_unknown_status(
+        failure_status.code,
         "The response to a state-changing request could not be confirmed; PLC state is unknown");
   }
   return failure_status;
@@ -1003,12 +1090,12 @@ void MelsecSerialClient::complete(Status status) noexcept {
   callback_user_ = nullptr;
   busy_ = false;
   awaiting_write_complete_ = false;
+  tx_started_ = false;
   cancel_requested_during_tx_ = false;
   operation_ = OperationKind::None;
   tx_frame_size_ = 0;
   rx_frame_size_ = 0;
   response_deadline_ms_ = 0;
-  inter_byte_deadline_ms_ = 0;
   clear_pending_outputs();
   clear_pending_copies();
 
@@ -1074,12 +1161,15 @@ void MelsecSerialClient::clear_pending_copies() noexcept {
 Status MelsecSerialClient::async_batch_read_words(
     std::uint32_t now_ms,
     const BatchReadWordsRequest& request,
-    std::span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
   const Status admission_status = validate_request_admission();
   if (!admission_status.ok()) {
     return admission_status;
+  }
+  if (out_words.size() < request.points) {
+    return make_status(StatusCode::BufferTooSmall, "Batch read words output buffer is too small");
   }
   batch_read_words_request_ = request;
   out_words_ = out_words;
@@ -1095,12 +1185,17 @@ Status MelsecSerialClient::async_batch_read_words(
 Status MelsecSerialClient::async_read_extended_file_register_words(
     std::uint32_t now_ms,
     const ExtendedFileRegisterBatchReadWordsRequest& request,
-    std::span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
   const Status admission_status = validate_request_admission();
   if (!admission_status.ok()) {
     return admission_status;
+  }
+  if (out_words.size() < request.points) {
+    return make_status(
+        StatusCode::BufferTooSmall,
+        "Extended file-register read output buffer is too small");
   }
   extended_file_register_read_request_ = request;
   out_words_ = out_words;
@@ -1125,12 +1220,17 @@ Status MelsecSerialClient::async_read_extended_file_register_words(
 Status MelsecSerialClient::async_direct_read_extended_file_register_words(
     std::uint32_t now_ms,
     const ExtendedFileRegisterDirectBatchReadWordsRequest& request,
-    std::span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
   const Status admission_status = validate_request_admission();
   if (!admission_status.ok()) {
     return admission_status;
+  }
+  if (out_words.size() < request.points) {
+    return make_status(
+        StatusCode::BufferTooSmall,
+        "Direct extended file-register read output buffer is too small");
   }
   direct_extended_file_register_read_request_ = request;
   out_words_ = out_words;
@@ -1156,12 +1256,15 @@ Status MelsecSerialClient::async_link_direct_batch_read_words(
     std::uint32_t now_ms,
     const LinkDirectDevice& device,
     std::uint16_t points,
-    std::span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
   const Status admission_status = validate_request_admission();
   if (!admission_status.ok()) {
     return admission_status;
+  }
+  if (out_words.size() < points) {
+    return make_status(StatusCode::BufferTooSmall, "Link direct word-read output buffer is too small");
   }
   batch_read_words_request_ = BatchReadWordsRequest(device.device, points);
   out_words_ = out_words;
@@ -1182,12 +1285,15 @@ Status MelsecSerialClient::async_link_direct_batch_read_words(
 Status MelsecSerialClient::async_batch_read_bits(
     std::uint32_t now_ms,
     const BatchReadBitsRequest& request,
-    std::span<BitValue> out_bits,
+    mcprotocol::serial::Span<BitValue> out_bits,
     CompletionHandler callback,
     void* user) noexcept {
   const Status admission_status = validate_request_admission();
   if (!admission_status.ok()) {
     return admission_status;
+  }
+  if (out_bits.size() < request.points) {
+    return make_status(StatusCode::BufferTooSmall, "Batch read bits output buffer is too small");
   }
   batch_read_bits_request_ = request;
   out_bits_ = out_bits;
@@ -1204,12 +1310,15 @@ Status MelsecSerialClient::async_link_direct_batch_read_bits(
     std::uint32_t now_ms,
     const LinkDirectDevice& device,
     std::uint16_t points,
-    std::span<BitValue> out_bits,
+    mcprotocol::serial::Span<BitValue> out_bits,
     CompletionHandler callback,
     void* user) noexcept {
   const Status admission_status = validate_request_admission();
   if (!admission_status.ok()) {
     return admission_status;
+  }
+  if (out_bits.size() < points) {
+    return make_status(StatusCode::BufferTooSmall, "Link direct bit-read output buffer is too small");
   }
   batch_read_bits_request_ = BatchReadBitsRequest(device.device, points);
   out_bits_ = out_bits;
@@ -1232,6 +1341,10 @@ Status MelsecSerialClient::async_batch_write_words(
     const BatchWriteWordsRequest& request,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_batch_write_words(config_, request, request_data_, request_size);
   if (!status.ok()) {
@@ -1245,6 +1358,10 @@ Status MelsecSerialClient::async_write_extended_file_register_words(
     const ExtendedFileRegisterBatchWriteWordsRequest& request,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_write_extended_file_register_words(
       config_,
@@ -1267,6 +1384,10 @@ Status MelsecSerialClient::async_direct_write_extended_file_register_words(
     const ExtendedFileRegisterDirectBatchWriteWordsRequest& request,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_direct_write_extended_file_register_words(
       config_,
@@ -1287,9 +1408,13 @@ Status MelsecSerialClient::async_direct_write_extended_file_register_words(
 Status MelsecSerialClient::async_link_direct_batch_write_words(
     std::uint32_t now_ms,
     const LinkDirectDevice& device,
-    std::span<const std::uint16_t> words,
+    mcprotocol::serial::Span<const std::uint16_t> words,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_link_direct_batch_write_words(
       config_,
@@ -1308,6 +1433,10 @@ Status MelsecSerialClient::async_batch_write_bits(
     const BatchWriteBitsRequest& request,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_batch_write_bits(config_, request, request_data_, request_size);
   if (!status.ok()) {
@@ -1319,9 +1448,13 @@ Status MelsecSerialClient::async_batch_write_bits(
 Status MelsecSerialClient::async_link_direct_batch_write_bits(
     std::uint32_t now_ms,
     const LinkDirectDevice& device,
-    std::span<const BitValue> bits,
+    mcprotocol::serial::Span<const BitValue> bits,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_link_direct_batch_write_bits(
       config_,
@@ -1339,12 +1472,15 @@ Status MelsecSerialClient::async_extended_batch_read_words(
     std::uint32_t now_ms,
     const QualifiedBufferWordDevice& device,
     std::uint16_t points,
-    std::span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
   const Status admission_status = validate_request_admission();
   if (!admission_status.ok()) {
     return admission_status;
+  }
+  if (out_words.size() < points) {
+    return make_status(StatusCode::BufferTooSmall, "Qualified word-read output buffer is too small");
   }
   extended_batch_words_device_ = device;
   extended_batch_words_points_ = points;
@@ -1366,7 +1502,7 @@ Status MelsecSerialClient::async_extended_batch_read_words(
 Status MelsecSerialClient::async_extended_batch_write_words(
     std::uint32_t now_ms,
     const QualifiedBufferWordDevice& device,
-    std::span<const std::uint16_t> words,
+    mcprotocol::serial::Span<const std::uint16_t> words,
     CompletionHandler callback,
     void* user) noexcept {
   const Status admission_status = validate_request_admission();
@@ -1392,8 +1528,8 @@ Status MelsecSerialClient::async_extended_batch_write_words(
 Status MelsecSerialClient::async_random_read(
     std::uint32_t now_ms,
     const RandomReadRequest& request,
-    std::span<std::uint16_t> out_words,
-    std::span<std::uint32_t> out_dwords,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint32_t> out_dwords,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
@@ -1438,8 +1574,8 @@ Status MelsecSerialClient::async_random_read(
 
 Status MelsecSerialClient::async_link_direct_random_read(
     std::uint32_t now_ms,
-    std::span<const LinkDirectRandomReadWordItem> word_items,
-    std::span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<const LinkDirectRandomReadWordItem> word_items,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
@@ -1483,11 +1619,15 @@ Status MelsecSerialClient::async_link_direct_random_read(
 
 Status MelsecSerialClient::async_random_write_words(
     std::uint32_t now_ms,
-    std::span<const RandomWriteWordItem> word_items,
-    std::span<const RandomWriteDWordItem> dword_items,
+    mcprotocol::serial::Span<const RandomWriteWordItem> word_items,
+    mcprotocol::serial::Span<const RandomWriteDWordItem> dword_items,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_random_write_words(
       config_, word_items, dword_items, request_data_, request_size);
@@ -1507,10 +1647,14 @@ Status MelsecSerialClient::async_random_write_words(
 
 Status MelsecSerialClient::async_random_write_extended_file_register_words(
     std::uint32_t now_ms,
-    std::span<const ExtendedFileRegisterRandomWriteWordItem> items,
+    mcprotocol::serial::Span<const ExtendedFileRegisterRandomWriteWordItem> items,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_random_write_extended_file_register_words(
       config_,
@@ -1537,10 +1681,14 @@ Status MelsecSerialClient::async_random_write_extended_file_register_words(
 
 Status MelsecSerialClient::async_link_direct_random_write_words(
     std::uint32_t now_ms,
-    std::span<const LinkDirectRandomWriteWordItem> items,
+    mcprotocol::serial::Span<const LinkDirectRandomWriteWordItem> items,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_link_direct_random_write_words(config_, items, request_data_, request_size);
   if (!status.ok()) {
@@ -1558,10 +1706,14 @@ Status MelsecSerialClient::async_link_direct_random_write_words(
 
 Status MelsecSerialClient::async_random_write_bits(
     std::uint32_t now_ms,
-    std::span<const RandomWriteBitItem> items,
+    mcprotocol::serial::Span<const RandomWriteBitItem> items,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_random_write_bits(config_, items, request_data_, request_size);
   if (!status.ok()) {
@@ -1579,10 +1731,14 @@ Status MelsecSerialClient::async_random_write_bits(
 
 Status MelsecSerialClient::async_link_direct_random_write_bits(
     std::uint32_t now_ms,
-    std::span<const LinkDirectRandomWriteBitItem> items,
+    mcprotocol::serial::Span<const LinkDirectRandomWriteBitItem> items,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_link_direct_random_write_bits(config_, items, request_data_, request_size);
   if (!status.ok()) {
@@ -1601,9 +1757,9 @@ Status MelsecSerialClient::async_link_direct_random_write_bits(
 Status MelsecSerialClient::async_multi_block_read(
     std::uint32_t now_ms,
     const MultiBlockReadRequest& request,
-    std::span<std::uint16_t> out_words,
-    std::span<BitValue> out_bits,
-    std::span<MultiBlockReadBlockResult> out_results,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<BitValue> out_bits,
+    mcprotocol::serial::Span<MultiBlockReadBlockResult> out_results,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
@@ -1613,6 +1769,19 @@ Status MelsecSerialClient::async_multi_block_read(
   }
   if (request.blocks.size() > pending_multi_blocks_.size()) {
     return make_status(StatusCode::InvalidArgument, "Multi-block read block count exceeds the client limit");
+  }
+  std::size_t required_words = 0U;
+  std::size_t required_bits = 0U;
+  for (const MultiBlockReadBlock& block : request.blocks) {
+    if (block.bit_block) {
+      required_bits += static_cast<std::size_t>(block.points) * 16U;
+    } else {
+      required_words += block.points;
+    }
+  }
+  if (out_results.size() < request.blocks.size() || out_words.size() < required_words ||
+      out_bits.size() < required_bits) {
+    return make_status(StatusCode::BufferTooSmall, "Multi-block read output buffers are too small");
   }
   pending_multi_block_count_ = request.blocks.size();
   std::copy(request.blocks.begin(), request.blocks.end(), pending_multi_blocks_.begin());
@@ -1643,9 +1812,9 @@ Status MelsecSerialClient::async_multi_block_read(
 Status MelsecSerialClient::async_link_direct_multi_block_read(
     std::uint32_t now_ms,
     const LinkDirectMultiBlockReadRequest& request,
-    std::span<std::uint16_t> out_words,
-    std::span<BitValue> out_bits,
-    std::span<MultiBlockReadBlockResult> out_results,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<BitValue> out_bits,
+    mcprotocol::serial::Span<MultiBlockReadBlockResult> out_results,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
@@ -1655,6 +1824,21 @@ Status MelsecSerialClient::async_link_direct_multi_block_read(
   }
   if (request.blocks.size() > pending_multi_blocks_.size()) {
     return make_status(StatusCode::InvalidArgument, "Link direct multi-block read block count exceeds the client limit");
+  }
+  std::size_t required_words = 0U;
+  std::size_t required_bits = 0U;
+  for (const LinkDirectMultiBlockReadBlock& block : request.blocks) {
+    if (block.bit_block) {
+      required_bits += static_cast<std::size_t>(block.points) * 16U;
+    } else {
+      required_words += block.points;
+    }
+  }
+  if (out_results.size() < request.blocks.size() || out_words.size() < required_words ||
+      out_bits.size() < required_bits) {
+    return make_status(
+        StatusCode::BufferTooSmall,
+        "Link direct multi-block read output buffers are too small");
   }
   pending_multi_block_count_ = request.blocks.size();
   for (std::size_t index = 0; index < request.blocks.size(); ++index) {
@@ -1697,6 +1881,10 @@ Status MelsecSerialClient::async_multi_block_write(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_multi_block_write(config_, request, request_data_, request_size);
   if (!status.ok()) {
@@ -1718,6 +1906,10 @@ Status MelsecSerialClient::async_link_direct_multi_block_write(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_link_direct_multi_block_write(
       config_,
@@ -1857,8 +2049,8 @@ Status MelsecSerialClient::async_link_direct_register_monitor(
 
 Status MelsecSerialClient::async_read_monitor(
     std::uint32_t now_ms,
-    std::span<std::uint16_t> out_words,
-    std::span<std::uint32_t> out_dwords,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint32_t> out_dwords,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
@@ -1880,9 +2072,9 @@ Status MelsecSerialClient::async_read_monitor(
   const Status status = CommandCodec::encode_read_monitor(
       config_,
       MonitorRegistration(
-          std::span<const RandomReadWordItem>(
+          mcprotocol::serial::Span<const RandomReadWordItem>(
               monitor_word_items_.data(), monitor_word_item_count_),
-          std::span<const RandomReadDWordItem>(
+          mcprotocol::serial::Span<const RandomReadDWordItem>(
               monitor_dword_items_.data(), monitor_dword_item_count_)),
       request_data_,
       request_size);
@@ -1903,7 +2095,7 @@ Status MelsecSerialClient::async_read_monitor(
 
 Status MelsecSerialClient::async_read_extended_file_register_monitor(
     std::uint32_t now_ms,
-    std::span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
@@ -1926,7 +2118,7 @@ Status MelsecSerialClient::async_read_extended_file_register_monitor(
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_read_extended_file_register_monitor(
       config_,
-      std::span<const ExtendedFileRegisterAddress>(
+      mcprotocol::serial::Span<const ExtendedFileRegisterAddress>(
           extended_file_register_monitor_items_.data(),
           extended_file_register_monitor_item_count_),
       request_data_,
@@ -1953,13 +2145,16 @@ Status MelsecSerialClient::async_read_extended_file_register_monitor(
 Status MelsecSerialClient::async_read_host_buffer(
     std::uint32_t now_ms,
     const HostBufferReadRequest& request,
-    std::span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
   const Status admission_status = validate_request_admission();
   if (!admission_status.ok()) {
     return admission_status;
+  }
+  if (out_words.size() < request.word_length) {
+    return make_status(StatusCode::BufferTooSmall, "Host-buffer read output buffer is too small");
   }
   host_buffer_read_request_ = request;
   out_words_ = out_words;
@@ -1987,6 +2182,10 @@ Status MelsecSerialClient::async_write_host_buffer(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_write_host_buffer(config_, request, request_data_, request_size);
   if (!status.ok()) {
@@ -2005,13 +2204,16 @@ Status MelsecSerialClient::async_write_host_buffer(
 Status MelsecSerialClient::async_read_module_buffer(
     std::uint32_t now_ms,
     const ModuleBufferReadRequest& request,
-    std::span<std::byte> out_bytes,
+    mcprotocol::serial::Span<mcprotocol::serial::Byte> out_bytes,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
   const Status admission_status = validate_request_admission();
   if (!admission_status.ok()) {
     return admission_status;
+  }
+  if (out_bytes.size() < request.bytes) {
+    return make_status(StatusCode::BufferTooSmall, "Module-buffer read output buffer is too small");
   }
   module_buffer_read_request_ = request;
   out_bytes_ = out_bytes;
@@ -2039,6 +2241,10 @@ Status MelsecSerialClient::async_write_module_buffer(
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_write_module_buffer(config_, request, request_data_, request_size);
   if (!status.ok()) {
@@ -2088,6 +2294,10 @@ Status MelsecSerialClient::async_remote_run(
     RemoteRunClearMode clear_mode,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status =
       CommandCodec::encode_remote_run(config_, mode, clear_mode, request_data_, request_size);
@@ -2101,6 +2311,10 @@ Status MelsecSerialClient::async_remote_stop(
     std::uint32_t now_ms,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_remote_stop(config_, request_data_, request_size);
   if (!status.ok()) {
@@ -2114,6 +2328,10 @@ Status MelsecSerialClient::async_remote_pause(
     RemoteOperationMode mode,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_remote_pause(config_, mode, request_data_, request_size);
   if (!status.ok()) {
@@ -2126,6 +2344,10 @@ Status MelsecSerialClient::async_remote_latch_clear(
     std::uint32_t now_ms,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status =
       CommandCodec::encode_remote_latch_clear(config_, request_data_, request_size);
@@ -2140,6 +2362,10 @@ Status MelsecSerialClient::async_unlock_remote_password(
     std::string_view remote_password,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_unlock_remote_password(
       config_,
@@ -2157,6 +2383,10 @@ Status MelsecSerialClient::async_lock_remote_password(
     std::string_view remote_password,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_lock_remote_password(
       config_,
@@ -2173,6 +2403,10 @@ Status MelsecSerialClient::async_remote_reset(
     std::uint32_t now_ms,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_remote_reset(config_, request_data_, request_size);
   if (!status.ok()) {
@@ -2185,6 +2419,10 @@ Status MelsecSerialClient::async_clear_error_information(
     std::uint32_t now_ms,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status =
       CommandCodec::encode_clear_error_information(config_, request_data_, request_size);
@@ -2224,6 +2462,10 @@ Status MelsecSerialClient::async_write_user_frame(
     const UserFrameWriteRequest& request,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_write_user_frame(
       config_,
@@ -2241,6 +2483,10 @@ Status MelsecSerialClient::async_delete_user_frame(
     const UserFrameDeleteRequest& request,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_delete_user_frame(
       config_,
@@ -2258,6 +2504,10 @@ Status MelsecSerialClient::async_control_global_signal(
     const GlobalSignalControlRequest& request,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_control_global_signal(
       config_,
@@ -2275,6 +2525,10 @@ Status MelsecSerialClient::async_switch_serial_module_mode(
     const SerialModuleModeSwitchRequest& request,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status =
       CommandCodec::encode_switch_serial_module_mode(config_, request, request_data_, request_size);
@@ -2288,6 +2542,10 @@ Status MelsecSerialClient::async_initialize_c24_transmission_sequence(
     std::uint32_t now_ms,
     CompletionHandler callback,
     void* user) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) {
+    return admission_status;
+  }
   std::size_t request_size = 0;
   const Status status =
       CommandCodec::encode_initialize_transmission_sequence(config_, request_data_, request_size);
@@ -2304,8 +2562,8 @@ Status MelsecSerialClient::async_initialize_c24_transmission_sequence(
 
 Status MelsecSerialClient::async_loopback(
     std::uint32_t now_ms,
-    std::span<const char> hex_ascii,
-    std::span<char> out_echoed,
+    mcprotocol::serial::Span<const char> hex_ascii,
+    mcprotocol::serial::Span<char> out_echoed,
     CompletionHandler callback,
     void* user) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS
@@ -2315,6 +2573,9 @@ Status MelsecSerialClient::async_loopback(
   }
   if (hex_ascii.size() > pending_loopback_.size()) {
     return make_status(StatusCode::InvalidArgument, "Loopback request exceeds the client limit");
+  }
+  if (out_echoed.size() < hex_ascii.size()) {
+    return make_status(StatusCode::BufferTooSmall, "Loopback output buffer is too small");
   }
   out_chars_ = out_echoed;
   pending_loopback_size_ = hex_ascii.size();

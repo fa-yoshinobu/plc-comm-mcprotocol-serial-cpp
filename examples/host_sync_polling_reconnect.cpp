@@ -227,7 +227,7 @@ int main(int argc, char** argv) {
       status = plc.read_words(
           options.head_device,
           static_cast<std::uint16_t>(options.points),
-          std::span<std::uint16_t>(words.data(), options.points));
+          mcprotocol::serial::Span<std::uint16_t>(words.data(), options.points));
       plc.close();
 
       if (status.ok()) {

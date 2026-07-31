@@ -5,7 +5,7 @@
 #include "mcprotocol/serial/compat/cstdint.hpp"
 
 #include "mcprotocol/serial/detail/parse_helpers.hpp"
-#include "mcprotocol/serial/span_compat.hpp"
+#include "mcprotocol/serial/span.hpp"
 #include "mcprotocol/serial/status.hpp"
 #include "mcprotocol/serial/string_view_compat.hpp"
 #include "mcprotocol/serial/types.hpp"
@@ -37,13 +37,28 @@ struct QualifiedBufferWordDevice {
 /// \brief Returns `"G"` or `"HG"` for the helper device kind.
 [[nodiscard]] constexpr const char* qualified_buffer_kind_name(
     QualifiedBufferDeviceKind kind) noexcept {
-  return kind == QualifiedBufferDeviceKind::HG ? "HG" : "G";
+  switch (kind) {
+    case QualifiedBufferDeviceKind::G:
+      return "G";
+    case QualifiedBufferDeviceKind::HG:
+      return "HG";
+    default:
+      return "INVALID";
+  }
 }
 
 /// \brief Converts a qualified word address to the corresponding module-buffer byte address.
-[[nodiscard]] constexpr std::uint32_t qualified_buffer_word_to_byte_address(
-    std::uint32_t word_address) noexcept {
-  return word_address * 2U;
+[[nodiscard]] inline Status qualified_buffer_word_to_byte_address(
+    std::uint32_t word_address,
+    std::uint32_t& out_byte_address) noexcept {
+  const std::uint64_t byte_address = static_cast<std::uint64_t>(word_address) * 2U;
+  if (byte_address > 0xFFFFFFFFULL) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "Qualified buffer word address cannot be represented as a 32-bit byte address");
+  }
+  out_byte_address = static_cast<std::uint32_t>(byte_address);
+  return ok_status();
 }
 
 /// \brief Validates whether the helper `0601/1601` route may be used for a profile.
@@ -53,6 +68,12 @@ struct QualifiedBufferWordDevice {
 [[nodiscard]] inline Status validate_qualified_buffer_helper_route(
     PlcProfile profile,
     const QualifiedBufferWordDevice& device) noexcept {
+  if (device.kind != QualifiedBufferDeviceKind::G &&
+      device.kind != QualifiedBufferDeviceKind::HG) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "Qualified buffer device kind must be G or HG");
+  }
   if (profile == PlcProfile::MelsecIqL && device.kind == QualifiedBufferDeviceKind::HG) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
@@ -187,8 +208,22 @@ using mcprotocol::serial::detail::parse_u32;
         "Qualified buffer read length must be in range 1..960 words");
   }
 
+  std::uint32_t byte_address = 0U;
+  const Status address_status =
+      qualified_buffer_word_to_byte_address(device.word_address, byte_address);
+  if (!address_status.ok()) {
+    return address_status;
+  }
+  const std::uint64_t end_address =
+      static_cast<std::uint64_t>(byte_address) + (static_cast<std::uint64_t>(word_length) * 2U);
+  if (end_address > 0x100000000ULL) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "Qualified buffer read range exceeds the 32-bit module-buffer address space");
+  }
+
   out_request = ModuleBufferReadRequest(
-      qualified_buffer_word_to_byte_address(device.word_address),
+      byte_address,
       static_cast<std::uint16_t>(word_length * 2U),
       device.module_number);
   return ok_status();
@@ -196,8 +231,8 @@ using mcprotocol::serial::detail::parse_u32;
 
 /// \brief Encodes helper qualified word values into little-endian module-buffer bytes.
 [[nodiscard]] inline Status encode_qualified_buffer_word_values(
-    std::span<const std::uint16_t> words,
-    std::span<std::byte> out_bytes,
+    mcprotocol::serial::Span<const std::uint16_t> words,
+    mcprotocol::serial::Span<mcprotocol::serial::Byte> out_bytes,
     std::size_t& out_size) noexcept {
   out_size = 0U;
   if (words.empty()) {
@@ -214,8 +249,8 @@ using mcprotocol::serial::detail::parse_u32;
 
   for (std::size_t index = 0; index < words.size(); ++index) {
     const std::uint16_t value = words[index];
-    out_bytes[index * 2U] = static_cast<std::byte>(value & 0xFFU);
-    out_bytes[index * 2U + 1U] = static_cast<std::byte>((value >> 8U) & 0xFFU);
+    out_bytes[index * 2U] = static_cast<mcprotocol::serial::Byte>(value & 0xFFU);
+    out_bytes[index * 2U + 1U] = static_cast<mcprotocol::serial::Byte>((value >> 8U) & 0xFFU);
   }
   out_size = required;
   return ok_status();
@@ -224,8 +259,8 @@ using mcprotocol::serial::detail::parse_u32;
 /// \brief Builds a module-buffer write request for helper qualified word access.
 [[nodiscard]] inline Status make_qualified_buffer_write_words_request(
     const QualifiedBufferWordDevice& device,
-    std::span<const std::uint16_t> words,
-    std::span<std::byte> byte_storage,
+    mcprotocol::serial::Span<const std::uint16_t> words,
+    mcprotocol::serial::Span<mcprotocol::serial::Byte> byte_storage,
     ModuleBufferWriteRequest& out_request,
     std::size_t& out_byte_count) noexcept {
   out_byte_count = 0U;
@@ -240,23 +275,43 @@ using mcprotocol::serial::detail::parse_u32;
         "Qualified buffer write length must be in range 1..960 words");
   }
 
+  std::uint32_t byte_address = 0U;
+  const Status address_status =
+      qualified_buffer_word_to_byte_address(device.word_address, byte_address);
+  if (!address_status.ok()) {
+    return address_status;
+  }
+  const std::uint64_t end_address =
+      static_cast<std::uint64_t>(byte_address) + (static_cast<std::uint64_t>(words.size()) * 2U);
+  if (end_address > 0x100000000ULL) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "Qualified buffer write range exceeds the 32-bit module-buffer address space");
+  }
+
   const Status encode_status =
       encode_qualified_buffer_word_values(words, byte_storage, out_byte_count);
   if (!encode_status.ok()) {
     return encode_status;
   }
 
+  mcprotocol::serial::Span<mcprotocol::serial::Byte> request_bytes;
+  if (!byte_storage.try_first(out_byte_count, request_bytes)) {
+    return make_status(
+        StatusCode::BufferTooSmall,
+        "Qualified buffer byte buffer is too small for the encoded request");
+  }
   out_request = ModuleBufferWriteRequest(
-      qualified_buffer_word_to_byte_address(device.word_address),
+      byte_address,
       device.module_number,
-      byte_storage.first(out_byte_count));
+      request_bytes);
   return ok_status();
 }
 
 /// \brief Decodes little-endian module-buffer bytes into helper qualified word values.
 [[nodiscard]] inline Status decode_qualified_buffer_word_values(
-    std::span<const std::byte> bytes,
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes,
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   if ((bytes.size() % 2U) != 0U) {
     return make_status(
         StatusCode::Parse,

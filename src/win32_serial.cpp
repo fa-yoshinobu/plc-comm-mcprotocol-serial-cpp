@@ -1,6 +1,8 @@
 #if defined(_WIN32)
 
 #include "mcprotocol/serial/posix_serial.hpp"
+#include "mcprotocol/serial/detail/win32_serial_settings.hpp"
+#include "host_now_ms.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -21,6 +23,22 @@ namespace {
 
 [[nodiscard]] Status transport_error(const char* message) noexcept {
   return make_status(StatusCode::Transport, message);
+}
+
+[[nodiscard]] bool deadline_reached(std::uint32_t now, std::uint32_t deadline) noexcept {
+  return static_cast<std::int32_t>(now - deadline) >= 0;
+}
+
+[[nodiscard]] DWORD remaining_timeout_ms(std::uint32_t deadline) noexcept {
+  const std::uint32_t now = now_ms();
+  if (deadline_reached(now, deadline)) {
+    return 0U;
+  }
+  return static_cast<DWORD>(deadline - now);
+}
+
+[[nodiscard]] Status deadline_timeout(const char* message) noexcept {
+  return make_status(StatusCode::Timeout, message);
 }
 
 [[nodiscard]] HANDLE to_handle(std::intptr_t fd) noexcept {
@@ -97,13 +115,13 @@ namespace {
   return ok_status();
 }
 
-[[nodiscard]] Status set_read_timeout(HANDLE h, int timeout_ms) noexcept {
+[[nodiscard]] Status set_io_deadline_timeouts(HANDLE h, DWORD timeout_ms) noexcept {
   COMMTIMEOUTS timeouts {};
   timeouts.ReadIntervalTimeout = MAXDWORD;
   timeouts.ReadTotalTimeoutMultiplier = 0;
-  timeouts.ReadTotalTimeoutConstant = timeout_ms > 0 ? static_cast<DWORD>(timeout_ms) : 0;
+  timeouts.ReadTotalTimeoutConstant = timeout_ms;
   timeouts.WriteTotalTimeoutMultiplier = 0;
-  timeouts.WriteTotalTimeoutConstant = 0;
+  timeouts.WriteTotalTimeoutConstant = timeout_ms;
   if (!SetCommTimeouts(h, &timeouts)) {
     return transport_last_error(GetLastError(), "SetCommTimeouts failed");
   }
@@ -114,39 +132,12 @@ namespace {
   DCB dcb {};
   dcb.DCBlength = sizeof(dcb);
   if (!GetCommState(h, &dcb)) {
-    return transport_error("GetCommState failed");
+    return transport_last_error(GetLastError(), "GetCommState failed");
   }
-
-  dcb.BaudRate = static_cast<DWORD>(config.baud_rate);
-
-  switch (config.data_bits) {
-    case 7: dcb.ByteSize = static_cast<BYTE>(7); break;
-    case 8: dcb.ByteSize = static_cast<BYTE>(8); break;
-    default: return make_status(StatusCode::InvalidArgument, "Unsupported data bit width");
+  const Status dcb_status = detail::build_win32_dcb(dcb, config);
+  if (!dcb_status.ok()) {
+    return dcb_status;
   }
-
-  switch (config.stop_bits) {
-    case 1: dcb.StopBits = ONESTOPBIT;  break;
-    case 2: dcb.StopBits = TWOSTOPBITS; break;
-    default: return make_status(StatusCode::InvalidArgument, "Unsupported stop bit width");
-  }
-
-  switch (config.parity) {
-    case SerialParity::None: dcb.Parity = NOPARITY;   dcb.fParity = FALSE; break;
-    case SerialParity::Even: dcb.Parity = EVENPARITY;  dcb.fParity = TRUE;  break;
-    case SerialParity::Odd: dcb.Parity = ODDPARITY;   dcb.fParity = TRUE;  break;
-    default: return make_status(StatusCode::InvalidArgument, "Unsupported parity");
-  }
-
-  dcb.fBinary      = TRUE;
-  dcb.fOutxCtsFlow = config.hardware_flow_control == HardwareFlowControl::RtsCts ? TRUE : FALSE;
-  dcb.fRtsControl  = config.hardware_flow_control == HardwareFlowControl::RtsCts
-                         ? RTS_CONTROL_HANDSHAKE
-                         : RTS_CONTROL_DISABLE;
-  dcb.fOutX        = FALSE;
-  dcb.fInX         = FALSE;
-  dcb.fNull        = FALSE;
-  dcb.fAbortOnError = FALSE;
 
   if (!SetCommState(h, &dcb)) {
     return transport_last_error(GetLastError(), "SetCommState failed");
@@ -220,14 +211,27 @@ std::intptr_t PosixSerialPort::native_handle() const noexcept {
   return fd_;
 }
 
-Status PosixSerialPort::write_all(std::span<const std::byte> bytes) noexcept {
+Status PosixSerialPort::write_all_until(
+    mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes,
+    std::uint32_t absolute_deadline_ms) noexcept {
   if (fd_ < 0) {
-    return transport_error("Serial port is not open");
+    return make_status(StatusCode::NotConnected, "Serial port is not open");
+  }
+  if (bytes.size() > static_cast<std::size_t>(MAXDWORD)) {
+    return make_status(StatusCode::InvalidArgument, "Serial write size exceeds the Win32 DWORD limit");
   }
   const HANDLE h = to_handle(fd_);
   const auto* data = reinterpret_cast<const BYTE*>(bytes.data());
   DWORD total_written = 0;
   while (total_written < static_cast<DWORD>(bytes.size())) {
+    const DWORD remaining = remaining_timeout_ms(absolute_deadline_ms);
+    if (remaining == 0U) {
+      return deadline_timeout("Serial transaction deadline expired during write");
+    }
+    const Status timeout_status = set_io_deadline_timeouts(h, remaining);
+    if (!timeout_status.ok()) {
+      return timeout_status;
+    }
     DWORD written = 0;
     if (!WriteFile(
             h,
@@ -238,24 +242,30 @@ Status PosixSerialPort::write_all(std::span<const std::byte> bytes) noexcept {
       return transport_last_error(GetLastError(), "write failed");
     }
     if (written == 0) {
-      return transport_error("write failed");
+      return deadline_reached(now_ms(), absolute_deadline_ms)
+                 ? deadline_timeout("Serial transaction deadline expired during write")
+                 : transport_error("write made no progress");
     }
     total_written += written;
   }
   return ok_status();
 }
 
-Status PosixSerialPort::read_some(
-    std::span<std::byte> buffer,
-    int timeout_ms,
+Status PosixSerialPort::read_some_until(
+    mcprotocol::serial::Span<mcprotocol::serial::Byte> buffer,
+    std::uint32_t absolute_deadline_ms,
     std::size_t& out_size) noexcept {
   out_size = 0;
   if (fd_ < 0) {
-    return transport_error("Serial port is not open");
+    return make_status(StatusCode::NotConnected, "Serial port is not open");
   }
   const HANDLE h = to_handle(fd_);
 
-  Status status = set_read_timeout(h, timeout_ms);
+  const DWORD remaining = remaining_timeout_ms(absolute_deadline_ms);
+  if (remaining == 0U) {
+    return deadline_timeout("Serial transaction deadline expired during receive");
+  }
+  Status status = set_io_deadline_timeouts(h, remaining);
   if (!status.ok()) {
     return status;
   }
@@ -272,13 +282,16 @@ Status PosixSerialPort::read_some(
   if (!ok) {
     return transport_last_error(read_error, "read failed");
   }
+  if (received == 0U && deadline_reached(now_ms(), absolute_deadline_ms)) {
+    return deadline_timeout("Serial transaction deadline expired during receive");
+  }
   out_size = static_cast<std::size_t>(received);
   return ok_status();
 }
 
 Status PosixSerialPort::flush_rx() noexcept {
   if (fd_ < 0) {
-    return transport_error("Serial port is not open");
+    return make_status(StatusCode::NotConnected, "Serial port is not open");
   }
   if (!PurgeComm(to_handle(fd_), PURGE_RXABORT | PURGE_RXCLEAR)) {
     return transport_last_error(GetLastError(), "PurgeComm failed");
@@ -286,19 +299,30 @@ Status PosixSerialPort::flush_rx() noexcept {
   return ok_status();
 }
 
-Status PosixSerialPort::drain_tx() noexcept {
+Status PosixSerialPort::drain_tx_until(std::uint32_t absolute_deadline_ms) noexcept {
   if (fd_ < 0) {
-    return transport_error("Serial port is not open");
+    return make_status(StatusCode::NotConnected, "Serial port is not open");
   }
-  if (!FlushFileBuffers(to_handle(fd_))) {
-    return transport_last_error(GetLastError(), "FlushFileBuffers failed");
+  const HANDLE h = to_handle(fd_);
+  for (;;) {
+    DWORD errors = 0U;
+    COMSTAT status {};
+    if (!ClearCommError(h, &errors, &status)) {
+      return transport_last_error(GetLastError(), "ClearCommError failed during drain");
+    }
+    if (status.cbOutQue == 0U) {
+      return ok_status();
+    }
+    if (remaining_timeout_ms(absolute_deadline_ms) == 0U) {
+      return deadline_timeout("Serial transaction deadline expired during drain");
+    }
+    Sleep(1U);
   }
-  return ok_status();
 }
 
 Status PosixSerialPort::set_rts(bool enabled) noexcept {
   if (fd_ < 0) {
-    return transport_error("Serial port is not open");
+    return make_status(StatusCode::NotConnected, "Serial port is not open");
   }
   const BOOL ok = EscapeCommFunction(
       to_handle(fd_),

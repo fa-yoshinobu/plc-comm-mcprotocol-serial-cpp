@@ -1,6 +1,8 @@
 #if defined(__unix__) || defined(__APPLE__)
 
 #include "mcprotocol/serial/posix_serial.hpp"
+#include "mcprotocol/serial/detail/posix_serial_settings.hpp"
+#include "host_now_ms.hpp"
 
 #include <cerrno>
 #include <cstddef>
@@ -41,6 +43,23 @@ constexpr unsigned long kLinuxTcsets2 = _IOW('T', 0x2B, LinuxTermios2);
 
 [[nodiscard]] Status transport_error(const char* message) noexcept {
   return make_status(StatusCode::Transport, message);
+}
+
+[[nodiscard]] bool deadline_reached(std::uint32_t now, std::uint32_t deadline) noexcept {
+  return static_cast<std::int32_t>(now - deadline) >= 0;
+}
+
+[[nodiscard]] int remaining_timeout_ms(std::uint32_t deadline) noexcept {
+  const std::uint32_t now = now_ms();
+  if (deadline_reached(now, deadline)) {
+    return 0;
+  }
+  const std::uint32_t remaining = deadline - now;
+  return remaining > 0x7FFFFFFFU ? 0x7FFFFFFF : static_cast<int>(remaining);
+}
+
+[[nodiscard]] Status deadline_timeout(const char* message) noexcept {
+  return make_status(StatusCode::Timeout, message);
 }
 
 [[nodiscard]] Status make_device_path(
@@ -94,10 +113,14 @@ constexpr unsigned long kLinuxTcsets2 = _IOW('T', 0x2B, LinuxTermios2);
       return B115200;
     case 230400:
       return B230400;
+#if defined(B460800)
     case 460800:
       return B460800;
+#endif
+#if defined(B921600)
     case 921600:
       return B921600;
+#endif
     default:
       return 0;
   }
@@ -129,57 +152,12 @@ constexpr unsigned long kLinuxTcsets2 = _IOW('T', 0x2B, LinuxTermios2);
   }
 
   const speed_t speed = to_baud_constant(config.baud_rate);
-  ::cfmakeraw(&tty);
-  tty.c_cflag |= CLOCAL | CREAD;
-  tty.c_cflag &= ~CSIZE;
 
-  switch (config.data_bits) {
-    case 7:
-      tty.c_cflag |= CS7;
-      break;
-    case 8:
-      tty.c_cflag |= CS8;
-      break;
-    default:
-      return make_status(StatusCode::InvalidArgument, "Unsupported data bit width");
-  }
-
-  if (config.stop_bits == 2) {
-    tty.c_cflag |= CSTOPB;
-  } else if (config.stop_bits == 1) {
-    tty.c_cflag &= ~CSTOPB;
-  } else {
-    return make_status(StatusCode::InvalidArgument, "Unsupported stop bit width");
-  }
-
-  tty.c_cflag &= ~(PARENB | PARODD);
-  switch (config.parity) {
-    case SerialParity::None:
-      break;
-    case SerialParity::Even:
-      tty.c_cflag |= PARENB;
-      break;
-    case SerialParity::Odd:
-      tty.c_cflag |= PARENB;
-      tty.c_cflag |= PARODD;
-      break;
-    default:
-      return make_status(StatusCode::InvalidArgument, "Unsupported parity");
-  }
-
-  if (config.hardware_flow_control == HardwareFlowControl::RtsCts) {
-    tty.c_cflag |= CRTSCTS;
-  } else {
-    tty.c_cflag &= ~CRTSCTS;
-  }
-
-  tty.c_cc[VMIN] = 0;
-  tty.c_cc[VTIME] = 0;
-
-  if (speed != 0) {
-    if (::cfsetispeed(&tty, speed) != 0 || ::cfsetospeed(&tty, speed) != 0) {
-      return transport_error("Failed to configure baud rate");
-    }
+  const speed_t configured_speed = speed != 0 ? speed : B38400;
+  const Status settings_status =
+      detail::build_posix_termios(tty, config, configured_speed);
+  if (!settings_status.ok()) {
+    return settings_status;
   }
   if (::tcsetattr(fd, TCSANOW, &tty) != 0) {
     return transport_error("tcsetattr failed");
@@ -237,20 +215,24 @@ Status PosixSerialPort::open(const PosixSerialConfig& config) noexcept {
     return path_status;
   }
 
-  fd_ = static_cast<std::intptr_t>(::open(path_buf, O_RDWR | O_NOCTTY | O_SYNC));
+  int open_flags = O_RDWR | O_NOCTTY | O_SYNC | O_NONBLOCK;
+#if defined(O_CLOEXEC)
+  open_flags |= O_CLOEXEC;
+#endif
+  fd_ = static_cast<std::intptr_t>(::open(path_buf, open_flags));
   if (fd_ < 0) {
     return transport_errno("open failed");
   }
 
-  const Status status = configure_termios(static_cast<int>(fd_), config);
-  if (!status.ok()) {
-    close();
-    return status;
-  }
   const Status exclusive_status = enable_exclusive_access(static_cast<int>(fd_));
   if (!exclusive_status.ok()) {
     close();
     return exclusive_status;
+  }
+  const Status status = configure_termios(static_cast<int>(fd_), config);
+  if (!status.ok()) {
+    close();
+    return status;
   }
   return ok_status();
 }
@@ -274,41 +256,70 @@ std::intptr_t PosixSerialPort::native_handle() const noexcept {
   return fd_;
 }
 
-Status PosixSerialPort::write_all(std::span<const std::byte> bytes) noexcept {
+Status PosixSerialPort::write_all_until(
+    mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes,
+    std::uint32_t absolute_deadline_ms) noexcept {
   if (fd_ < 0) {
-    return transport_error("Serial port is not open");
+    return make_status(StatusCode::NotConnected, "Serial port is not open");
   }
 
   const auto* data = reinterpret_cast<const std::uint8_t*>(bytes.data());
   const int native_fd = static_cast<int>(fd_);
   std::size_t total_written = 0;
   while (total_written < bytes.size()) {
+    const int remaining = remaining_timeout_ms(absolute_deadline_ms);
+    if (remaining == 0) {
+      return deadline_timeout("Serial transaction deadline expired during write");
+    }
     const ssize_t written = ::write(native_fd, data + total_written, bytes.size() - total_written);
     if (written < 0) {
       if (errno == EINTR) {
         continue;
       }
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        pollfd descriptor {};
+        descriptor.fd = native_fd;
+        descriptor.events = POLLOUT;
+        const int poll_result = ::poll(&descriptor, 1, remaining);
+        if (poll_result == 0) {
+          return deadline_timeout("Serial transaction deadline expired during write");
+        }
+        if (poll_result < 0 && errno == EINTR) {
+          continue;
+        }
+        if (poll_result < 0 || (descriptor.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+          return transport_errno("write readiness wait failed");
+        }
+        continue;
+      }
       return transport_errno("write failed");
+    }
+    if (written == 0) {
+      return transport_error("write returned zero bytes");
     }
     total_written += static_cast<std::size_t>(written);
   }
   return ok_status();
 }
 
-Status PosixSerialPort::read_some(
-    std::span<std::byte> buffer,
-    int timeout_ms,
+Status PosixSerialPort::read_some_until(
+    mcprotocol::serial::Span<mcprotocol::serial::Byte> buffer,
+    std::uint32_t absolute_deadline_ms,
     std::size_t& out_size) noexcept {
   out_size = 0;
   if (fd_ < 0) {
-    return transport_error("Serial port is not open");
+    return make_status(StatusCode::NotConnected, "Serial port is not open");
   }
 
   const int native_fd = static_cast<int>(fd_);
   pollfd descriptor {};
   descriptor.fd = native_fd;
   descriptor.events = POLLIN;
-  const int poll_result = ::poll(&descriptor, 1, timeout_ms);
+  const int remaining = remaining_timeout_ms(absolute_deadline_ms);
+  if (remaining == 0) {
+    return deadline_timeout("Serial transaction deadline expired during receive");
+  }
+  const int poll_result = ::poll(&descriptor, 1, remaining);
   if (poll_result < 0) {
     if (errno == EINTR) {
       return ok_status();
@@ -316,7 +327,7 @@ Status PosixSerialPort::read_some(
     return transport_errno("poll failed");
   }
   if (poll_result == 0) {
-    return ok_status();
+    return deadline_timeout("Serial transaction deadline expired during receive");
   }
   if ((descriptor.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0) {
     return transport_error("Serial port reported an error");
@@ -336,7 +347,7 @@ Status PosixSerialPort::read_some(
 
 Status PosixSerialPort::flush_rx() noexcept {
   if (fd_ < 0) {
-    return transport_error("Serial port is not open");
+    return make_status(StatusCode::NotConnected, "Serial port is not open");
   }
   if (::tcflush(static_cast<int>(fd_), TCIFLUSH) != 0) {
     return transport_error("tcflush failed");
@@ -344,19 +355,38 @@ Status PosixSerialPort::flush_rx() noexcept {
   return ok_status();
 }
 
-Status PosixSerialPort::drain_tx() noexcept {
+Status PosixSerialPort::drain_tx_until(std::uint32_t absolute_deadline_ms) noexcept {
   if (fd_ < 0) {
-    return transport_error("Serial port is not open");
+    return make_status(StatusCode::NotConnected, "Serial port is not open");
   }
-  if (::tcdrain(static_cast<int>(fd_)) != 0) {
-    return transport_error("tcdrain failed");
+  const int native_fd = static_cast<int>(fd_);
+#if defined(TIOCOUTQ)
+  for (;;) {
+    int pending = 0;
+    if (::ioctl(native_fd, TIOCOUTQ, &pending) != 0) {
+      return transport_errno("TIOCOUTQ failed");
+    }
+    if (pending == 0) {
+      return ok_status();
+    }
+    const int remaining = remaining_timeout_ms(absolute_deadline_ms);
+    if (remaining == 0) {
+      return deadline_timeout("Serial transaction deadline expired during drain");
+    }
+    const int wait_ms = remaining > 1 ? 1 : remaining;
+    (void)::poll(nullptr, 0, wait_ms);
   }
-  return ok_status();
+#else
+  (void)absolute_deadline_ms;
+  return make_status(
+      StatusCode::UnsupportedConfiguration,
+      "Deadline-bounded serial drain is unavailable on this POSIX platform");
+#endif
 }
 
 Status PosixSerialPort::set_rts(bool enabled) noexcept {
   if (fd_ < 0) {
-    return transport_error("Serial port is not open");
+    return make_status(StatusCode::NotConnected, "Serial port is not open");
   }
 
   const int native_fd = static_cast<int>(fd_);

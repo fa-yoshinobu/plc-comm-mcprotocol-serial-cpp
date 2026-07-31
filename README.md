@@ -28,7 +28,7 @@ build_unflags =
     -std=gnu++11
     -std=gnu++14
 build_flags =
-    -std=gnu++17
+    -std=c++17
 ```
 
 The PlatformIO package contains the transport-agnostic `MelsecSerialClient`, codecs, high-level request builders, and MCU compatibility headers. It intentionally does not compile the Windows/POSIX serial backend or `PosixSyncClient`. Use a source checkout with CMake for those host-only components.

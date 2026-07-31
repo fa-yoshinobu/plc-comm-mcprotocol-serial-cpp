@@ -15,6 +15,8 @@ INPUTS = (
     "include/mcprotocol_serial.hpp",
     "include/mcprotocol/serial/types.hpp",
     "include/mcprotocol/serial/status.hpp",
+    "include/mcprotocol/serial/byte.hpp",
+    "include/mcprotocol/serial/span.hpp",
     "include/mcprotocol/serial/codec.hpp",
     "include/mcprotocol/serial/client.hpp",
     "include/mcprotocol/serial/high_level.hpp",

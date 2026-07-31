@@ -69,7 +69,6 @@ fi
 rts_toggle="${MCPROTOCOL_RTS_TOGGLE:-off}"
 duration_sec="${MCPROTOCOL_DURATION_SEC:-180}"
 response_timeout_ms="${MCPROTOCOL_RESPONSE_TIMEOUT_MS:-}"
-inter_byte_timeout_ms="${MCPROTOCOL_INTER_BYTE_TIMEOUT_MS:-}"
 
 targets_override="${MCPROTOCOL_TARGETS:-}"
 
@@ -146,10 +145,6 @@ fi
 
 if [[ -n "${response_timeout_ms}" ]]; then
   common_args+=(--response-timeout-ms "${response_timeout_ms}")
-fi
-
-if [[ -n "${inter_byte_timeout_ms}" ]]; then
-  common_args+=(--inter-byte-timeout-ms "${inter_byte_timeout_ms}")
 fi
 
 run_cli_capture() {

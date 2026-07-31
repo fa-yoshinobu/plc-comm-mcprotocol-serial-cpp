@@ -2,6 +2,7 @@
 
 #include "host_now_ms.hpp"
 #include "mcprotocol/serial/detail/fixed_item_array.hpp"
+#include "mcprotocol/serial/detail/long_state_aggregate.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -35,20 +36,20 @@ namespace {
 #endif
 }
 
-void trace_bytes(const char* label, std::span<const std::byte> bytes) noexcept {
+void trace_bytes(const char* label, mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes) noexcept {
   if (!trace_enabled()) {
     return;
   }
   std::fprintf(stderr, "%s len=%zu hex=", label, bytes.size());
-  for (const std::byte value : bytes) {
+  for (const mcprotocol::serial::Byte value : bytes) {
     std::fprintf(stderr, "%02X", static_cast<unsigned int>(value));
   }
   std::fprintf(stderr, "\n");
 }
 
-[[nodiscard]] constexpr Status operation_outcome_unknown_status() noexcept {
-  return make_status(
-      StatusCode::OperationOutcomeUnknown,
+[[nodiscard]] constexpr Status operation_outcome_unknown_status(StatusCode cause) noexcept {
+  return make_outcome_unknown_status(
+      cause,
       "State-changing command transmission started but its response was not confirmed; PLC state is unknown");
 }
 
@@ -93,7 +94,7 @@ void PosixSyncClient::close() noexcept {
   port_.close();
   if (client_.busy()) {
     (void)client_.notify_tx_complete(
-        now_ms(), make_status(StatusCode::Cancelled, "Serial transport closed during TX"));
+        now_ms(), make_status(StatusCode::Closed, "Serial transport closed locally during TX"));
   }
 }
 
@@ -118,23 +119,33 @@ Status PosixSyncClient::run_until_complete(bool operation_outcome_unknown_after_
     return status;
   }
 
+  const std::uint32_t transaction_start_ms = now_ms();
+  const std::uint32_t transaction_deadline_ms =
+      transaction_start_ms + protocol_config_.timeout().response_timeout_ms;
+  status = client_.notify_tx_started(transaction_start_ms);
+  if (!status.ok()) {
+    client_.cancel();
+    port_.close();
+    return status;
+  }
+
   trace_bytes("MC TX", client_.pending_tx_frame());
-  status = port_.write_all(client_.pending_tx_frame());
+  status = port_.write_all_until(client_.pending_tx_frame(), transaction_deadline_ms);
   if (!status.ok()) {
     (void)client_.notify_tx_complete(now_ms(), status);
+    port_.close();
     if (operation_outcome_unknown_after_write) {
-      port_.close();
-      return operation_outcome_unknown_status();
+      return operation_outcome_unknown_status(status.code);
     }
     return status;
   }
 
-  status = port_.drain_tx();
+  status = port_.drain_tx_until(transaction_deadline_ms);
   if (!status.ok()) {
     (void)client_.notify_tx_complete(now_ms(), status);
+    port_.close();
     if (operation_outcome_unknown_after_write) {
-      port_.close();
-      return operation_outcome_unknown_status();
+      return operation_outcome_unknown_status(status.code);
     }
     return status;
   }
@@ -142,9 +153,9 @@ Status PosixSyncClient::run_until_complete(bool operation_outcome_unknown_after_
   status = client_.notify_tx_complete(now_ms(), mcprotocol::serial::ok_status());
   if (!status.ok()) {
     client_.cancel();
+    port_.close();
     if (operation_outcome_unknown_after_write) {
-      port_.close();
-      return operation_outcome_unknown_status();
+      return operation_outcome_unknown_status(status.code);
     }
     return status;
   }
@@ -154,12 +165,12 @@ Status PosixSyncClient::run_until_complete(bool operation_outcome_unknown_after_
 
   while (!completion_.done) {
     std::size_t received = 0;
-    status = port_.read_some(rx_buffer_, 20, received);
+    status = port_.read_some_until(rx_buffer_, transaction_deadline_ms, received);
     if (!status.ok()) {
       client_.cancel();
+      port_.close();
       if (operation_outcome_unknown_after_write) {
-        port_.close();
-        return operation_outcome_unknown_status();
+        return operation_outcome_unknown_status(status.code);
       }
       return status;
     }
@@ -167,10 +178,10 @@ Status PosixSyncClient::run_until_complete(bool operation_outcome_unknown_after_
     if (received > 0U) {
       trace_bytes(
           "MC RX",
-          std::span<const std::byte>(rx_buffer_.data(), received));
+          mcprotocol::serial::Span<const mcprotocol::serial::Byte>(rx_buffer_.data(), received));
       client_.on_rx_bytes(
           now_ms(),
-          std::span<const std::byte>(rx_buffer_.data(), received));
+          mcprotocol::serial::Span<const mcprotocol::serial::Byte>(rx_buffer_.data(), received));
       if (completion_.done) {
         break;
       }
@@ -180,7 +191,9 @@ Status PosixSyncClient::run_until_complete(bool operation_outcome_unknown_after_
   }
 
   if (completion_.status.code == StatusCode::Timeout ||
-      completion_.status.code == StatusCode::OperationOutcomeUnknown) {
+      completion_.status.code == StatusCode::OperationOutcomeUnknown ||
+      completion_.status.code == StatusCode::Transport ||
+      client_.requires_transport_reset()) {
     port_.close();
   }
   return completion_.status;
@@ -372,7 +385,7 @@ Status PosixSyncClient::initialize_c24_transmission_sequence() noexcept {
 Status PosixSyncClient::read_words(
     std::string_view head_device,
     std::uint16_t points,
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   BatchReadWordsRequest request(DeviceAddress {DeviceCode::D, 0U}, 0U);
   Status status = highlevel::make_batch_read_words_request(head_device, points, request);
   if (!status.ok()) {
@@ -393,7 +406,7 @@ Status PosixSyncClient::read_words(
 
 Status PosixSyncClient::read_words(
     std::string_view head_device,
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   std::uint16_t points = 0;
   const Status status = span_size_to_points(
       out_words.size(),
@@ -407,7 +420,7 @@ Status PosixSyncClient::read_words(
 
 Status PosixSyncClient::read_extended_file_register_words(
     const ExtendedFileRegisterBatchReadWordsRequest& request,
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   const Status status = client_.async_read_extended_file_register_words(
       now_ms(),
       request,
@@ -422,7 +435,7 @@ Status PosixSyncClient::read_extended_file_register_words(
 
 Status PosixSyncClient::direct_read_extended_file_register_words(
     const ExtendedFileRegisterDirectBatchReadWordsRequest& request,
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   const Status status = client_.async_direct_read_extended_file_register_words(
       now_ms(),
       request,
@@ -438,7 +451,7 @@ Status PosixSyncClient::direct_read_extended_file_register_words(
 Status PosixSyncClient::read_bits(
     std::string_view head_device,
     std::uint16_t points,
-    std::span<BitValue> out_bits) noexcept {
+    mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   DeviceAddress parsed(DeviceCode::D, 0U);
   Status status = highlevel::parse_device_address(head_device, parsed);
   if (!status.ok()) {
@@ -475,7 +488,7 @@ Status PosixSyncClient::read_bits(
 
 Status PosixSyncClient::read_bits(
     std::string_view head_device,
-    std::span<BitValue> out_bits) noexcept {
+    mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   std::uint16_t points = 0;
   const Status status = span_size_to_points(
       out_bits.size(),
@@ -490,7 +503,7 @@ Status PosixSyncClient::read_bits(
 Status PosixSyncClient::read_link_direct_words(
     std::string_view head_device,
     std::uint16_t points,
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
   Status status = parse_link_direct_device(head_device, device);
   if (!status.ok()) {
@@ -513,7 +526,7 @@ Status PosixSyncClient::read_link_direct_words(
 Status PosixSyncClient::read_link_direct_bits(
     std::string_view head_device,
     std::uint16_t points,
-    std::span<BitValue> out_bits) noexcept {
+    mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
   Status status = parse_link_direct_device(head_device, device);
   if (!status.ok()) {
@@ -536,7 +549,7 @@ Status PosixSyncClient::read_link_direct_bits(
 Status PosixSyncClient::read_native_qualified_words(
     std::string_view head_device,
     std::uint16_t points,
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   QualifiedBufferWordDevice device(QualifiedBufferDeviceKind::G, 0U, 0U);
   Status status = parse_qualified_buffer_word_device(head_device, device);
   if (!status.ok()) {
@@ -559,7 +572,7 @@ Status PosixSyncClient::read_native_qualified_words(
 Status PosixSyncClient::read_long_state_bits(
     std::string_view head_device,
     std::uint16_t points,
-    std::span<BitValue> out_bits) noexcept {
+    mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   if (points == 0U) {
     return make_status(StatusCode::InvalidArgument, "Long state bit-read points must be in range 1..65535");
   }
@@ -600,43 +613,69 @@ Status PosixSyncClient::read_long_state_bits(
     return make_status(StatusCode::InvalidArgument, "Long state bit-read address range overflows");
   }
 
-  std::array<std::uint16_t, 4> status_block {};
+  // This is the only explicitly aggregate public read in this library.  Validate the complete
+  // immutable plan before the first send.  In particular, do not discover a profile, wire-field,
+  // request-frame, or response-frame limit after an earlier point has already been read.
+  std::array<std::uint8_t, kMaxRequestDataBytes> validation_request_data {};
+  std::array<std::uint8_t, kMaxRequestFrameBytes> validation_frame {};
   for (std::uint16_t index = 0; index < points; ++index) {
     const BatchReadWordsRequest request(
         DeviceAddress {
             spec.base_code, parsed.number + static_cast<std::uint32_t>(index)},
         4U);
-
-    status = client_.async_batch_read_words(
-        now_ms(),
+    std::size_t request_data_size = 0U;
+    status = CommandCodec::encode_batch_read_words(
+        protocol_config_,
         request,
-        std::span<std::uint16_t>(status_block.data(), status_block.size()),
-        &PosixSyncClient::on_request_complete,
-        &completion_);
+        mcprotocol::serial::Span<std::uint8_t>(
+            validation_request_data.data(), validation_request_data.size()),
+        request_data_size);
     if (!status.ok()) {
       return status;
     }
-
-    status = run_until_complete();
-    if (!status.ok()) {
-      return status;
-    }
-
-    status = highlevel::decode_long_state_bit(
-        spec,
-        std::span<const std::uint16_t>(status_block.data(), status_block.size()),
-        out_bits[index]);
+    std::size_t frame_size = 0U;
+    status = FrameCodec::encode_request(
+        protocol_config_,
+        mcprotocol::serial::Span<const std::uint8_t>(
+            validation_request_data.data(), request_data_size),
+        mcprotocol::serial::Span<std::uint8_t>(validation_frame.data(), validation_frame.size()),
+        frame_size);
     if (!status.ok()) {
       return status;
     }
   }
+  status = FrameCodec::validate_response_capacity(protocol_config_, 4U * sizeof(std::uint16_t));
+  if (!status.ok()) {
+    return status;
+  }
 
-  return ok_status();
+  // Caller storage is committed only after every internal request succeeds. This blocking wrapper
+  // owns the client for the duration of the call; same-instance cross-thread use is prohibited.
+  auto read_one = [this](
+                      DeviceAddress device,
+                      mcprotocol::serial::Span<std::uint16_t> status_block) noexcept -> Status {
+    const BatchReadWordsRequest request(
+        device,
+        static_cast<std::uint16_t>(status_block.size()));
+
+    Status read_status = client_.async_batch_read_words(
+        now_ms(),
+        request,
+        status_block,
+        &PosixSyncClient::on_request_complete,
+        &completion_);
+    if (!read_status.ok()) {
+      return read_status;
+    }
+    return run_until_complete();
+  };
+  return detail::execute_long_state_read_aggregate(
+      spec, parsed.number, points, out_bits, read_one);
 }
 
 Status PosixSyncClient::read_long_state_bits(
     std::string_view head_device,
-    std::span<BitValue> out_bits) noexcept {
+    mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   std::uint16_t points = 0;
   const Status status = span_size_to_points(
       out_bits.size(),
@@ -650,7 +689,7 @@ Status PosixSyncClient::read_long_state_bits(
 
 Status PosixSyncClient::write_words(
     std::string_view head_device,
-    std::span<const std::uint16_t> words) noexcept {
+    mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
   BatchWriteWordsRequest request(DeviceAddress {DeviceCode::D, 0U}, {});
   Status status = highlevel::make_batch_write_words_request(head_device, words, request);
   if (!status.ok()) {
@@ -670,7 +709,7 @@ Status PosixSyncClient::write_words(
 
 Status PosixSyncClient::write_link_direct_words(
     std::string_view head_device,
-    std::span<const std::uint16_t> words) noexcept {
+    mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
   LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
   Status status = parse_link_direct_device(head_device, device);
   if (!status.ok()) {
@@ -691,7 +730,7 @@ Status PosixSyncClient::write_link_direct_words(
 
 Status PosixSyncClient::write_link_direct_bits(
     std::string_view head_device,
-    std::span<const BitValue> bits) noexcept {
+    mcprotocol::serial::Span<const BitValue> bits) noexcept {
   LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
   Status status = parse_link_direct_device(head_device, device);
   if (!status.ok()) {
@@ -712,7 +751,7 @@ Status PosixSyncClient::write_link_direct_bits(
 
 Status PosixSyncClient::write_native_qualified_words(
     std::string_view head_device,
-    std::span<const std::uint16_t> words) noexcept {
+    mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
   QualifiedBufferWordDevice device(QualifiedBufferDeviceKind::G, 0U, 0U);
   Status status = parse_qualified_buffer_word_device(head_device, device);
   if (!status.ok()) {
@@ -758,10 +797,10 @@ Status PosixSyncClient::direct_write_extended_file_register_words(
 }
 
 Status PosixSyncClient::random_read(
-    std::span<const highlevel::RandomReadWordSpec> word_items,
-    std::span<const highlevel::RandomReadDWordSpec> dword_items,
-    std::span<std::uint16_t> out_words,
-    std::span<std::uint32_t> out_dwords) noexcept {
+    mcprotocol::serial::Span<const highlevel::RandomReadWordSpec> word_items,
+    mcprotocol::serial::Span<const highlevel::RandomReadDWordSpec> dword_items,
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint32_t> out_dwords) noexcept {
   auto parsed_word_items = detail::make_filled_array<RandomReadWordItem, kMaxRandomAccessItems>(
       RandomReadWordItem {DeviceAddress {DeviceCode::D, 0U}});
   auto parsed_dword_items = detail::make_filled_array<RandomReadDWordItem, kMaxRandomAccessItems>(
@@ -792,7 +831,7 @@ Status PosixSyncClient::random_read_word(
   const std::array<highlevel::RandomReadWordSpec, 1> items {{
       highlevel::RandomReadWordSpec(device),
   }};
-  return random_read(items, {}, std::span<std::uint16_t>(&out_value, 1U), {});
+  return random_read(items, {}, mcprotocol::serial::Span<std::uint16_t>(&out_value, 1U), {});
 }
 
 Status PosixSyncClient::random_read_dword(
@@ -801,14 +840,14 @@ Status PosixSyncClient::random_read_dword(
   const std::array<highlevel::RandomReadDWordSpec, 1> items {{
       highlevel::RandomReadDWordSpec(device),
   }};
-  return random_read({}, items, {}, std::span<std::uint32_t>(&out_value, 1U));
+  return random_read({}, items, {}, mcprotocol::serial::Span<std::uint32_t>(&out_value, 1U));
 }
 
 Status PosixSyncClient::random_write_words(
-    std::span<const highlevel::RandomWriteWordSpec> items) noexcept {
+    mcprotocol::serial::Span<const highlevel::RandomWriteWordSpec> items) noexcept {
   auto parsed_items = detail::make_filled_array<RandomWriteWordItem, kMaxRandomAccessItems>(
       RandomWriteWordItem(DeviceAddress {DeviceCode::D, 0U}, 0U));
-  std::span<const RandomWriteWordItem> request_items {};
+  mcprotocol::serial::Span<const RandomWriteWordItem> request_items {};
   Status status = highlevel::make_random_write_word_items(items, parsed_items, request_items);
   if (!status.ok()) {
     return status;
@@ -827,10 +866,10 @@ Status PosixSyncClient::random_write_words(
 }
 
 Status PosixSyncClient::random_write_dwords(
-    std::span<const highlevel::RandomWriteDWordSpec> items) noexcept {
+    mcprotocol::serial::Span<const highlevel::RandomWriteDWordSpec> items) noexcept {
   auto parsed_items = detail::make_filled_array<RandomWriteDWordItem, kMaxRandomAccessItems>(
       RandomWriteDWordItem(DeviceAddress {DeviceCode::D, 0U}, 0U));
-  std::span<const RandomWriteDWordItem> request_items {};
+  mcprotocol::serial::Span<const RandomWriteDWordItem> request_items {};
   Status status = highlevel::make_random_write_dword_items(items, parsed_items, request_items);
   if (!status.ok()) {
     return status;
@@ -844,7 +883,7 @@ Status PosixSyncClient::random_write_dwords(
 }
 
 Status PosixSyncClient::random_write_extended_file_register_words(
-    std::span<const ExtendedFileRegisterRandomWriteWordItem> items) noexcept {
+    mcprotocol::serial::Span<const ExtendedFileRegisterRandomWriteWordItem> items) noexcept {
   const Status status = client_.async_random_write_extended_file_register_words(
       now_ms(),
       items,
@@ -875,10 +914,10 @@ Status PosixSyncClient::random_write_dword(
 }
 
 Status PosixSyncClient::random_write_bits(
-    std::span<const highlevel::RandomWriteBitSpec> items) noexcept {
+    mcprotocol::serial::Span<const highlevel::RandomWriteBitSpec> items) noexcept {
   auto parsed_items = detail::make_filled_array<RandomWriteBitItem, kMaxRandomAccessItems>(
-      RandomWriteBitItem(DeviceAddress {DeviceCode::M, 0U}, BitValue::Off));
-  std::span<const RandomWriteBitItem> request_items {};
+      RandomWriteBitItem(DeviceAddress {DeviceCode::M, 0U}, false));
+  mcprotocol::serial::Span<const RandomWriteBitItem> request_items {};
   Status status = highlevel::make_random_write_bit_items(items, parsed_items, request_items);
   if (!status.ok()) {
     return status;
@@ -905,8 +944,8 @@ Status PosixSyncClient::random_write_bit(
 }
 
 Status PosixSyncClient::register_monitor(
-    std::span<const highlevel::RandomReadWordSpec> word_items,
-    std::span<const highlevel::RandomReadDWordSpec> dword_items) noexcept {
+    mcprotocol::serial::Span<const highlevel::RandomReadWordSpec> word_items,
+    mcprotocol::serial::Span<const highlevel::RandomReadDWordSpec> dword_items) noexcept {
   auto parsed_word_items = detail::make_filled_array<RandomReadWordItem, kMaxMonitorItems>(
       RandomReadWordItem {DeviceAddress {DeviceCode::D, 0U}});
   auto parsed_dword_items = detail::make_filled_array<RandomReadDWordItem, kMaxMonitorItems>(
@@ -957,8 +996,8 @@ Status PosixSyncClient::register_extended_file_register_monitor(
 }
 
 Status PosixSyncClient::read_monitor(
-    std::span<std::uint16_t> out_words,
-    std::span<std::uint32_t> out_dwords) noexcept {
+    mcprotocol::serial::Span<std::uint16_t> out_words,
+    mcprotocol::serial::Span<std::uint32_t> out_dwords) noexcept {
   const Status status = client_.async_read_monitor(
       now_ms(),
       out_words,
@@ -972,7 +1011,7 @@ Status PosixSyncClient::read_monitor(
 }
 
 Status PosixSyncClient::read_extended_file_register_monitor(
-    std::span<std::uint16_t> out_words) noexcept {
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   const Status status = client_.async_read_extended_file_register_monitor(
       now_ms(),
       out_words,
@@ -986,7 +1025,7 @@ Status PosixSyncClient::read_extended_file_register_monitor(
 
 Status PosixSyncClient::write_bits(
     std::string_view head_device,
-    std::span<const BitValue> bits) noexcept {
+    mcprotocol::serial::Span<const BitValue> bits) noexcept {
   BatchWriteBitsRequest request(DeviceAddress {DeviceCode::M, 0U}, {});
   Status status = highlevel::make_batch_write_bits_request(head_device, bits, request);
   if (!status.ok()) {

@@ -5,7 +5,7 @@
 #include "mcprotocol/serial/compat/cstdint.hpp"
 
 #include "mcprotocol_serial.hpp"
-#include "mcprotocol/serial/span_compat.hpp"
+#include "mcprotocol/serial/span.hpp"
 
 namespace {
 
@@ -50,7 +50,7 @@ void on_request_complete(void* user, Status status) {
   app->completion_status = status;
 }
 
-void start_uart_tx(AppState& app, std::span<const std::byte> frame) {
+void start_uart_tx(AppState& app, mcprotocol::serial::Span<const mcprotocol::serial::Byte> frame) {
   // A real UART driver would start DMA or interrupt-driven transmission here.
   (void)frame;
   app.tx_started = true;
@@ -64,7 +64,7 @@ void simulate_response(AppState& app, std::uint32_t now_ms) {
   std::size_t response_frame_size = 0;
   const Status status = FrameCodec::encode_success_response(
       config,
-      std::span<const std::uint8_t>(response_data.data(), response_data.size()),
+      mcprotocol::serial::Span<const std::uint8_t>(response_data.data(), response_data.size()),
       response_frame,
       response_frame_size);
   if (!status.ok()) {
@@ -76,8 +76,8 @@ void simulate_response(AppState& app, std::uint32_t now_ms) {
   // Feed received bytes back to the state machine.
   app.client.on_rx_bytes(
       now_ms,
-      std::span<const std::byte>(
-          reinterpret_cast<const std::byte*>(response_frame.data()),
+      mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
+          reinterpret_cast<const mcprotocol::serial::Byte*>(response_frame.data()),
           response_frame_size));
 }
 
@@ -119,10 +119,16 @@ void loop() {
     const Status status = g_app.client.async_batch_read_words(
         now,
         BatchReadWordsRequest({mcprotocol::serial::DeviceCode::D, 100}, static_cast<std::uint16_t>(g_app.out_words.size())),
-        std::span<std::uint16_t>(g_app.out_words.data(), g_app.out_words.size()),
+        mcprotocol::serial::Span<std::uint16_t>(g_app.out_words.data(), g_app.out_words.size()),
         on_request_complete,
         &g_app);
     if (status.ok()) {
+      const Status tx_start_status = g_app.client.notify_tx_started(now);
+      if (!tx_start_status.ok()) {
+        g_app.done = true;
+        g_app.completion_status = tx_start_status;
+        return;
+      }
       start_uart_tx(g_app, g_app.client.pending_tx_frame());
       g_app.started = true;
     } else {

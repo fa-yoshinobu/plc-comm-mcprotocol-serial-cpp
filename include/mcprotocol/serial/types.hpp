@@ -4,7 +4,8 @@
 #include "mcprotocol/serial/compat/cstddef.hpp"
 #include "mcprotocol/serial/compat/cstdint.hpp"
 
-#include "mcprotocol/serial/span_compat.hpp"
+#include "mcprotocol/serial/span.hpp"
+#include "mcprotocol/serial/byte.hpp"
 
 #include "mcprotocol/serial/status.hpp"
 
@@ -511,11 +512,10 @@ enum class DeviceCode : std::uint8_t {
   HG
 };
 
-/// \brief Logical single-bit value used by bit read/write APIs.
-enum class BitValue : std::uint8_t {
-  Off = 0,
-  On = 1
-};
+/// \brief Native Boolean value used by every individual bit read/write API.
+///
+/// Packed block words remain `std::uint16_t`; they are not individual bit-value inputs.
+using BitValue = bool;
 
 /// \brief Conflict-handling mode for remote RUN / PAUSE.
 enum class RemoteOperationMode : std::uint16_t {
@@ -586,18 +586,10 @@ enum class ResponseType : std::uint8_t {
   PlcError
 };
 
-/// \brief Timeout settings used by the frame decoder and async client.
-///
-/// These values are transport-facing rather than command-facing:
-///
-/// - `response_timeout_ms` is the total request timeout once TX finishes
-/// - `inter_byte_timeout_ms` is RX inactivity after the library receives a response byte/chunk;
-///   one OS/UART callback may contain multiple physical bytes whose internal spacing is unobservable
+/// \brief One absolute transaction timeout used from the first TX attempt through full decode.
 struct TimeoutConfig {
-  /// Maximum wait after TX completion before the request is treated as timed out.
+  /// Maximum complete transaction duration. Partial progress never restarts this limit.
   std::uint32_t response_timeout_ms = 3000;
-  /// Maximum RX inactivity after a response byte/chunk; defaults to 250 ms.
-  std::uint32_t inter_byte_timeout_ms = 250;
 };
 
 /// \brief PLC-side ACPU monitoring timer encoded in 1E requests.
@@ -1240,13 +1232,6 @@ class ProtocolConfig {
     return with_timeout(next);
   }
 
-  [[nodiscard]] constexpr ProtocolConfig with_inter_byte_timeout_ms(
-      std::uint32_t value) const noexcept {
-    TimeoutConfig next = timeout_;
-    next.inter_byte_timeout_ms = value;
-    return with_timeout(next);
-  }
-
  private:
   struct UnconfiguredTag {};
 
@@ -1348,13 +1333,13 @@ struct BatchWriteWordsRequest {
   BatchWriteWordsRequest() = delete;
   constexpr BatchWriteWordsRequest(
       DeviceAddress first_device,
-      std::span<const std::uint16_t> write_words) noexcept
+      mcprotocol::serial::Span<const std::uint16_t> write_words) noexcept
       : head_device(first_device), words(write_words) {}
 
   /// First device in the contiguous write range.
   DeviceAddress head_device;
   /// Caller-owned word data to write starting at `head_device`.
-  std::span<const std::uint16_t> words;
+  mcprotocol::serial::Span<const std::uint16_t> words;
 };
 
 /// \brief Contiguous bit-write request (`1401` bit path).
@@ -1362,13 +1347,13 @@ struct BatchWriteBitsRequest {
   BatchWriteBitsRequest() = delete;
   constexpr BatchWriteBitsRequest(
       DeviceAddress first_device,
-      std::span<const BitValue> write_bits) noexcept
+      mcprotocol::serial::Span<const BitValue> write_bits) noexcept
       : head_device(first_device), bits(write_bits) {}
 
   /// First bit device in the contiguous write range.
   DeviceAddress head_device;
   /// Caller-owned bit data to write starting at `head_device`.
-  std::span<const BitValue> bits;
+  mcprotocol::serial::Span<const BitValue> bits;
 };
 /// @}
 
@@ -1407,13 +1392,13 @@ struct ExtendedFileRegisterBatchWriteWordsRequest {
   ExtendedFileRegisterBatchWriteWordsRequest() = delete;
   constexpr ExtendedFileRegisterBatchWriteWordsRequest(
       ExtendedFileRegisterAddress first_device,
-      std::span<const std::uint16_t> write_words) noexcept
+      mcprotocol::serial::Span<const std::uint16_t> write_words) noexcept
       : head_device(first_device), words(write_words) {}
 
   /// First block-addressed file-register word to write.
   ExtendedFileRegisterAddress head_device;
   /// Caller-owned word data to write starting at `head_device`.
-  std::span<const std::uint16_t> words;
+  mcprotocol::serial::Span<const std::uint16_t> words;
 };
 
 /// \brief Direct extended file-register batch write (`NW` on 1C AnA/AnUCPU common, chapter-18 direct path on 1E).
@@ -1421,13 +1406,13 @@ struct ExtendedFileRegisterDirectBatchWriteWordsRequest {
   ExtendedFileRegisterDirectBatchWriteWordsRequest() = delete;
   constexpr ExtendedFileRegisterDirectBatchWriteWordsRequest(
       std::uint32_t first_device_number,
-      std::span<const std::uint16_t> write_words) noexcept
+      mcprotocol::serial::Span<const std::uint16_t> write_words) noexcept
       : head_device_number(first_device_number), words(write_words) {}
 
   /// \brief `NR/NW` direct address on 1C or the chapter-18 direct `R` address on 1E.
   std::uint32_t head_device_number;
   /// Caller-owned word data to write starting at `head_device_number`.
-  std::span<const std::uint16_t> words;
+  mcprotocol::serial::Span<const std::uint16_t> words;
 };
 
 /// \brief One item inside extended file-register random write (`ET` on 1C, chapter-18 on 1E).
@@ -1448,11 +1433,11 @@ struct ExtendedFileRegisterRandomWriteWordItem {
 struct ExtendedFileRegisterMonitorRegistration {
   ExtendedFileRegisterMonitorRegistration() = delete;
   constexpr explicit ExtendedFileRegisterMonitorRegistration(
-      std::span<const ExtendedFileRegisterAddress> monitor_items) noexcept
+      mcprotocol::serial::Span<const ExtendedFileRegisterAddress> monitor_items) noexcept
       : items(monitor_items) {}
 
   /// Sparse list of block-addressed file-register items to register for monitoring.
-  std::span<const ExtendedFileRegisterAddress> items;
+  mcprotocol::serial::Span<const ExtendedFileRegisterAddress> items;
 };
 /// @}
 
@@ -1474,14 +1459,14 @@ struct RandomReadDWordItem {
 struct RandomReadRequest {
   RandomReadRequest() = delete;
   constexpr RandomReadRequest(
-      std::span<const RandomReadWordItem> words,
-      std::span<const RandomReadDWordItem> dwords) noexcept
+      mcprotocol::serial::Span<const RandomReadWordItem> words,
+      mcprotocol::serial::Span<const RandomReadDWordItem> dwords) noexcept
       : word_items(words), dword_items(dwords) {}
 
   /// Sparse 16-bit items, encoded first and returned through the word output span.
-  std::span<const RandomReadWordItem> word_items;
+  mcprotocol::serial::Span<const RandomReadWordItem> word_items;
   /// Sparse 32-bit items, encoded second and returned through the dword output span.
-  std::span<const RandomReadDWordItem> dword_items;
+  mcprotocol::serial::Span<const RandomReadDWordItem> dword_items;
 };
 
 /// \brief One explicitly word-width item inside native random write (`1402` word path).
@@ -1548,11 +1533,11 @@ struct MultiBlockReadBlock {
 struct MultiBlockReadRequest {
   MultiBlockReadRequest() = delete;
   constexpr explicit MultiBlockReadRequest(
-      std::span<const MultiBlockReadBlock> request_blocks) noexcept
+      mcprotocol::serial::Span<const MultiBlockReadBlock> request_blocks) noexcept
       : blocks(request_blocks) {}
 
   /// Ordered block list encoded into the native multi-block read request.
-  std::span<const MultiBlockReadBlock> blocks;
+  mcprotocol::serial::Span<const MultiBlockReadBlock> blocks;
 };
 
 /// \brief One block inside native multi-block write (`1406`).
@@ -1562,8 +1547,8 @@ struct MultiBlockWriteBlock {
       DeviceAddress first_device,
       std::uint16_t point_count,
       bool use_bit_block,
-      std::span<const std::uint16_t> write_words,
-      std::span<const BitValue> write_bits) noexcept
+      mcprotocol::serial::Span<const std::uint16_t> write_words,
+      mcprotocol::serial::Span<const BitValue> write_bits) noexcept
       : head_device(first_device),
         points(point_count),
         bit_block(use_bit_block),
@@ -1572,12 +1557,12 @@ struct MultiBlockWriteBlock {
   constexpr MultiBlockWriteBlock(
       DeviceAddress first_device,
       std::uint16_t point_count,
-      std::span<const std::uint16_t> write_words) noexcept
+      mcprotocol::serial::Span<const std::uint16_t> write_words) noexcept
       : MultiBlockWriteBlock(first_device, point_count, false, write_words, {}) {}
   constexpr MultiBlockWriteBlock(
       DeviceAddress first_device,
       std::uint16_t point_count,
-      std::span<const BitValue> write_bits) noexcept
+      mcprotocol::serial::Span<const BitValue> write_bits) noexcept
       : MultiBlockWriteBlock(first_device, point_count, true, {}, write_bits) {}
 
   /// First device in this contiguous block.
@@ -1587,20 +1572,20 @@ struct MultiBlockWriteBlock {
   /// `true` when `bits` is used, `false` when `words` is used.
   bool bit_block;
   /// Caller-owned word data for word blocks.
-  std::span<const std::uint16_t> words;
+  mcprotocol::serial::Span<const std::uint16_t> words;
   /// Caller-owned bit data for bit blocks.
-  std::span<const BitValue> bits;
+  mcprotocol::serial::Span<const BitValue> bits;
 };
 
 /// \brief Native multi-block write request composed of multiple contiguous blocks.
 struct MultiBlockWriteRequest {
   MultiBlockWriteRequest() = delete;
   constexpr explicit MultiBlockWriteRequest(
-      std::span<const MultiBlockWriteBlock> request_blocks) noexcept
+      mcprotocol::serial::Span<const MultiBlockWriteBlock> request_blocks) noexcept
       : blocks(request_blocks) {}
 
   /// Ordered block list encoded into the native multi-block write request.
-  std::span<const MultiBlockWriteBlock> blocks;
+  mcprotocol::serial::Span<const MultiBlockWriteBlock> blocks;
 };
 
 /// \brief Parsed layout description for one block returned by `parse_multi_block_read_response()`.
@@ -1624,14 +1609,14 @@ struct MultiBlockReadBlockResult {
 struct MonitorRegistration {
   MonitorRegistration() = delete;
   constexpr MonitorRegistration(
-      std::span<const RandomReadWordItem> words,
-      std::span<const RandomReadDWordItem> dwords) noexcept
+      mcprotocol::serial::Span<const RandomReadWordItem> words,
+      mcprotocol::serial::Span<const RandomReadDWordItem> dwords) noexcept
       : word_items(words), dword_items(dwords) {}
 
   /// Sparse 16-bit items registered first.
-  std::span<const RandomReadWordItem> word_items;
+  mcprotocol::serial::Span<const RandomReadWordItem> word_items;
   /// Sparse 32-bit items registered second. Unsupported for 1C and 1E monitor commands.
-  std::span<const RandomReadDWordItem> dword_items;
+  mcprotocol::serial::Span<const RandomReadDWordItem> dword_items;
 };
 /// @}
 
@@ -1654,7 +1639,7 @@ struct UserFrameRegistrationData {
   /// Optional frame-byte count returned by the target for the registered frame data.
   std::uint16_t frame_bytes = 0;
   /// Raw user-frame registration bytes as returned by the target.
-  std::array<std::byte, kMaxUserFrameRegistrationBytes> registration_data {};
+  std::array<mcprotocol::serial::Byte, kMaxUserFrameRegistrationBytes> registration_data {};
 };
 
 /// \brief User-frame registration-data write request (`1610`, subcommand `0000`).
@@ -1663,7 +1648,7 @@ struct UserFrameWriteRequest {
   constexpr UserFrameWriteRequest(
       std::uint16_t target_frame_no,
       std::uint16_t target_frame_bytes,
-      std::span<const std::byte> target_registration_data) noexcept
+      mcprotocol::serial::Span<const mcprotocol::serial::Byte> target_registration_data) noexcept
       : frame_no(target_frame_no),
         frame_bytes(target_frame_bytes),
         registration_data(target_registration_data) {}
@@ -1673,7 +1658,7 @@ struct UserFrameWriteRequest {
   /// Frame-byte count encoded into the `1610` payload.
   std::uint16_t frame_bytes;
   /// Raw user-frame registration bytes to store.
-  std::span<const std::byte> registration_data;
+  mcprotocol::serial::Span<const mcprotocol::serial::Byte> registration_data;
 };
 
 /// \brief User-frame registration-data delete request (`1610`, subcommand `0001`).
@@ -1761,13 +1746,13 @@ struct HostBufferWriteRequest {
   HostBufferWriteRequest() = delete;
   constexpr HostBufferWriteRequest(
       std::uint32_t first_address,
-      std::span<const std::uint16_t> write_words) noexcept
+      mcprotocol::serial::Span<const std::uint16_t> write_words) noexcept
       : start_address(first_address), words(write_words) {}
 
   /// Starting host-buffer word address.
   std::uint32_t start_address;
   /// Caller-owned words written sequentially from `start_address`.
-  std::span<const std::uint16_t> words;
+  mcprotocol::serial::Span<const std::uint16_t> words;
 };
 
 /// \brief Module-buffer byte read request (`0601` helper path).
@@ -1793,7 +1778,7 @@ struct ModuleBufferWriteRequest {
   constexpr ModuleBufferWriteRequest(
       std::uint32_t first_address,
       std::uint16_t target_module_number,
-      std::span<const std::byte> write_bytes) noexcept
+      mcprotocol::serial::Span<const mcprotocol::serial::Byte> write_bytes) noexcept
       : start_address(first_address), module_number(target_module_number), bytes(write_bytes) {}
 
   /// Starting module-buffer byte address.
@@ -1801,7 +1786,7 @@ struct ModuleBufferWriteRequest {
   /// Module number used by the addressed special-function module.
   std::uint16_t module_number;
   /// Caller-owned raw bytes written starting at `start_address`.
-  std::span<const std::byte> bytes;
+  mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes;
 };
 /// @}
 

@@ -8,9 +8,17 @@ from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
 
-FORBIDDEN_FILES = {"AGENTS.md", "TODO.md"}
 REQUIRED_FILES = {"LICENSE", "README.md", "library.json", "library.properties"}
-REQUIRED_DIRECTORIES = {"examples/", "include/"}
+REQUIRED_DIRECTORIES = {
+    ".github/",
+    "docsrc/maintainer/",
+    "docsrc/user/",
+    "examples/",
+    "include/",
+    "scripts/",
+    "tests/",
+}
+FORBIDDEN_DIRECTORIES = {"build/", "build_win/", "release-artifacts/"}
 
 
 def main() -> int:
@@ -25,11 +33,13 @@ def main() -> int:
         raise SystemExit(f"Invalid release archive {args.archive}: {error}") from error
 
     forbidden = sorted(
-        entry for entry in entries if entry.rstrip("/").rsplit("/", 1)[-1] in FORBIDDEN_FILES
+        entry
+        for entry in entries
+        if any(entry.startswith(prefix) for prefix in FORBIDDEN_DIRECTORIES)
     )
     if forbidden:
         raise SystemExit(
-            "Release archive contains maintainer-only files: " + ", ".join(forbidden)
+            "Release archive contains generated or release-output files: " + ", ".join(forbidden)
         )
 
     missing_files = sorted(REQUIRED_FILES - entries)

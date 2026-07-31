@@ -17,6 +17,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Release: Aligned artifact roles so the registry package contains consumer runtime, native API metadata, license, README, and ecosystem-native examples where applicable while excluding repository tests and maintainer tooling; the GitHub source archive retains tracked non-hardware validation and maintainer inputs.
+
+### BREAKING
+
+- Library: Bit inputs and outputs now use native `bool` through the `BitValue` type alias. Replace
+  the removed `BitValue::Off` and `BitValue::On` enumerators with `false` and `true`; invalid bit
+  states are unrepresentable at the public type boundary.
+- Library: One absolute transaction deadline now covers first TX write, partial TX progress,
+  physical drain, and complete RX. Call `notify_tx_started()` immediately before the first write;
+  `notify_tx_complete()` does not restart the deadline. `inter_byte_timeout_ms` and its builder/CLI
+  option are removed, and host transports use deadline-bounded write, drain, and read APIs. Any
+  deadline expiry requires transport reset.
+- Library: `StatusCode::NotConnected` and `StatusCode::Closed` distinguish lifecycle failures, and
+  `Status::cause` identifies the underlying failure wrapped by `OperationOutcomeUnknown`.
+- Library: Accepted single requests are preflighted against complete request, worst-case binary DLE
+  expansion, response, decoder, and caller-output capacities. An operation that cannot fit one wire
+  request returns `InvalidArgument` before request-state mutation; an independently undersized
+  caller output returns `BufferTooSmall`. Single-request operations are never split or resized.
+- Library: Every `async_*` entry point now rejects overlap with `Busy` before changing the active
+  frame, outputs, callback, or request metadata. Separate client instances remain independent.
+- Library: Multi-point `PosixSyncClient::read_long_state_bits()` for long timer/retentive-timer
+  status devices is now explicitly a non-atomic read aggregate: its complete plan is validated
+  before transport and caller output is published only after all ordered internal reads succeed.
+  All writes and every other public operation remain single-request and are never auto-split.
+
+- Library: The public contiguous-range type is now `mcprotocol::serial::Span<T>` from
+  `mcprotocol/serial/span.hpp`. Replace `std::span<T>` and the removed
+  `mcprotocol/serial/span_compat.hpp` include. The library no longer injects a pre-C++20 `span`
+  implementation into `namespace std`; the complete CMake build, tests, CLI, and examples now use
+  strict ISO C++17 without C++20 designated initializers or concepts. `Span` accepts pointer/count,
+  pointer-pair, C-array, and matching `std::array` lvalues; use `.data(), .size()` explicitly for
+  other containers. Rvalue arrays are rejected, mutable views convert only to const views, and
+  slicing now uses checked `try_first` / `try_subspan` output methods.
+- Library: Raw public buffers now use `mcprotocol::serial::Byte` and the explicit
+  `byte_to_integer<Integer>()` conversion from `mcprotocol/serial/byte.hpp`. Replace `std::byte` and
+  `std::to_integer`; no compatibility alias remains in `namespace std`.
+- Library: Host serial open now replaces inherited OS line state completely. POSIX uses raw input,
+  output, and local modes with software flow control disabled; Win32 preserves only documented
+  driver-reserved/provider DCB fields while overwriting DTR, DSR flow, software flow, error
+  replacement, null stripping, and abort-on-error behavior. RTS is
+  disabled for `HardwareFlowControl::None` and OS-handshaked only for `RtsCts`. Applications that
+  relied on a previous process or driver session leaving extra COM/termios flags enabled must now
+  express supported settings through `PosixSerialConfig`.
+- Library: `qualified_buffer_word_to_byte_address` and `module_buffer_start_address` now return a
+  `Status` and write the checked result through an output argument. Callers must handle
+  `InvalidArgument` when word-to-byte conversion or the additional module offset cannot be
+  represented in the 32-bit module-buffer address space.
+
+- Library: Module-buffer and native qualified-buffer encoders now reject address, module-number,
+  and end-of-range values that do not fit the active 1E, 1C, Q/L, or iQ-R wire fields instead of
+  truncating high bits. Undefined qualified-buffer and long-state enum values are rejected.
+- Library: All contiguous, link-direct, and multi-block bit-write encoders accept only native
+  `bool` values; invalid bit states are excluded by the public type system.
+- Library: Binary 1E monitor bit responses use packed high/low nibbles, require the exact response
+  length, and reject nibbles other than `0` and `1`. ASCII 1E module-buffer reads wait for the full
+  two-hex-characters-per-byte payload.
+- Library: Complete Format 1/2/4 responses with an invalid CRLF terminator report `Framing` instead
+  of remaining indefinitely incomplete. Starting a replacement monitor registration invalidates
+  the previous registration, and reconfiguration clears all monitor registration state.
+- Library: Synchronous host operations close the serial port after transport/framing reset
+  conditions. POSIX writes that make zero-byte progress fail, serial descriptors request
+  close-on-exec where available, exclusive access is acquired before termios changes, optional
+  baud constants are compile-guarded, and Win32 rejects writes larger than the DWORD limit.
+- CI: PlatformIO's native CLI target now includes the POSIX serial backend, and reduced/ultra
+  subproject configuration no longer overwrites a parent project's `BUILD_TESTING` cache value.
+- CI: Worktree source archives now use a synthetic Git tree containing modifications, untracked files, and deletions; the extracted archive must pass host CI and build native plus AVR consumers from its own packed PlatformIO tarball.
+- Docs: Regenerated the public API reference for the checked address-conversion signatures.
+- Tests: Added capacity/deadline boundaries, Busy/no-mutation and independent-instance coverage,
+  structured outcome causes, native-bool, packed-nibble, CRLF, monitor-state, and ASCII
+  payload-length regression coverage.
+
 ## [3.2.2] - 2026-07-31
 
 - Release: Bumped library, CMake, PlatformIO, Arduino, public version-header, and install-documentation metadata to `3.2.2`. This version supersedes `3.2.1` on the PlatformIO registry, where the `3.2.1` upload remained stuck in registry-side processing; the library code is unchanged from `3.2.1`.
