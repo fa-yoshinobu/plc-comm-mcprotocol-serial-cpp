@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `notify_tx_complete()` does not restart the deadline. `inter_byte_timeout_ms` and its builder/CLI
   option are removed, and host transports use deadline-bounded write, drain, and read APIs. Any
   deadline expiry requires transport reset.
+- Library: A deadline reached while physical TX is pending is now latched until the UART/DMA layer
+  reports completion or abort through `notify_tx_complete()`. The client stays busy and keeps the
+  RS-485 direction hook and completion callback pending; the later notification publishes the
+  original timeout result and cannot replace it with a later transport cause.
 - Library: `StatusCode::NotConnected` and `StatusCode::Closed` distinguish lifecycle failures, and
   `Status::cause` identifies the underlying failure wrapped by `OperationOutcomeUnknown`.
 - Library: Accepted single requests are preflighted against complete request, worst-case binary DLE

@@ -44,6 +44,9 @@ namespace mcprotocol::serial {
 /// Cancelling before `notify_tx_started()` completes immediately as `Cancelled`. Cancelling during
 /// TX records the cancellation but does not complete the request until the UART reports physical
 /// TX completion or abort through `notify_tx_complete()`.
+/// Likewise, a deadline reached while physical TX is pending is latched: `poll()` marks the
+/// transport for reset but keeps the request busy and leaves the RS-485 direction/completion
+/// callbacks pending until `notify_tx_complete()` reports that TX finished or was aborted.
 /// After transmission may have begun, any unconfirmed state-changing command completes as
 /// `OperationOutcomeUnknown`; the client never retries it automatically.
 class MelsecSerialClient {
@@ -86,7 +89,9 @@ class MelsecSerialClient {
   /// \brief Advances the state machine after the transport finished or aborted the pending TX.
   ///
   /// `transport_status` is mandatory. Pass `ok_status()` only after confirmed physical TX
-  /// completion; otherwise pass the actual transport failure or cancellation status.
+  /// completion; otherwise pass the actual transport failure or cancellation status. If `poll()`
+  /// already latched the absolute deadline, this call releases TX ownership exactly once and
+  /// publishes the latched timeout result regardless of the later transport status.
   [[nodiscard]] Status notify_tx_complete(
       std::uint32_t now_ms,
       Status transport_status) noexcept;
@@ -101,6 +106,10 @@ class MelsecSerialClient {
   /// unconfirmed state-changing request.
   [[nodiscard]] Status notify_rx_failure(Status receive_status) noexcept;
   /// \brief Checks timeouts for the current in-flight request.
+  ///
+  /// A timeout during pending physical TX is latched without ending the RS-485 hook, firing the
+  /// completion callback, or clearing `busy()`. The application must finish or abort TX and call
+  /// `notify_tx_complete()`.
   void poll(std::uint32_t now_ms) noexcept;
   /// \brief Requests cancellation of the in-flight request.
   ///
@@ -595,6 +604,7 @@ class MelsecSerialClient {
   bool transport_reset_required_ = false;
   bool awaiting_write_complete_ = false;
   bool tx_started_ = false;
+  bool tx_timeout_latched_ = false;
   bool cancel_requested_during_tx_ = false;
   OperationKind operation_ = OperationKind::None;
   CompletionHandler callback_ = nullptr;
