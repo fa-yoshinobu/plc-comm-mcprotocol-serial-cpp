@@ -6,6 +6,9 @@
 
 MELSEC MC Protocol over RS-232C/RS-485 in transport-agnostic C++ for MCU firmware and host-side bring-up tools.
 
+Supported MCU targets are ESP32 and RP2040. Arduino Mega 2560 and other AVR/8-bit targets are not
+supported; migrate those projects to a supported ESP32 target or maintain the AVR port downstream.
+
 ## PLC Comm Family
 
 This library is part of the plc-comm family. See the [package matrix](https://fa-yoshinobu.github.io/plc-comm-docs-site/package-matrix/) for protocol, language, registry, and install-command mapping.
@@ -31,7 +34,7 @@ build_flags =
     -std=c++17
 ```
 
-The PlatformIO package contains the transport-agnostic `MelsecSerialClient`, codecs, high-level request builders, and MCU compatibility headers. It intentionally does not compile the Windows/POSIX serial backend or `PosixSyncClient`. Use a source checkout with CMake for those host-only components.
+The PlatformIO package contains the transport-agnostic `MelsecSerialClient`, codecs, high-level request builders, and MCU compatibility headers for ESP32 and RP2040. It intentionally does not compile the Windows/POSIX serial backend or `PosixSyncClient`. Use a source checkout with CMake for those host-only components.
 
 ## Core client start
 

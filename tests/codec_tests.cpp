@@ -6592,6 +6592,67 @@ void completion_callback(void* user, Status status) {
   capture->status = status;
 }
 
+void test_client_receive_failure_preserves_transport_status() {
+  const auto config = make_binary_c4_config();
+  MelsecSerialClient client;
+  Status status = client.configure(config);
+  assert(status.ok());
+
+  status = client.notify_rx_failure(
+      mcprotocol::serial::make_status(StatusCode::Transport, "no active response wait"));
+  assert(status.code == StatusCode::InvalidArgument);
+
+  const std::array<std::uint16_t, 1> write_values {0x1234U};
+  CallbackCapture write_capture {};
+  status = client.async_batch_write_words(
+      0U,
+      BatchWriteWordsRequest(
+          DeviceAddress {mcprotocol::serial::DeviceCode::D, 100U}, write_values),
+      completion_callback,
+      &write_capture);
+  assert(status.ok());
+  status = client.notify_rx_failure(
+      mcprotocol::serial::make_status(StatusCode::Transport, "TX is not complete"));
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(client.busy());
+  assert(!write_capture.called);
+
+  assert(start_and_notify_tx_complete(client, 1U, mcprotocol::serial::ok_status()).ok());
+  status = client.notify_rx_failure(mcprotocol::serial::ok_status());
+  assert(status.code == StatusCode::InvalidArgument);
+  assert(client.busy());
+  assert(!write_capture.called);
+
+  status = client.notify_rx_failure(
+      mcprotocol::serial::make_status(StatusCode::Transport, "simulated receive failure"));
+  assert(status.ok());
+  assert(write_capture.called);
+  assert(write_capture.status.code == StatusCode::OperationOutcomeUnknown);
+  assert(write_capture.status.cause == StatusCode::Transport);
+  assert(!client.busy());
+  assert(client.requires_transport_reset());
+
+  assert(client.configure(config).ok());
+  std::array<std::uint16_t, 1> read_values {};
+  CallbackCapture read_capture {};
+  status = client.async_batch_read_words(
+      10U,
+      BatchReadWordsRequest(DeviceAddress {mcprotocol::serial::DeviceCode::D, 100U}, 1U),
+      read_values,
+      completion_callback,
+      &read_capture);
+  assert(status.ok());
+  assert(start_and_notify_tx_complete(client, 11U, mcprotocol::serial::ok_status()).ok());
+  status = client.notify_rx_failure(
+      mcprotocol::serial::make_status(StatusCode::Timeout, "simulated receive timeout"));
+  assert(status.ok());
+  assert(read_capture.called);
+  assert(read_capture.status.code == StatusCode::Timeout);
+  assert(read_capture.status.cause == StatusCode::Ok);
+  assert(!client.busy());
+  assert(client.requires_transport_reset());
+}
+
 void test_client_busy_rejection_preserves_active_request_state() {
   const auto config = make_binary_c4_config();
   MelsecSerialClient client;
@@ -9831,6 +9892,18 @@ void test_win32_serial_dcb_is_fully_owned() {
   assert(dcb.wReserved == 0x1357U);
   assert(dcb.wReserved1 == 0x2468U);
 }
+
+void test_win32_serial_io_size_boundaries() {
+  Status status = mcprotocol::serial::detail::validate_win32_io_size(
+      static_cast<std::uint64_t>(MAXDWORD),
+      "size rejected");
+  assert(status.ok());
+
+  status = mcprotocol::serial::detail::validate_win32_io_size(
+      static_cast<std::uint64_t>(MAXDWORD) + 1U,
+      "size rejected");
+  assert(status.code == StatusCode::InvalidArgument);
+}
 #endif
 
 #if defined(__unix__) || defined(__APPLE__)
@@ -9931,6 +10004,7 @@ int main() {
   test_byte_and_span_cxx17_contract();
 #if defined(_WIN32)
   test_win32_serial_dcb_is_fully_owned();
+  test_win32_serial_io_size_boundaries();
 #endif
 #if defined(__unix__) || defined(__APPLE__)
   test_posix_serial_termios_is_fully_owned();
@@ -10116,6 +10190,7 @@ int main() {
   test_validate_qualified_buffer_helper_route_rejects_q_l_equivalent_profiles();
   test_make_qualified_buffer_write_words_request_encodes_little_endian_bytes();
   test_decode_qualified_buffer_word_values_decodes_little_endian_bytes();
+  test_client_receive_failure_preserves_transport_status();
   test_client_busy_rejection_preserves_active_request_state();
   test_client_instances_have_independent_in_flight_state();
   test_client_all_state_changes_report_ambiguous_outcomes();

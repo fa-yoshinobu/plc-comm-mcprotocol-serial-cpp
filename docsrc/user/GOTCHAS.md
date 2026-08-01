@@ -54,7 +54,7 @@
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| A write, remote-control, password, user-frame, signal, mode-switch, or initialization command returns `StatusCode::OperationOutcomeUnknown`. | Transmission may have begun, but the PLC result could not be confirmed. The requested state change may already have occurred. | Do not resend automatically. Inspect the affected PLC state and reset/reopen the transport when required before deciding the next operation. |
+| A write, monitor registration, remote-control, password, user-frame, signal, mode-switch, or initialization command returns `StatusCode::OperationOutcomeUnknown`. | Transmission may have begun, but the PLC result could not be confirmed. The requested state change may already have occurred. | Do not resend automatically. Inspect the affected PLC state and reset/reopen the transport when required before deciding the next operation. |
 | Remote RUN returns `StatusCode::OperationOutcomeUnknown`. | Transmission started, but transport failure, timeout, cancellation, or an invalid response prevented confirmation. The PLC may already have applied the requested RUN and clear policies. | Do not resend automatically. Inspect the PLC state, reset/reopen the transport when required, and decide the next action explicitly. |
 | `remote_run()` does not compile, or CLI `remote-run` exits with usage. | Conflict and clear policies are mandatory. | Pass `RemoteOperationMode::{DoNotExecuteForcibly, ExecuteForcibly}` and one `RemoteRunClearMode`, or CLI `no-force|force` plus `no-clear|outside-latch|all-clear`. |
 | Remote PAUSE returns `StatusCode::OperationOutcomeUnknown`. | PAUSE transmission started, but its result was not confirmed. The library does not retry or escalate to forced execution. | Inspect the PLC state before deciding the next operation. Reopen/reset the transport when required. |
@@ -71,12 +71,13 @@
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
 | A constrained MCU toolchain has no `<array>`, `<algorithm>`, or related C++ standard header. | The library auto-detects missing headers and uses fallbacks from `mcprotocol/serial/compat/`. The compatibility files no longer use standard header names in the public include root. | If the toolchain's header probe is inaccurate, add `-DMCPROTOCOL_SERIAL_USE_BUNDLED_STDLIB_COMPAT=1` to that environment. Do not copy compatibility files into the include root under names such as `array` or `algorithm`. |
+| An Arduino Mega 2560 or another AVR/8-bit build is requested. | AVR/8-bit targets are outside the supported memory and toolchain contract. | Migrate to a supported ESP32 target or maintain an explicitly unsupported downstream port. |
 
 ## PlatformIO UART pins wrong
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| The PlatformIO UART sample builds but does not communicate. | The sample pin defaults are starting values: RP2040 TX `0` / RX `1`, ESP32-C3 TX `7` / RX `6`, and Mega 2560 TX1 `18` / RX1 `19`. | Match those definitions to your actual board, level shifter, and cable wiring. |
+| The PlatformIO UART sample builds but does not communicate. | The sample pin defaults are starting values: RP2040 TX `0` / RX `1` and ESP32-C3 TX `7` / RX `6`. | Match those definitions to your actual board, level shifter, and cable wiring. |
 
 ## Target-dependent native commands
 

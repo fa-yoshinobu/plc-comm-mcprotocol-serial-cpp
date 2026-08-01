@@ -131,7 +131,6 @@ for %%E in (
   esp32-c3-devkitm-1-example-ultra-minimal
   rpipico-arduino-uart-example
   esp32-c3-devkitm-1-uart-example
-  mega2560-arduino-uart-example
 ) do (
   echo [ci] PlatformIO %%E
   call "%PIO_EXE%" run -e %%E

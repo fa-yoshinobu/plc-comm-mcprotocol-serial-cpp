@@ -513,6 +513,19 @@ void MelsecSerialClient::on_rx_bytes(
   }
 }
 
+Status MelsecSerialClient::notify_rx_failure(Status receive_status) noexcept {
+  if (!busy_ || awaiting_write_complete_ || !tx_started_) {
+    return make_status(StatusCode::InvalidArgument, "No active response wait can accept a receive failure");
+  }
+  if (receive_status.ok()) {
+    return make_status(StatusCode::InvalidArgument, "Receive failure status must not be Ok");
+  }
+
+  transport_reset_required_ = true;
+  complete(active_transport_failure_status(receive_status));
+  return ok_status();
+}
+
 void MelsecSerialClient::poll(std::uint32_t now_ms) noexcept {
   if (!busy_ || !tx_started_) {
     return;

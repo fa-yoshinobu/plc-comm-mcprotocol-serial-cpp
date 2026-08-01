@@ -1,6 +1,7 @@
 #include "mcprotocol/serial/host_sync.hpp"
 
 #include "host_now_ms.hpp"
+#include "host_sync_runner.hpp"
 #include "mcprotocol/serial/detail/fixed_item_array.hpp"
 #include "mcprotocol/serial/detail/long_state_aggregate.hpp"
 
@@ -45,12 +46,6 @@ void trace_bytes(const char* label, mcprotocol::serial::Span<const mcprotocol::s
     std::fprintf(stderr, "%02X", static_cast<unsigned int>(value));
   }
   std::fprintf(stderr, "\n");
-}
-
-[[nodiscard]] constexpr Status operation_outcome_unknown_status(StatusCode cause) noexcept {
-  return make_outcome_unknown_status(
-      cause,
-      "State-changing command transmission started but its response was not confirmed; PLC state is unknown");
 }
 
 }  // namespace
@@ -106,97 +101,18 @@ const ProtocolConfig& PosixSyncClient::protocol_config() const noexcept {
   return protocol_config_;
 }
 
-Status PosixSyncClient::run_until_complete(bool operation_outcome_unknown_after_write) noexcept {
-  completion_ = {};
-
-  Status status = port_.flush_rx();
-  if (!status.ok()) {
-    client_.cancel();
-    port_.close();
-    if (client_.busy()) {
-      (void)client_.notify_tx_complete(now_ms(), status);
-    }
-    return status;
-  }
-
-  const std::uint32_t transaction_start_ms = now_ms();
-  const std::uint32_t transaction_deadline_ms =
-      transaction_start_ms + protocol_config_.timeout().response_timeout_ms;
-  status = client_.notify_tx_started(transaction_start_ms);
-  if (!status.ok()) {
-    client_.cancel();
-    port_.close();
-    return status;
-  }
-
-  trace_bytes("MC TX", client_.pending_tx_frame());
-  status = port_.write_all_until(client_.pending_tx_frame(), transaction_deadline_ms);
-  if (!status.ok()) {
-    (void)client_.notify_tx_complete(now_ms(), status);
-    port_.close();
-    if (operation_outcome_unknown_after_write) {
-      return operation_outcome_unknown_status(status.code);
-    }
-    return status;
-  }
-
-  status = port_.drain_tx_until(transaction_deadline_ms);
-  if (!status.ok()) {
-    (void)client_.notify_tx_complete(now_ms(), status);
-    port_.close();
-    if (operation_outcome_unknown_after_write) {
-      return operation_outcome_unknown_status(status.code);
-    }
-    return status;
-  }
-
-  status = client_.notify_tx_complete(now_ms(), mcprotocol::serial::ok_status());
-  if (!status.ok()) {
-    client_.cancel();
-    port_.close();
-    if (operation_outcome_unknown_after_write) {
-      return operation_outcome_unknown_status(status.code);
-    }
-    return status;
-  }
-  if (completion_.done) {
-    return completion_.status;
-  }
-
-  while (!completion_.done) {
-    std::size_t received = 0;
-    status = port_.read_some_until(rx_buffer_, transaction_deadline_ms, received);
-    if (!status.ok()) {
-      client_.cancel();
-      port_.close();
-      if (operation_outcome_unknown_after_write) {
-        return operation_outcome_unknown_status(status.code);
-      }
-      return status;
-    }
-
-    if (received > 0U) {
-      trace_bytes(
-          "MC RX",
-          mcprotocol::serial::Span<const mcprotocol::serial::Byte>(rx_buffer_.data(), received));
-      client_.on_rx_bytes(
-          now_ms(),
-          mcprotocol::serial::Span<const mcprotocol::serial::Byte>(rx_buffer_.data(), received));
-      if (completion_.done) {
-        break;
-      }
-    }
-
-    client_.poll(now_ms());
-  }
-
-  if (completion_.status.code == StatusCode::Timeout ||
-      completion_.status.code == StatusCode::OperationOutcomeUnknown ||
-      completion_.status.code == StatusCode::Transport ||
-      client_.requires_transport_reset()) {
-    port_.close();
-  }
-  return completion_.status;
+Status PosixSyncClient::run_until_complete() noexcept {
+  return detail::run_synchronous_request(
+      client_,
+      port_,
+      protocol_config_,
+      rx_buffer_,
+      completion_,
+      []() noexcept { return now_ms(); },
+      [](const char* label,
+         mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes) noexcept {
+        trace_bytes(label, bytes);
+      });
 }
 
 Status PosixSyncClient::read_cpu_model(CpuModelInfo& out_info) noexcept {
@@ -223,7 +139,7 @@ Status PosixSyncClient::remote_run(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::remote_stop() noexcept {
@@ -234,7 +150,7 @@ Status PosixSyncClient::remote_stop() noexcept {
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::remote_pause(RemoteOperationMode mode) noexcept {
@@ -246,7 +162,7 @@ Status PosixSyncClient::remote_pause(RemoteOperationMode mode) noexcept {
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::remote_latch_clear() noexcept {
@@ -257,7 +173,7 @@ Status PosixSyncClient::remote_latch_clear() noexcept {
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::unlock_remote_password(std::string_view remote_password) noexcept {
@@ -269,7 +185,7 @@ Status PosixSyncClient::unlock_remote_password(std::string_view remote_password)
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::lock_remote_password(std::string_view remote_password) noexcept {
@@ -281,7 +197,7 @@ Status PosixSyncClient::lock_remote_password(std::string_view remote_password) n
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::clear_error_information() noexcept {
@@ -292,7 +208,7 @@ Status PosixSyncClient::clear_error_information() noexcept {
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::remote_reset() noexcept {
@@ -303,7 +219,7 @@ Status PosixSyncClient::remote_reset() noexcept {
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::read_user_frame(
@@ -330,7 +246,7 @@ Status PosixSyncClient::write_user_frame(const UserFrameWriteRequest& request) n
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::delete_user_frame(const UserFrameDeleteRequest& request) noexcept {
@@ -342,7 +258,7 @@ Status PosixSyncClient::delete_user_frame(const UserFrameDeleteRequest& request)
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::control_global_signal(
@@ -355,7 +271,7 @@ Status PosixSyncClient::control_global_signal(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::switch_serial_module_mode(
@@ -368,7 +284,7 @@ Status PosixSyncClient::switch_serial_module_mode(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::initialize_c24_transmission_sequence() noexcept {
@@ -379,7 +295,7 @@ Status PosixSyncClient::initialize_c24_transmission_sequence() noexcept {
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::read_words(
@@ -704,7 +620,7 @@ Status PosixSyncClient::write_words(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::write_link_direct_words(
@@ -725,7 +641,7 @@ Status PosixSyncClient::write_link_direct_words(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::write_link_direct_bits(
@@ -746,7 +662,7 @@ Status PosixSyncClient::write_link_direct_bits(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::write_native_qualified_words(
@@ -767,7 +683,7 @@ Status PosixSyncClient::write_native_qualified_words(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::write_extended_file_register_words(
@@ -780,7 +696,7 @@ Status PosixSyncClient::write_extended_file_register_words(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::direct_write_extended_file_register_words(
@@ -793,7 +709,7 @@ Status PosixSyncClient::direct_write_extended_file_register_words(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::random_read(
@@ -862,7 +778,7 @@ Status PosixSyncClient::random_write_words(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::random_write_dwords(
@@ -879,7 +795,7 @@ Status PosixSyncClient::random_write_dwords(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::random_write_extended_file_register_words(
@@ -892,7 +808,7 @@ Status PosixSyncClient::random_write_extended_file_register_words(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::random_write_word(
@@ -931,7 +847,7 @@ Status PosixSyncClient::random_write_bits(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 Status PosixSyncClient::random_write_bit(
@@ -1040,7 +956,7 @@ Status PosixSyncClient::write_bits(
   if (!status.ok()) {
     return status;
   }
-  return run_until_complete(true);
+  return run_until_complete();
 }
 
 }  // namespace mcprotocol::serial

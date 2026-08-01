@@ -308,8 +308,7 @@ class PosixSyncClient {
   };
 
   static void on_request_complete(void* user, Status status) noexcept;
-  [[nodiscard]] Status run_until_complete(
-      bool operation_outcome_unknown_after_write = false) noexcept;
+  [[nodiscard]] Status run_until_complete() noexcept;
 
   PosixSerialPort port_ {};
   MelsecSerialClient client_ {};

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build native and Arduino consumers from the packed PlatformIO tarball."""
+"""Build native and supported ESP32 consumers from the packed PlatformIO tarball."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ENVIRONMENTS = ("native-core", "mega2560-core")
+ENVIRONMENTS = ("native-core", "esp32-c3-core")
 REQUIRED_FILES = (
     "LICENSE",
     "README.md",
@@ -139,15 +139,19 @@ build_unflags =
     -std=gnu++17
     -std=gnu++2a
     -std=gnu++20
+    -std=c++11
+    -std=c++14
+    -std=c++17
+    -std=c++20
 build_flags =
     -std=c++17
 
 [env:native-core]
 platform = native
 
-[env:mega2560-core]
-platform = atmelavr
-board = megaatmega2560
+[env:esp32-c3-core]
+platform = espressif32
+board = esp32-c3-devkitm-1
 framework = arduino
 """,
         encoding="utf-8",

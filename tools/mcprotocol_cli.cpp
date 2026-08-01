@@ -1958,7 +1958,8 @@ void on_tx_end(void* user) {
   (void)port->set_rts(false);
 }
 
-[[nodiscard]] Status discard_stale_rx(PosixSerialPort& port) {
+template <typename Port>
+[[nodiscard]] Status discard_stale_rx(Port& port) {
   Status status = port.flush_rx();
   if (!status.ok()) {
     return status;
@@ -2076,9 +2077,10 @@ void print_hex_bytes(mcprotocol::serial::Span<const mcprotocol::serial::Byte> by
   return discard_stale_rx(port);
 }
 
+template <typename Port>
 [[nodiscard]] Status drive_request(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    Port& port,
     CommandState& state,
     bool dump_frames = false) {
   Status status = discard_stale_rx(port);
@@ -2101,6 +2103,9 @@ void print_hex_bytes(mcprotocol::serial::Span<const mcprotocol::serial::Byte> by
   }
 
   Status notify_status = client.notify_tx_complete(now_ms(), status);
+  if (state.done) {
+    return state.status;
+  }
   if (!notify_status.ok()) {
     return notify_status;
   }
@@ -2113,8 +2118,11 @@ void print_hex_bytes(mcprotocol::serial::Span<const mcprotocol::serial::Byte> by
     std::size_t bytes_read = 0;
     status = port.read_some_until(rx_buffer, transaction_deadline_ms, bytes_read);
     if (!status.ok()) {
-      client.cancel();
-      return status;
+      const Status notify_status = client.notify_rx_failure(status);
+      if (state.done) {
+        return state.status;
+      }
+      return notify_status.ok() ? status : notify_status;
     }
     if (bytes_read != 0U) {
       if (dump_frames || g_dump_frames) {
@@ -2284,42 +2292,69 @@ void print_hex_bytes(mcprotocol::serial::Span<const mcprotocol::serial::Byte> by
       dump_frames);
 }
 
-void print_status_error(const char* prefix, Status status) {
-  if (status.code == StatusCode::PlcError) {
-    std::fprintf(stderr, "%s: %s (0x%04X)\n", prefix, status.message, status.plc_error_code);
-    return;
+[[nodiscard]] const char* status_code_name(StatusCode code) noexcept {
+  switch (code) {
+    case StatusCode::Ok:
+      return "Ok";
+    case StatusCode::InvalidArgument:
+      return "InvalidArgument";
+    case StatusCode::Busy:
+      return "Busy";
+    case StatusCode::Timeout:
+      return "Timeout";
+    case StatusCode::NotConnected:
+      return "NotConnected";
+    case StatusCode::Closed:
+      return "Closed";
+    case StatusCode::Transport:
+      return "Transport";
+    case StatusCode::Framing:
+      return "Framing";
+    case StatusCode::SumCheckMismatch:
+      return "SumCheckMismatch";
+    case StatusCode::Parse:
+      return "Parse";
+    case StatusCode::UnsupportedConfiguration:
+      return "UnsupportedConfiguration";
+    case StatusCode::PlcError:
+      return "PlcError";
+    case StatusCode::BufferTooSmall:
+      return "BufferTooSmall";
+    case StatusCode::Cancelled:
+      return "Cancelled";
+    case StatusCode::OperationOutcomeUnknown:
+      return "OperationOutcomeUnknown";
   }
-  std::fprintf(stderr, "%s: %s\n", prefix, status.message);
+  return "UnknownStatus";
+}
+
+void print_status_value(std::FILE* stream, Status status) {
+  std::fprintf(stream, "%s: %s", status_code_name(status.code), status.message);
+  if (status.code == StatusCode::PlcError) {
+    std::fprintf(stream, " (0x%04X)", status.plc_error_code);
+  }
+  if (status.code == StatusCode::OperationOutcomeUnknown) {
+    std::fprintf(stream, " (cause=%s)", status_code_name(status.cause));
+  }
+  std::fputc('\n', stream);
+}
+
+void print_status_error(const char* prefix, Status status) {
+  std::fprintf(stderr, "%s: ", prefix);
+  print_status_value(stderr, status);
 }
 
 void print_probe_status(std::string_view label, Status status) {
-  if (status.code == StatusCode::PlcError) {
-    std::printf("%-5.*s error 0x%04X\n",
-                static_cast<int>(label.size()),
-                label.data(),
-                status.plc_error_code);
-    return;
-  }
-  std::printf("%-5.*s error %s\n",
-              static_cast<int>(label.size()),
-              label.data(),
-              status.message);
+  std::printf("%-5.*s error ", static_cast<int>(label.size()), label.data());
+  print_status_value(stdout, status);
 }
 
 void print_probe_write_status(std::string_view label, const char* stage, Status status) {
-  if (status.code == StatusCode::PlcError) {
-    std::printf("%-5.*s %s error 0x%04X\n",
-                static_cast<int>(label.size()),
-                label.data(),
-                stage,
-                status.plc_error_code);
-    return;
-  }
-  std::printf("%-5.*s %s error %s\n",
+  std::printf("%-5.*s %s error ",
               static_cast<int>(label.size()),
               label.data(),
-              stage,
-              status.message);
+              stage);
+  print_status_value(stdout, status);
 }
 
 [[nodiscard]] bool parse_bit_value(std::string_view text, BitValue& out_value) {
@@ -3388,6 +3423,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 }  // namespace
 
+#if !defined(MCPROTOCOL_SERIAL_CLI_TESTING)
 int main(int argc, char** argv) {
   CliOptions options;
   if (!parse_args(argc, argv, options)) {
@@ -4006,11 +4042,7 @@ int main(int argc, char** argv) {
         std::printf("%.*s=skip ",
                     static_cast<int>(label.size()),
                     label.data());
-        if (status.code == StatusCode::PlcError) {
-          std::printf("0x%04X\n", status.plc_error_code);
-        } else {
-          std::printf("%s\n", status.message);
-        }
+        print_status_value(stdout, status);
       };
 
       const auto verify_random_word_values = [](std::string_view label,
@@ -4280,11 +4312,7 @@ int main(int argc, char** argv) {
         std::printf("%.*s=skip ",
                     static_cast<int>(label.size()),
                     label.data());
-        if (status.code == StatusCode::PlcError) {
-          std::printf("0x%04X\n", status.plc_error_code);
-        } else {
-          std::printf("%s\n", status.message);
-        }
+        print_status_value(stdout, status);
       };
 
       const auto restore_originals = [&]() -> bool {
@@ -4559,11 +4587,7 @@ int main(int argc, char** argv) {
         std::printf("%.*s=skip ",
                     static_cast<int>(label.size()),
                     label.data());
-        if (status.code == StatusCode::PlcError) {
-          std::printf("0x%04X\n", status.plc_error_code);
-        } else {
-          std::printf("%s\n", status.message);
-        }
+        print_status_value(stdout, status);
       };
 
       const auto restore_originals = [&]() -> bool {
@@ -5031,11 +5055,7 @@ int main(int argc, char** argv) {
           mcprotocol::serial::Span<MultiBlockReadBlockResult>(multi_read_results.data(), selected_read_blocks.size()));
       if (!status.ok()) {
         std::printf("multi-block-read=skip ");
-        if (status.code == StatusCode::PlcError) {
-          std::printf("0x%04X\n", status.plc_error_code);
-        } else {
-          std::printf("%s\n", status.message);
-        }
+        print_status_value(stdout, status);
       } else {
         bool matches_backup = true;
         std::size_t word_cursor = 0;
@@ -5182,11 +5202,7 @@ int main(int argc, char** argv) {
           MultiBlockWriteRequest(selected_write_blocks));
       if (!status.ok()) {
         std::printf("multi-block-write=skip ");
-        if (status.code == StatusCode::PlcError) {
-          std::printf("0x%04X\n", status.plc_error_code);
-        } else {
-          std::printf("%s\n", status.message);
-        }
+        print_status_value(stdout, status);
       } else {
         std::array<std::uint16_t, 2> verify_word_block_a {};
         std::array<std::uint16_t, 3> verify_word_block_b {};
@@ -5251,10 +5267,9 @@ int main(int argc, char** argv) {
         if (!matches_test) {
           if (status.ok()) {
             std::printf("multi-block-write=skip verify-mismatch\n");
-          } else if (status.code == StatusCode::PlcError) {
-            std::printf("multi-block-write=skip verify-0x%04X\n", status.plc_error_code);
           } else {
-            std::printf("multi-block-write=skip verify-%s\n", status.message);
+            std::printf("multi-block-write=skip verify-");
+            print_status_value(stdout, status);
           }
         } else {
           multi_write_ok = true;
@@ -5342,11 +5357,7 @@ int main(int argc, char** argv) {
         status = run_read_monitor_raw(options.protocol_config(), port, options.rts_toggle, frame, options.dump_frames);
         if (!status.ok()) {
           std::printf("probe-monitor[read-only]: skip ");
-          if (status.code == StatusCode::PlcError) {
-            std::printf("0x%04X\n", status.plc_error_code);
-          } else {
-            std::printf("%s\n", status.message);
-          }
+          print_status_value(stdout, status);
           return 1;
         }
 
@@ -5370,11 +5381,7 @@ int main(int argc, char** argv) {
           mcprotocol::serial::Span<const RandomReadWordItem>(items.data(), items.size()));
       if (!status.ok()) {
         std::printf("probe-monitor: skip register ");
-        if (status.code == StatusCode::PlcError) {
-          std::printf("0x%04X\n", status.plc_error_code);
-        } else {
-          std::printf("%s\n", status.message);
-        }
+        print_status_value(stdout, status);
         return 1;
       }
 
@@ -5385,11 +5392,7 @@ int main(int argc, char** argv) {
           mcprotocol::serial::Span<std::uint32_t>(monitor_values.data(), monitor_values.size()));
       if (!status.ok()) {
         std::printf("probe-monitor: skip read ");
-        if (status.code == StatusCode::PlcError) {
-          std::printf("0x%04X\n", status.plc_error_code);
-        } else {
-          std::printf("%s\n", status.message);
-        }
+        print_status_value(stdout, status);
         return 1;
       }
 
@@ -5461,11 +5464,7 @@ int main(int argc, char** argv) {
           mcprotocol::serial::Span<std::uint16_t>(words.data(), words.size()));
       if (!status.ok()) {
         std::printf("probe-host-buffer: skip ");
-        if (status.code == StatusCode::PlcError) {
-          std::printf("0x%04X\n", status.plc_error_code);
-        } else {
-          std::printf("%s\n", status.message);
-        }
+        print_status_value(stdout, status);
         return 1;
       }
       std::printf("probe-host-buffer=ok start=0 words=1 value=0x%04X %u\n", words[0], words[0]);
@@ -5482,11 +5481,7 @@ int main(int argc, char** argv) {
           mcprotocol::serial::Span<mcprotocol::serial::Byte>(bytes.data(), bytes.size()));
       if (!status.ok()) {
         std::printf("probe-module-buffer: skip ");
-        if (status.code == StatusCode::PlcError) {
-          std::printf("0x%04X\n", status.plc_error_code);
-        } else {
-          std::printf("%s\n", status.message);
-        }
+        print_status_value(stdout, status);
         return 1;
       }
       std::printf("probe-module-buffer=ok start=0 bytes=2 module=0 value=%02X %02X\n",
@@ -5599,11 +5594,7 @@ int main(int argc, char** argv) {
                     first_mismatch_expected,
                     first_mismatch_read);
       } else if (recorded_skip_status) {
-        if (first_skip_status.code == StatusCode::PlcError) {
-          std::printf("0x%04X\n", first_skip_status.plc_error_code);
-        } else {
-          std::printf("%s\n", first_skip_status.message);
-        }
+        print_status_value(stdout, first_skip_status);
       } else {
         std::printf("no writable host-buffer word found in range 0..%u\n",
                     static_cast<unsigned int>(kProbeAddressLimit - 1U));
@@ -5635,11 +5626,7 @@ int main(int argc, char** argv) {
           ModuleBufferWriteRequest(0U, 0U, mcprotocol::serial::Span<const mcprotocol::serial::Byte>(test_value.data(), test_value.size())));
       if (!status.ok()) {
         std::printf("probe-write-module-buffer: skip ");
-        if (status.code == StatusCode::PlcError) {
-          std::printf("0x%04X\n", status.plc_error_code);
-        } else {
-          std::printf("%s\n", status.message);
-        }
+        print_status_value(stdout, status);
         return 1;
       }
 
@@ -7237,3 +7224,4 @@ int main(int argc, char** argv) {
 
   return 2;
 }
+#endif

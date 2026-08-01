@@ -1537,7 +1537,7 @@ Connected own-station route.
 
 Asynchronous MC protocol client for UART / serial integrations.
 
-The intended MCU-side workflow is: call configure() start an async_* request call notify_tx_started(now_ms) immediately before the first UART write transmit pending_tx_frame() with the board UART layer call notify_tx_complete(now_ms, transport_status) when TX finishes or aborts feed received bytes with on_rx_bytes() call poll() from the main loop or scheduler for deadline handling
+The intended MCU-side workflow is: call configure() start an async_* request call notify_tx_started(now_ms) immediately before the first UART write transmit pending_tx_frame() with the board UART layer call notify_tx_complete(now_ms, transport_status) when TX finishes or aborts feed received bytes with on_rx_bytes() call notify_rx_failure(receive_status) if the transport aborts response reception call poll() from the main loop or scheduler for deadline handling
 
 Output spans passed to async_* requests must remain valid until the completion callback fires. Only one request may be active. A second enabled async_* request returns Busy before changing the active request's output storage, request metadata, or monitor state. Same-instance calls from different operating-system threads are prohibited; the caller owns scheduling. Separate instances are independent and may progress concurrently. Cancelling before notify_tx_started() completes immediately as Cancelled. Cancelling during TX records the cancellation but does not complete the request until the UART reports physical TX completion or abort through notify_tx_complete(). After transmission may have begun, any unconfirmed state-changing command completes as OperationOutcomeUnknown; the client never retries it automatically.
 
@@ -1632,6 +1632,16 @@ void mcprotocol::serial::MelsecSerialClient::on_rx_bytes(std::uint32_t now_ms, m
 ```
 
 Feeds received bytes into the response decoder.
+
+#### `notify_rx_failure`
+
+```cpp
+Status mcprotocol::serial::MelsecSerialClient::notify_rx_failure(Status receive_status) noexcept
+```
+
+Completes an active response wait with the actual receive failure.
+
+Call this only after successful TX completion when the transport cannot continue receiving. receive_status must be an error. The completion callback receives that status for a read-only request, or OperationOutcomeUnknown with receive_status.code as its cause for an unconfirmed state-changing request.
 
 #### `poll`
 
