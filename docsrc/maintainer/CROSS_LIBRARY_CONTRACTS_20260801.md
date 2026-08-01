@@ -263,8 +263,9 @@ Final source state evidence:
 - MSVC 19.50 strict build: 4/4 CTest executables passed.
 - GCC reduced and ultra core profiles compiled successfully with their intended test targets
   disabled by the profile contract.
-- The packed PlatformIO package compiled and linked both `native-core` and AVR
-  `mega2560-core` consumers; host-only objects were absent.
+- The packed PlatformIO package compiled and linked its then-current native/AVR consumers. AVR
+  support was subsequently removed by GOAL-MCS-001; the maintained gate now uses `native-core` and
+  `esp32-c3-core`.
 - A synthetic worktree source archive containing modified, untracked, and
   deleted paths passed contents, extracted build, 4/4 CTest, Markdown-link,
   generated-API, and packed PlatformIO consumer checks (104 files).
@@ -298,13 +299,13 @@ fixed time, build/package shape, or injected response behavior.
 ## MCS-ARTIFACT-001 — Complete worktree source and packed consumers
 
 Implementation scope: source-archive worktree mode, extracted host CI,
-PlatformIO package construction, native/AVR packed consumers, and CI tooling.
+PlatformIO package construction, native/ESP32-C3 packed consumers, and CI tooling.
 
 Target contract: worktree source archives are created from one synthetic Git
 tree containing every modified and untracked non-ignored file and every tracked
 deletion. The extracted archive alone passes host build/tests, Markdown and API
 freshness, then packs its own PlatformIO artifact and builds both native and
-AVR consumers from that tarball.
+supported ESP32-C3 consumers from that tarball.
 
 Compatibility impact: none; runtime and public C++ contracts are unchanged.
 
@@ -316,7 +317,7 @@ Machine-verifiable acceptance criteria:
    detail headers and every worktree modification are compiled from extraction.
 3. Extracted CMake/CTest, Markdown-link, and generated-API checks pass.
 4. The extracted tree's packed tarball builds `native-core` and
-   `mega2560-core`, links `client.cpp` and `codec.cpp`, and excludes host-only
+   `esp32-c3-core`, links `client.cpp` and `codec.cpp`, and excludes host-only
    objects from both consumers.
 
 Self-review finding disposition: accepted. The previous worktree option only
@@ -330,3 +331,143 @@ evidence for modified, untracked, or deleted content.
 - [x] Live PLC verification is not required; archive and compilation behavior are deterministic.
 - [x] Maintainer record, changelog, and CI workflow agree with the implemented gate.
 - [x] Final acceptance criteria verified and the item marked complete.
+
+## GOAL-MCS-001 — Remove unsupported Arduino Mega 2560 support
+
+Implementation scope: PlatformIO environments, samples, package metadata, CI/package consumers,
+user documentation, maintainer documentation, and changelog.
+
+Target contract: ESP32 and RP2040 remain supported MCU targets. Arduino Mega 2560 and every other
+AVR/8-bit target are unsupported and are not presented by a tracked artifact or gate. The public
+decode API is unchanged by this support removal.
+
+Compatibility impact: Mega/AVR users migrate to ESP32 or maintain an unsupported downstream port.
+
+Machine-verifiable acceptance criteria:
+
+1. No Mega/AVR PlatformIO environment, sample, package platform wildcard, or CI consumer remains.
+2. The packed embedded consumer gate builds `esp32-c3-core`, and the maintained ESP32 examples build.
+3. User/release documentation names the support removal and migration path.
+4. No public decode header changes as part of this item.
+
+- [x] Implementation completed in this repository.
+- [x] Targeted source, metadata, sample, and documentation searches added to self-review evidence.
+- [x] Relevant ESP32 and package-consumer build checks passed.
+- [x] Codex self-review completed against the approved contract.
+- [x] Live PLC verification is not required; support metadata and build targets are deterministic.
+- [x] Documentation, migration guidance, and changelog agree.
+- [x] Final acceptance criteria verified.
+
+## GOAL-MCS-002 — Preserve core completion status in the synchronous API
+
+Implementation scope: `PosixSyncClient`, its internal synchronous runner, deterministic fault
+injection tests, user guidance, and changelog.
+
+Target contract: once transmission starts, a completed core callback is the sole returned result.
+No wrapper-owned state-changing command list can replace that result. Normal and extended monitor
+registration preserve `OperationOutcomeUnknown` and `cause`; pre-send failures remain direct. A
+receive-side failure is reported to the core with its actual `Status`, not converted to caller
+cancellation.
+
+Compatibility impact: monitor-registration timeout/transport results can change from a direct
+failure to `OperationOutcomeUnknown`; callers must reconcile PLC state before retrying.
+
+Machine-verifiable acceptance criteria:
+
+1. Flush/pre-send failure remains direct.
+2. Injected write, drain, receive `Transport`, receive `Timeout`, and core timeout return the core
+   callback status with the originating cause.
+3. Normal and extended monitor registration are covered.
+4. Read-only injected failures never become outcome-unknown.
+
+- [x] Implementation completed in this repository.
+- [x] Deterministic sync-runner fault tests added for every classification branch.
+- [x] Targeted build and tests passed.
+- [x] Codex self-review completed against the approved contract.
+- [x] Live PLC verification is not required; injected transport/core evidence is authoritative.
+- [x] User guidance and changelog agree.
+- [x] Final acceptance criteria verified.
+
+## GOAL-MCS-003 — Preserve core completion status in the CLI
+
+Implementation scope: common CLI request driving, diagnostic formatting, deterministic fake-port
+tests, user guidance, and changelog.
+
+Target contract: after notify/cancel completes the core operation, the callback status is the sole
+CLI result. Diagnostics print the machine status name and the structured cause for
+`OperationOutcomeUnknown`; the CLI has no command-specific ambiguity list. Transport receive
+failures use the same core notification path as the synchronous facade and retain their actual
+status code.
+
+Compatibility impact: post-send CLI diagnostics can change classification and text; scripts must
+consume the corrected status/cause output.
+
+Machine-verifiable acceptance criteria:
+
+1. Injected write, drain, receive `Transport`, and receive `Timeout` failures return a completed
+   callback result.
+2. State-changing requests preserve outcome-unknown and cause.
+3. Read-only requests preserve direct failure/cancellation classification.
+4. Rendered unknown-outcome diagnostics contain both machine classification and cause.
+
+- [x] Implementation completed in this repository.
+- [x] Deterministic CLI fake-port and diagnostic tests added.
+- [x] Targeted build and tests passed.
+- [x] Codex self-review completed against the approved contract.
+- [x] Live PLC verification is not required; injected transport and formatting checks are deterministic.
+- [x] User guidance and changelog agree.
+- [x] Final acceptance criteria verified.
+
+## GOAL-MCS-004 — Reject Win32 receive sizes above MAXDWORD
+
+Implementation scope: Win32 serial send/receive size validation, Windows unit tests, user-visible
+release documentation, and self-review of narrowing conversions.
+
+Target contract: sizes through `MAXDWORD` pass common Win32 validation. A larger receive span
+returns `InvalidArgument` before timeout configuration or `ReadFile`; no truncation or clamping is
+allowed.
+
+Compatibility impact: oversized receive spans are explicitly rejected instead of truncated.
+
+Machine-verifiable acceptance criteria:
+
+1. `MAXDWORD` passes and `MAXDWORD + 1` fails common validation.
+2. Both send and receive call the common validator before their Win32 I/O function.
+3. Every size-to-`DWORD` conversion is dominated by that validation.
+
+- [x] Implementation completed in this repository.
+- [x] Windows boundary tests added.
+- [x] Targeted Windows build and tests passed.
+- [x] Codex self-review completed against the approved contract.
+- [x] Live PLC verification is not required; integer-boundary validation is deterministic.
+- [x] Changelog records the corrected behavior.
+- [x] Final acceptance criteria verified.
+
+### GOAL-MCS-001..004 verification and self-review disposition
+
+Verification used the final source state: the Windows CMake build and all 6 CTest tests passed;
+Markdown links, generated API freshness, JSON parsing, and `git diff --check` passed; four maintained
+ESP32-C3 example environments passed; and the packed package built and linked both `native-core`
+and `esp32-c3-core` consumers without host-only objects.
+
+Codex self-review inspected the actual diff, public headers and decode surface, synchronous and CLI
+validation order, callback result ownership, failure/cancellation/timeout transitions, diagnostic
+formatting, Win32 narrowing boundaries, deterministic tests, examples, package metadata, user and
+maintainer documentation, and changelog.
+
+Accepted findings, corrected and reverified:
+
+1. The first ESP32-C3 packed-consumer run retained a conflicting explicit C++ standard flag from
+   the platform. The consumer gate now removes every supported GNU/ISO standard spelling before
+   adding exactly `-std=c++17`; native and ESP32-C3 package builds then passed.
+2. Several specialized CLI probe paths still printed only a message or PLC code. They now use the
+   common status formatter, so every path preserves the machine classification and structured
+   unknown-outcome cause without a command-specific ambiguity list.
+3. Independent final review found that synchronous and CLI receive failures called argument-less
+   `cancel()`, replacing the actual `Transport` or `Timeout` with `Cancelled`. The core now exposes
+   `notify_rx_failure(Status)`; both drivers use it, and core/sync/CLI tests cover receive
+   `Transport` and `Timeout` for state-changing and read-only requests.
+
+No self-review finding was rejected, duplicated, or deferred. Live PLC work is not required because
+these acceptance criteria are fully determined by local lifecycle injection, integer-boundary,
+metadata, compilation, package-content, and documentation checks.

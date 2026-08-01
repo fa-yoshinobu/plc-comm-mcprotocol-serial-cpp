@@ -8,6 +8,7 @@ This library speaks MELSEC serial MC Protocol from host tools and MCU firmware. 
 | --- | --- |
 | C++ standard | Strict ISO C++17 for PlatformIO packages, the repository CMake build, tests, CLI, and examples. |
 | Build system | PlatformIO for MCU projects, or CMake for host examples and local integration. |
+| Supported MCU targets | ESP32 and RP2040. Arduino Mega 2560 and other AVR/8-bit targets are not supported. |
 | Serial interface | RS-232C or RS-485 hardware that matches your PLC serial module. |
 | PLC settings | Baud rate, parity, stop bits, frame type, and station number must match the PLC module settings. |
 
@@ -47,9 +48,10 @@ Run the maintained PlatformIO environments with `pio run -e <env>`.
 | Host / simulated examples | `native-example`, `native-example-ultra-minimal` |
 | RP2040 / Raspberry Pi Pico | `rpipico-arduino-example`, `rpipico-arduino-uart-example`, `rpipico-arduino-example-ultra-minimal` |
 | ESP32-C3 DevKitM-1 | `esp32-c3-devkitm-1-example`, `esp32-c3-devkitm-1-uart-example`, `esp32-c3-devkitm-1-example-ultra-minimal` |
-| Arduino Mega 2560 real UART | `mega2560-arduino-uart-example`, `mega2560-arduino-uart-example-ultra-minimal` |
 
 The normal MCU examples use a reduced footprint profile. The ultra-minimal examples keep only the smallest batch read/write path and reduce fixed buffers for small firmware builds.
+Existing Mega/AVR projects must migrate to a supported ESP32 target or carry an unsupported
+downstream port; the distributed package and CI do not validate AVR builds.
 
 ## Choose your PLC profile
 
@@ -149,7 +151,6 @@ Start from the real-UART PlatformIO examples:
 | --- | --- | --- |
 | RP2040 / Raspberry Pi Pico | [platformio_rpipico_arduino_uart](../../examples/platformio_rpipico_arduino_uart/platformio_rpipico_arduino_uart.cpp) | `Serial1`, TX `0`, RX `1`, `19200 / 8E1` |
 | ESP32-C3 DevKitM-1 | [platformio_esp32c3_arduino_uart](../../examples/platformio_esp32c3_arduino_uart/platformio_esp32c3_arduino_uart.cpp) | `Serial1`, TX `7`, RX `6`, `19200 / 8E1` |
-| Arduino Mega 2560 | [platformio_arduino_mega2560_uart](../../examples/platformio_arduino_mega2560_uart/platformio_arduino_mega2560_uart.cpp) | `Serial1`, TX1 `18`, RX1 `19`, `19200 / 8E1` |
 
 The pin numbers are sample defaults. Change them to match your actual board wiring and level shifter.
 The serial values in examples are also sample defaults. Match the actual PLC serial-module frame, baud rate, parity, stop bits, and station number before using them as validation settings.

@@ -408,6 +408,11 @@ to do next; the library does not resend automatically.
 | `PlcError` | The PLC returned a confirmed NG/end code; inspect `plc_error_code`. |
 | `OperationOutcomeUnknown` | A state-changing request may have been sent. Do not retry automatically; inspect `status.cause` (`Timeout`, `Cancelled`, `Closed`, `Transport`, or protocol reason) and verify PLC state. |
 
+The CLI prints the machine classification before the message. For an unknown state-changing result,
+it also prints the structured cause, for example `OperationOutcomeUnknown: ... (cause=Timeout)`.
+The synchronous facade and CLI both use the core completion callback as the final result after a
+request is admitted; neither keeps a separate state-changing command list.
+
 Remote RUN always requires two explicit decisions. `RemoteOperationMode` selects whether a RUN
 conflict is handled forcibly. `RemoteRunClearMode` selects whether device state is retained,
 cleared outside the latch range, or cleared completely. There is no overload that infers either
@@ -426,9 +431,11 @@ PAUSE returns `OperationOutcomeUnknown`, so inspect the PLC state and do not res
 `MelsecSerialClient` owns the protocol state machine but not the UART. Your code configures the
 client, starts an async request, calls `notify_tx_started(now)` immediately before its first UART
 write, sends `pending_tx_frame()`, calls `notify_tx_complete(now, status)`, feeds response bytes
-with `on_rx_bytes()`, and calls `poll()` for deadline handling. The TX status is always explicit:
-pass `ok_status()` only after the UART confirms physical transmission completion, or pass the
-actual transport failure/cancellation status.
+with `on_rx_bytes()`, calls `notify_rx_failure(status)` if response reception fails, and calls
+`poll()` for deadline handling. TX and receive failures are always explicit: pass `ok_status()` to
+`notify_tx_complete()` only after the UART confirms physical transmission completion, and otherwise
+pass the actual transport failure. Use `cancel()` only for caller-requested cancellation; do not
+replace a receive-side `Timeout` or `Transport` status with cancellation.
 
 One instance admits one wire transaction. A second operation returns `Busy` before request-state
 mutation. The class retains caller-owned spans, so it has no internal pending queue. Calls from

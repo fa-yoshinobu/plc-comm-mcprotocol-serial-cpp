@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### BREAKING
 
+- Samples/Packaging: Arduino Mega 2560 and all other AVR/8-bit targets are no longer supported.
+  The Mega PlatformIO environments, sample, and AVR package-consumer gate are removed. Existing
+  AVR users must migrate to ESP32 or maintain an unsupported downstream port. The public decode API
+  is unchanged by this support decision.
 - Library: Bit inputs and outputs now use native `bool` through the `BitValue` type alias. Replace
   the removed `BitValue::Off` and `BitValue::On` enumerators with `false` and `true`; invalid bit
   states are unrepresentable at the public type boundary.
@@ -65,6 +69,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `InvalidArgument` when word-to-byte conversion or the additional module offset cannot be
   represented in the 32-bit module-buffer address space.
 
+- Library: The synchronous facade now returns the core completion callback status after request
+  admission. Normal and extended monitor registration therefore preserve
+  `OperationOutcomeUnknown` and its structured cause for unconfirmed post-send results. The async
+  core exposes `notify_rx_failure(status)` so a receive-side `Timeout` or `Transport` failure is not
+  misreported as caller cancellation.
+- Library: Win32 receive spans larger than `MAXDWORD` are rejected with `InvalidArgument` before
+  `ReadFile`; the receive length is never truncated to `DWORD`.
+- Tooling: CLI request execution now returns a completed core callback status after TX/RX failure,
+  preserves the underlying receive failure cause, and prints the machine status classification plus
+  `cause` for `OperationOutcomeUnknown`.
+
 - Library: Module-buffer and native qualified-buffer encoders now reject address, module-number,
   and end-of-range values that do not fit the active 1E, 1C, Q/L, or iQ-R wire fields instead of
   truncating high bits. Undefined qualified-buffer and long-state enum values are rejected.
@@ -82,11 +97,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   baud constants are compile-guarded, and Win32 rejects writes larger than the DWORD limit.
 - CI: PlatformIO's native CLI target now includes the POSIX serial backend, and reduced/ultra
   subproject configuration no longer overwrites a parent project's `BUILD_TESTING` cache value.
-- CI: Worktree source archives now use a synthetic Git tree containing modifications, untracked files, and deletions; the extracted archive must pass host CI and build native plus AVR consumers from its own packed PlatformIO tarball.
+- CI: Worktree source archives use a synthetic Git tree containing modifications, untracked files, and deletions; the extracted archive must pass host CI and build native plus ESP32-C3 consumers from its own packed PlatformIO tarball.
 - Docs: Regenerated the public API reference for the checked address-conversion signatures.
 - Tests: Added capacity/deadline boundaries, Busy/no-mutation and independent-instance coverage,
   structured outcome causes, native-bool, packed-nibble, CRLF, monitor-state, and ASCII
   payload-length regression coverage.
+- Tests: Added deterministic synchronous-wrapper and CLI transport-failure tests plus Win32
+  `MAXDWORD` receive boundary coverage.
 
 ## [3.2.2] - 2026-07-31
 

@@ -31,7 +31,11 @@
   "license": "MIT",
   "homepage": "https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp",
   "frameworks": "*",
-  "platforms": "*",
+  "platforms": [
+    "espressif32",
+    "raspberrypi",
+    "native"
+  ],
   "headers": [
     "mcprotocol_serial.hpp"
   ],

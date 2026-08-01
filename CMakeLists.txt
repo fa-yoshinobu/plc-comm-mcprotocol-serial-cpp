@@ -208,6 +208,17 @@ if(MCPROTOCOL_SERIAL_BUILD_TESTING)
   target_link_libraries(bundled_algorithm_compat_tests PRIVATE mcprotocol_serial)
 
   add_test(NAME bundled_algorithm_compat_tests COMMAND bundled_algorithm_compat_tests)
+
+  if(MCPROTOCOL_EFFECTIVE_BUILD_HOST_SUPPORT)
+    add_executable(host_sync_runner_tests
+      tests/host_sync_runner_tests.cpp
+    )
+
+    target_include_directories(host_sync_runner_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(host_sync_runner_tests PRIVATE mcprotocol_serial)
+
+    add_test(NAME host_sync_runner_tests COMMAND host_sync_runner_tests)
+  endif()
 endif()
 
 if(MCPROTOCOL_EFFECTIVE_BUILD_CLI)
@@ -224,6 +235,16 @@ if(MCPROTOCOL_EFFECTIVE_BUILD_CLI)
               ${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_serial_config_tests.py
               $<TARGET_FILE:mcprotocol_cli>
     )
+  endif()
+
+  if(MCPROTOCOL_SERIAL_BUILD_TESTING)
+    add_executable(cli_completion_tests
+      tests/cli_completion_tests.cpp
+    )
+
+    target_link_libraries(cli_completion_tests PRIVATE mcprotocol_serial)
+
+    add_test(NAME cli_completion_tests COMMAND cli_completion_tests)
   endif()
 endif()
 

@@ -12,7 +12,18 @@
 
 #include "mcprotocol/serial/posix_serial.hpp"
 
+#include <cstdint>
+
 namespace mcprotocol::serial::detail {
+
+[[nodiscard]] inline Status validate_win32_io_size(
+    std::uint64_t size,
+    const char* message) noexcept {
+  if (size > static_cast<std::uint64_t>(MAXDWORD)) {
+    return make_status(StatusCode::InvalidArgument, message);
+  }
+  return ok_status();
+}
 
 /// \brief Overwrites every behavior field while preserving driver-reserved DCB state.
 [[nodiscard]] inline Status build_win32_dcb(

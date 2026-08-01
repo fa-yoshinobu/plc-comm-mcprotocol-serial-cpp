@@ -10,7 +10,7 @@ Use only test addresses that are safe for your PLC program before you run any wr
 | --- | --- | --- |
 | Host sync | `host_sync_quickstart.cpp`, `host_sync_polling_reconnect.cpp` | First read and reconnect polling from a Windows, Linux, or POSIX host with the blocking facade. |
 | Linux CLI wrapper | `linux_cli/safe_bringup_readonly.sh` | Read-only CLI bring-up with explicit frame and profile environment variables. |
-| MCU UART | `platformio_*_arduino_uart/*.cpp` | Real UART reads from `D100-D103` on RP2040, ESP32-C3, and Arduino Mega 2560. |
+| MCU UART | `platformio_*_arduino_uart/*.cpp` | Real UART reads from `D100-D103` on supported RP2040 and ESP32-C3 targets. |
 | Async state machine | `mcu_async_batch_read.cpp`, `platformio_*_arduino_async/*.cpp` | The transport-owned async flow with simulated PLC responses. |
 
 ## How to run
@@ -35,10 +35,6 @@ pio run -e rpipico-arduino-uart-example
 
 ```bash
 pio run -e esp32-c3-devkitm-1-uart-example
-```
-
-```bash
-pio run -e mega2560-arduino-uart-example
 ```
 
 ```bash
@@ -75,7 +71,6 @@ Set `MCPROTOCOL_FRAME` and `MCPROTOCOL_PLC_PROFILE` before running the CLI wrapp
 | `linux_cli/safe_bringup_readonly.sh` | Linux host | Safe read-only CLI bring-up with explicit serial, frame, and PLC profile settings. |
 | `platformio_rpipico_arduino_uart/` | RP2040 Arduino | Real `Serial1` UART read-only polling of `D100-D103`. |
 | `platformio_esp32c3_arduino_uart/` | ESP32-C3 Arduino | Real `Serial1` UART read-only polling with explicit RX/TX pins. |
-| `platformio_arduino_mega2560_uart/` | Arduino Mega 2560 | Real `Serial1` UART read-only polling of `D100-D103`. |
 | `platformio_rpipico_arduino_async/` | RP2040 Arduino | Async client lifecycle with simulated response bytes. |
 | `platformio_esp32c3_arduino_async/` | ESP32-C3 Arduino | Async client lifecycle with simulated response bytes. |
 | `platformio_esp32c3_arduino_async_polling_reconnect/` | ESP32-C3 Arduino | Read-only async UART polling of `D100-D103` with reconnect/backoff state logs. |
@@ -90,11 +85,13 @@ settings must match the PLC serial module.
 | --- | --- | --- | --- | --- |
 | RP2040 / Raspberry Pi Pico | `Serial1` | TX `0`, RX `1` | `19200 / 8E1` | `4C ASCII Format4`, `CR/LF`, station `0`, sum check off |
 | ESP32-C3 DevKitM-1 | `Serial1` | TX `7`, RX `6` | `19200 / 8E1` | `4C ASCII Format4`, `CR/LF`, station `0`, sum check off |
-| Arduino Mega 2560 | `Serial1` | TX1 `18`, RX1 `19` | `19200 / 8E1` | `4C ASCII Format4`, `CR/LF`, station `0`, sum check off |
 
 Treat the pins and serial settings as sample defaults. Change them to match
 your board wiring, level shifter, and PLC serial module settings before live
 hardware use.
+
+Arduino Mega 2560 and other AVR/8-bit targets are not supported. Migrate an existing AVR project
+to ESP32 or maintain it as an unsupported downstream port.
 
 ## Before live hardware
 

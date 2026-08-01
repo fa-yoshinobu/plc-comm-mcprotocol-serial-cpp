@@ -949,8 +949,9 @@ Acceptance criteria:
    transmission-setting, or speed change. All flags false leaves no pending transmit frame.
 7. Internal pending storage uses explicit inert seeds without reintroducing a public default
    constructor or treating unused capacity as a request item.
-8. The required-construction API compiles under the supported C++17 host, RP2040, ESP32-C3, and AVR
-   profiles, including reduced and ultra-minimal feature configurations.
+8. The required-construction API compiled under the then-supported C++17 host, RP2040, ESP32-C3,
+   and AVR profiles, including reduced and ultra-minimal feature configurations. AVR support was
+   later removed by GOAL-MCS-001; ESP32 and RP2040 are the maintained MCU targets.
 9. CLI, examples, user guidance, generated API reference, migration notes, and changelog contain no
    former default-construction, partial aggregate, `turn_on`, or implicit-D0 usage.
 
@@ -1091,10 +1092,9 @@ Acceptance criteria:
   generated API-reference drift check passed.
 - PlatformIO results: after adding the existing
   `%USERPROFILE%\.platformio\penv\Scripts` directory to the process PATH, the nine CI-selected
-  native/RP2040/ESP32-C3/Arduino Mega environments and packed-package consumers passed. A direct
-  full matrix run also passed all 12 configured environments, including native CLI, polling-
-  reconnect, and Mega ultra-minimal. The D-110 review additionally caught and fixed C++17 aggregate
-  parenthesized initialization and AVR's missing `<utility>` header before the final pass.
+  native/RP2040/ESP32-C3/Arduino Mega environments and packed-package consumers passed at that
+  historical source state. A direct full matrix run also passed all 12 then-configured environments.
+  GOAL-MCS-001 later removed Mega/AVR support and replaced its package gate with ESP32-C3.
 - Script checks: all four Linux CLI scripts passed `bash -n`; the PowerShell password recheck script
   parsed successfully; `git diff --check` passed.
 - Codex self-review covered the actual diff, public constructor/enum surface, integer truncation,

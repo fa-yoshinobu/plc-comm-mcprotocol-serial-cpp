@@ -217,8 +217,11 @@ Status PosixSerialPort::write_all_until(
   if (fd_ < 0) {
     return make_status(StatusCode::NotConnected, "Serial port is not open");
   }
-  if (bytes.size() > static_cast<std::size_t>(MAXDWORD)) {
-    return make_status(StatusCode::InvalidArgument, "Serial write size exceeds the Win32 DWORD limit");
+  const Status size_status = detail::validate_win32_io_size(
+      static_cast<std::uint64_t>(bytes.size()),
+      "Serial write size exceeds the Win32 DWORD limit");
+  if (!size_status.ok()) {
+    return size_status;
   }
   const HANDLE h = to_handle(fd_);
   const auto* data = reinterpret_cast<const BYTE*>(bytes.data());
@@ -258,6 +261,12 @@ Status PosixSerialPort::read_some_until(
   out_size = 0;
   if (fd_ < 0) {
     return make_status(StatusCode::NotConnected, "Serial port is not open");
+  }
+  const Status size_status = detail::validate_win32_io_size(
+      static_cast<std::uint64_t>(buffer.size()),
+      "Serial read size exceeds the Win32 DWORD limit");
+  if (!size_status.ok()) {
+    return size_status;
   }
   const HANDLE h = to_handle(fd_);
 

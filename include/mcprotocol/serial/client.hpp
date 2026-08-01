@@ -19,6 +19,7 @@
 /// - moving bytes from `pending_tx_frame()` to the actual serial port
 /// - calling `notify_tx_complete(now_ms, transport_status)` when TX finishes or aborts
 /// - feeding received bytes back through `on_rx_bytes()`
+/// - calling `notify_rx_failure(receive_status)` if response reception fails
 /// - calling `poll()` for timeout handling
 
 namespace mcprotocol::serial {
@@ -32,7 +33,8 @@ namespace mcprotocol::serial {
 /// 4. transmit `pending_tx_frame()` with the board UART layer
 /// 5. call `notify_tx_complete(now_ms, transport_status)` when TX finishes or aborts
 /// 6. feed received bytes with `on_rx_bytes()`
-/// 7. call `poll()` from the main loop or scheduler for deadline handling
+/// 7. call `notify_rx_failure(receive_status)` if the transport aborts response reception
+/// 8. call `poll()` from the main loop or scheduler for deadline handling
 ///
 /// Output spans passed to `async_*` requests must remain valid until the completion callback fires.
 /// Only one request may be active. A second enabled `async_*` request returns `Busy` before
@@ -91,6 +93,13 @@ class MelsecSerialClient {
 
   /// \brief Feeds received bytes into the response decoder.
   void on_rx_bytes(std::uint32_t now_ms, mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes) noexcept;
+  /// \brief Completes an active response wait with the actual receive failure.
+  ///
+  /// Call this only after successful TX completion when the transport cannot continue receiving.
+  /// `receive_status` must be an error. The completion callback receives that status for a
+  /// read-only request, or `OperationOutcomeUnknown` with `receive_status.code` as its cause for an
+  /// unconfirmed state-changing request.
+  [[nodiscard]] Status notify_rx_failure(Status receive_status) noexcept;
   /// \brief Checks timeouts for the current in-flight request.
   void poll(std::uint32_t now_ms) noexcept;
   /// \brief Requests cancellation of the in-flight request.
