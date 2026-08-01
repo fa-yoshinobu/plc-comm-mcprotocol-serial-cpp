@@ -414,7 +414,7 @@ Status MelsecSerialClient::notify_tx_complete(
     rs485_hooks_.on_tx_end(rs485_hooks_.user);
   }
 
-  if (deadline_reached(now_ms, response_deadline_ms_)) {
+  if (tx_timeout_latched_ || deadline_reached(now_ms, response_deadline_ms_)) {
     transport_reset_required_ = true;
     complete(active_timeout_status("The absolute transaction deadline expired during transmission"));
     return ok_status();
@@ -532,8 +532,9 @@ void MelsecSerialClient::poll(std::uint32_t now_ms) noexcept {
   }
   if (deadline_reached(now_ms, response_deadline_ms_)) {
     transport_reset_required_ = true;
-    if (awaiting_write_complete_ && rs485_hooks_.on_tx_end != nullptr) {
-      rs485_hooks_.on_tx_end(rs485_hooks_.user);
+    if (awaiting_write_complete_) {
+      tx_timeout_latched_ = true;
+      return;
     }
     complete(active_timeout_status("The absolute transaction deadline expired"));
   }
@@ -628,6 +629,7 @@ Status MelsecSerialClient::start_request(
   busy_ = true;
   awaiting_write_complete_ = true;
   tx_started_ = false;
+  tx_timeout_latched_ = false;
   cancel_requested_during_tx_ = false;
   operation_ = operation;
 
@@ -1104,6 +1106,7 @@ void MelsecSerialClient::complete(Status status) noexcept {
   busy_ = false;
   awaiting_write_complete_ = false;
   tx_started_ = false;
+  tx_timeout_latched_ = false;
   cancel_requested_during_tx_ = false;
   operation_ = OperationKind::None;
   tx_frame_size_ = 0;

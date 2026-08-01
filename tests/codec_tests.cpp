@@ -6908,6 +6908,17 @@ struct Rs485HookCapture {
   std::size_t end_count = 0U;
 };
 
+struct CountingCallbackCapture {
+  std::size_t call_count = 0U;
+  Status status {};
+};
+
+void counting_completion_callback(void* user, Status status) {
+  auto* capture = static_cast<CountingCallbackCapture*>(user);
+  ++capture->call_count;
+  capture->status = status;
+}
+
 void rs485_tx_begin(void* user) {
   if (user != nullptr) {
     ++static_cast<Rs485HookCapture*>(user)->begin_count;
@@ -7000,6 +7011,125 @@ void test_client_rs485_hooks_and_tx_completion_lifecycle() {
   assert(hookless_capture.called);
   assert(hookless_capture.status.code == StatusCode::Transport);
   assert(client.requires_transport_reset());
+}
+
+void test_tx_deadline_latches_until_physical_completion_or_abort() {
+  const auto config = make_binary_c4_config().with_response_timeout_ms(10U);
+  const BatchReadWordsRequest read_request({mcprotocol::serial::DeviceCode::D, 100U}, 1U);
+  const std::array<std::uint16_t, 1> write_values {0x1234U};
+
+  {
+    MelsecSerialClient client;
+    assert(client.configure(config).ok());
+    Rs485HookCapture hooks {};
+    assert(client.set_rs485_hooks(Rs485Hooks {rs485_tx_begin, rs485_tx_end, &hooks}).ok());
+    std::array<std::uint16_t, 1> words {};
+    CountingCallbackCapture completion {};
+    assert(client.async_batch_read_words(
+        0U, read_request, words, counting_completion_callback, &completion).ok());
+    assert(client.notify_tx_started(100U).ok());
+    assert(client.transaction_deadline_ms() == 110U);
+    assert(hooks.begin_count == 1U);
+
+    client.poll(109U);
+    assert(client.busy());
+    assert(!client.requires_transport_reset());
+    assert(hooks.end_count == 0U);
+    assert(completion.call_count == 0U);
+
+    client.poll(110U);
+    client.poll(111U);
+    assert(client.busy());
+    assert(client.requires_transport_reset());
+    assert(hooks.end_count == 0U);
+    assert(completion.call_count == 0U);
+
+    std::array<std::uint16_t, 1> rejected_words {};
+    CountingCallbackCapture rejected_completion {};
+    const Status busy_status = client.async_batch_read_words(
+        111U,
+        read_request,
+        rejected_words,
+        counting_completion_callback,
+        &rejected_completion);
+    assert(busy_status.code == StatusCode::Busy);
+    assert(rejected_completion.call_count == 0U);
+
+    const Status notification = client.notify_tx_complete(
+        112U,
+        mcprotocol::serial::make_status(
+            StatusCode::Transport, "physical UART abort reported after the deadline"));
+    assert(notification.ok());
+    assert(!client.busy());
+    assert(hooks.end_count == 1U);
+    assert(completion.call_count == 1U);
+    assert(completion.status.code == StatusCode::Timeout);
+    assert(completion.status.cause == StatusCode::Ok);
+    assert(client.requires_transport_reset());
+
+    const Status duplicate = client.notify_tx_complete(113U, mcprotocol::serial::ok_status());
+    assert(duplicate.code == StatusCode::InvalidArgument);
+    client.poll(114U);
+    assert(hooks.end_count == 1U);
+    assert(completion.call_count == 1U);
+
+    const Status blocked = client.async_batch_read_words(
+        115U,
+        read_request,
+        rejected_words,
+        counting_completion_callback,
+        &rejected_completion);
+    assert(blocked.code == StatusCode::Transport);
+  }
+
+  {
+    MelsecSerialClient client;
+    assert(client.configure(config).ok());
+    Rs485HookCapture hooks {};
+    assert(client.set_rs485_hooks(Rs485Hooks {rs485_tx_begin, rs485_tx_end, &hooks}).ok());
+    CountingCallbackCapture completion {};
+    assert(client.async_batch_write_words(
+        0U,
+        BatchWriteWordsRequest(
+            DeviceAddress {mcprotocol::serial::DeviceCode::D, 100U}, write_values),
+        counting_completion_callback,
+        &completion).ok());
+    assert(client.notify_tx_started(0U).ok());
+    client.poll(10U);
+    client.cancel();
+    assert(client.busy());
+    assert(completion.call_count == 0U);
+    assert(hooks.end_count == 0U);
+
+    assert(client.notify_tx_complete(
+        11U,
+        mcprotocol::serial::make_status(StatusCode::Cancelled, "UART abort completed")).ok());
+    assert(!client.busy());
+    assert(hooks.end_count == 1U);
+    assert(completion.call_count == 1U);
+    assert(completion.status.code == StatusCode::OperationOutcomeUnknown);
+    assert(completion.status.cause == StatusCode::Timeout);
+    assert(client.requires_transport_reset());
+  }
+
+  {
+    MelsecSerialClient client;
+    assert(client.configure(config).ok());
+    CountingCallbackCapture completion {};
+    assert(client.async_batch_write_words(
+        0U,
+        BatchWriteWordsRequest(
+            DeviceAddress {mcprotocol::serial::DeviceCode::D, 100U}, write_values),
+        counting_completion_callback,
+        &completion).ok());
+    assert(client.notify_tx_started(0U).ok());
+    assert(client.notify_tx_complete(
+        9U,
+        mcprotocol::serial::make_status(StatusCode::Transport, "TX failed before deadline")).ok());
+    assert(completion.call_count == 1U);
+    assert(completion.status.code == StatusCode::OperationOutcomeUnknown);
+    assert(completion.status.cause == StatusCode::Transport);
+  }
 }
 
 [[nodiscard]] std::uint8_t ascii_hex_digit(std::uint8_t value) {
@@ -10197,6 +10327,7 @@ int main() {
   test_not_connected_is_distinct_from_transport_failure();
   test_client_unsequenced_decode_failures_require_transport_reset();
   test_client_rs485_hooks_and_tx_completion_lifecycle();
+  test_tx_deadline_latches_until_physical_completion_or_abort();
   test_client_binary_cpu_model_roundtrip();
   test_client_discards_foreign_route_then_accepts_current_route();
   test_client_format2_auto_sequence_wrap_and_stale_response_isolation();

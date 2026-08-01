@@ -50,6 +50,12 @@
 | --- | --- | --- |
 | Response bytes keep arriving slowly, but the request still times out. | One absolute deadline covers first TX, drain, every RX chunk, correlation, and decode. Partial progress never restarts it. | Increase the one transaction timeout if the complete operation legitimately needs longer. After any timeout, close/reopen the serial generation and reconfigure; never reuse partial bytes. |
 
+## Timeout occurs while UART or DMA transmit is still active
+
+| Symptom | Root cause | Fix |
+| --- | --- | --- |
+| `requires_transport_reset()` becomes true, but the request remains busy and neither `on_tx_end` nor the completion callback runs. | The absolute deadline expired while the external transport still owned physical TX. The client cannot safely infer that the UART/DMA operation stopped. | Finish or abort the physical TX and call `notify_tx_complete()` exactly once. The client then releases the hook/callback and publishes the already-latched timeout result. If no physical notification is supplied, it intentionally remains busy. |
+
 ## A state-changing result is unknown
 
 | Symptom | Root cause | Fix |

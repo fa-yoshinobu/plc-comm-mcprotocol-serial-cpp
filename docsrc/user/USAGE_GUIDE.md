@@ -114,6 +114,14 @@ Every timeout sets `requires_transport_reset()`, including Format2. Abort, drain
 the exact UART generation, then call `configure()` before another request. `PosixSyncClient` does
 this retirement itself and must be opened again. The timed-out request is not retried.
 
+For the low-level async client, a deadline reached while physical TX is still pending is latched
+rather than completed immediately. `poll()` sets the reset requirement but keeps the request busy,
+keeps an active RS-485 direction hook asserted, and does not invoke the completion callback. Finish
+or abort the UART/DMA operation and always call `notify_tx_complete()`. That notification releases
+TX ownership once and publishes `Timeout` for a read, or `OperationOutcomeUnknown` with cause
+`Timeout` for a state-changing request, even if the later physical notification reports another
+transport status. If it is never reported, the client intentionally remains busy.
+
 The 1E ACPU monitoring timer is a different PLC-side protocol field. It defaults independently to
 4000 ms (`0x0010` in 250 ms wire units). Set it with
 `config.e1_monitoring_timer = E1MonitoringTimer::milliseconds(value)`. Explicit values must be
@@ -450,6 +458,11 @@ physical completion or abort with `notify_tx_complete`; only then is `on_tx_end`
 once and the completion callback released. Cancellation before `notify_tx_started()` completes
 immediately as `Cancelled`, invokes no TX hook, and cannot become `OperationOutcomeUnknown` because
 no transport write has started.
+
+The same physical-ownership rule applies when `poll()` observes the absolute deadline during TX.
+The timeout is already logically fixed, so a later transport result cannot override its cause, but
+the hook, callback, and busy state are retained until `notify_tx_complete()` confirms completion or
+abort.
 
 This is the path used in the PlatformIO examples.
 

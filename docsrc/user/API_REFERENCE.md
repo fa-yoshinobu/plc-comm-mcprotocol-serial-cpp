@@ -1539,7 +1539,7 @@ Asynchronous MC protocol client for UART / serial integrations.
 
 The intended MCU-side workflow is: call configure() start an async_* request call notify_tx_started(now_ms) immediately before the first UART write transmit pending_tx_frame() with the board UART layer call notify_tx_complete(now_ms, transport_status) when TX finishes or aborts feed received bytes with on_rx_bytes() call notify_rx_failure(receive_status) if the transport aborts response reception call poll() from the main loop or scheduler for deadline handling
 
-Output spans passed to async_* requests must remain valid until the completion callback fires. Only one request may be active. A second enabled async_* request returns Busy before changing the active request's output storage, request metadata, or monitor state. Same-instance calls from different operating-system threads are prohibited; the caller owns scheduling. Separate instances are independent and may progress concurrently. Cancelling before notify_tx_started() completes immediately as Cancelled. Cancelling during TX records the cancellation but does not complete the request until the UART reports physical TX completion or abort through notify_tx_complete(). After transmission may have begun, any unconfirmed state-changing command completes as OperationOutcomeUnknown; the client never retries it automatically.
+Output spans passed to async_* requests must remain valid until the completion callback fires. Only one request may be active. A second enabled async_* request returns Busy before changing the active request's output storage, request metadata, or monitor state. Same-instance calls from different operating-system threads are prohibited; the caller owns scheduling. Separate instances are independent and may progress concurrently. Cancelling before notify_tx_started() completes immediately as Cancelled. Cancelling during TX records the cancellation but does not complete the request until the UART reports physical TX completion or abort through notify_tx_complete(). Likewise, a deadline reached while physical TX is pending is latched: poll() marks the transport for reset but keeps the request busy and leaves the RS-485 direction/completion callbacks pending until notify_tx_complete() reports that TX finished or was aborted. After transmission may have begun, any unconfirmed state-changing command completes as OperationOutcomeUnknown; the client never retries it automatically.
 
 #### Member Functions
 
@@ -1623,7 +1623,7 @@ Status mcprotocol::serial::MelsecSerialClient::notify_tx_complete(std::uint32_t 
 
 Advances the state machine after the transport finished or aborted the pending TX.
 
-transport_status is mandatory. Pass ok_status() only after confirmed physical TX completion; otherwise pass the actual transport failure or cancellation status.
+transport_status is mandatory. Pass ok_status() only after confirmed physical TX completion; otherwise pass the actual transport failure or cancellation status. If poll() already latched the absolute deadline, this call releases TX ownership exactly once and publishes the latched timeout result regardless of the later transport status.
 
 #### `on_rx_bytes`
 
@@ -1650,6 +1650,8 @@ void mcprotocol::serial::MelsecSerialClient::poll(std::uint32_t now_ms) noexcept
 ```
 
 Checks timeouts for the current in-flight request.
+
+A timeout during pending physical TX is latched without ending the RS-485 hook, firing the completion callback, or clearing busy(). The application must finish or abort TX and call notify_tx_complete().
 
 #### `cancel`
 
