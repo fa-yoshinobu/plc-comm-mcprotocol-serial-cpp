@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Samples: Made word/random writes classify confirmed and outcome-unknown results before restoration, report restoration failures, and require double opt-in plus original-RUN confirmation for Remote STOP/RUN.
+- Tests: Added C++17 compilation and safety-order checks for the maintained state-changing documentation examples.
 - Release: Aligned artifact roles so the registry package contains consumer runtime, native API metadata, license, README, and ecosystem-native examples where applicable while excluding repository tests and maintainer tooling; the GitHub source archive retains tracked non-hardware validation and maintainer inputs.
 
 ### BREAKING

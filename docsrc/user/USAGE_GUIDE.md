@@ -233,9 +233,17 @@ int main() {
 
 ### Write words
 
+Run this example only on a controlled test PLC and a device range reserved for
+the test. It saves the original words and restores them only after the test
+write is confirmed. `OperationOutcomeUnknown` means the new values may already
+be present and the host facade has retired the serial connection; do not retry
+or attempt an immediate restore. Reopen, inspect, and reconcile the devices only
+under an explicit application safety policy.
+
 ```cpp
 #include <array>
 #include <cstdint>
+#include <cstdio>
 
 #include "mcprotocol_serial.hpp"
 
@@ -270,12 +278,38 @@ int main() {
 
   const std::array<std::uint16_t, 2> words {0x1234, 0x5678};
   const auto write_status = plc.write_words("D100", words);
+  if (write_status.code == mcprotocol::serial::StatusCode::OperationOutcomeUnknown) {
+    std::fprintf(
+        stderr,
+        "write outcome unknown; reopen and inspect D100-D101 before reconciliation\n");
+    return 2;
+  }
+  if (!write_status.ok()) {
+    // A confirmed failure is reported before any restoration request is attempted.
+    return 1;
+  }
+
   const auto restore_status = plc.write_words("D100", original);
-  return write_status.ok() && restore_status.ok() ? 0 : 1;
+  if (restore_status.code == mcprotocol::serial::StatusCode::OperationOutcomeUnknown) {
+    std::fprintf(
+        stderr,
+        "restore outcome unknown; reopen and inspect D100-D101 manually\n");
+    return 2;
+  }
+  if (!restore_status.ok()) {
+    std::fputs("restore failed; inspect and reconcile D100-D101 manually\n", stderr);
+    return 1;
+  }
+  return 0;
 }
 ```
 
 ### Random read and random write
+
+Run the random-write portion only on a controlled test PLC and a device reserved
+for the test. Save the original value first. Restore only after a confirmed
+write; an unknown write or restoration outcome requires reconnecting, inspecting
+the device, and reconciling it manually under an explicit safety policy.
 
 ```cpp
 #include <array>
@@ -325,12 +359,31 @@ int main() {
     // The PLC may already have applied the value. Inspect the target; do not retry automatically.
     return 2;
   }
+  if (!write_status.ok()) {
+    // Report the confirmed failure before attempting any restoration request.
+    return 1;
+  }
   const auto restore_status = plc.write_words("D101", original_d101);
-  return write_status.ok() && restore_status.ok() ? 0 : 1;
+  if (restore_status.code == mcprotocol::serial::StatusCode::OperationOutcomeUnknown) {
+    // Reopen and inspect D101 manually; do not assume restoration succeeded.
+    return 2;
+  }
+  if (!restore_status.ok()) {
+    // Inspect and reconcile D101 manually before continuing.
+    return 1;
+  }
+  return 0;
 }
 ```
 
 ### Remote control and CPU model
+
+Remote STOP/RUN changes CPU execution state. The example is disabled by default
+and is only for a controlled test PLC whose outputs and process are already in a
+safe condition. Before opting in, verify and record that the original CPU state
+is RUN. This library does not infer that state. If STOP or the compensating RUN
+is unconfirmed, the PLC may remain STOPped; inspect it and restore the recorded
+state manually after reconnecting instead of retrying automatically.
 
 ```cpp
 #include <cstdio>
@@ -370,17 +423,41 @@ int main() {
   }
 
   std::printf("model=%s code=0x%04X\n", info.model_name.data(), info.model_code);
-  if (!plc.remote_stop().ok()) {
+
+  constexpr bool kControlledTestApproved = false;
+  constexpr bool kCpuWasRunningBeforeTest = false;
+  if (!kControlledTestApproved) {
+    std::puts("remote STOP/RUN skipped; controlled-test approval is required");
+    return 0;
+  }
+  if (!kCpuWasRunningBeforeTest) {
+    std::puts("remote STOP/RUN skipped; original CPU state was not RUN");
+    return 0;
+  }
+
+  const auto stop_status = plc.remote_stop();
+  if (stop_status.code == mcprotocol::serial::StatusCode::OperationOutcomeUnknown) {
+    std::fputs("STOP outcome unknown; inspect CPU state and do not retry\n", stderr);
+    return 2;
+  }
+  if (!stop_status.ok()) {
     return 1;
   }
+
   const auto run_status = plc.remote_run(
       RemoteOperationMode::DoNotExecuteForcibly,
       RemoteRunClearMode::DoNotClear);
   if (run_status.code == mcprotocol::serial::StatusCode::OperationOutcomeUnknown) {
-    // The request may have reached the PLC. Inspect the PLC state; do not retry automatically.
+    std::fputs(
+        "RUN outcome unknown; the PLC may remain STOPped, so inspect it manually\n",
+        stderr);
     return 2;
   }
-  return run_status.ok() ? 0 : 1;
+  if (!run_status.ok()) {
+    std::fputs("RUN failed; the PLC remains STOPped and needs manual recovery\n", stderr);
+    return 1;
+  }
+  return 0;
 }
 ```
 

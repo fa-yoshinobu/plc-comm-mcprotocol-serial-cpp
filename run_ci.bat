@@ -37,6 +37,8 @@ call :find_tool cmake.exe CMAKE_EXE
 if errorlevel 1 goto fail
 call :find_tool ctest.exe CTEST_EXE
 if errorlevel 1 goto fail
+call :find_tool g++.exe CXX_EXE
+if errorlevel 1 goto fail
 call :find_python
 if errorlevel 1 goto fail
 
@@ -61,6 +63,10 @@ if errorlevel 1 goto fail
 
 echo [ci] API reference
 call "%PYTHON_EXE%" %PYTHON_ARGS% "%REPO_ROOT%\scripts\update_api_reference.py" --check
+if errorlevel 1 goto fail
+
+echo [ci] Documentation examples
+call "%PYTHON_EXE%" %PYTHON_ARGS% "%REPO_ROOT%\tests\check_documentation_examples.py" --compiler "%CXX_EXE%"
 if errorlevel 1 goto fail
 
 if "%RUN_PLATFORMIO%"=="1" (
