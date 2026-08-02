@@ -597,6 +597,7 @@ void print_usage() {
       "  --self-station N           Required only for mn topology (0..31)\n"
       "  --sum-check on|off         Required for C1/C2/C3/C4; rejected for fixed 1E\n"
       "  --response-timeout-ms N    Absolute first-TX-through-decode timeout (default: 3000)\n"
+      "  --inter-byte-timeout-ms N  Retained-response inactivity timeout (default: 250)\n"
       "  --e1-monitoring-timer-ms N PLC-side 1E timer in exact 250 ms units (default: 4000)\n"
       "\n"
       "Notes:\n"
@@ -1489,6 +1490,12 @@ void print_usage() {
         return false;
       }
       options.protocol_input.timeout.response_timeout_ms = value;
+    } else if (arg == "--inter-byte-timeout-ms" && (index + 1) < argc) {
+      std::uint32_t value = 0;
+      if (!parse_u32(argv[++index], value)) {
+        return false;
+      }
+      options.protocol_input.timeout.inter_byte_timeout_ms = value;
     } else if (arg == "--e1-monitoring-timer-ms" && (index + 1) < argc) {
       std::uint32_t value = 0;
       if (!parse_u32(argv[++index], value)) {
@@ -2136,6 +2143,101 @@ template <typename Port>
   return state.status;
 }
 
+struct RawResponseBufferResult {
+  mcprotocol::serial::DecodeStatus status = mcprotocol::serial::DecodeStatus::Incomplete;
+  mcprotocol::serial::RawResponseFrame frame {};
+  Status error {};
+  bool candidate_retained = false;
+};
+
+[[nodiscard]] bool is_raw_response_start_byte(
+    const ProtocolConfig& config,
+    std::uint8_t expected_e1_response_subheader,
+    std::uint8_t byte) noexcept {
+  if (config.frame_kind() == FrameKind::E1) {
+    if (config.code_mode() == CodeMode::Binary) {
+      return byte == expected_e1_response_subheader;
+    }
+    const auto upper = static_cast<std::uint8_t>(
+        expected_e1_response_subheader < 0xA0U
+            ? ('0' + (expected_e1_response_subheader >> 4U))
+            : ('A' + ((expected_e1_response_subheader >> 4U) - 10U)));
+    return byte == upper;
+  }
+  if (config.code_mode() == CodeMode::Binary) {
+    return byte == 0x10U;
+  }
+  if (config.ascii_format() == AsciiFormat::Format3) {
+    return byte == 0x02U;
+  }
+  return byte == 0x02U || byte == 0x06U || byte == 0x15U;
+}
+
+[[nodiscard]] std::size_t raw_response_noise_prefix(
+    const ProtocolConfig& config,
+    std::uint8_t expected_e1_response_subheader,
+    const std::uint8_t* bytes,
+    std::size_t size) noexcept {
+  for (std::size_t offset = 0U; offset < size; ++offset) {
+    if (!is_raw_response_start_byte(config, expected_e1_response_subheader, bytes[offset])) {
+      continue;
+    }
+    if (config.frame_kind() != FrameKind::E1 || config.code_mode() != CodeMode::Ascii) {
+      return offset;
+    }
+    if ((offset + 1U) == size) {
+      return offset;
+    }
+    const std::uint8_t lower_nibble = expected_e1_response_subheader & 0x0FU;
+    const std::uint8_t expected_lower = static_cast<std::uint8_t>(
+        lower_nibble < 10U ? ('0' + lower_nibble) : ('A' + (lower_nibble - 10U)));
+    if (bytes[offset + 1U] == expected_lower) {
+      return offset;
+    }
+  }
+  return size;
+}
+
+[[nodiscard]] RawResponseBufferResult decode_raw_response_buffer(
+    const ProtocolConfig& config,
+    mcprotocol::serial::FrameCodecContext frame_context,
+    std::uint8_t* rx_frame,
+    std::size_t& rx_size,
+    std::uint8_t expected_e1_response_subheader = 0U) noexcept {
+  for (;;) {
+    if (rx_size == 0U) {
+      return {};
+    }
+    const std::size_t noise_prefix = raw_response_noise_prefix(
+        config, expected_e1_response_subheader, rx_frame, rx_size);
+    if (noise_prefix != 0U) {
+      const std::size_t remaining = rx_size - noise_prefix;
+      std::memmove(rx_frame, rx_frame + noise_prefix, remaining);
+      rx_size = remaining;
+      if (rx_size == 0U) {
+        return {};
+      }
+    }
+    const mcprotocol::serial::DecodeResult decode =
+        mcprotocol::serial::FrameCodec::decode_response(
+            config,
+            frame_context,
+            mcprotocol::serial::Span<const std::uint8_t>(rx_frame, rx_size));
+    if (decode.response_identity_mismatch && decode.bytes_consumed != 0U) {
+      const std::size_t remaining = rx_size - decode.bytes_consumed;
+      std::memmove(rx_frame, rx_frame + decode.bytes_consumed, remaining);
+      rx_size = remaining;
+      continue;
+    }
+    return RawResponseBufferResult {
+        decode.status,
+        decode.frame,
+        decode.error,
+        decode.status == mcprotocol::serial::DecodeStatus::Incomplete && rx_size != 0U,
+    };
+  }
+}
+
 [[nodiscard]] Status run_raw_request(
     const ProtocolConfig& config,
     PosixSerialPort& port,
@@ -2152,6 +2254,42 @@ template <typename Port>
       format2
           ? mcprotocol::serial::FrameCodecContext::format2(next_raw_format2_block_number)
           : mcprotocol::serial::FrameCodecContext::none();
+  std::uint8_t expected_e1_response_subheader = 0U;
+  if (config.frame_kind() == FrameKind::E1) {
+    std::uint8_t request_subheader = 0U;
+    if (config.code_mode() == CodeMode::Binary) {
+      if (request_data.empty()) {
+        return mcprotocol::serial::make_status(
+            StatusCode::InvalidArgument, "1E binary request data has no subheader");
+      }
+      request_subheader = request_data[0];
+    } else {
+      if (request_data.size() < 2U) {
+        return mcprotocol::serial::make_status(
+            StatusCode::InvalidArgument, "1E ASCII request data has no subheader");
+      }
+      const auto nibble = [](std::uint8_t value) noexcept -> int {
+        if (value >= '0' && value <= '9') {
+          return value - '0';
+        }
+        if (value >= 'A' && value <= 'F') {
+          return 10 + (value - 'A');
+        }
+        if (value >= 'a' && value <= 'f') {
+          return 10 + (value - 'a');
+        }
+        return -1;
+      };
+      const int upper = nibble(request_data[0]);
+      const int lower = nibble(request_data[1]);
+      if (upper < 0 || lower < 0) {
+        return mcprotocol::serial::make_status(
+            StatusCode::InvalidArgument, "1E ASCII request subheader is not hexadecimal");
+      }
+      request_subheader = static_cast<std::uint8_t>((upper << 4U) | lower);
+    }
+    expected_e1_response_subheader = static_cast<std::uint8_t>(request_subheader | 0x80U);
+  }
   std::array<std::uint8_t, mcprotocol::serial::kMaxRequestFrameBytes> tx_frame {};
   std::size_t tx_size = 0;
   Status status = mcprotocol::serial::FrameCodec::encode_request(
@@ -2204,6 +2342,8 @@ template <typename Port>
 
   std::array<std::uint8_t, mcprotocol::serial::kMaxResponseFrameBytes> rx_frame {};
   std::size_t rx_size = 0;
+  std::uint32_t inter_byte_deadline_ms = 0U;
+  bool inter_byte_deadline_active = false;
 
   std::array<mcprotocol::serial::Byte, 256> rx_chunk {};
   while (true) {
@@ -2213,10 +2353,30 @@ template <typename Port>
           StatusCode::Timeout,
           "Absolute transaction deadline expired");
     }
+    if (inter_byte_deadline_active && deadline_reached(current_ms, inter_byte_deadline_ms)) {
+      return mcprotocol::serial::make_status(
+          StatusCode::Timeout,
+          "Inter-byte response inactivity timeout expired");
+    }
+
+    std::uint32_t read_deadline_ms = transaction_deadline_ms;
+    bool read_deadline_is_inter_byte = false;
+    if (inter_byte_deadline_active &&
+        static_cast<std::int32_t>(inter_byte_deadline_ms - current_ms) <
+            static_cast<std::int32_t>(transaction_deadline_ms - current_ms)) {
+      read_deadline_ms = inter_byte_deadline_ms;
+      read_deadline_is_inter_byte = true;
+    }
 
     std::size_t bytes_read = 0;
-    status = port.read_some_until(rx_chunk, transaction_deadline_ms, bytes_read);
+    status = port.read_some_until(rx_chunk, read_deadline_ms, bytes_read);
     if (!status.ok()) {
+      if (status.code == StatusCode::Timeout && read_deadline_is_inter_byte &&
+          deadline_reached(now_ms(), inter_byte_deadline_ms)) {
+        return mcprotocol::serial::make_status(
+            StatusCode::Timeout,
+            "Inter-byte response inactivity timeout expired");
+      }
       return status;
     }
     if (bytes_read == 0U) {
@@ -2228,6 +2388,11 @@ template <typename Port>
       return mcprotocol::serial::make_status(
           StatusCode::Timeout,
           "Absolute transaction deadline expired");
+    }
+    if (inter_byte_deadline_active && deadline_reached(received_ms, inter_byte_deadline_ms)) {
+      return mcprotocol::serial::make_status(
+          StatusCode::Timeout,
+          "Inter-byte response inactivity timeout expired");
     }
 
     const mcprotocol::serial::Span<const mcprotocol::serial::Byte> rx_chunk_bytes(rx_chunk.data(), bytes_read);
@@ -2244,17 +2409,12 @@ template <typename Port>
         bytes_read);
     rx_size += bytes_read;
 
-    const mcprotocol::serial::DecodeResult decode =
-        mcprotocol::serial::FrameCodec::decode_response(
-            config,
-            frame_context,
-            mcprotocol::serial::Span<const std::uint8_t>(rx_frame.data(), rx_size));
-    if (decode.response_identity_mismatch && decode.bytes_consumed != 0U) {
-      const std::size_t remaining = rx_size - decode.bytes_consumed;
-      std::memmove(rx_frame.data(), rx_frame.data() + decode.bytes_consumed, remaining);
-      rx_size = remaining;
-      continue;
-    }
+    const RawResponseBufferResult decode = decode_raw_response_buffer(
+        config,
+        frame_context,
+        rx_frame.data(),
+        rx_size,
+        expected_e1_response_subheader);
     if (decode.status == mcprotocol::serial::DecodeStatus::Complete) {
       out_frame = decode.frame;
       if (decode.frame.type == mcprotocol::serial::ResponseType::PlcError) {
@@ -2268,6 +2428,8 @@ template <typename Port>
     if (decode.status == mcprotocol::serial::DecodeStatus::Error) {
       return decode.error;
     }
+    inter_byte_deadline_ms = received_ms + config.timeout().inter_byte_timeout_ms;
+    inter_byte_deadline_active = decode.candidate_retained;
   }
 }
 
@@ -2324,6 +2486,8 @@ template <typename Port>
       return "Cancelled";
     case StatusCode::OperationOutcomeUnknown:
       return "OperationOutcomeUnknown";
+    case StatusCode::OutOfMemory:
+      return "OutOfMemory";
   }
   return "UnknownStatus";
 }
@@ -2385,6 +2549,12 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
     case DeviceCode::STC:
     case DeviceCode::CS:
     case DeviceCode::CC:
+    case DeviceCode::LTS:
+    case DeviceCode::LTC:
+    case DeviceCode::LSTS:
+    case DeviceCode::LSTC:
+    case DeviceCode::LCS:
+    case DeviceCode::LCC:
     case DeviceCode::SB:
     case DeviceCode::S:
     case DeviceCode::DX:
@@ -2405,6 +2575,8 @@ void print_probe_write_status(std::string_view label, const char* stage, Status 
     case DeviceCode::R:
     case DeviceCode::RD:
     case DeviceCode::ZR:
+    case DeviceCode::G:
+    case DeviceCode::HG:
       return false;
   }
   return false;
@@ -7046,10 +7218,6 @@ int main(int argc, char** argv) {
         RandomWriteWordItem item(DeviceAddress {DeviceCode::D, 0U}, 0U);
         if (!parse_word_write_arg(options.command_argv[index], item)) {
           std::fprintf(stderr, "Invalid write-words item: %s\n", options.command_argv[index]);
-          return 2;
-        }
-        if (item.value > 0xFFFFU) {
-          std::fprintf(stderr, "write-words value must be 0..65535: %s\n", options.command_argv[index]);
           return 2;
         }
         const bool can_append = have_group &&

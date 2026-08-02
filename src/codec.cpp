@@ -1,4 +1,5 @@
 #include "mcprotocol/serial/codec.hpp"
+#include "mcprotocol/serial/detail/validated_frame_codec.hpp"
 
 #include "protocol_predicates.hpp"
 
@@ -2453,6 +2454,18 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 }  // namespace
 
+namespace detail {
+
+struct RouteConfigAccess {
+  [[nodiscard]] static constexpr RouteConfig c1_wire_route(
+      std::uint8_t station_no,
+      std::uint8_t pc_no) noexcept {
+    return RouteConfig::c1_wire_route(station_no, pc_no);
+  }
+};
+
+}  // namespace detail
+
 // FrameCodec public implementation.
 
 Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
@@ -2471,6 +2484,10 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
 
   if (!is_wrap_safe_timeout_ms(config.timeout().response_timeout_ms)) {
     return invalid_argument("Response timeout must be in range 1..2147483647 ms");
+  }
+
+  if (!is_wrap_safe_timeout_ms(config.timeout().inter_byte_timeout_ms)) {
+    return invalid_argument("Inter-byte timeout must be in range 1..2147483647 ms");
   }
 
   if (!config.e1_monitoring_timer().is_valid()) {
@@ -2577,6 +2594,12 @@ Status FrameCodec::validate_request_capacity(
   if (!config_status.ok()) {
     return config_status;
   }
+  return detail::validate_request_capacity_validated(config, request_data_size);
+}
+
+Status detail::validate_request_capacity_validated(
+    const ProtocolConfig& config,
+    std::size_t request_data_size) noexcept {
   if (request_data_size > kMaxRequestDataBytes) {
     return make_status(
         StatusCode::InvalidArgument,
@@ -2618,6 +2641,12 @@ Status FrameCodec::validate_response_capacity(
   if (!config_status.ok()) {
     return config_status;
   }
+  return detail::validate_response_capacity_validated(config, response_data_size);
+}
+
+Status detail::validate_response_capacity_validated(
+    const ProtocolConfig& config,
+    std::size_t response_data_size) noexcept {
   if (response_data_size > kMaxResponseFrameBytes) {
     return make_status(
         StatusCode::InvalidArgument,
@@ -2673,6 +2702,16 @@ Status FrameCodec::encode_request(
   if (!config_status.ok()) {
     return config_status;
   }
+  return detail::encode_request_validated(config, context, request_data, out_frame, out_size);
+}
+
+Status detail::encode_request_validated(
+    const ProtocolConfig& config,
+    FrameCodecContext context,
+    mcprotocol::serial::Span<const std::uint8_t> request_data,
+    mcprotocol::serial::Span<std::uint8_t> out_frame,
+    std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status context_status = validate_frame_context(config, context);
   if (!context_status.ok()) {
     return context_status;
@@ -2682,7 +2721,8 @@ Status FrameCodec::encode_request(
   if (!request_status.ok()) {
     return request_status;
   }
-  const Status capacity_status = validate_request_capacity(config, request_data.size());
+  const Status capacity_status =
+      validate_request_capacity_validated(config, request_data.size());
   if (!capacity_status.ok()) {
     return capacity_status;
   }
@@ -3049,6 +3089,13 @@ DecodeResult FrameCodec::decode_response(
         0,
     };
   }
+  return detail::decode_response_validated(config, context, bytes);
+}
+
+DecodeResult detail::decode_response_validated(
+    const ProtocolConfig& config,
+    FrameCodecContext context,
+    mcprotocol::serial::Span<const std::uint8_t> bytes) noexcept {
   const Status context_status = validate_frame_context(config, context);
   if (!context_status.ok()) {
     return DecodeResult {
@@ -3084,7 +3131,7 @@ DecodeResult FrameCodec::decode_response(
     }
     const std::uint8_t actual_block_number = static_cast<std::uint8_t>(parsed_block_number);
     if (actual_block_number != context.format2_block_number()) {
-      DecodeResult foreign = decode_response(
+      DecodeResult foreign = decode_response_validated(
           config,
           FrameCodecContext::format2(actual_block_number),
           bytes);
@@ -3141,7 +3188,7 @@ DecodeResult FrameCodec::decode_response(
         route_parse_ok = parse_route_field(0U, 2U, station) &&
                          parse_route_field(2U, 2U, pc);
         if (route_parse_ok) {
-          actual_route = RouteConfig::c1_wire_route(
+          actual_route = detail::RouteConfigAccess::c1_wire_route(
               static_cast<std::uint8_t>(station),
               static_cast<std::uint8_t>(pc));
         }
@@ -3216,7 +3263,7 @@ DecodeResult FrameCodec::decode_response(
         self_station_no != config.route().self_station_no();
     if (route_mismatch) {
       const ProtocolConfig foreign_config = config.with_route(actual_route);
-      DecodeResult foreign = decode_response(foreign_config, context, bytes);
+      DecodeResult foreign = detail::decode_response_validated(foreign_config, context, bytes);
       if (foreign.status != DecodeStatus::Incomplete) {
         foreign.response_identity_mismatch = true;
       }

@@ -1,4 +1,5 @@
 #include "mcprotocol/serial/client.hpp"
+#include "mcprotocol/serial/detail/validated_frame_codec.hpp"
 
 #include "protocol_predicates.hpp"
 
@@ -215,7 +216,8 @@ struct StreamDecodeResult {
             return result;
           }
           DecodeResult candidate =
-              FrameCodec::decode_response(config, frame_context, checked_first(bytes, total_size));
+              detail::decode_response_validated(
+                  config, frame_context, checked_first(bytes, total_size));
           candidate.bytes_consumed = total_size;
           result.status = candidate.status;
           result.decode = candidate;
@@ -248,7 +250,8 @@ struct StreamDecodeResult {
         return result;
       }
       DecodeResult candidate =
-          FrameCodec::decode_response(config, frame_context, checked_first(bytes, total_size));
+          detail::decode_response_validated(
+              config, frame_context, checked_first(bytes, total_size));
       candidate.bytes_consumed = total_size;
       result.status = candidate.status;
       result.decode = candidate;
@@ -274,7 +277,8 @@ struct StreamDecodeResult {
       result.discard_prefix = offset;
     }
 
-    DecodeResult candidate = FrameCodec::decode_response(config, frame_context, checked_subspan(bytes, offset));
+    DecodeResult candidate = detail::decode_response_validated(
+        config, frame_context, checked_subspan(bytes, offset));
     if (candidate.response_identity_mismatch && candidate.bytes_consumed != 0U) {
       result.discard_prefix = offset + candidate.bytes_consumed;
       return result;
@@ -330,6 +334,11 @@ Status MelsecSerialClient::configure(const ProtocolConfig& config) noexcept {
   if (!status.ok()) {
     return status;
   }
+  apply_validated_config(config);
+  return ok_status();
+}
+
+void MelsecSerialClient::apply_validated_config(const ProtocolConfig& config) noexcept {
   config_ = config;
   configured_ = true;
   transport_reset_required_ = false;
@@ -342,7 +351,6 @@ Status MelsecSerialClient::configure(const ProtocolConfig& config) noexcept {
   extended_file_register_monitor_item_count_ = 0U;
   extended_file_register_monitor_registered_ = false;
 #endif
-  return ok_status();
 }
 
 Status MelsecSerialClient::set_rs485_hooks(const Rs485Hooks& hooks) noexcept {
@@ -410,6 +418,8 @@ Status MelsecSerialClient::notify_tx_complete(
   }
 
   awaiting_write_complete_ = false;
+  inter_byte_deadline_ms_ = 0U;
+  inter_byte_deadline_active_ = false;
   if (rs485_hooks_.on_tx_end != nullptr) {
     rs485_hooks_.on_tx_end(rs485_hooks_.user);
   }
@@ -456,6 +466,11 @@ void MelsecSerialClient::on_rx_bytes(
     complete(active_timeout_status("Timed out while waiting for a response"));
     return;
   }
+  if (inter_byte_deadline_active_ && deadline_reached(now_ms, inter_byte_deadline_ms_)) {
+    transport_reset_required_ = true;
+    complete(active_timeout_status("Inter-byte response inactivity timeout expired"));
+    return;
+  }
   const auto incoming = as_u8_span(bytes);
   if ((rx_frame_size_ + incoming.size()) > rx_frame_.size()) {
     transport_reset_required_ = !active_format2_block_number_valid_;
@@ -478,12 +493,18 @@ void MelsecSerialClient::on_rx_bytes(
     if (stream_decode.discard_prefix != 0U) {
       discard_rx_prefix(rx_frame_, rx_frame_size_, stream_decode.discard_prefix);
       if (rx_frame_size_ == 0U) {
+        inter_byte_deadline_ms_ = 0U;
+        inter_byte_deadline_active_ = false;
         return;
       }
       continue;
     }
 
     if (stream_decode.status == DecodeStatus::Incomplete) {
+      // Only a retained possible frame starts/restarts the inactivity deadline. Bytes that the
+      // stream scanner classifies entirely as noise are discarded above and do not start it.
+      inter_byte_deadline_ms_ = now_ms + config_.timeout().inter_byte_timeout_ms;
+      inter_byte_deadline_active_ = true;
       return;
     }
 
@@ -537,6 +558,12 @@ void MelsecSerialClient::poll(std::uint32_t now_ms) noexcept {
       return;
     }
     complete(active_timeout_status("The absolute transaction deadline expired"));
+    return;
+  }
+  if (!awaiting_write_complete_ && inter_byte_deadline_active_ &&
+      deadline_reached(now_ms, inter_byte_deadline_ms_)) {
+    transport_reset_required_ = true;
+    complete(active_timeout_status("Inter-byte response inactivity timeout expired"));
   }
 }
 
@@ -600,7 +627,7 @@ Status MelsecSerialClient::start_request(
   const FrameCodecContext frame_context = format2
                                               ? FrameCodecContext::format2(next_format2_block_number_)
                                               : FrameCodecContext::none();
-  const Status encode_status = FrameCodec::encode_request(
+  const Status encode_status = detail::encode_request_validated(
       config_,
       frame_context,
       mcprotocol::serial::Span<const std::uint8_t>(request_data_.data(), request_data_size),
@@ -609,7 +636,7 @@ Status MelsecSerialClient::start_request(
   if (!encode_status.ok()) {
     return encode_status;
   }
-  const Status response_capacity_status = FrameCodec::validate_response_capacity(
+  const Status response_capacity_status = detail::validate_response_capacity_validated(
       config_, expected_success_response_data_size(operation));
   if (!response_capacity_status.ok()) {
     return response_capacity_status;
@@ -624,6 +651,8 @@ Status MelsecSerialClient::start_request(
   tx_frame_size_ = encoded_size;
   rx_frame_size_ = 0;
   response_deadline_ms_ = 0U;
+  inter_byte_deadline_ms_ = 0U;
+  inter_byte_deadline_active_ = false;
   callback_ = callback;
   callback_user_ = user;
   busy_ = true;
@@ -1112,6 +1141,8 @@ void MelsecSerialClient::complete(Status status) noexcept {
   tx_frame_size_ = 0;
   rx_frame_size_ = 0;
   response_deadline_ms_ = 0;
+  inter_byte_deadline_ms_ = 0;
+  inter_byte_deadline_active_ = false;
   clear_pending_outputs();
   clear_pending_copies();
 

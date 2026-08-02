@@ -586,10 +586,12 @@ enum class ResponseType : std::uint8_t {
   PlcError
 };
 
-/// \brief One absolute transaction timeout used from the first TX attempt through full decode.
+/// \brief Absolute transaction and retained-frame inactivity timeouts.
 struct TimeoutConfig {
   /// Maximum complete transaction duration. Partial progress never restarts this limit.
   std::uint32_t response_timeout_ms = 3000;
+  /// Maximum inactivity after a possible response frame has been retained.
+  std::uint32_t inter_byte_timeout_ms = 250;
 };
 
 /// \brief PLC-side ACPU monitoring timer encoded in 1E requests.
@@ -993,6 +995,10 @@ class E1Route {
   E1PcTarget pc_target_;
 };
 
+namespace detail {
+struct RouteConfigAccess;
+}
+
 /// \brief Explicit route selection for a protocol session.
 ///
 /// Default construction represents an omitted route and is rejected before request encoding. Use
@@ -1094,6 +1100,7 @@ class RouteConfig {
 
  private:
   friend class FrameCodec;
+  friend struct detail::RouteConfigAccess;
 
   [[nodiscard]] static constexpr RouteConfig c1_wire_route(
       std::uint8_t station_no,
@@ -1229,6 +1236,14 @@ class ProtocolConfig {
       std::uint32_t value) const noexcept {
     TimeoutConfig next = timeout_;
     next.response_timeout_ms = value;
+    return with_timeout(next);
+  }
+
+  /// \brief Returns a new configuration with a different retained-frame inactivity timeout.
+  [[nodiscard]] constexpr ProtocolConfig with_inter_byte_timeout_ms(
+      std::uint32_t value) const noexcept {
+    TimeoutConfig next = timeout_;
+    next.inter_byte_timeout_ms = value;
     return with_timeout(next);
   }
 

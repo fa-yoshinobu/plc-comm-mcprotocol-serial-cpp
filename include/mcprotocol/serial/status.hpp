@@ -23,7 +23,9 @@ enum class StatusCode : std::uint8_t {
   BufferTooSmall,
   Cancelled,
   /// A state-changing request may have reached the PLC, but its result was not confirmed.
-  OperationOutcomeUnknown
+  OperationOutcomeUnknown,
+  /// Host-side temporary storage could not be allocated before communication started.
+  OutOfMemory
 };
 
 /// \brief Result object returned by most public APIs.

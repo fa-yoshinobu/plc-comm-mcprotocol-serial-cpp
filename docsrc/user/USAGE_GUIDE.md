@@ -101,7 +101,7 @@ encoding rather than inferred from response bytes. Malformed ASCII route hexadec
 as a parse error. Timeout, NAK, malformed input, or mismatch never causes automatic route discovery
 or fallback.
 
-### Absolute transaction timeout and 1E monitoring timer
+### Absolute transaction timeout, response inactivity, and 1E monitoring timer
 
 `TimeoutConfig::response_timeout_ms` is the one absolute transaction deadline. Its omitted value
 is 3000 ms for every frame and code mode. Call `notify_tx_started(now_ms)` immediately before the
@@ -109,6 +109,18 @@ first UART write. That same deadline covers partial writes, physical TX drain, a
 response correlation, and complete decode. No byte, chunk, ignored response, or phase transition
 restarts it. An explicit value must be 1..2147483647 ms so 32-bit monotonic-clock comparisons remain
 wrap-safe.
+
+`TimeoutConfig::inter_byte_timeout_ms` is a second, shorter RX inactivity limit. It defaults to
+250 ms and starts only when the decoder retains a possible response frame. Each new chunk that
+advances that retained candidate restarts the inactivity limit, but noise with no retained
+candidate does not start it. Set it immutably with `with_inter_byte_timeout_ms(value)` when a valid
+slow link needs more than 250 ms between observable chunks. Explicit values must also be
+1..2147483647 ms; zero does not disable the check. The absolute transaction deadline is never
+restarted, so whichever deadline expires first wins. The CLI equivalent is
+`--inter-byte-timeout-ms`.
+
+This is library-observed RX inactivity. When one OS read or UART callback delivers multiple
+physical bytes together, the library cannot observe or time the physical gaps inside that chunk.
 
 Every timeout sets `requires_transport_reset()`, including Format2. Abort, drain, and close/reopen
 the exact UART generation, then call `configure()` before another request. `PosixSyncClient` does
@@ -492,6 +504,7 @@ to do next; the library does not resend automatically.
 | `Framing` / `Parse` / `SumCheckMismatch` | A response was malformed or invalid. |
 | `PlcError` | The PLC returned a confirmed NG/end code; inspect `plc_error_code`. |
 | `OperationOutcomeUnknown` | A state-changing request may have been sent. Do not retry automatically; inspect `status.cause` (`Timeout`, `Cancelled`, `Closed`, `Transport`, or protocol reason) and verify PLC state. |
+| `OutOfMemory` | A host-only aggregate could not allocate its result stage before communication. No PLC request was sent; reduce the point count or free host memory. |
 
 The CLI prints the machine classification before the message. For an unknown state-changing result,
 it also prints the structured cause, for example `OperationOutcomeUnknown: ... (cause=Timeout)`.

@@ -807,6 +807,7 @@ Library-level status code returned by encode, decode, transport, and client oper
 | `BufferTooSmall` |  |
 | `Cancelled` |  |
 | `OperationOutcomeUnknown` | A state-changing request may have reached the PLC, but its result was not confirmed. |
+| `OutOfMemory` | Host-side temporary storage could not be allocated before communication started. |
 
 #### `Byte`
 
@@ -1217,14 +1218,6 @@ Status mcprotocol::serial::ok_status() noexcept
 
 Returns the default success status.
 
-#### `make_status`
-
-```cpp
-Status mcprotocol::serial::make_status(StatusCode code, const char *message, std::uint16_t plc_error_code=0, StatusCode cause=StatusCode::Ok) noexcept
-```
-
-Builds a status value with an optional PLC end code.
-
 #### `qualified_buffer_word_to_byte_address`
 
 ```cpp
@@ -1232,6 +1225,14 @@ Status mcprotocol::serial::qualified_buffer_word_to_byte_address(std::uint32_t w
 ```
 
 Converts a qualified word address to the corresponding module-buffer byte address.
+
+#### `make_status`
+
+```cpp
+Status mcprotocol::serial::make_status(StatusCode code, const char *message, std::uint16_t plc_error_code=0, StatusCode cause=StatusCode::Ok) noexcept
+```
+
+Builds a status value with an optional PLC end code.
 
 #### `validate_serial_config`
 
@@ -1539,7 +1540,7 @@ Asynchronous MC protocol client for UART / serial integrations.
 
 The intended MCU-side workflow is: call configure() start an async_* request call notify_tx_started(now_ms) immediately before the first UART write transmit pending_tx_frame() with the board UART layer call notify_tx_complete(now_ms, transport_status) when TX finishes or aborts feed received bytes with on_rx_bytes() call notify_rx_failure(receive_status) if the transport aborts response reception call poll() from the main loop or scheduler for deadline handling
 
-Output spans passed to async_* requests must remain valid until the completion callback fires. Only one request may be active. A second enabled async_* request returns Busy before changing the active request's output storage, request metadata, or monitor state. Same-instance calls from different operating-system threads are prohibited; the caller owns scheduling. Separate instances are independent and may progress concurrently. Cancelling before notify_tx_started() completes immediately as Cancelled. Cancelling during TX records the cancellation but does not complete the request until the UART reports physical TX completion or abort through notify_tx_complete(). Likewise, a deadline reached while physical TX is pending is latched: poll() marks the transport for reset but keeps the request busy and leaves the RS-485 direction/completion callbacks pending until notify_tx_complete() reports that TX finished or was aborted. After transmission may have begun, any unconfirmed state-changing command completes as OperationOutcomeUnknown; the client never retries it automatically.
+Output spans passed to async_* requests must remain valid until the completion callback fires. Only one request may be active. A second enabled async_* request returns Busy before changing the active request's output storage, request metadata, or monitor state. Same-instance calls from different operating-system threads are prohibited; the caller owns scheduling. Separate instances are independent and may progress concurrently. Cancelling before notify_tx_started() completes immediately as Cancelled. Cancelling during TX records the cancellation but does not complete the request until the UART reports physical TX completion or abort through notify_tx_complete(). Likewise, a deadline reached while physical TX is pending is latched: poll() marks the transport for reset but keeps the request busy and leaves the RS-485 direction/completion callbacks pending until notify_tx_complete() reports that TX finished or was aborted. Once the decoder retains a possible response, TimeoutConfig::inter_byte_timeout_ms also bounds inactivity between chunks without extending the absolute transaction deadline. After transmission may have begun, any unconfirmed state-changing command completes as OperationOutcomeUnknown; the client never retries it automatically.
 
 #### Member Functions
 
@@ -2485,7 +2486,7 @@ Status mcprotocol::serial::PosixSyncClient::read_long_state_bits(std::string_vie
 
 Reads long timer/counter contact or coil states through the dedicated status-block path.
 
-LTS/LTC/LSTS/LSTC with more than one point are explicitly aggregate reads: one four-word status-block request is issued per point, in address order. The complete plan is validated before transmission, the result is non-atomic across PLC scan times, and caller output is changed only after every internal request succeeds. LCS/LCC use one direct bit request and are not split.
+LTS/LTC/LSTS/LSTC with more than one point are explicitly aggregate reads: one four-word status-block request is issued per point, in address order. The complete plan is validated before transmission, the result is non-atomic across PLC scan times, and caller output is changed only after every internal request succeeds. LCS/LCC use one direct bit request and are not split. The host aggregate allocates ceil(points / 8) staging bytes before the first send and returns StatusCode::OutOfMemory if that allocation fails.
 
 #### `read_long_state_bits`
 
@@ -2784,6 +2785,8 @@ Status mcprotocol::serial::PosixSerialPort::drain_tx_until(std::uint32_t absolut
 ```
 
 Waits until queued TX data has physically drained, bounded by the transaction deadline.
+
+Queue polling yields before its first recheck and after observed progress. Only consecutive no-progress observations use a bounded sleep of at most one millisecond.
 
 #### `set_rts`
 
@@ -3717,6 +3720,14 @@ Returns a new immutable session configuration with different host timeout settin
 ProtocolConfig mcprotocol::serial::ProtocolConfig::with_response_timeout_ms(std::uint32_t value) const noexcept
 ```
 
+#### `with_inter_byte_timeout_ms`
+
+```cpp
+ProtocolConfig mcprotocol::serial::ProtocolConfig::with_inter_byte_timeout_ms(std::uint32_t value) const noexcept
+```
+
+Returns a new configuration with a different retained-frame inactivity timeout.
+
 ## Structs
 
 ### Struct `mcprotocol::serial::RawResponseFrame`
@@ -4463,7 +4474,7 @@ bool mcprotocol::serial::Status::ok() const noexcept
 
 ### Struct `mcprotocol::serial::TimeoutConfig`
 
-One absolute transaction timeout used from the first TX attempt through full decode.
+Absolute transaction and retained-frame inactivity timeouts.
 
 #### Fields
 
@@ -4474,6 +4485,14 @@ std::uint32_t mcprotocol::serial::TimeoutConfig::response_timeout_ms = 3000
 ```
 
 Maximum complete transaction duration. Partial progress never restarts this limit.
+
+#### `inter_byte_timeout_ms`
+
+```cpp
+std::uint32_t mcprotocol::serial::TimeoutConfig::inter_byte_timeout_ms = 250
+```
+
+Maximum inactivity after a possible response frame has been retained.
 
 ### Struct `mcprotocol::serial::HostStationRoute`
 

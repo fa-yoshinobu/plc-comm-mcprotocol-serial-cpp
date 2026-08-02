@@ -4,6 +4,7 @@
 #include "host_sync_runner.hpp"
 #include "mcprotocol/serial/detail/fixed_item_array.hpp"
 #include "mcprotocol/serial/detail/long_state_aggregate.hpp"
+#include "mcprotocol/serial/detail/validated_frame_codec.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -70,10 +71,7 @@ Status PosixSyncClient::open(
   }
 
   close();
-  status = client_.configure(protocol_config);
-  if (!status.ok()) {
-    return status;
-  }
+  client_.apply_validated_config(protocol_config);
 
   status = port_.open(serial_config);
   if (!status.ok()) {
@@ -532,35 +530,28 @@ Status PosixSyncClient::read_long_state_bits(
   // This is the only explicitly aggregate public read in this library.  Validate the complete
   // immutable plan before the first send.  In particular, do not discover a profile, wire-field,
   // request-frame, or response-frame limit after an earlier point has already been read.
-  std::array<std::uint8_t, kMaxRequestDataBytes> validation_request_data {};
-  std::array<std::uint8_t, kMaxRequestFrameBytes> validation_frame {};
-  for (std::uint16_t index = 0; index < points; ++index) {
-    const BatchReadWordsRequest request(
-        DeviceAddress {
-            spec.base_code, parsed.number + static_cast<std::uint32_t>(index)},
-        4U);
-    std::size_t request_data_size = 0U;
-    status = CommandCodec::encode_batch_read_words(
-        protocol_config_,
-        request,
-        mcprotocol::serial::Span<std::uint8_t>(
-            validation_request_data.data(), validation_request_data.size()),
-        request_data_size);
-    if (!status.ok()) {
-      return status;
-    }
-    std::size_t frame_size = 0U;
-    status = FrameCodec::encode_request(
-        protocol_config_,
-        mcprotocol::serial::Span<const std::uint8_t>(
-            validation_request_data.data(), request_data_size),
-        mcprotocol::serial::Span<std::uint8_t>(validation_frame.data(), validation_frame.size()),
-        frame_size);
-    if (!status.ok()) {
-      return status;
-    }
+  // All intermediate device numbers are bounded by the already-checked final number, so one
+  // typed validation of that endpoint covers the complete contiguous plan. It produces command
+  // data only; completed wire frames are encoded exactly once later, when each request is sent.
+  const BatchReadWordsRequest final_request(
+      DeviceAddress {
+          spec.base_code,
+          parsed.number + static_cast<std::uint32_t>(points - 1U)},
+      4U);
+  std::array<std::uint8_t, 64U> validation_request_data {};
+  std::size_t request_data_size = 0U;
+  status = CommandCodec::encode_batch_read_words(
+      protocol_config_, final_request, validation_request_data, request_data_size);
+  if (!status.ok()) {
+    return status;
   }
-  status = FrameCodec::validate_response_capacity(protocol_config_, 4U * sizeof(std::uint16_t));
+  status = detail::validate_request_capacity_validated(protocol_config_, request_data_size);
+  if (!status.ok()) {
+    return status;
+  }
+  status = detail::validate_response_capacity_validated(
+      protocol_config_,
+      detail::long_state_status_block_response_bytes(protocol_config_.code_mode()));
   if (!status.ok()) {
     return status;
   }

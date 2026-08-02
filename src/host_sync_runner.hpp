@@ -7,6 +7,19 @@
 
 namespace mcprotocol::serial::detail {
 
+struct ClientAccess {
+  [[nodiscard]] static bool inter_byte_deadline(
+      const MelsecSerialClient& client,
+      std::uint32_t& out_deadline_ms) noexcept {
+    if (!client.inter_byte_deadline_active_) {
+      out_deadline_ms = 0U;
+      return false;
+    }
+    out_deadline_ms = client.inter_byte_deadline_ms_;
+    return true;
+  }
+};
+
 template <typename Port, typename CompletionState, typename Clock, typename Trace>
 [[nodiscard]] Status run_synchronous_request(
     MelsecSerialClient& client,
@@ -73,9 +86,32 @@ template <typename Port, typename CompletionState, typename Clock, typename Trac
   }
 
   while (!completion.done) {
+    const std::uint32_t before_read_ms = clock();
+    client.poll(before_read_ms);
+    if (completion.done) {
+      break;
+    }
+    std::uint32_t read_deadline_ms = transaction_deadline_ms;
+    bool inter_byte_wakeup = false;
+    std::uint32_t possible_inter_byte_deadline = 0U;
+    if (ClientAccess::inter_byte_deadline(client, possible_inter_byte_deadline)) {
+      if (static_cast<std::int32_t>(possible_inter_byte_deadline - before_read_ms) <
+          static_cast<std::int32_t>(transaction_deadline_ms - before_read_ms)) {
+        read_deadline_ms = possible_inter_byte_deadline;
+        inter_byte_wakeup = true;
+      }
+    }
+
     std::size_t received = 0;
-    status = port.read_some_until(rx_buffer, transaction_deadline_ms, received);
+    status = port.read_some_until(rx_buffer, read_deadline_ms, received);
     if (!status.ok()) {
+      if (status.code == StatusCode::Timeout && inter_byte_wakeup) {
+        client.poll(clock());
+        if (completion.done) {
+          break;
+        }
+        continue;
+      }
       const Status notify_status = client.notify_rx_failure(status);
       port.close();
       if (completion.done) {
@@ -85,10 +121,11 @@ template <typename Port, typename CompletionState, typename Clock, typename Trac
     }
 
     if (received > 0U) {
+      const std::uint32_t received_ms = clock();
       const auto received_bytes =
           mcprotocol::serial::Span<const mcprotocol::serial::Byte>(rx_buffer.data(), received);
       trace("MC RX", received_bytes);
-      client.on_rx_bytes(clock(), received_bytes);
+      client.on_rx_bytes(received_ms, received_bytes);
       if (completion.done) {
         break;
       }

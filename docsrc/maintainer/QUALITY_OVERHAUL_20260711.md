@@ -709,6 +709,10 @@ and Format2 late-response identity are covered.
   deterministic; physical adapter gap characteristics remain user configuration).
 - [x] Documentation and final acceptance agree with the completed implementation (2026-07-18).
 
+Historical note: this checked record preserves the behavior accepted on 2026-07-18. The later
+`MCS-SERIAL-PERF-005` record in `CROSS_LIBRARY_CONTRACTS_20260801.md` narrows the inactivity timer to
+decoder-retained response candidates; the earlier completion evidence is not reused for that change.
+
 ## D-106: mandatory Remote RUN conflict and clear policies
 
 Scope: `RemoteOperationMode`, `RemoteRunClearMode`, command encoder, async and host-sync clients,

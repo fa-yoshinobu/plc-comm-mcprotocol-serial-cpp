@@ -67,6 +67,8 @@ def main() -> int:
     usage = run(cli, [])
     if "Absolute first-TX-through-decode timeout (default: 3000)" not in usage.stderr:
         raise AssertionError("CLI usage must advertise the absolute 3000 ms transaction timeout")
+    if "Retained-response inactivity timeout (default: 250)" not in usage.stderr:
+        raise AssertionError("CLI usage must advertise the 250 ms inter-byte inactivity timeout")
     if "1E timer in exact 250 ms units (default: 4000)" not in usage.stderr:
         raise AssertionError("CLI usage must advertise the independent 4000 ms 1E timer default")
     if "remote-run requires both conflict mode and clear mode" not in usage.stderr:
@@ -224,6 +226,30 @@ def main() -> int:
     for value, label in (("-1", "negative response timeout"), ("invalid", "nonnumeric response timeout")):
         invalid_timeout_text = binary_seven.copy()
         invalid_timeout_text[-1:-1] = ["--response-timeout-ms", value]
+        require_parse_error(cli, invalid_timeout_text, label)
+
+    for value, label in (
+        ("1", "one millisecond inter-byte timeout"),
+        ("250", "default inter-byte timeout"),
+        ("2147483647", "maximum wrap-safe inter-byte timeout"),
+    ):
+        valid_timeout = binary_seven.copy()
+        valid_timeout[-1:-1] = ["--inter-byte-timeout-ms", value]
+        require_validation_error(cli, valid_timeout, label)
+
+    for value, label in (
+        ("0", "zero inter-byte timeout"),
+        ("2147483648", "non-wrap-safe inter-byte timeout"),
+        ("4294967295", "maximum uint32 inter-byte timeout"),
+    ):
+        invalid_timeout = binary_seven.copy()
+        invalid_timeout[invalid_timeout.index("--data-bits") + 1] = "8"
+        invalid_timeout[-1:-1] = ["--inter-byte-timeout-ms", value]
+        require_protocol_validation_error(cli, invalid_timeout, label)
+
+    for value, label in (("-1", "negative inter-byte timeout"), ("invalid", "nonnumeric inter-byte timeout")):
+        invalid_timeout_text = binary_seven.copy()
+        invalid_timeout_text[-1:-1] = ["--inter-byte-timeout-ms", value]
         require_parse_error(cli, invalid_timeout_text, label)
 
     remote_run = [

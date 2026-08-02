@@ -48,7 +48,7 @@
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| Response bytes keep arriving slowly, but the request still times out. | One absolute deadline covers first TX, drain, every RX chunk, correlation, and decode. Partial progress never restarts it. | Increase the one transaction timeout if the complete operation legitimately needs longer. After any timeout, close/reopen the serial generation and reconfigure; never reuse partial bytes. |
+| Response bytes keep arriving slowly, but the request still times out. | The absolute deadline covers first TX through decode, while the 250 ms default inter-byte deadline limits inactivity after a possible response is retained. Chunk progress restarts only the inter-byte deadline. | Increase `inter_byte_timeout_ms` if valid chunk gaps exceed 250 ms, and increase `response_timeout_ms` only if the whole transaction needs longer. After any timeout, close/reopen and reconfigure. |
 
 ## Timeout occurs while UART or DMA transmit is still active
 

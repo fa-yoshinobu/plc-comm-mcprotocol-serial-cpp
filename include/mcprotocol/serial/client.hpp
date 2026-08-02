@@ -24,6 +24,10 @@
 
 namespace mcprotocol::serial {
 
+namespace detail {
+struct ClientAccess;
+}
+
 /// \brief Asynchronous MC protocol client for UART / serial integrations.
 ///
 /// The intended MCU-side workflow is:
@@ -47,6 +51,8 @@ namespace mcprotocol::serial {
 /// Likewise, a deadline reached while physical TX is pending is latched: `poll()` marks the
 /// transport for reset but keeps the request busy and leaves the RS-485 direction/completion
 /// callbacks pending until `notify_tx_complete()` reports that TX finished or was aborted.
+/// Once the decoder retains a possible response, `TimeoutConfig::inter_byte_timeout_ms` also
+/// bounds inactivity between chunks without extending the absolute transaction deadline.
 /// After transmission may have begun, any unconfirmed state-changing command completes as
 /// `OperationOutcomeUnknown`; the client never retries it automatically.
 class MelsecSerialClient {
@@ -519,6 +525,12 @@ class MelsecSerialClient {
       void* user) noexcept;
 
  private:
+  friend class PosixSyncClient;
+  friend struct detail::ClientAccess;
+
+  /// Stores a ProtocolConfig that has already passed FrameCodec::validate_config().
+  void apply_validated_config(const ProtocolConfig& config) noexcept;
+
   enum class OperationKind : std::uint8_t {
     None,
     BatchReadWords,
@@ -610,6 +622,8 @@ class MelsecSerialClient {
   CompletionHandler callback_ = nullptr;
   void* callback_user_ = nullptr;
   std::uint32_t response_deadline_ms_ = 0;
+  std::uint32_t inter_byte_deadline_ms_ = 0;
+  bool inter_byte_deadline_active_ = false;
   std::uint8_t next_format2_block_number_ = 0;
   std::uint8_t active_format2_block_number_ = 0;
   bool active_format2_block_number_valid_ = false;

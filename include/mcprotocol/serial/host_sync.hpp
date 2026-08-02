@@ -173,7 +173,8 @@ class PosixSyncClient {
   /// four-word status-block request is issued per point, in address order. The complete plan is
   /// validated before transmission, the result is non-atomic across PLC scan times, and caller
   /// output is changed only after every internal request succeeds. `LCS`/`LCC` use one direct bit
-  /// request and are not split.
+  /// request and are not split. The host aggregate allocates `ceil(points / 8)` staging bytes
+  /// before the first send and returns `StatusCode::OutOfMemory` if that allocation fails.
   [[nodiscard]] Status read_long_state_bits(
       std::string_view head_device,
       std::uint16_t points,

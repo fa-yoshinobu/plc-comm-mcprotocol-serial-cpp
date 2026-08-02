@@ -209,6 +209,14 @@ if(MCPROTOCOL_SERIAL_BUILD_TESTING)
 
   add_test(NAME bundled_algorithm_compat_tests COMMAND bundled_algorithm_compat_tests)
 
+  if(Python3_Interpreter_FOUND)
+    add_test(
+      NAME performance_contract_tests
+      COMMAND ${Python3_EXECUTABLE}
+              ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_performance_contracts.py
+    )
+  endif()
+
   if(MCPROTOCOL_EFFECTIVE_BUILD_HOST_SUPPORT)
     add_executable(host_sync_runner_tests
       tests/host_sync_runner_tests.cpp

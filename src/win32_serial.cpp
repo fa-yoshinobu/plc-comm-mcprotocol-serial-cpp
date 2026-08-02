@@ -2,12 +2,14 @@
 
 #include "mcprotocol/serial/posix_serial.hpp"
 #include "mcprotocol/serial/detail/win32_serial_settings.hpp"
+#include "mcprotocol/serial/detail/yield_first_wait.hpp"
 #include "host_now_ms.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <thread>
 
 // Avoid including winsock2 conflicts; use minimal Windows headers.
 #ifndef WIN32_LEAN_AND_MEAN
@@ -313,20 +315,27 @@ Status PosixSerialPort::drain_tx_until(std::uint32_t absolute_deadline_ms) noexc
     return make_status(StatusCode::NotConnected, "Serial port is not open");
   }
   const HANDLE h = to_handle(fd_);
-  for (;;) {
+  auto remaining_timeout = [](std::uint32_t deadline) noexcept -> std::uint32_t {
+    return static_cast<std::uint32_t>(remaining_timeout_ms(deadline));
+  };
+  auto query_pending = [h](std::uint64_t& out_pending) noexcept -> Status {
     DWORD errors = 0U;
     COMSTAT status {};
     if (!ClearCommError(h, &errors, &status)) {
       return transport_last_error(GetLastError(), "ClearCommError failed during drain");
     }
-    if (status.cbOutQue == 0U) {
-      return ok_status();
-    }
-    if (remaining_timeout_ms(absolute_deadline_ms) == 0U) {
-      return deadline_timeout("Serial transaction deadline expired during drain");
-    }
-    Sleep(1U);
-  }
+    out_pending = static_cast<std::uint64_t>(status.cbOutQue);
+    return ok_status();
+  };
+  auto yield_now = []() noexcept { std::this_thread::yield(); };
+  auto sleep_one = [](std::uint32_t delay_ms) noexcept { Sleep(static_cast<DWORD>(delay_ms)); };
+  return detail::drain_tx_with_yield_first(
+      absolute_deadline_ms,
+      "Serial transaction deadline expired during drain",
+      remaining_timeout,
+      query_pending,
+      yield_now,
+      sleep_one);
 }
 
 Status PosixSerialPort::set_rts(bool enabled) noexcept {

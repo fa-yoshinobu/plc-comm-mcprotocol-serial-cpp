@@ -2,12 +2,14 @@
 
 #include "mcprotocol/serial/posix_serial.hpp"
 #include "mcprotocol/serial/detail/posix_serial_settings.hpp"
+#include "mcprotocol/serial/detail/yield_first_wait.hpp"
 #include "host_now_ms.hpp"
 
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <thread>
 
 #include <fcntl.h>
 #include <poll.h>
@@ -361,21 +363,28 @@ Status PosixSerialPort::drain_tx_until(std::uint32_t absolute_deadline_ms) noexc
   }
   const int native_fd = static_cast<int>(fd_);
 #if defined(TIOCOUTQ)
-  for (;;) {
+  auto remaining_timeout = [](std::uint32_t deadline) noexcept -> std::uint32_t {
+    return static_cast<std::uint32_t>(remaining_timeout_ms(deadline));
+  };
+  auto query_pending = [native_fd](std::uint64_t& out_pending) noexcept -> Status {
     int pending = 0;
     if (::ioctl(native_fd, TIOCOUTQ, &pending) != 0) {
       return transport_errno("TIOCOUTQ failed");
     }
-    if (pending == 0) {
-      return ok_status();
-    }
-    const int remaining = remaining_timeout_ms(absolute_deadline_ms);
-    if (remaining == 0) {
-      return deadline_timeout("Serial transaction deadline expired during drain");
-    }
-    const int wait_ms = remaining > 1 ? 1 : remaining;
-    (void)::poll(nullptr, 0, wait_ms);
-  }
+    out_pending = static_cast<std::uint64_t>(pending);
+    return ok_status();
+  };
+  auto yield_now = []() noexcept { std::this_thread::yield(); };
+  auto sleep_one = [](std::uint32_t delay_ms) noexcept {
+    (void)::poll(nullptr, 0, static_cast<int>(delay_ms));
+  };
+  return detail::drain_tx_with_yield_first(
+      absolute_deadline_ms,
+      "Serial transaction deadline expired during drain",
+      remaining_timeout,
+      query_pending,
+      yield_now,
+      sleep_one);
 #else
   (void)absolute_deadline_ms;
   return make_status(

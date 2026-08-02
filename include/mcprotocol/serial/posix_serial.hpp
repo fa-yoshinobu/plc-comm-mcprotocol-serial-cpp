@@ -142,6 +142,9 @@ class PosixSerialPort {
   /// \brief Drops unread RX data that is already buffered by the driver.
   [[nodiscard]] Status flush_rx() noexcept;
   /// \brief Waits until queued TX data has physically drained, bounded by the transaction deadline.
+  ///
+  /// Queue polling yields before its first recheck and after observed progress. Only consecutive
+  /// no-progress observations use a bounded sleep of at most one millisecond.
   [[nodiscard]] Status drain_tx_until(std::uint32_t absolute_deadline_ms) noexcept;
   /// \brief Sets the RTS line when the underlying driver supports it.
   [[nodiscard]] Status set_rts(bool enabled) noexcept;

@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -26,6 +27,7 @@
 #include "mcprotocol/serial/string_view_compat.hpp"
 #include "mcprotocol/serial/detail/fixed_item_array.hpp"
 #include "mcprotocol/serial/detail/long_state_aggregate.hpp"
+#include "mcprotocol/serial/detail/yield_first_wait.hpp"
 #if defined(_WIN32)
 #include "mcprotocol/serial/detail/win32_serial_settings.hpp"
 #endif
@@ -3656,6 +3658,313 @@ void test_response_timeout_and_e1_monitoring_timer_are_independent() {
   }
 }
 
+void test_inter_byte_timeout_contract_and_candidate_progress() {
+  struct LocalCapture {
+    bool called = false;
+    Status status {};
+  };
+  const auto completion = [](void* user, Status status) noexcept {
+    auto* capture = static_cast<LocalCapture*>(user);
+    capture->called = true;
+    capture->status = status;
+  };
+
+  static_assert(mcprotocol::serial::TimeoutConfig {}.inter_byte_timeout_ms == 250U);
+  static_assert(
+      make_c4_binary_protocol(
+          PlcProfile::MelsecQ,
+          SumCheckMode::Enabled,
+          RouteConfig {HostStationRoute {}})
+          .timeout().inter_byte_timeout_ms == 250U);
+
+  auto config = make_binary_c4_config();
+  for (const std::uint32_t value : {1U, 250U, 0x7FFFFFFFU}) {
+    assert(FrameCodec::validate_config(config.with_inter_byte_timeout_ms(value)).ok());
+  }
+  for (const std::uint32_t value : {0U, 0x80000000U, 0xFFFFFFFFU}) {
+    const Status invalid = FrameCodec::validate_config(config.with_inter_byte_timeout_ms(value));
+    assert(invalid.code == StatusCode::InvalidArgument);
+  }
+
+  config = config.with_response_timeout_ms(1000U).with_inter_byte_timeout_ms(250U);
+  const BatchReadWordsRequest request(
+      DeviceAddress {mcprotocol::serial::DeviceCode::D, 100U}, 1U);
+  const std::array<std::uint8_t, 2> response_data {0x34U, 0x12U};
+  std::array<std::uint8_t, 64> response_frame {};
+  std::size_t response_frame_size = 0U;
+  assert(FrameCodec::encode_success_response(
+             config, response_data, response_frame, response_frame_size)
+             .ok());
+  assert(response_frame_size > 2U);
+
+  const auto begin_read = [&](MelsecSerialClient& client,
+                              std::array<std::uint16_t, 1>& words,
+                              LocalCapture& capture,
+                              std::uint32_t now_ms) {
+    assert(client.configure(config).ok());
+    assert(client.async_batch_read_words(
+                     now_ms, request, words, completion, &capture)
+               .ok());
+    assert(start_and_notify_tx_complete(client, now_ms, mcprotocol::serial::ok_status()).ok());
+  };
+
+  // No candidate has arrived: the inter-byte timeout is not an alternate response-start timer.
+  {
+    MelsecSerialClient client;
+    std::array<std::uint16_t, 1> words {};
+    LocalCapture capture;
+    begin_read(client, words, capture, 0U);
+    client.poll(250U);
+    assert(!capture.called);
+
+    const std::array<mcprotocol::serial::Byte, 1> noise {
+        static_cast<mcprotocol::serial::Byte>(0x55U)};
+    client.on_rx_bytes(300U, noise);
+    client.poll(550U);
+    assert(!capture.called);
+    client.on_rx_bytes(
+        600U,
+        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
+            reinterpret_cast<const mcprotocol::serial::Byte*>(response_frame.data()),
+            response_frame_size));
+    assert(capture.called);
+    assert(capture.status.ok());
+    assert(words[0] == 0x1234U);
+  }
+
+  // A retained partial candidate starts the inactivity timer, and progress restarts only it.
+  {
+    MelsecSerialClient client;
+    std::array<std::uint16_t, 1> words {};
+    LocalCapture capture;
+    begin_read(client, words, capture, 0U);
+    client.on_rx_bytes(
+        100U,
+        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
+            reinterpret_cast<const mcprotocol::serial::Byte*>(response_frame.data()), 1U));
+    client.poll(349U);
+    assert(!capture.called);
+    client.on_rx_bytes(
+        349U,
+        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
+            reinterpret_cast<const mcprotocol::serial::Byte*>(response_frame.data() + 1U), 1U));
+    client.poll(598U);
+    assert(!capture.called);
+    client.on_rx_bytes(
+        599U,
+        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
+            reinterpret_cast<const mcprotocol::serial::Byte*>(response_frame.data() + 2U),
+            response_frame_size - 2U));
+    assert(capture.called);
+    assert(capture.status.code == StatusCode::Timeout);
+    assert(client.requires_transport_reset());
+  }
+
+  // The absolute deadline remains earlier when it expires before the restarted inactivity timer.
+  {
+    const ProtocolConfig short_total =
+        config.with_response_timeout_ms(100U).with_inter_byte_timeout_ms(250U);
+    MelsecSerialClient client;
+    std::array<std::uint16_t, 1> words {};
+    LocalCapture capture;
+    assert(client.configure(short_total).ok());
+    assert(client.async_batch_read_words(0U, request, words, completion, &capture).ok());
+    assert(start_and_notify_tx_complete(client, 0U, mcprotocol::serial::ok_status()).ok());
+    client.on_rx_bytes(
+        10U,
+        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
+            reinterpret_cast<const mcprotocol::serial::Byte*>(response_frame.data()), 1U));
+    client.poll(100U);
+    assert(capture.called);
+    assert(capture.status.code == StatusCode::Timeout);
+  }
+
+  // Both deadline calculations remain correct across uint32_t wrap.
+  {
+    const ProtocolConfig wrap_config =
+        config.with_response_timeout_ms(1000U).with_inter_byte_timeout_ms(10U);
+    MelsecSerialClient client;
+    std::array<std::uint16_t, 1> words {};
+    LocalCapture capture;
+    assert(client.configure(wrap_config).ok());
+    assert(client.async_batch_read_words(
+                     0xFFFFFF00U, request, words, completion, &capture)
+               .ok());
+    assert(start_and_notify_tx_complete(
+               client, 0xFFFFFF00U, mcprotocol::serial::ok_status())
+               .ok());
+    client.on_rx_bytes(
+        0xFFFFFFFAU,
+        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
+            reinterpret_cast<const mcprotocol::serial::Byte*>(response_frame.data()), 1U));
+    client.poll(3U);
+    assert(!capture.called);
+    client.poll(4U);
+    assert(capture.called);
+    assert(capture.status.code == StatusCode::Timeout);
+  }
+
+  // A partial response to an already-transmitted state change keeps the structured ambiguity.
+  {
+    MelsecSerialClient client;
+    LocalCapture capture;
+    const std::array<std::uint16_t, 1> values {0x1234U};
+    const BatchWriteWordsRequest write_request(
+        DeviceAddress {mcprotocol::serial::DeviceCode::D, 100U}, values);
+    assert(client.configure(config).ok());
+    assert(client.async_batch_write_words(
+                     0U, write_request, completion, &capture)
+               .ok());
+    assert(start_and_notify_tx_complete(client, 0U, mcprotocol::serial::ok_status()).ok());
+
+    std::array<std::uint8_t, 64> write_response {};
+    std::size_t write_response_size = 0U;
+    assert(FrameCodec::encode_success_response(
+               config,
+               mcprotocol::serial::Span<const std::uint8_t> {},
+               write_response,
+               write_response_size)
+               .ok());
+    client.on_rx_bytes(
+        100U,
+        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
+            reinterpret_cast<const mcprotocol::serial::Byte*>(write_response.data()), 1U));
+    client.poll(350U);
+    assert(capture.called);
+    assert(capture.status.code == StatusCode::OperationOutcomeUnknown);
+    assert(capture.status.cause == StatusCode::Timeout);
+    assert(client.requires_transport_reset());
+  }
+}
+
+void test_invalid_reconfigure_preserves_previous_validated_config() {
+  ProtocolConfig valid = make_binary_c4_config()
+                             .with_response_timeout_ms(100U)
+                             .with_inter_byte_timeout_ms(250U);
+  MelsecSerialClient client;
+  assert(client.configure(valid).ok());
+
+  const ProtocolConfig invalid = valid.with_response_timeout_ms(200U)
+                                     .with_inter_byte_timeout_ms(0U);
+  const Status configure_status = client.configure(invalid);
+  assert(configure_status.code == StatusCode::InvalidArgument);
+
+  std::array<std::uint16_t, 1> words {};
+  const BatchReadWordsRequest request(
+      DeviceAddress {mcprotocol::serial::DeviceCode::D, 100U}, 1U);
+  assert(client.async_batch_read_words(
+                   0U,
+                   request,
+                   words,
+                   [](void*, Status) {},
+                   nullptr)
+             .ok());
+  assert(client.notify_tx_started(10U).ok());
+  assert(client.transaction_deadline_ms() == 110U);
+  client.cancel();
+}
+
+void test_tx_drain_wait_policy_yields_before_each_bounded_sleep() {
+  using mcprotocol::serial::detail::YieldFirstWaitAction;
+  using mcprotocol::serial::detail::YieldFirstWaitPolicy;
+
+  YieldFirstWaitPolicy policy;
+  assert(policy.observe(8U) == YieldFirstWaitAction::Yield);
+  assert(policy.observe(8U) == YieldFirstWaitAction::SleepOneMillisecond);
+  assert(policy.observe(8U) == YieldFirstWaitAction::Yield);
+  assert(policy.observe(8U) == YieldFirstWaitAction::SleepOneMillisecond);
+
+  // Queue progress resets the phase even when the preceding observation slept.
+  assert(policy.observe(4U) == YieldFirstWaitAction::Yield);
+  assert(policy.observe(4U) == YieldFirstWaitAction::SleepOneMillisecond);
+  assert(policy.observe(1U) == YieldFirstWaitAction::Yield);
+}
+
+struct DrainSimulation {
+  std::vector<std::uint32_t> remaining_values;
+  std::vector<std::uint64_t> pending_values;
+  Status query_status = mcprotocol::serial::ok_status();
+  std::size_t remaining_calls = 0U;
+  std::size_t query_calls = 0U;
+  std::size_t yield_calls = 0U;
+  std::vector<std::uint32_t> sleep_durations;
+
+  Status run() {
+    auto remaining = [this](std::uint32_t) noexcept -> std::uint32_t {
+      const std::size_t selected = std::min(remaining_calls, remaining_values.size() - 1U);
+      ++remaining_calls;
+      return remaining_values[selected];
+    };
+    auto query = [this](std::uint64_t& out_pending) noexcept -> Status {
+      const std::size_t selected = std::min(query_calls, pending_values.size() - 1U);
+      ++query_calls;
+      out_pending = pending_values[selected];
+      return query_status;
+    };
+    auto yield_now = [this]() noexcept { ++yield_calls; };
+    auto sleep_one = [this](std::uint32_t duration) noexcept {
+      sleep_durations.push_back(duration);
+    };
+    return mcprotocol::serial::detail::drain_tx_with_yield_first(
+        123U, "simulated drain timeout", remaining, query, yield_now, sleep_one);
+  }
+};
+
+void test_tx_drain_loop_boundaries_failures_and_simulated_delay() {
+  {
+    DrainSimulation immediate {{5U, 5U, 5U, 5U}, {8U, 0U}};
+    assert(immediate.run().ok());
+    assert(immediate.query_calls == 2U);
+    assert(immediate.yield_calls == 1U);
+    assert(immediate.sleep_durations.empty());
+    // The replaced fixed-sleep loop deliberately waited 1 ms after the first non-empty query.
+    // For this same immediate-completion sequence the approved loop adds 0 ms deliberate sleep.
+    constexpr std::uint32_t old_deliberate_sleep_ms = 1U;
+    const std::uint32_t new_deliberate_sleep_ms = 0U;
+    assert(new_deliberate_sleep_ms < old_deliberate_sleep_ms);
+  }
+  {
+    DrainSimulation stalled {{5U, 5U, 5U, 5U, 5U, 5U}, {8U, 8U, 0U}};
+    assert(stalled.run().ok());
+    assert(stalled.query_calls == 3U);
+    assert(stalled.yield_calls == 1U);
+    assert((stalled.sleep_durations == std::vector<std::uint32_t> {1U}));
+  }
+  {
+    DrainSimulation progress {{5U, 5U, 5U, 5U, 5U, 5U, 5U, 5U}, {8U, 4U, 4U, 0U}};
+    assert(progress.run().ok());
+    assert(progress.yield_calls == 2U);
+    assert((progress.sleep_durations == std::vector<std::uint32_t> {1U}));
+  }
+  {
+    DrainSimulation expired_before_query {{0U}, {0U}};
+    const Status status = expired_before_query.run();
+    assert(status.code == StatusCode::Timeout);
+    assert(expired_before_query.query_calls == 0U);
+  }
+  {
+    DrainSimulation expired_during_query {{1U, 0U}, {0U}};
+    const Status status = expired_during_query.run();
+    assert(status.code == StatusCode::Timeout);
+    assert(expired_during_query.query_calls == 1U);
+  }
+  {
+    DrainSimulation query_failure {{5U}, {8U}};
+    query_failure.query_status =
+        mcprotocol::serial::make_status(StatusCode::Transport, "simulated queue query failure");
+    const Status status = query_failure.run();
+    assert(status.code == StatusCode::Transport);
+    assert(query_failure.yield_calls == 0U);
+    assert(query_failure.sleep_durations.empty());
+  }
+  {
+    DrainSimulation bounded_sleep {{2U, 2U, 1U, 1U, 0U}, {8U, 8U}};
+    const Status status = bounded_sleep.run();
+    assert(status.code == StatusCode::Timeout);
+    assert((bounded_sleep.sleep_durations == std::vector<std::uint32_t> {1U}));
+  }
+}
+
 void test_plc_profile_names_and_internal_grouping() {
   PlcProfile profile = PlcProfile::MelsecQ;
   assert(std::string_view(plc_profile_name(PlcProfile::Unspecified)).empty());
@@ -3935,6 +4244,18 @@ void test_high_level_long_state_read_spec_and_decode() {
 }
 
 void test_long_state_read_aggregate_order_boundary_and_no_partial_output() {
+  static_assert(mcprotocol::serial::detail::long_state_stage_bytes(1U) == 1U);
+  static_assert(mcprotocol::serial::detail::long_state_stage_bytes(8U) == 1U);
+  static_assert(mcprotocol::serial::detail::long_state_stage_bytes(9U) == 2U);
+  static_assert(mcprotocol::serial::detail::long_state_stage_bytes(0xFFFFU) == 8192U);
+  static_assert(
+      mcprotocol::serial::detail::long_state_status_block_response_bytes(CodeMode::Binary) == 8U);
+  static_assert(
+      mcprotocol::serial::detail::long_state_status_block_response_bytes(CodeMode::Ascii) == 16U);
+  static_assert(
+      static_cast<std::uint8_t>(StatusCode::OutOfMemory) ==
+      static_cast<std::uint8_t>(StatusCode::OperationOutcomeUnknown) + 1U);
+
   const LongStateReadSpec spec(
       LongStateReadRoute::StatusBlock,
       mcprotocol::serial::DeviceCode::LTN,
@@ -3969,6 +4290,23 @@ void test_long_state_read_aggregate_order_boundary_and_no_partial_output() {
   assert(calls == 2U);
   assert(observed_addresses[0] == 100U);
   assert(observed_addresses[1] == 101U);
+  assert(failed_output[0] == true);
+  assert(failed_output[1] == false);
+  assert(failed_output[2] == true);
+
+  calls = 0U;
+  const auto fail_allocation = [](std::size_t) noexcept {
+    return std::unique_ptr<std::uint8_t[]> {};
+  };
+  status = mcprotocol::serial::detail::execute_long_state_read_aggregate(
+      spec,
+      100U,
+      static_cast<std::uint16_t>(failed_output.size()),
+      mcprotocol::serial::Span<BitValue>(failed_output.data(), failed_output.size()),
+      fail_second,
+      fail_allocation);
+  assert(status.code == StatusCode::OutOfMemory);
+  assert(calls == 0U);
   assert(failed_output[0] == true);
   assert(failed_output[1] == false);
   assert(failed_output[2] == true);
@@ -8454,7 +8792,9 @@ void test_client_response_timeout_is_wrap_safe_and_not_extended_by_rx() {
 
 void test_absolute_transaction_deadline_covers_tx_and_is_not_extended_by_chunks() {
   auto config = make_binary_c4_config();
-  config = config.with_response_timeout_ms(1000U);
+  // Keep the independent inactivity deadline longer than every test chunk gap so this test
+  // isolates the fixed absolute transaction deadline.
+  config = config.with_response_timeout_ms(1000U).with_inter_byte_timeout_ms(900U);
   const BatchReadWordsRequest request({mcprotocol::serial::DeviceCode::D, 100U}, 1U);
   const std::array<std::uint8_t, 2> response_data {0x34U, 0x12U};
   std::array<std::uint8_t, 64> response_frame {};
@@ -10214,6 +10554,10 @@ int main() {
   test_encode_ascii_c1_extended_file_register_monitor_a_request_shape();
   test_validate_e1_config_and_route_constraints();
   test_response_timeout_and_e1_monitoring_timer_are_independent();
+  test_inter_byte_timeout_contract_and_candidate_progress();
+  test_invalid_reconfigure_preserves_previous_validated_config();
+  test_tx_drain_wait_policy_yields_before_each_bounded_sleep();
+  test_tx_drain_loop_boundaries_failures_and_simulated_delay();
   test_encode_ascii_e1_batch_read_words_request_shape();
   test_encode_binary_e1_batch_read_bits_request_shape();
   test_encode_ascii_e1_l_device_uses_internal_relay_code_and_s_is_rejected();

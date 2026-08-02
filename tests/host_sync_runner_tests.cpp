@@ -100,6 +100,47 @@ struct FakePort {
   }
 };
 
+struct ScriptedClock {
+  std::array<std::uint32_t, 7> values {};
+  std::size_t index = 0U;
+
+  std::uint32_t operator()() noexcept {
+    const std::size_t selected = index < values.size() ? index : values.size() - 1U;
+    ++index;
+    return values[selected];
+  }
+};
+
+struct PartialResponsePort {
+  Byte first_byte {};
+  std::size_t read_calls = 0U;
+  std::array<std::uint32_t, 2> read_deadlines {};
+  bool closed = false;
+
+  Status flush_rx() noexcept { return mcprotocol::serial::ok_status(); }
+  Status write_all_until(Span<const Byte>, std::uint32_t) noexcept {
+    return mcprotocol::serial::ok_status();
+  }
+  Status drain_tx_until(std::uint32_t) noexcept { return mcprotocol::serial::ok_status(); }
+  Status read_some_until(
+      Span<Byte> out,
+      std::uint32_t deadline,
+      std::size_t& out_size) noexcept {
+    if (read_calls < read_deadlines.size()) {
+      read_deadlines[read_calls] = deadline;
+    }
+    ++read_calls;
+    if (read_calls == 1U) {
+      out[0] = first_byte;
+      out_size = 1U;
+      return mcprotocol::serial::ok_status();
+    }
+    out_size = 0U;
+    return mcprotocol::serial::make_status(StatusCode::Timeout, "bounded receive wait expired");
+  }
+  void close() noexcept { closed = true; }
+};
+
 ProtocolConfig normal_monitor_config() {
   return ProtocolConfig::c4_binary(
              PlcProfile::MelsecIqR,
@@ -237,10 +278,137 @@ void test_read_only_failures_keep_core_classification() {
   assert(status.cause == StatusCode::Ok);
 }
 
+void test_partial_response_uses_inter_byte_deadline_in_host_runner() {
+  const ProtocolConfig config = normal_monitor_config()
+                                    .with_response_timeout_ms(1000U)
+                                    .with_inter_byte_timeout_ms(250U);
+  MelsecSerialClient client;
+  assert(client.configure(config).ok());
+
+  CompletionState completion;
+  std::array<std::uint16_t, 1> words {};
+  const mcprotocol::serial::BatchReadWordsRequest request(
+      DeviceAddress {DeviceCode::D, 100U}, 1U);
+  assert(client.async_batch_read_words(
+                   0U, request, words, capture_completion, &completion)
+             .ok());
+
+  const std::array<std::uint8_t, 2> response_data {0x34U, 0x12U};
+  std::array<std::uint8_t, 64> response_frame {};
+  std::size_t response_size = 0U;
+  assert(mcprotocol::serial::FrameCodec::encode_success_response(
+             config, response_data, response_frame, response_size)
+             .ok());
+
+  PartialResponsePort port {
+      static_cast<Byte>(response_frame[0])};
+  ScriptedClock clock {{0U, 0U, 0U, 100U, 100U, 100U, 350U}};
+  std::array<Byte, 256> rx_buffer {};
+  const Status status = mcprotocol::serial::detail::run_synchronous_request(
+      client,
+      port,
+      config,
+      rx_buffer,
+      completion,
+      clock,
+      [](const char*, Span<const Byte>) noexcept {});
+
+  assert(status.code == StatusCode::Timeout);
+  assert(port.read_calls == 2U);
+  assert(port.read_deadlines[0] == 1000U);
+  assert(port.read_deadlines[1] == 350U);
+  assert(port.closed);
+}
+
+void test_noise_does_not_shorten_host_runner_read_deadline() {
+  const ProtocolConfig config = normal_monitor_config()
+                                    .with_response_timeout_ms(1000U)
+                                    .with_inter_byte_timeout_ms(250U);
+  MelsecSerialClient client;
+  assert(client.configure(config).ok());
+
+  CompletionState completion;
+  std::array<std::uint16_t, 1> words {};
+  const mcprotocol::serial::BatchReadWordsRequest request(
+      DeviceAddress {DeviceCode::D, 100U}, 1U);
+  assert(client.async_batch_read_words(
+                   0U, request, words, capture_completion, &completion)
+             .ok());
+
+  PartialResponsePort port {static_cast<Byte>(0x55U)};
+  ScriptedClock clock {{0U, 0U, 0U, 100U, 100U, 100U, 350U}};
+  std::array<Byte, 256> rx_buffer {};
+  const Status status = mcprotocol::serial::detail::run_synchronous_request(
+      client,
+      port,
+      config,
+      rx_buffer,
+      completion,
+      clock,
+      [](const char*, Span<const Byte>) noexcept {});
+
+  assert(status.code == StatusCode::Timeout);
+  assert(port.read_calls == 2U);
+  assert(port.read_deadlines[0] == 1000U);
+  assert(port.read_deadlines[1] == 1000U);
+  assert(port.closed);
+}
+
+void test_partial_response_inter_byte_deadline_wraps_in_host_runner() {
+  const ProtocolConfig config = normal_monitor_config()
+                                    .with_response_timeout_ms(1000U)
+                                    .with_inter_byte_timeout_ms(10U);
+  MelsecSerialClient client;
+  assert(client.configure(config).ok());
+
+  CompletionState completion;
+  std::array<std::uint16_t, 1> words {};
+  const mcprotocol::serial::BatchReadWordsRequest request(
+      DeviceAddress {DeviceCode::D, 100U}, 1U);
+  assert(client.async_batch_read_words(
+                   0U, request, words, capture_completion, &completion)
+             .ok());
+
+  const std::array<std::uint8_t, 2> response_data {0x34U, 0x12U};
+  std::array<std::uint8_t, 64> response_frame {};
+  std::size_t response_size = 0U;
+  assert(mcprotocol::serial::FrameCodec::encode_success_response(
+             config, response_data, response_frame, response_size)
+             .ok());
+
+  PartialResponsePort port {static_cast<Byte>(response_frame[0])};
+  ScriptedClock clock {{
+      0xFFFFFF00U,
+      0xFFFFFF00U,
+      0xFFFFFF00U,
+      0xFFFFFFFAU,
+      0xFFFFFFFAU,
+      0xFFFFFFFAU,
+      0x00000004U}};
+  std::array<Byte, 256> rx_buffer {};
+  const Status status = mcprotocol::serial::detail::run_synchronous_request(
+      client,
+      port,
+      config,
+      rx_buffer,
+      completion,
+      clock,
+      [](const char*, Span<const Byte>) noexcept {});
+
+  assert(status.code == StatusCode::Timeout);
+  assert(port.read_calls == 2U);
+  assert(port.read_deadlines[0] == 0x000002E8U);
+  assert(port.read_deadlines[1] == 0x00000004U);
+  assert(port.closed);
+}
+
 }  // namespace
 
 int main() {
   test_monitor_registration_uses_core_completion_status();
   test_read_only_failures_keep_core_classification();
+  test_partial_response_uses_inter_byte_deadline_in_host_runner();
+  test_noise_does_not_shorten_host_runner_read_deadline();
+  test_partial_response_inter_byte_deadline_wraps_in_host_runner();
   return 0;
 }

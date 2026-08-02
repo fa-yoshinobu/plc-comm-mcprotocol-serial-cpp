@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Samples: Made word/random writes classify confirmed and outcome-unknown results before restoration, report restoration failures, and require double opt-in plus original-RUN confirmation for Remote STOP/RUN.
 - Tests: Added C++17 compilation and safety-order checks for the maintained state-changing documentation examples.
+- Tooling: The CLI now classifies `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, and `LCC` as bit-state
+  devices when selecting probe/read handling and formatting results.
 - Release: Aligned artifact roles so the registry package contains consumer runtime, native API metadata, license, README, and ecosystem-native examples where applicable while excluding repository tests and maintainer tooling; the GitHub source archive retains tracked non-hardware validation and maintainer inputs.
 
 ### BREAKING
@@ -32,9 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   states are unrepresentable at the public type boundary.
 - Library: One absolute transaction deadline now covers first TX write, partial TX progress,
   physical drain, and complete RX. Call `notify_tx_started()` immediately before the first write;
-  `notify_tx_complete()` does not restart the deadline. `inter_byte_timeout_ms` and its builder/CLI
-  option are removed, and host transports use deadline-bounded write, drain, and read APIs. Any
-  deadline expiry requires transport reset.
+  `notify_tx_complete()` does not restart the deadline. A separate retained-response inactivity
+  deadline is available through `inter_byte_timeout_ms`, its immutable builder, and the CLI; it
+  defaults to 250 ms and never extends the absolute deadline. Host transports use deadline-bounded
+  write, drain, and read APIs. Any deadline expiry requires transport reset. Restoring the field
+  changes `TimeoutConfig` aggregate initialization and structure size; positional initializers must
+  supply or intentionally omit the new final field and binary-layout assumptions must be updated.
+- Library: Added `StatusCode::OutOfMemory` at the end of the public enum. Exhaustive caller switches
+  must handle the new value. Host long-state aggregation returns it before sending when its
+  `ceil(points / 8)` result stage cannot be allocated.
 - Library: A deadline reached while physical TX is pending is now latched until the UART/DMA layer
   reports completion or abort through `notify_tx_complete()`. The client stays busy and keeps the
   RS-485 direction hook and completion callback pending; the later notification publishes the
@@ -51,6 +59,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   status devices is now explicitly a non-atomic read aggregate: its complete plan is validated
   before transport and caller output is published only after all ordered internal reads succeed.
   All writes and every other public operation remain single-request and are never auto-split.
+- Library: Validated session configuration is now accepted once by `configure()`/`open()` and reused
+  by internal frame capacity, encode, and response-candidate decode paths. Public standalone codec
+  calls continue validating arbitrary configurations.
+- Library: POSIX and Win32 physical TX drain polling is yield-first and sleeps for at most 1 ms only
+  after a consecutive no-progress observation. Queue progress resets the yield-first phase.
 
 - Library: The public contiguous-range type is now `mcprotocol::serial::Span<T>` from
   `mcprotocol/serial/span.hpp`. Replace `std::span<T>` and the removed

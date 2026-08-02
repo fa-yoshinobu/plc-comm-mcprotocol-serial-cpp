@@ -151,10 +151,153 @@ void test_cli_diagnostic_includes_classification_and_cause() {
   assert(rendered.find("cause=Timeout") != std::string::npos);
 }
 
+void test_raw_cli_redecodes_remaining_bytes_after_foreign_format2_frame() {
+  const ProtocolConfig config = ProtocolConfig::ascii(
+      mcprotocol::serial::AsciiFrameKind::C4,
+      mcprotocol::serial::AsciiFormat::Format2,
+      PlcProfile::MelsecQ,
+      SumCheckMode::Enabled,
+      RouteConfig {HostStationRoute {}});
+  const auto expected_context = mcprotocol::serial::FrameCodecContext::format2(7U);
+  const auto foreign_context = mcprotocol::serial::FrameCodecContext::format2(6U);
+
+  std::array<std::uint8_t, 128> foreign {};
+  std::array<std::uint8_t, 128> expected {};
+  std::size_t foreign_size = 0U;
+  std::size_t expected_size = 0U;
+  assert(mcprotocol::serial::FrameCodec::encode_success_response(
+             config,
+             foreign_context,
+             mcprotocol::serial::Span<const std::uint8_t> {},
+             foreign,
+             foreign_size)
+             .ok());
+  assert(mcprotocol::serial::FrameCodec::encode_success_response(
+             config,
+             expected_context,
+             mcprotocol::serial::Span<const std::uint8_t> {},
+             expected,
+             expected_size)
+             .ok());
+
+  {
+    std::array<std::uint8_t, 256> buffer {};
+    std::memcpy(buffer.data(), foreign.data(), foreign_size);
+    std::memcpy(buffer.data() + foreign_size, expected.data(), expected_size);
+    std::size_t size = foreign_size + expected_size;
+    const RawResponseBufferResult result =
+        decode_raw_response_buffer(config, expected_context, buffer.data(), size);
+    assert(result.status == mcprotocol::serial::DecodeStatus::Complete);
+    assert(!result.candidate_retained);
+    assert(size == expected_size);
+  }
+
+  {
+    std::array<std::uint8_t, 256> buffer {};
+    std::memcpy(buffer.data(), foreign.data(), foreign_size);
+    std::memcpy(buffer.data() + foreign_size, expected.data(), 1U);
+    std::size_t size = foreign_size + 1U;
+    const RawResponseBufferResult result =
+        decode_raw_response_buffer(config, expected_context, buffer.data(), size);
+    assert(result.status == mcprotocol::serial::DecodeStatus::Incomplete);
+    assert(result.candidate_retained);
+    assert(size == 1U);
+    assert(buffer[0] == expected[0]);
+  }
+
+  {
+    std::array<std::uint8_t, 128> buffer = foreign;
+    std::size_t size = foreign_size;
+    const RawResponseBufferResult result =
+        decode_raw_response_buffer(config, expected_context, buffer.data(), size);
+    assert(result.status == mcprotocol::serial::DecodeStatus::Incomplete);
+    assert(!result.candidate_retained);
+    assert(size == 0U);
+  }
+}
+
+void test_raw_cli_discards_noise_before_starting_candidate_timeout() {
+  const ProtocolConfig ascii_config = ProtocolConfig::ascii(
+      mcprotocol::serial::AsciiFrameKind::C4,
+      mcprotocol::serial::AsciiFormat::Format2,
+      PlcProfile::MelsecQ,
+      SumCheckMode::Enabled,
+      RouteConfig {HostStationRoute {}});
+  const auto ascii_context = mcprotocol::serial::FrameCodecContext::format2(7U);
+  std::array<std::uint8_t, 64> ascii_frame {};
+  std::size_t ascii_frame_size = 0U;
+  assert(mcprotocol::serial::FrameCodec::encode_success_response(
+             ascii_config,
+             ascii_context,
+             mcprotocol::serial::Span<const std::uint8_t> {},
+             ascii_frame,
+             ascii_frame_size)
+             .ok());
+
+  {
+    std::array<std::uint8_t, 4> noise {0x55U};
+    std::size_t size = 1U;
+    const RawResponseBufferResult result =
+        decode_raw_response_buffer(ascii_config, ascii_context, noise.data(), size);
+    assert(result.status == mcprotocol::serial::DecodeStatus::Incomplete);
+    assert(!result.candidate_retained);
+    assert(size == 0U);
+  }
+  {
+    std::array<std::uint8_t, 4> noise_then_start {0x55U, ascii_frame[0]};
+    std::size_t size = 2U;
+    const RawResponseBufferResult result = decode_raw_response_buffer(
+        ascii_config, ascii_context, noise_then_start.data(), size);
+    assert(result.status == mcprotocol::serial::DecodeStatus::Incomplete);
+    assert(result.candidate_retained);
+    assert(size == 1U);
+    assert(noise_then_start[0] == ascii_frame[0]);
+  }
+
+  const ProtocolConfig binary_config = ProtocolConfig::c4_binary(
+      PlcProfile::MelsecQ,
+      SumCheckMode::Enabled,
+      RouteConfig {HostStationRoute {}});
+  {
+    std::array<std::uint8_t, 4> noise_then_start {0x55U, 0x10U};
+    std::size_t size = 2U;
+    const RawResponseBufferResult result = decode_raw_response_buffer(
+        binary_config,
+        mcprotocol::serial::FrameCodecContext::none(),
+        noise_then_start.data(),
+        size);
+    assert(result.status == mcprotocol::serial::DecodeStatus::Incomplete);
+    assert(result.candidate_retained);
+    assert(size == 1U);
+    assert(noise_then_start[0] == 0x10U);
+  }
+}
+
+void test_cli_bit_device_classification_includes_long_state_families() {
+  const std::array<DeviceCode, 6> long_state_bits {{
+      DeviceCode::LTS,
+      DeviceCode::LTC,
+      DeviceCode::LSTS,
+      DeviceCode::LSTC,
+      DeviceCode::LCS,
+      DeviceCode::LCC,
+  }};
+  for (const DeviceCode code : long_state_bits) {
+    assert(is_bit_device(code));
+  }
+  assert(!is_bit_device(DeviceCode::LTN));
+  assert(!is_bit_device(DeviceCode::LCN));
+  assert(!is_bit_device(DeviceCode::G));
+  assert(!is_bit_device(DeviceCode::HG));
+}
+
 }  // namespace
 
 int main() {
   test_cli_returns_completed_core_status();
   test_cli_diagnostic_includes_classification_and_cause();
+  test_raw_cli_redecodes_remaining_bytes_after_foreign_format2_frame();
+  test_raw_cli_discards_noise_before_starting_candidate_timeout();
+  test_cli_bit_device_classification_includes_long_state_families();
   return 0;
 }
