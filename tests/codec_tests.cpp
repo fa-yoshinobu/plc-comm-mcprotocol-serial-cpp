@@ -7083,6 +7083,9 @@ void test_bit_in_word_operation_covers_every_complete_word_route() {
   const auto exercise = [](
                             const ProtocolConfig& config,
                             auto begin_operation,
+                            auto encode_expected_read,
+                            std::uint8_t e1_read_response_subheader,
+                            std::uint8_t e1_write_response_subheader,
                             auto encode_expected_write) {
     MelsecSerialClient client;
     assert(client.configure(config).ok());
@@ -7090,26 +7093,10 @@ void test_bit_in_word_operation_covers_every_complete_word_route() {
     CallbackCapture capture {};
     Status status = begin_operation(operation, client, capture);
     assert(status.ok());
-    assert(client.notify_tx_started(100U).ok());
-    assert(client.notify_tx_complete(100U, mcprotocol::serial::ok_status()).ok());
 
-    std::array<std::uint8_t, 64U> response {};
-    std::size_t response_size = 0U;
-    const std::array<std::uint8_t, 2U> read_data {0x00U, 0x12U};
-    status = FrameCodec::encode_success_response(config, read_data, response, response_size);
-    assert(status.ok());
-    client.on_rx_bytes(
-        101U,
-        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
-            reinterpret_cast<const mcprotocol::serial::Byte*>(response.data()),
-            response_size));
-    assert(!capture.called);
-    assert(client.busy());
-
-    const std::uint16_t expected_word = 0x1208U;
     std::array<std::uint8_t, 96U> request_data {};
     std::size_t request_data_size = 0U;
-    status = encode_expected_write(config, expected_word, request_data, request_data_size);
+    status = encode_expected_read(config, request_data, request_data_size);
     assert(status.ok());
     std::array<std::uint8_t, 160U> expected_frame {};
     std::size_t expected_frame_size = 0U;
@@ -7120,14 +7107,60 @@ void test_bit_in_word_operation_covers_every_complete_word_route() {
         expected_frame,
         expected_frame_size);
     assert(status.ok());
-    const auto pending = client.pending_tx_frame();
+    auto pending = client.pending_tx_frame();
+    assert(pending.size() == expected_frame_size);
+    assert(std::memcmp(pending.data(), expected_frame.data(), expected_frame_size) == 0);
+
+    assert(client.notify_tx_started(100U).ok());
+    assert(client.notify_tx_complete(100U, mcprotocol::serial::ok_status()).ok());
+
+    std::array<std::uint8_t, 64U> response {};
+    std::size_t response_size = 0U;
+    const std::array<std::uint8_t, 2U> read_data {0x00U, 0x12U};
+    if (config.frame_kind() == FrameKind::E1) {
+      assert(config.code_mode() == CodeMode::Binary);
+      response[0] = e1_read_response_subheader;
+      response[1] = 0x00U;
+      std::memcpy(response.data() + 2U, read_data.data(), read_data.size());
+      response_size = 2U + read_data.size();
+    } else {
+      status = FrameCodec::encode_success_response(config, read_data, response, response_size);
+      assert(status.ok());
+    }
+    client.on_rx_bytes(
+        101U,
+        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
+            reinterpret_cast<const mcprotocol::serial::Byte*>(response.data()),
+            response_size));
+    assert(!capture.called);
+    assert(client.busy());
+
+    const std::uint16_t expected_word = 0x1208U;
+    request_data_size = 0U;
+    status = encode_expected_write(config, expected_word, request_data, request_data_size);
+    assert(status.ok());
+    expected_frame_size = 0U;
+    status = FrameCodec::encode_request(
+        config,
+        mcprotocol::serial::Span<const std::uint8_t>(
+            request_data.data(), request_data_size),
+        expected_frame,
+        expected_frame_size);
+    assert(status.ok());
+    pending = client.pending_tx_frame();
     assert(pending.size() == expected_frame_size);
     assert(std::memcmp(pending.data(), expected_frame.data(), expected_frame_size) == 0);
 
     assert(client.notify_tx_started(102U).ok());
     assert(client.notify_tx_complete(102U, mcprotocol::serial::ok_status()).ok());
     response_size = 0U;
-    assert(FrameCodec::encode_success_response(config, {}, response, response_size).ok());
+    if (config.frame_kind() == FrameKind::E1) {
+      response[0] = e1_write_response_subheader;
+      response[1] = 0x00U;
+      response_size = 2U;
+    } else {
+      assert(FrameCodec::encode_success_response(config, {}, response, response_size).ok());
+    }
     client.on_rx_bytes(
         103U,
         mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
@@ -7136,6 +7169,7 @@ void test_bit_in_word_operation_covers_every_complete_word_route() {
     assert(capture.called);
     assert(capture.status.ok());
     assert(!operation.busy());
+    assert(!client.busy());
   };
 
   const ExtendedFileRegisterAddress extended_device {2U, 70U};
@@ -7145,7 +7179,16 @@ void test_bit_in_word_operation_covers_every_complete_word_route() {
         return operation.begin_extended_file_register(
             client, 100U, extended_device, 3, true, completion_callback, &capture);
       },
-      [extended_device](const auto& config, std::uint16_t word, auto out, auto& out_size) {
+      [extended_device](const auto& config, auto& out, auto& out_size) {
+        return CommandCodec::encode_read_extended_file_register_words(
+            config,
+            ExtendedFileRegisterBatchReadWordsRequest(extended_device, 1U),
+            out,
+            out_size);
+      },
+      0x97U,
+      0x98U,
+      [extended_device](const auto& config, std::uint16_t word, auto& out, auto& out_size) {
         const ExtendedFileRegisterBatchWriteWordsRequest request(
             extended_device,
             mcprotocol::serial::Span<const std::uint16_t>(&word, 1U));
@@ -7160,7 +7203,16 @@ void test_bit_in_word_operation_covers_every_complete_word_route() {
         return operation.begin_direct_extended_file_register(
             client, 100U, direct_device, 3, true, completion_callback, &capture);
       },
-      [](const auto& config, std::uint16_t word, auto out, auto& out_size) {
+      [](const auto& config, auto& out, auto& out_size) {
+        return CommandCodec::encode_direct_read_extended_file_register_words(
+            config,
+            ExtendedFileRegisterDirectBatchReadWordsRequest(direct_device, 1U),
+            out,
+            out_size);
+      },
+      0xBBU,
+      0xBCU,
+      [](const auto& config, std::uint16_t word, auto& out, auto& out_size) {
         const ExtendedFileRegisterDirectBatchWriteWordsRequest request(
             direct_device,
             mcprotocol::serial::Span<const std::uint16_t>(&word, 1U));
@@ -7177,7 +7229,13 @@ void test_bit_in_word_operation_covers_every_complete_word_route() {
         return operation.begin_link_direct(
             client, 100U, link_device, 3, true, completion_callback, &capture);
       },
-      [link_device](const auto& config, std::uint16_t word, auto out, auto& out_size) {
+      [link_device](const auto& config, auto& out, auto& out_size) {
+        return CommandCodec::encode_link_direct_batch_read_words(
+            config, link_device, 1U, out, out_size);
+      },
+      0x00U,
+      0x00U,
+      [link_device](const auto& config, std::uint16_t word, auto& out, auto& out_size) {
         return CommandCodec::encode_link_direct_batch_write_words(
             config,
             link_device,
@@ -7196,7 +7254,13 @@ void test_bit_in_word_operation_covers_every_complete_word_route() {
         return operation.begin_qualified_buffer(
             client, 100U, qualified_device, 3, true, completion_callback, &capture);
       },
-      [qualified_device](const auto& config, std::uint16_t word, auto out, auto& out_size) {
+      [qualified_device](const auto& config, auto& out, auto& out_size) {
+        return CommandCodec::encode_extended_batch_read_words(
+            config, qualified_device, 1U, out, out_size);
+      },
+      0x00U,
+      0x00U,
+      [qualified_device](const auto& config, std::uint16_t word, auto& out, auto& out_size) {
         return CommandCodec::encode_extended_batch_write_words(
             config,
             qualified_device,
