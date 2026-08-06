@@ -6930,6 +6930,301 @@ void completion_callback(void* user, Status status) {
   capture->status = status;
 }
 
+void test_bit_in_word_operation_contract() {
+  auto config = make_binary_c4_config();
+  config = config.with_response_timeout_ms(10U);
+
+  const auto deliver_success = [&config](
+                                   MelsecSerialClient& client,
+                                   std::uint32_t now_ms,
+                                   mcprotocol::serial::Span<const std::uint8_t> data) {
+    std::array<std::uint8_t, 64U> frame {};
+    std::size_t frame_size = 0U;
+    const Status status = FrameCodec::encode_success_response(
+        config, data, frame, frame_size);
+    assert(status.ok());
+    client.on_rx_bytes(
+        now_ms,
+        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
+            reinterpret_cast<const mcprotocol::serial::Byte*>(frame.data()),
+            frame_size));
+  };
+
+  {
+    MelsecSerialClient client;
+    assert(client.configure(config).ok());
+    mcprotocol::serial::highlevel::BitInWordWriteOperation operation;
+    CallbackCapture capture {};
+
+    Status status = operation.begin(
+        client, 100U, "D100", 3, true, completion_callback, &capture);
+    assert(status.ok());
+    assert(operation.busy());
+    assert(client.busy());
+    assert(client.notify_tx_started(100U).ok());
+    assert(client.notify_tx_complete(100U, mcprotocol::serial::ok_status()).ok());
+
+    const std::array<std::uint8_t, 2U> read_data {0x34U, 0x12U};
+    deliver_success(client, 105U, read_data);
+    assert(!capture.called);
+    assert(operation.busy());
+    assert(client.busy());
+
+    const std::uint16_t expected_word = 0x123CU;
+    std::array<std::uint8_t, 64U> expected_data {};
+    std::size_t expected_data_size = 0U;
+    status = CommandCodec::encode_batch_write_words(
+        config,
+        BatchWriteWordsRequest(
+            DeviceAddress {mcprotocol::serial::DeviceCode::D, 100U},
+            mcprotocol::serial::Span<const std::uint16_t>(&expected_word, 1U)),
+        expected_data,
+        expected_data_size);
+    assert(status.ok());
+    std::array<std::uint8_t, 128U> expected_frame {};
+    std::size_t expected_frame_size = 0U;
+    status = FrameCodec::encode_request(
+        config,
+        mcprotocol::serial::Span<const std::uint8_t>(
+            expected_data.data(), expected_data_size),
+        expected_frame,
+        expected_frame_size);
+    assert(status.ok());
+    const auto pending = client.pending_tx_frame();
+    assert(pending.size() == expected_frame_size);
+    assert(std::memcmp(pending.data(), expected_frame.data(), expected_frame_size) == 0);
+
+    assert(client.notify_tx_started(106U).ok());
+    assert(client.notify_tx_complete(106U, mcprotocol::serial::ok_status()).ok());
+    deliver_success(client, 107U, {});
+    assert(capture.called);
+    assert(capture.status.ok());
+    assert(!operation.busy());
+    assert(!client.busy());
+  }
+
+  {
+    MelsecSerialClient client;
+    assert(client.configure(config).ok());
+    mcprotocol::serial::highlevel::BitInWordWriteOperation operation;
+    CallbackCapture capture {};
+
+    Status status = operation.begin(
+        client, 100U, "M100", 3, true, completion_callback, &capture);
+    assert(status.code == StatusCode::InvalidArgument);
+    assert(!operation.busy());
+    assert(!client.busy());
+    assert(client.pending_tx_frame().empty());
+    assert(!capture.called);
+
+    status = operation.begin(
+        client, 100U, "D100", 16, true, completion_callback, &capture);
+    assert(status.code == StatusCode::InvalidArgument);
+    assert(!operation.busy());
+    assert(!client.busy());
+    assert(client.pending_tx_frame().empty());
+    assert(!capture.called);
+
+    for (const std::string_view device : {"LTN0", "LSTN0", "LCN0", "LZ0"}) {
+      status = operation.begin(
+          client, 100U, device, 0, true, completion_callback, &capture);
+      assert(status.code == StatusCode::InvalidArgument);
+      assert(!operation.busy());
+      assert(!client.busy());
+      assert(client.pending_tx_frame().empty());
+      assert(!capture.called);
+    }
+  }
+
+  {
+    MelsecSerialClient client;
+    assert(client.configure(config).ok());
+    mcprotocol::serial::highlevel::BitInWordWriteOperation operation;
+    CallbackCapture capture {};
+    Status status = operation.begin(
+        client, 100U, "D100", 0, false, completion_callback, &capture);
+    assert(status.ok());
+    assert(client.notify_tx_started(100U).ok());
+    assert(client.notify_tx_complete(100U, mcprotocol::serial::ok_status()).ok());
+    const std::array<std::uint8_t, 2U> read_data {0x01U, 0x00U};
+    deliver_success(client, 109U, read_data);
+    assert(client.busy());
+    status = client.notify_tx_started(110U);
+    assert(status.code == StatusCode::Timeout);
+    assert(capture.called);
+    assert(capture.status.code == StatusCode::Timeout);
+    assert(!operation.busy());
+    assert(!client.busy());
+    assert(!client.requires_transport_reset());
+  }
+
+  {
+    MelsecSerialClient client;
+    assert(client.configure(config).ok());
+    mcprotocol::serial::highlevel::BitInWordWriteOperation operation;
+    CallbackCapture capture {};
+    Status status = operation.begin(
+        client, 100U, "D100", 0, true, completion_callback, &capture);
+    assert(status.ok());
+    assert(client.notify_tx_started(100U).ok());
+    assert(client.notify_tx_complete(100U, mcprotocol::serial::ok_status()).ok());
+    const std::array<std::uint8_t, 2U> read_data {0x00U, 0x00U};
+    deliver_success(client, 101U, read_data);
+    operation.cancel();
+    assert(capture.called);
+    assert(capture.status.code == StatusCode::Cancelled);
+    assert(!operation.busy());
+    assert(!client.busy());
+    assert(!client.requires_transport_reset());
+  }
+}
+
+void test_bit_in_word_operation_covers_every_complete_word_route() {
+  const auto exercise = [](
+                            const ProtocolConfig& config,
+                            auto begin_operation,
+                            auto encode_expected_write) {
+    MelsecSerialClient client;
+    assert(client.configure(config).ok());
+    mcprotocol::serial::highlevel::BitInWordWriteOperation operation;
+    CallbackCapture capture {};
+    Status status = begin_operation(operation, client, capture);
+    assert(status.ok());
+    assert(client.notify_tx_started(100U).ok());
+    assert(client.notify_tx_complete(100U, mcprotocol::serial::ok_status()).ok());
+
+    std::array<std::uint8_t, 64U> response {};
+    std::size_t response_size = 0U;
+    const std::array<std::uint8_t, 2U> read_data {0x00U, 0x12U};
+    status = FrameCodec::encode_success_response(config, read_data, response, response_size);
+    assert(status.ok());
+    client.on_rx_bytes(
+        101U,
+        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
+            reinterpret_cast<const mcprotocol::serial::Byte*>(response.data()),
+            response_size));
+    assert(!capture.called);
+    assert(client.busy());
+
+    const std::uint16_t expected_word = 0x1208U;
+    std::array<std::uint8_t, 96U> request_data {};
+    std::size_t request_data_size = 0U;
+    status = encode_expected_write(config, expected_word, request_data, request_data_size);
+    assert(status.ok());
+    std::array<std::uint8_t, 160U> expected_frame {};
+    std::size_t expected_frame_size = 0U;
+    status = FrameCodec::encode_request(
+        config,
+        mcprotocol::serial::Span<const std::uint8_t>(
+            request_data.data(), request_data_size),
+        expected_frame,
+        expected_frame_size);
+    assert(status.ok());
+    const auto pending = client.pending_tx_frame();
+    assert(pending.size() == expected_frame_size);
+    assert(std::memcmp(pending.data(), expected_frame.data(), expected_frame_size) == 0);
+
+    assert(client.notify_tx_started(102U).ok());
+    assert(client.notify_tx_complete(102U, mcprotocol::serial::ok_status()).ok());
+    response_size = 0U;
+    assert(FrameCodec::encode_success_response(config, {}, response, response_size).ok());
+    client.on_rx_bytes(
+        103U,
+        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
+            reinterpret_cast<const mcprotocol::serial::Byte*>(response.data()),
+            response_size));
+    assert(capture.called);
+    assert(capture.status.ok());
+    assert(!operation.busy());
+  };
+
+  const ExtendedFileRegisterAddress extended_device {2U, 70U};
+  exercise(
+      make_binary_e1_a_config(),
+      [extended_device](auto& operation, auto& client, auto& capture) {
+        return operation.begin_extended_file_register(
+            client, 100U, extended_device, 3, true, completion_callback, &capture);
+      },
+      [extended_device](const auto& config, std::uint16_t word, auto out, auto& out_size) {
+        const ExtendedFileRegisterBatchWriteWordsRequest request(
+            extended_device,
+            mcprotocol::serial::Span<const std::uint16_t>(&word, 1U));
+        return CommandCodec::encode_write_extended_file_register_words(
+            config, request, out, out_size);
+      });
+
+  constexpr std::uint32_t direct_device = 1234U;
+  exercise(
+      make_binary_e1_a_config(),
+      [](auto& operation, auto& client, auto& capture) {
+        return operation.begin_direct_extended_file_register(
+            client, 100U, direct_device, 3, true, completion_callback, &capture);
+      },
+      [](const auto& config, std::uint16_t word, auto out, auto& out_size) {
+        const ExtendedFileRegisterDirectBatchWriteWordsRequest request(
+            direct_device,
+            mcprotocol::serial::Span<const std::uint16_t>(&word, 1U));
+        return CommandCodec::encode_direct_write_extended_file_register_words(
+            config, request, out, out_size);
+      });
+
+  const LinkDirectDevice link_device(
+      1U,
+      DeviceAddress {mcprotocol::serial::DeviceCode::W, 0x100U});
+  exercise(
+      make_binary_c4_iqr_config(),
+      [link_device](auto& operation, auto& client, auto& capture) {
+        return operation.begin_link_direct(
+            client, 100U, link_device, 3, true, completion_callback, &capture);
+      },
+      [link_device](const auto& config, std::uint16_t word, auto out, auto& out_size) {
+        return CommandCodec::encode_link_direct_batch_write_words(
+            config,
+            link_device,
+            mcprotocol::serial::Span<const std::uint16_t>(&word, 1U),
+            out,
+            out_size);
+      });
+
+  const QualifiedBufferWordDevice qualified_device(
+      QualifiedBufferDeviceKind::G,
+      0x03E0U,
+      10U);
+  exercise(
+      make_binary_c4_iqr_config(),
+      [qualified_device](auto& operation, auto& client, auto& capture) {
+        return operation.begin_qualified_buffer(
+            client, 100U, qualified_device, 3, true, completion_callback, &capture);
+      },
+      [qualified_device](const auto& config, std::uint16_t word, auto out, auto& out_size) {
+        return CommandCodec::encode_extended_batch_write_words(
+            config,
+            qualified_device,
+            mcprotocol::serial::Span<const std::uint16_t>(&word, 1U),
+            out,
+            out_size);
+      });
+}
+
+void test_bit_in_word_sync_surface_covers_every_complete_word_route() {
+  using Client = mcprotocol::serial::PosixSyncClient;
+  using TextSignature = Status (Client::*)(std::string_view, int, bool) noexcept;
+  using ExtendedSignature = Status (Client::*)(ExtendedFileRegisterAddress, int, bool) noexcept;
+  using DirectExtendedSignature = Status (Client::*)(std::uint32_t, int, bool) noexcept;
+
+  const TextSignature ordinary = &Client::write_bit_in_word;
+  const ExtendedSignature extended = &Client::write_extended_file_register_bit_in_word;
+  const DirectExtendedSignature direct_extended =
+      &Client::direct_write_extended_file_register_bit_in_word;
+  const TextSignature link_direct = &Client::write_link_direct_bit_in_word;
+  const TextSignature qualified = &Client::write_native_qualified_bit_in_word;
+  assert(ordinary != nullptr);
+  assert(extended != nullptr);
+  assert(direct_extended != nullptr);
+  assert(link_direct != nullptr);
+  assert(qualified != nullptr);
+}
+
 void test_client_receive_failure_preserves_transport_status() {
   const auto config = make_binary_c4_config();
   MelsecSerialClient client;
@@ -10664,6 +10959,9 @@ int main() {
   test_validate_qualified_buffer_helper_route_rejects_q_l_equivalent_profiles();
   test_make_qualified_buffer_write_words_request_encodes_little_endian_bytes();
   test_decode_qualified_buffer_word_values_decodes_little_endian_bytes();
+  test_bit_in_word_operation_contract();
+  test_bit_in_word_operation_covers_every_complete_word_route();
+  test_bit_in_word_sync_surface_covers_every_complete_word_route();
   test_client_receive_failure_preserves_transport_status();
   test_client_busy_rejection_preserves_active_request_state();
   test_client_instances_have_independent_in_flight_state();

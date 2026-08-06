@@ -387,8 +387,17 @@ Status MelsecSerialClient::notify_tx_started(std::uint32_t now_ms) noexcept {
   if (tx_started_) {
     return make_status(StatusCode::InvalidArgument, "Transmission start was already notified");
   }
+  if (compound_deadline_active_ && deadline_reached(now_ms, compound_deadline_ms_)) {
+    const Status timeout = make_status(
+        StatusCode::Timeout,
+        "The compound operation deadline expired before transmission started");
+    complete(timeout);
+    return timeout;
+  }
   tx_started_ = true;
-  response_deadline_ms_ = now_ms + config_.timeout().response_timeout_ms;
+  response_deadline_ms_ = compound_deadline_active_
+                              ? compound_deadline_ms_
+                              : now_ms + config_.timeout().response_timeout_ms;
   if (rs485_hooks_.on_tx_begin != nullptr) {
     rs485_hooks_.on_tx_begin(rs485_hooks_.user);
   }
@@ -674,6 +683,158 @@ Status MelsecSerialClient::start_request(
 #endif
 
   return ok_status();
+}
+
+Status MelsecSerialClient::preflight_request(
+    OperationKind operation,
+    std::size_t request_data_size) noexcept {
+  std::size_t encoded_size = 0U;
+  const bool format2 = is_ascii_mode(config_) &&
+                       !is_c1_frame(config_) &&
+                       !is_e1_frame(config_) &&
+                       config_.ascii_format() == AsciiFormat::Format2;
+  const FrameCodecContext frame_context = format2
+                                              ? FrameCodecContext::format2(next_format2_block_number_)
+                                              : FrameCodecContext::none();
+  const Status encode_status = detail::encode_request_validated(
+      config_,
+      frame_context,
+      mcprotocol::serial::Span<const std::uint8_t>(request_data_.data(), request_data_size),
+      tx_frame_,
+      encoded_size);
+  if (!encode_status.ok()) return encode_status;
+  return detail::validate_response_capacity_validated(
+      config_, expected_success_response_data_size(operation));
+}
+
+Status MelsecSerialClient::validate_bit_in_word_plan(DeviceAddress device) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) return admission_status;
+
+  std::size_t request_size = 0U;
+  const BatchReadWordsRequest read_request(device, 1U);
+  Status status = CommandCodec::encode_batch_read_words(
+      config_, read_request, request_data_, request_size);
+  if (!status.ok()) return status;
+  status = preflight_request(OperationKind::BatchReadWords, request_size);
+  if (!status.ok()) return status;
+
+  const std::uint16_t value = 0U;
+  const BatchWriteWordsRequest write_request(
+      device,
+      mcprotocol::serial::Span<const std::uint16_t>(&value, 1U));
+  status = CommandCodec::encode_batch_write_words(
+      config_, write_request, request_data_, request_size);
+  if (!status.ok()) return status;
+  return preflight_request(OperationKind::BatchWriteWords, request_size);
+}
+
+Status MelsecSerialClient::validate_bit_in_word_plan(
+    ExtendedFileRegisterAddress device) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) return admission_status;
+
+  std::size_t request_size = 0U;
+  const ExtendedFileRegisterBatchReadWordsRequest read_request(device, 1U);
+  Status status = CommandCodec::encode_read_extended_file_register_words(
+      config_, read_request, request_data_, request_size);
+  if (!status.ok()) return status;
+  status = preflight_request(OperationKind::ReadExtendedFileRegisterWords, request_size);
+  if (!status.ok()) return status;
+
+  const std::uint16_t value = 0U;
+  const ExtendedFileRegisterBatchWriteWordsRequest write_request(
+      device,
+      mcprotocol::serial::Span<const std::uint16_t>(&value, 1U));
+  status = CommandCodec::encode_write_extended_file_register_words(
+      config_, write_request, request_data_, request_size);
+  if (!status.ok()) return status;
+  return preflight_request(OperationKind::WriteExtendedFileRegisterWords, request_size);
+}
+
+Status MelsecSerialClient::validate_direct_bit_in_word_plan(
+    std::uint32_t device_number) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) return admission_status;
+
+  std::size_t request_size = 0U;
+  const ExtendedFileRegisterDirectBatchReadWordsRequest read_request(device_number, 1U);
+  Status status = CommandCodec::encode_direct_read_extended_file_register_words(
+      config_, read_request, request_data_, request_size);
+  if (!status.ok()) return status;
+  status = preflight_request(OperationKind::DirectReadExtendedFileRegisterWords, request_size);
+  if (!status.ok()) return status;
+
+  const std::uint16_t value = 0U;
+  const ExtendedFileRegisterDirectBatchWriteWordsRequest write_request(
+      device_number,
+      mcprotocol::serial::Span<const std::uint16_t>(&value, 1U));
+  status = CommandCodec::encode_direct_write_extended_file_register_words(
+      config_, write_request, request_data_, request_size);
+  if (!status.ok()) return status;
+  return preflight_request(OperationKind::DirectWriteExtendedFileRegisterWords, request_size);
+}
+
+Status MelsecSerialClient::validate_bit_in_word_plan(
+    const LinkDirectDevice& device) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) return admission_status;
+
+  std::size_t request_size = 0U;
+  Status status = CommandCodec::encode_link_direct_batch_read_words(
+      config_, device, 1U, request_data_, request_size);
+  if (!status.ok()) return status;
+  status = preflight_request(OperationKind::BatchReadWords, request_size);
+  if (!status.ok()) return status;
+
+  const std::uint16_t value = 0U;
+  status = CommandCodec::encode_link_direct_batch_write_words(
+      config_,
+      device,
+      mcprotocol::serial::Span<const std::uint16_t>(&value, 1U),
+      request_data_,
+      request_size);
+  if (!status.ok()) return status;
+  return preflight_request(OperationKind::BatchWriteWords, request_size);
+}
+
+Status MelsecSerialClient::validate_bit_in_word_plan(
+    const QualifiedBufferWordDevice& device) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) return admission_status;
+
+  std::size_t request_size = 0U;
+  Status status = CommandCodec::encode_extended_batch_read_words(
+      config_, device, 1U, request_data_, request_size);
+  if (!status.ok()) return status;
+  status = preflight_request(OperationKind::ExtendedBatchReadWords, request_size);
+  if (!status.ok()) return status;
+
+  const std::uint16_t value = 0U;
+  status = CommandCodec::encode_extended_batch_write_words(
+      config_,
+      device,
+      mcprotocol::serial::Span<const std::uint16_t>(&value, 1U),
+      request_data_,
+      request_size);
+  if (!status.ok()) return status;
+  return preflight_request(OperationKind::ExtendedBatchWriteWords, request_size);
+}
+
+Status MelsecSerialClient::begin_compound_deadline(std::uint32_t now_ms) noexcept {
+  const Status admission_status = validate_request_admission();
+  if (!admission_status.ok()) return admission_status;
+  if (compound_deadline_active_) {
+    return make_status(StatusCode::Busy, "Another compound operation already owns this client");
+  }
+  compound_deadline_active_ = true;
+  compound_deadline_ms_ = now_ms + config_.timeout().response_timeout_ms;
+  return ok_status();
+}
+
+void MelsecSerialClient::end_compound_deadline() noexcept {
+  compound_deadline_active_ = false;
+  compound_deadline_ms_ = 0U;
 }
 
 std::uint8_t MelsecSerialClient::expected_e1_response_subheader() const noexcept {

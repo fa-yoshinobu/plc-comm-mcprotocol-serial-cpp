@@ -190,6 +190,41 @@ class PosixSyncClient {
       std::string_view head_device,
       mcprotocol::serial::Span<const std::uint16_t> words) noexcept;
 
+  /// \brief Writes one bit inside an ordinary 16-bit word by one read-modify-write turn.
+  ///
+  /// The complete two-request plan is validated before transmission. The read and write share one
+  /// absolute deadline, and the write is always issued after a successful read even when the bit is
+  /// already in the requested state. The operation is not PLC-atomic: PLC logic or another
+  /// connection can modify the word between the read and write.
+  [[nodiscard]] Status write_bit_in_word(
+      std::string_view word_device,
+      int bit_index,
+      bool value) noexcept;
+
+  /// \brief Bit-in-word update through the block-addressed extended file-register route.
+  [[nodiscard]] Status write_extended_file_register_bit_in_word(
+      ExtendedFileRegisterAddress word_device,
+      int bit_index,
+      bool value) noexcept;
+
+  /// \brief Bit-in-word update through the direct extended file-register route.
+  [[nodiscard]] Status direct_write_extended_file_register_bit_in_word(
+      std::uint32_t word_device_number,
+      int bit_index,
+      bool value) noexcept;
+
+  /// \brief Bit-in-word update through one immutable `Jn\\...` link-direct route.
+  [[nodiscard]] Status write_link_direct_bit_in_word(
+      std::string_view word_device,
+      int bit_index,
+      bool value) noexcept;
+
+  /// \brief Bit-in-word update through one immutable qualified-buffer route.
+  [[nodiscard]] Status write_native_qualified_bit_in_word(
+      std::string_view word_device,
+      int bit_index,
+      bool value) noexcept;
+
   /// \brief Writes extended file-register words synchronously.
   [[nodiscard]] Status write_extended_file_register_words(
       const ExtendedFileRegisterBatchWriteWordsRequest& request) noexcept;

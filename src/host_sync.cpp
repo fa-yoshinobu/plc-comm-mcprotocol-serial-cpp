@@ -614,6 +614,205 @@ Status PosixSyncClient::write_words(
   return run_until_complete();
 }
 
+Status PosixSyncClient::write_bit_in_word(
+    std::string_view word_device,
+    int bit_index,
+    bool value) noexcept {
+  if (bit_index < 0 || bit_index > 15) {
+    return make_status(StatusCode::InvalidArgument, "bit_index must be in range 0..15");
+  }
+
+  DeviceAddress parsed(DeviceCode::D, 0U);
+  Status status = highlevel::parse_device_address(word_device, parsed);
+  if (!status.ok()) {
+    return status;
+  }
+  if (highlevel::detail::is_bit_device_code(parsed.code) ||
+      highlevel::detail::is_dword_only_device_code(parsed.code) ||
+      parsed.code == DeviceCode::G || parsed.code == DeviceCode::HG) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "write_bit_in_word requires an ordinary 16-bit word device");
+  }
+
+  status = client_.validate_bit_in_word_plan(parsed);
+  if (!status.ok()) {
+    return status;
+  }
+  status = client_.begin_compound_deadline(now_ms());
+  if (!status.ok()) {
+    return status;
+  }
+
+  std::uint16_t word = 0U;
+  status = read_words(
+      word_device,
+      mcprotocol::serial::Span<std::uint16_t>(&word, 1U));
+  if (status.ok()) {
+    const std::uint16_t mask = static_cast<std::uint16_t>(1U << bit_index);
+    word = value
+               ? static_cast<std::uint16_t>(word | mask)
+               : static_cast<std::uint16_t>(word & static_cast<std::uint16_t>(~mask));
+    status = write_words(
+        word_device,
+        mcprotocol::serial::Span<const std::uint16_t>(&word, 1U));
+  }
+
+  client_.end_compound_deadline();
+  return status;
+}
+
+Status PosixSyncClient::write_extended_file_register_bit_in_word(
+    ExtendedFileRegisterAddress word_device,
+    int bit_index,
+    bool value) noexcept {
+  if (bit_index < 0 || bit_index > 15) {
+    return make_status(StatusCode::InvalidArgument, "bit_index must be in range 0..15");
+  }
+  Status status = client_.validate_bit_in_word_plan(word_device);
+  if (!status.ok()) return status;
+  status = client_.begin_compound_deadline(now_ms());
+  if (!status.ok()) return status;
+
+  std::uint16_t word = 0U;
+  const ExtendedFileRegisterBatchReadWordsRequest read_request(word_device, 1U);
+  status = read_extended_file_register_words(
+      read_request,
+      mcprotocol::serial::Span<std::uint16_t>(&word, 1U));
+  if (status.ok()) {
+    const std::uint16_t mask = static_cast<std::uint16_t>(1U << bit_index);
+    word = value
+               ? static_cast<std::uint16_t>(word | mask)
+               : static_cast<std::uint16_t>(word & static_cast<std::uint16_t>(~mask));
+    const ExtendedFileRegisterBatchWriteWordsRequest write_request(
+        word_device,
+        mcprotocol::serial::Span<const std::uint16_t>(&word, 1U));
+    status = write_extended_file_register_words(write_request);
+  }
+  client_.end_compound_deadline();
+  return status;
+}
+
+Status PosixSyncClient::direct_write_extended_file_register_bit_in_word(
+    std::uint32_t word_device_number,
+    int bit_index,
+    bool value) noexcept {
+  if (bit_index < 0 || bit_index > 15) {
+    return make_status(StatusCode::InvalidArgument, "bit_index must be in range 0..15");
+  }
+  Status status = client_.validate_direct_bit_in_word_plan(word_device_number);
+  if (!status.ok()) return status;
+  status = client_.begin_compound_deadline(now_ms());
+  if (!status.ok()) return status;
+
+  std::uint16_t word = 0U;
+  const ExtendedFileRegisterDirectBatchReadWordsRequest read_request(word_device_number, 1U);
+  status = direct_read_extended_file_register_words(
+      read_request,
+      mcprotocol::serial::Span<std::uint16_t>(&word, 1U));
+  if (status.ok()) {
+    const std::uint16_t mask = static_cast<std::uint16_t>(1U << bit_index);
+    word = value
+               ? static_cast<std::uint16_t>(word | mask)
+               : static_cast<std::uint16_t>(word & static_cast<std::uint16_t>(~mask));
+    const ExtendedFileRegisterDirectBatchWriteWordsRequest write_request(
+        word_device_number,
+        mcprotocol::serial::Span<const std::uint16_t>(&word, 1U));
+    status = direct_write_extended_file_register_words(write_request);
+  }
+  client_.end_compound_deadline();
+  return status;
+}
+
+Status PosixSyncClient::write_link_direct_bit_in_word(
+    std::string_view word_device,
+    int bit_index,
+    bool value) noexcept {
+  if (bit_index < 0 || bit_index > 15) {
+    return make_status(StatusCode::InvalidArgument, "bit_index must be in range 0..15");
+  }
+  LinkDirectDevice parsed(0U, DeviceAddress {DeviceCode::D, 0U});
+  Status status = parse_link_direct_device(word_device, parsed);
+  if (!status.ok()) return status;
+  if (highlevel::detail::is_bit_device_code(parsed.device.code) ||
+      highlevel::detail::is_dword_only_device_code(parsed.device.code) ||
+      parsed.device.code == DeviceCode::G || parsed.device.code == DeviceCode::HG) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "write_link_direct_bit_in_word requires an ordinary 16-bit word device");
+  }
+  status = client_.validate_bit_in_word_plan(parsed);
+  if (!status.ok()) return status;
+  status = client_.begin_compound_deadline(now_ms());
+  if (!status.ok()) return status;
+
+  std::uint16_t word = 0U;
+  status = client_.async_link_direct_batch_read_words(
+      now_ms(),
+      parsed,
+      1U,
+      mcprotocol::serial::Span<std::uint16_t>(&word, 1U),
+      &PosixSyncClient::on_request_complete,
+      &completion_);
+  if (status.ok()) status = run_until_complete();
+  if (status.ok()) {
+    const std::uint16_t mask = static_cast<std::uint16_t>(1U << bit_index);
+    word = value
+               ? static_cast<std::uint16_t>(word | mask)
+               : static_cast<std::uint16_t>(word & static_cast<std::uint16_t>(~mask));
+    status = client_.async_link_direct_batch_write_words(
+        now_ms(),
+        parsed,
+        mcprotocol::serial::Span<const std::uint16_t>(&word, 1U),
+        &PosixSyncClient::on_request_complete,
+        &completion_);
+    if (status.ok()) status = run_until_complete();
+  }
+  client_.end_compound_deadline();
+  return status;
+}
+
+Status PosixSyncClient::write_native_qualified_bit_in_word(
+    std::string_view word_device,
+    int bit_index,
+    bool value) noexcept {
+  if (bit_index < 0 || bit_index > 15) {
+    return make_status(StatusCode::InvalidArgument, "bit_index must be in range 0..15");
+  }
+  QualifiedBufferWordDevice parsed(QualifiedBufferDeviceKind::G, 0U, 0U);
+  Status status = parse_qualified_buffer_word_device(word_device, parsed);
+  if (!status.ok()) return status;
+  status = client_.validate_bit_in_word_plan(parsed);
+  if (!status.ok()) return status;
+  status = client_.begin_compound_deadline(now_ms());
+  if (!status.ok()) return status;
+
+  std::uint16_t word = 0U;
+  status = client_.async_extended_batch_read_words(
+      now_ms(),
+      parsed,
+      1U,
+      mcprotocol::serial::Span<std::uint16_t>(&word, 1U),
+      &PosixSyncClient::on_request_complete,
+      &completion_);
+  if (status.ok()) status = run_until_complete();
+  if (status.ok()) {
+    const std::uint16_t mask = static_cast<std::uint16_t>(1U << bit_index);
+    word = value
+               ? static_cast<std::uint16_t>(word | mask)
+               : static_cast<std::uint16_t>(word & static_cast<std::uint16_t>(~mask));
+    status = client_.async_extended_batch_write_words(
+        now_ms(),
+        parsed,
+        mcprotocol::serial::Span<const std::uint16_t>(&word, 1U),
+        &PosixSyncClient::on_request_complete,
+        &completion_);
+    if (status.ok()) status = run_until_complete();
+  }
+  client_.end_compound_deadline();
+  return status;
+}
+
 Status PosixSyncClient::write_link_direct_words(
     std::string_view head_device,
     mcprotocol::serial::Span<const std::uint16_t> words) noexcept {

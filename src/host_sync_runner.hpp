@@ -29,6 +29,7 @@ template <typename Port, typename CompletionState, typename Clock, typename Trac
     CompletionState& completion,
     Clock&& clock,
     Trace&& trace) noexcept {
+  (void)protocol_config;
   completion = {};
 
   Status status = port.flush_rx();
@@ -42,14 +43,16 @@ template <typename Port, typename CompletionState, typename Clock, typename Trac
   }
 
   const std::uint32_t transaction_start_ms = clock();
-  const std::uint32_t transaction_deadline_ms =
-      transaction_start_ms + protocol_config.timeout().response_timeout_ms;
   status = client.notify_tx_started(transaction_start_ms);
   if (!status.ok()) {
+    if (completion.done) {
+      return completion.status;
+    }
     client.cancel();
     port.close();
     return status;
   }
+  const std::uint32_t transaction_deadline_ms = client.transaction_deadline_ms();
 
   trace("MC TX", client.pending_tx_frame());
   status = port.write_all_until(client.pending_tx_frame(), transaction_deadline_ms);

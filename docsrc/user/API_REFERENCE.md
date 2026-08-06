@@ -168,6 +168,198 @@ Do not edit it manually; run `scripts/update_api_reference.py` instead.
 
 ## Namespaces
 
+### Namespace `mcprotocol::serial::highlevel`
+
+#### Enums
+
+#### `LongStateReadKind`
+
+Logical state selected from a long timer/counter status block.
+
+| Value | Description |
+| --- | --- |
+| `Contact` |  |
+| `Coil` |  |
+
+#### `LongStateReadRoute`
+
+| Value | Description |
+| --- | --- |
+| `StatusBlock` |  |
+| `DirectBits` |  |
+
+#### Functions
+
+#### `make_c4_binary_protocol`
+
+```cpp
+ProtocolConfig mcprotocol::serial::highlevel::make_c4_binary_protocol(PlcProfile profile, SumCheckMode sum_check_mode, RouteConfig route) noexcept
+```
+
+Returns a practical Format5 / Binary / C4 configuration for an explicit PLC profile.
+
+#### `make_c4_ascii_format4_protocol`
+
+```cpp
+ProtocolConfig mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(PlcProfile profile, SumCheckMode sum_check_mode, RouteConfig route) noexcept
+```
+
+Returns a practical Format4 / ASCII / C4 configuration for an explicit PLC profile.
+
+#### `make_c4_ascii_format2_protocol`
+
+```cpp
+ProtocolConfig mcprotocol::serial::highlevel::make_c4_ascii_format2_protocol(PlcProfile profile, SumCheckMode sum_check_mode, RouteConfig route) noexcept
+```
+
+Returns a Format2 / ASCII / C4 configuration with explicit profile and sum-check mode.
+
+Format2 is the Format1 style ENQ/ACK/NAK/STX/ETX link with an extra 1-byte block number inserted before the frame ID. Block-number lifecycle is addressed separately by D-096.
+
+#### `parse_device_address`
+
+```cpp
+Status mcprotocol::serial::highlevel::parse_device_address(std::string_view text, DeviceAddress &out_device) noexcept
+```
+
+Parses a plain MC device string such as D100, M100, X10, or B20.
+
+This helper is intentionally limited to plain device syntax. It does not parse Jn\\... link- direct addresses, helper-qualified U...\\G... addresses, or standalone G / HG.
+
+#### `get_long_state_read_spec`
+
+```cpp
+Status mcprotocol::serial::highlevel::get_long_state_read_spec(DeviceCode code, LongStateReadSpec &out_spec) noexcept
+```
+
+Resolves the dedicated read path for long timer/counter state devices.
+
+LTS/LTC/LSTS/LSTC/LCS/LCC are read through this helper. Timer state devices use the corresponding LTN/LSTN 4-word status block; long counter contacts/coils use direct bit access.
+
+#### `decode_long_state_bit`
+
+```cpp
+Status mcprotocol::serial::highlevel::decode_long_state_bit(const LongStateReadSpec &spec, mcprotocol::serial::Span< const std::uint16_t > status_block_words, BitValue &out_value) noexcept
+```
+
+Decodes the contact/coil bit from a long-family 4-word status block.
+
+#### `make_batch_read_words_request`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_batch_read_words_request(std::string_view head_device, std::uint16_t points, BatchReadWordsRequest &out_request) noexcept
+```
+
+Builds a contiguous word-read request from a string address such as D100.
+
+#### `make_batch_read_bits_request`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_batch_read_bits_request(std::string_view head_device, std::uint16_t points, BatchReadBitsRequest &out_request) noexcept
+```
+
+Builds a contiguous bit-read request from a string address such as M100.
+
+#### `make_batch_write_words_request`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_batch_write_words_request(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words, BatchWriteWordsRequest &out_request) noexcept
+```
+
+Builds a contiguous word-write request from a string address such as D100.
+
+#### `make_batch_write_bits_request`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_batch_write_bits_request(std::string_view head_device, mcprotocol::serial::Span< const BitValue > bits, BatchWriteBitsRequest &out_request) noexcept
+```
+
+Builds a contiguous bit-write request from a string address such as M100.
+
+#### `make_random_read_word_item`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_random_read_word_item(std::string_view device, RandomReadWordItem &out_item) noexcept
+```
+
+Builds one explicitly word-width sparse random-read item from a string address.
+
+#### `make_random_read_dword_item`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_random_read_dword_item(std::string_view device, RandomReadDWordItem &out_item) noexcept
+```
+
+Builds one explicitly double-word-width sparse random-read item.
+
+#### `make_random_write_word_item`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_random_write_word_item(std::string_view device, std::uint16_t value, RandomWriteWordItem &out_item) noexcept
+```
+
+Builds one sparse random word-write item from a string address.
+
+#### `make_random_write_dword_item`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_random_write_dword_item(std::string_view device, std::uint32_t value, RandomWriteDWordItem &out_item) noexcept
+```
+
+Builds one explicitly double-word-width sparse random write item.
+
+#### `make_random_write_bit_item`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_random_write_bit_item(std::string_view device, BitValue value, RandomWriteBitItem &out_item) noexcept
+```
+
+Builds one sparse random bit-write item from a string address.
+
+#### `make_random_read_request`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_random_read_request(mcprotocol::serial::Span< const RandomReadWordSpec > word_specs, mcprotocol::serial::Span< const RandomReadDWordSpec > dword_specs, mcprotocol::serial::Span< RandomReadWordItem > out_word_items, mcprotocol::serial::Span< RandomReadDWordItem > out_dword_items, RandomReadRequest &out_request) noexcept
+```
+
+Builds a sparse random-read request from string-address specs.
+
+Use this when you want 0403 style sparse addressing without hand-filling the explicit-width Word and DWord item types.
+
+#### `make_monitor_registration`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_monitor_registration(mcprotocol::serial::Span< const RandomReadWordSpec > word_specs, mcprotocol::serial::Span< const RandomReadDWordSpec > dword_specs, mcprotocol::serial::Span< RandomReadWordItem > out_word_items, mcprotocol::serial::Span< RandomReadDWordItem > out_dword_items, MonitorRegistration &out_request) noexcept
+```
+
+Builds a sparse monitor registration payload from string-address specs.
+
+The resulting payload is intended for 0801. Readback still happens through the normal monitor read API.
+
+#### `make_random_write_word_items`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_random_write_word_items(mcprotocol::serial::Span< const RandomWriteWordSpec > specs, mcprotocol::serial::Span< RandomWriteWordItem > out_items, mcprotocol::serial::Span< const RandomWriteWordItem > &out_item_view) noexcept
+```
+
+Builds sparse random word-write items from string-address specs.
+
+#### `make_random_write_dword_items`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_random_write_dword_items(mcprotocol::serial::Span< const RandomWriteDWordSpec > specs, mcprotocol::serial::Span< RandomWriteDWordItem > out_items, mcprotocol::serial::Span< const RandomWriteDWordItem > &out_item_view) noexcept
+```
+
+Builds sparse explicit double-word write items from string-address specs.
+
+#### `make_random_write_bit_items`
+
+```cpp
+Status mcprotocol::serial::highlevel::make_random_write_bit_items(mcprotocol::serial::Span< const RandomWriteBitSpec > specs, mcprotocol::serial::Span< RandomWriteBitItem > out_items, mcprotocol::serial::Span< const RandomWriteBitItem > &out_item_view) noexcept
+```
+
+Builds sparse random bit-write items from string-address specs.
+
 ### Namespace `mcprotocol::serial::CommandCodec`
 
 Command-payload codec helpers below the frame layer.
@@ -567,198 +759,6 @@ Status mcprotocol::serial::CommandCodec::module_buffer_start_address(std::uint32
 ```
 
 Converts a logical buffer-memory word address plus module offset into a byte start address.
-
-### Namespace `mcprotocol::serial::highlevel`
-
-#### Enums
-
-#### `LongStateReadKind`
-
-Logical state selected from a long timer/counter status block.
-
-| Value | Description |
-| --- | --- |
-| `Contact` |  |
-| `Coil` |  |
-
-#### `LongStateReadRoute`
-
-| Value | Description |
-| --- | --- |
-| `StatusBlock` |  |
-| `DirectBits` |  |
-
-#### Functions
-
-#### `make_c4_binary_protocol`
-
-```cpp
-ProtocolConfig mcprotocol::serial::highlevel::make_c4_binary_protocol(PlcProfile profile, SumCheckMode sum_check_mode, RouteConfig route) noexcept
-```
-
-Returns a practical Format5 / Binary / C4 configuration for an explicit PLC profile.
-
-#### `make_c4_ascii_format4_protocol`
-
-```cpp
-ProtocolConfig mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(PlcProfile profile, SumCheckMode sum_check_mode, RouteConfig route) noexcept
-```
-
-Returns a practical Format4 / ASCII / C4 configuration for an explicit PLC profile.
-
-#### `make_c4_ascii_format2_protocol`
-
-```cpp
-ProtocolConfig mcprotocol::serial::highlevel::make_c4_ascii_format2_protocol(PlcProfile profile, SumCheckMode sum_check_mode, RouteConfig route) noexcept
-```
-
-Returns a Format2 / ASCII / C4 configuration with explicit profile and sum-check mode.
-
-Format2 is the Format1 style ENQ/ACK/NAK/STX/ETX link with an extra 1-byte block number inserted before the frame ID. Block-number lifecycle is addressed separately by D-096.
-
-#### `parse_device_address`
-
-```cpp
-Status mcprotocol::serial::highlevel::parse_device_address(std::string_view text, DeviceAddress &out_device) noexcept
-```
-
-Parses a plain MC device string such as D100, M100, X10, or B20.
-
-This helper is intentionally limited to plain device syntax. It does not parse Jn\\... link- direct addresses, helper-qualified U...\\G... addresses, or standalone G / HG.
-
-#### `get_long_state_read_spec`
-
-```cpp
-Status mcprotocol::serial::highlevel::get_long_state_read_spec(DeviceCode code, LongStateReadSpec &out_spec) noexcept
-```
-
-Resolves the dedicated read path for long timer/counter state devices.
-
-LTS/LTC/LSTS/LSTC/LCS/LCC are read through this helper. Timer state devices use the corresponding LTN/LSTN 4-word status block; long counter contacts/coils use direct bit access.
-
-#### `decode_long_state_bit`
-
-```cpp
-Status mcprotocol::serial::highlevel::decode_long_state_bit(const LongStateReadSpec &spec, mcprotocol::serial::Span< const std::uint16_t > status_block_words, BitValue &out_value) noexcept
-```
-
-Decodes the contact/coil bit from a long-family 4-word status block.
-
-#### `make_batch_read_words_request`
-
-```cpp
-Status mcprotocol::serial::highlevel::make_batch_read_words_request(std::string_view head_device, std::uint16_t points, BatchReadWordsRequest &out_request) noexcept
-```
-
-Builds a contiguous word-read request from a string address such as D100.
-
-#### `make_batch_read_bits_request`
-
-```cpp
-Status mcprotocol::serial::highlevel::make_batch_read_bits_request(std::string_view head_device, std::uint16_t points, BatchReadBitsRequest &out_request) noexcept
-```
-
-Builds a contiguous bit-read request from a string address such as M100.
-
-#### `make_batch_write_words_request`
-
-```cpp
-Status mcprotocol::serial::highlevel::make_batch_write_words_request(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words, BatchWriteWordsRequest &out_request) noexcept
-```
-
-Builds a contiguous word-write request from a string address such as D100.
-
-#### `make_batch_write_bits_request`
-
-```cpp
-Status mcprotocol::serial::highlevel::make_batch_write_bits_request(std::string_view head_device, mcprotocol::serial::Span< const BitValue > bits, BatchWriteBitsRequest &out_request) noexcept
-```
-
-Builds a contiguous bit-write request from a string address such as M100.
-
-#### `make_random_read_word_item`
-
-```cpp
-Status mcprotocol::serial::highlevel::make_random_read_word_item(std::string_view device, RandomReadWordItem &out_item) noexcept
-```
-
-Builds one explicitly word-width sparse random-read item from a string address.
-
-#### `make_random_read_dword_item`
-
-```cpp
-Status mcprotocol::serial::highlevel::make_random_read_dword_item(std::string_view device, RandomReadDWordItem &out_item) noexcept
-```
-
-Builds one explicitly double-word-width sparse random-read item.
-
-#### `make_random_write_word_item`
-
-```cpp
-Status mcprotocol::serial::highlevel::make_random_write_word_item(std::string_view device, std::uint16_t value, RandomWriteWordItem &out_item) noexcept
-```
-
-Builds one sparse random word-write item from a string address.
-
-#### `make_random_write_dword_item`
-
-```cpp
-Status mcprotocol::serial::highlevel::make_random_write_dword_item(std::string_view device, std::uint32_t value, RandomWriteDWordItem &out_item) noexcept
-```
-
-Builds one explicitly double-word-width sparse random write item.
-
-#### `make_random_write_bit_item`
-
-```cpp
-Status mcprotocol::serial::highlevel::make_random_write_bit_item(std::string_view device, BitValue value, RandomWriteBitItem &out_item) noexcept
-```
-
-Builds one sparse random bit-write item from a string address.
-
-#### `make_random_read_request`
-
-```cpp
-Status mcprotocol::serial::highlevel::make_random_read_request(mcprotocol::serial::Span< const RandomReadWordSpec > word_specs, mcprotocol::serial::Span< const RandomReadDWordSpec > dword_specs, mcprotocol::serial::Span< RandomReadWordItem > out_word_items, mcprotocol::serial::Span< RandomReadDWordItem > out_dword_items, RandomReadRequest &out_request) noexcept
-```
-
-Builds a sparse random-read request from string-address specs.
-
-Use this when you want 0403 style sparse addressing without hand-filling the explicit-width Word and DWord item types.
-
-#### `make_monitor_registration`
-
-```cpp
-Status mcprotocol::serial::highlevel::make_monitor_registration(mcprotocol::serial::Span< const RandomReadWordSpec > word_specs, mcprotocol::serial::Span< const RandomReadDWordSpec > dword_specs, mcprotocol::serial::Span< RandomReadWordItem > out_word_items, mcprotocol::serial::Span< RandomReadDWordItem > out_dword_items, MonitorRegistration &out_request) noexcept
-```
-
-Builds a sparse monitor registration payload from string-address specs.
-
-The resulting payload is intended for 0801. Readback still happens through the normal monitor read API.
-
-#### `make_random_write_word_items`
-
-```cpp
-Status mcprotocol::serial::highlevel::make_random_write_word_items(mcprotocol::serial::Span< const RandomWriteWordSpec > specs, mcprotocol::serial::Span< RandomWriteWordItem > out_items, mcprotocol::serial::Span< const RandomWriteWordItem > &out_item_view) noexcept
-```
-
-Builds sparse random word-write items from string-address specs.
-
-#### `make_random_write_dword_items`
-
-```cpp
-Status mcprotocol::serial::highlevel::make_random_write_dword_items(mcprotocol::serial::Span< const RandomWriteDWordSpec > specs, mcprotocol::serial::Span< RandomWriteDWordItem > out_items, mcprotocol::serial::Span< const RandomWriteDWordItem > &out_item_view) noexcept
-```
-
-Builds sparse explicit double-word write items from string-address specs.
-
-#### `make_random_write_bit_items`
-
-```cpp
-Status mcprotocol::serial::highlevel::make_random_write_bit_items(mcprotocol::serial::Span< const RandomWriteBitSpec > specs, mcprotocol::serial::Span< RandomWriteBitItem > out_items, mcprotocol::serial::Span< const RandomWriteBitItem > &out_item_view) noexcept
-```
-
-Builds sparse random bit-write items from string-address specs.
 
 ### Namespace `mcprotocol::serial`
 
@@ -2216,6 +2216,74 @@ static DecodeResult mcprotocol::serial::FrameCodec::decode_response(const Protoc
 
 Decodes one response using an explicit per-wire-frame identity context.
 
+### Class `mcprotocol::serial::highlevel::BitInWordWriteOperation`
+
+Explicit non-blocking read-modify-write for one bit inside a 16-bit word device.
+
+begin() validates both the read and write before the first request. The two requests occupy the same client continuously and share one absolute deadline. They are not PLC-atomic: PLC logic or another connection can modify the word between them. The write is always sent after a successful read, even when the selected bit already has the requested state. Keep this object alive until its completion callback runs.
+
+#### Member Functions
+
+#### `BitInWordWriteOperation`
+
+```cpp
+mcprotocol::serial::highlevel::BitInWordWriteOperation::BitInWordWriteOperation()=default
+```
+
+#### `BitInWordWriteOperation`
+
+```cpp
+mcprotocol::serial::highlevel::BitInWordWriteOperation::BitInWordWriteOperation(const BitInWordWriteOperation &)=delete
+```
+
+#### `operator=`
+
+```cpp
+BitInWordWriteOperation & mcprotocol::serial::highlevel::BitInWordWriteOperation::operator=(const BitInWordWriteOperation &)=delete
+```
+
+#### `begin`
+
+```cpp
+Status mcprotocol::serial::highlevel::BitInWordWriteOperation::begin(MelsecSerialClient &client, std::uint32_t now_ms, std::string_view word_device, int bit_index, bool value, CompletionHandler callback, void *user) noexcept
+```
+
+#### `begin_extended_file_register`
+
+```cpp
+Status mcprotocol::serial::highlevel::BitInWordWriteOperation::begin_extended_file_register(MelsecSerialClient &client, std::uint32_t now_ms, ExtendedFileRegisterAddress word_device, int bit_index, bool value, CompletionHandler callback, void *user) noexcept
+```
+
+#### `begin_direct_extended_file_register`
+
+```cpp
+Status mcprotocol::serial::highlevel::BitInWordWriteOperation::begin_direct_extended_file_register(MelsecSerialClient &client, std::uint32_t now_ms, std::uint32_t word_device_number, int bit_index, bool value, CompletionHandler callback, void *user) noexcept
+```
+
+#### `begin_link_direct`
+
+```cpp
+Status mcprotocol::serial::highlevel::BitInWordWriteOperation::begin_link_direct(MelsecSerialClient &client, std::uint32_t now_ms, LinkDirectDevice word_device, int bit_index, bool value, CompletionHandler callback, void *user) noexcept
+```
+
+#### `begin_qualified_buffer`
+
+```cpp
+Status mcprotocol::serial::highlevel::BitInWordWriteOperation::begin_qualified_buffer(MelsecSerialClient &client, std::uint32_t now_ms, QualifiedBufferWordDevice word_device, int bit_index, bool value, CompletionHandler callback, void *user) noexcept
+```
+
+#### `cancel`
+
+```cpp
+void mcprotocol::serial::highlevel::BitInWordWriteOperation::cancel() noexcept
+```
+
+#### `busy`
+
+```cpp
+bool mcprotocol::serial::highlevel::BitInWordWriteOperation::busy() const noexcept
+```
+
 ### Class `mcprotocol::serial::PosixSyncClient`
 
 Host-side synchronous convenience wrapper built on PosixSerialPort and MelsecSerialClient.
@@ -2503,6 +2571,48 @@ Status mcprotocol::serial::PosixSyncClient::write_words(std::string_view head_de
 ```
 
 Writes contiguous words synchronously to a string address such as D100.
+
+#### `write_bit_in_word`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::write_bit_in_word(std::string_view word_device, int bit_index, bool value) noexcept
+```
+
+Writes one bit inside an ordinary 16-bit word by one read-modify-write turn.
+
+The complete two-request plan is validated before transmission. The read and write share one absolute deadline, and the write is always issued after a successful read even when the bit is already in the requested state. The operation is not PLC-atomic: PLC logic or another connection can modify the word between the read and write.
+
+#### `write_extended_file_register_bit_in_word`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::write_extended_file_register_bit_in_word(ExtendedFileRegisterAddress word_device, int bit_index, bool value) noexcept
+```
+
+Bit-in-word update through the block-addressed extended file-register route.
+
+#### `direct_write_extended_file_register_bit_in_word`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::direct_write_extended_file_register_bit_in_word(std::uint32_t word_device_number, int bit_index, bool value) noexcept
+```
+
+Bit-in-word update through the direct extended file-register route.
+
+#### `write_link_direct_bit_in_word`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::write_link_direct_bit_in_word(std::string_view word_device, int bit_index, bool value) noexcept
+```
+
+Bit-in-word update through one immutable Jn\\... link-direct route.
+
+#### `write_native_qualified_bit_in_word`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::write_native_qualified_bit_in_word(std::string_view word_device, int bit_index, bool value) noexcept
+```
+
+Bit-in-word update through one immutable qualified-buffer route.
 
 #### `write_extended_file_register_words`
 

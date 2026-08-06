@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-08-07
+
+- Release: Bumped CMake, PlatformIO, Arduino, and public version metadata to `4.0.0` for the approved breaking contract release.
+- Library: Added explicit synchronous and non-blocking bit-in-word read-modify-write helpers for every supported complete-word route. Each helper preserves one immutable route, validates the complete read/write plan before communication, shares one absolute deadline, and always issues one read followed by one write. The sequence is not PLC-atomic; cancellation or failure after the write may have started is `OperationOutcomeUnknown` and requires transport reset, reconnect, and PLC-state reconciliation.
+- Tests: Added route coverage, whole-plan preflight, shared-deadline, always-write, pre-write cancellation, and post-send outcome-unknown regressions for bit-in-word helpers.
+
 - Samples: Made word/random writes classify confirmed and outcome-unknown results before restoration, report restoration failures, and require double opt-in plus original-RUN confirmation for Remote STOP/RUN.
 - Tests: Added C++17 compilation and safety-order checks for the maintained state-changing documentation examples.
 - Tooling: The CLI now classifies `LTS`, `LTC`, `LSTS`, `LSTC`, `LCS`, and `LCC` as bit-state

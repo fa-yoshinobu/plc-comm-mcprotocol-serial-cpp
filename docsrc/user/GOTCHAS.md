@@ -66,6 +66,14 @@
 | Remote PAUSE returns `StatusCode::OperationOutcomeUnknown`. | PAUSE transmission started, but its result was not confirmed. The library does not retry or escalate to forced execution. | Inspect the PLC state before deciding the next operation. Reopen/reset the transport when required. |
 | `remote_pause()` does not compile, or CLI `remote-pause` exits with usage. | The conflict policy is mandatory and only the exact CLI names `no-force` and `force` are accepted. | Pass one `RemoteOperationMode` or one exact CLI policy. Do not use numeric or compatibility aliases. |
 
+## Bit-in-word updates are two PLC requests
+
+| Symptom | Root cause | Fix |
+| --- | --- | --- |
+| Another bit in the word unexpectedly reverts. | A bit-in-word helper reads the complete word and then writes the modified word. The local client reserves the sequence, but PLC logic or another connection can write between those requests. | Use a PLC-side ownership or handshake contract when the complete word is shared. |
+| A bit-in-word helper returns `OperationOutcomeUnknown`. | Cancellation or failure occurred after the word write may have started. | Reset/reopen the transport, read the authoritative PLC state, and decide explicitly whether another update is safe. Do not resend automatically. |
+| A bit device, standalone `G`/`HG`, long-state route, random item, or byte-buffer route is rejected. | Bit-in-word helpers intentionally cover only routes that already support a complete 16-bit word read and write. | Use the route's native bit API or an explicit application-owned operation; the library does not change routes or fall back automatically. |
+
 ## `host_sync.hpp` symbol not found
 
 | Symptom | Root cause | Fix |

@@ -4,6 +4,7 @@
 #include "mcprotocol/serial/compat/cstddef.hpp"
 #include "mcprotocol/serial/compat/cstdint.hpp"
 
+#include "mcprotocol/serial/client.hpp"
 #include "mcprotocol/serial/detail/parse_helpers.hpp"
 #include "mcprotocol/serial/span.hpp"
 #include "mcprotocol/serial/status.hpp"
@@ -78,6 +79,50 @@ constexpr std::array<DeviceParseSpec, 38> kDeviceParseSpecs {{
 
 using mcprotocol::serial::detail::ascii_upper;
 using mcprotocol::serial::detail::parse_u32;
+
+[[nodiscard]] constexpr bool is_bit_device_code(DeviceCode code) noexcept {
+  switch (code) {
+    case DeviceCode::X:
+    case DeviceCode::Y:
+    case DeviceCode::M:
+    case DeviceCode::L:
+    case DeviceCode::SM:
+    case DeviceCode::F:
+    case DeviceCode::V:
+    case DeviceCode::B:
+    case DeviceCode::TS:
+    case DeviceCode::TC:
+    case DeviceCode::STS:
+    case DeviceCode::STC:
+    case DeviceCode::CS:
+    case DeviceCode::CC:
+    case DeviceCode::SB:
+    case DeviceCode::S:
+    case DeviceCode::DX:
+    case DeviceCode::DY:
+    case DeviceCode::LTS:
+    case DeviceCode::LTC:
+    case DeviceCode::LSTS:
+    case DeviceCode::LSTC:
+    case DeviceCode::LCS:
+    case DeviceCode::LCC:
+      return true;
+    default:
+      return false;
+  }
+}
+
+[[nodiscard]] constexpr bool is_dword_only_device_code(DeviceCode code) noexcept {
+  switch (code) {
+    case DeviceCode::LTN:
+    case DeviceCode::LSTN:
+    case DeviceCode::LCN:
+    case DeviceCode::LZ:
+      return true;
+    default:
+      return false;
+  }
+}
 
 }  // namespace detail
 
@@ -349,6 +394,334 @@ struct LongStateReadSpec {
   out_request = BatchWriteBitsRequest(parsed, bits);
   return ok_status();
 }
+
+/// \brief Explicit non-blocking read-modify-write for one bit inside a 16-bit word device.
+///
+/// `begin()` validates both the read and write before the first request. The two requests occupy
+/// the same client continuously and share one absolute deadline. They are not PLC-atomic: PLC
+/// logic or another connection can modify the word between them. The write is always sent after a
+/// successful read, even when the selected bit already has the requested state. Keep this object
+/// alive until its completion callback runs.
+class BitInWordWriteOperation {
+ public:
+  BitInWordWriteOperation() = default;
+  BitInWordWriteOperation(const BitInWordWriteOperation&) = delete;
+  BitInWordWriteOperation& operator=(const BitInWordWriteOperation&) = delete;
+
+  [[nodiscard]] Status begin(
+      MelsecSerialClient& client,
+      std::uint32_t now_ms,
+      std::string_view word_device,
+      int bit_index,
+      bool value,
+      CompletionHandler callback,
+      void* user) noexcept {
+    if (busy_) {
+      return make_status(StatusCode::Busy, "Bit-in-word operation is already active");
+    }
+    if (callback == nullptr) {
+      return make_status(StatusCode::InvalidArgument, "Completion callback must not be null");
+    }
+    if (bit_index < 0 || bit_index > 15) {
+      return make_status(StatusCode::InvalidArgument, "bit_index must be in range 0..15");
+    }
+    DeviceAddress parsed(DeviceCode::D, 0U);
+    Status status = parse_device_address(word_device, parsed);
+    if (!status.ok()) return status;
+    if (detail::is_bit_device_code(parsed.code) ||
+        detail::is_dword_only_device_code(parsed.code) ||
+        parsed.code == DeviceCode::G || parsed.code == DeviceCode::HG) {
+      return make_status(
+          StatusCode::InvalidArgument,
+          "write_bit_in_word requires an ordinary 16-bit word device");
+    }
+    status = client.validate_bit_in_word_plan(parsed);
+    if (!status.ok()) return status;
+    status = client.begin_compound_deadline(now_ms);
+    if (!status.ok()) return status;
+
+    client_ = &client;
+    route_ = Route::Standard;
+    device_ = parsed;
+    word_ = 0U;
+    bit_index_ = bit_index;
+    value_ = value;
+    callback_ = callback;
+    user_ = user;
+    busy_ = true;
+    const BatchReadWordsRequest request(device_, 1U);
+    status = client.async_batch_read_words(
+        now_ms,
+        request,
+        mcprotocol::serial::Span<std::uint16_t>(&word_, 1U),
+        &BitInWordWriteOperation::on_read_complete,
+        this);
+    if (!status.ok()) {
+      client.end_compound_deadline();
+      clear();
+    }
+    return status;
+  }
+
+  [[nodiscard]] Status begin_extended_file_register(
+      MelsecSerialClient& client,
+      std::uint32_t now_ms,
+      ExtendedFileRegisterAddress word_device,
+      int bit_index,
+      bool value,
+      CompletionHandler callback,
+      void* user) noexcept {
+    Status status = validate_begin(bit_index, callback);
+    if (!status.ok()) return status;
+    status = client.validate_bit_in_word_plan(word_device);
+    if (!status.ok()) return status;
+    status = client.begin_compound_deadline(now_ms);
+    if (!status.ok()) return status;
+
+    initialize(client, Route::ExtendedFileRegister, bit_index, value, callback, user);
+    extended_file_register_device_ = word_device;
+    const ExtendedFileRegisterBatchReadWordsRequest request(word_device, 1U);
+    status = client.async_read_extended_file_register_words(
+        now_ms,
+        request,
+        mcprotocol::serial::Span<std::uint16_t>(&word_, 1U),
+        &BitInWordWriteOperation::on_read_complete,
+        this);
+    if (!status.ok()) abort_begin(client);
+    return status;
+  }
+
+  [[nodiscard]] Status begin_direct_extended_file_register(
+      MelsecSerialClient& client,
+      std::uint32_t now_ms,
+      std::uint32_t word_device_number,
+      int bit_index,
+      bool value,
+      CompletionHandler callback,
+      void* user) noexcept {
+    Status status = validate_begin(bit_index, callback);
+    if (!status.ok()) return status;
+    status = client.validate_direct_bit_in_word_plan(word_device_number);
+    if (!status.ok()) return status;
+    status = client.begin_compound_deadline(now_ms);
+    if (!status.ok()) return status;
+
+    initialize(client, Route::DirectExtendedFileRegister, bit_index, value, callback, user);
+    direct_extended_file_register_device_ = word_device_number;
+    const ExtendedFileRegisterDirectBatchReadWordsRequest request(word_device_number, 1U);
+    status = client.async_direct_read_extended_file_register_words(
+        now_ms,
+        request,
+        mcprotocol::serial::Span<std::uint16_t>(&word_, 1U),
+        &BitInWordWriteOperation::on_read_complete,
+        this);
+    if (!status.ok()) abort_begin(client);
+    return status;
+  }
+
+  [[nodiscard]] Status begin_link_direct(
+      MelsecSerialClient& client,
+      std::uint32_t now_ms,
+      LinkDirectDevice word_device,
+      int bit_index,
+      bool value,
+      CompletionHandler callback,
+      void* user) noexcept {
+    Status status = validate_begin(bit_index, callback);
+    if (!status.ok()) return status;
+    if (detail::is_bit_device_code(word_device.device.code) ||
+        detail::is_dword_only_device_code(word_device.device.code) ||
+        word_device.device.code == DeviceCode::G || word_device.device.code == DeviceCode::HG) {
+      return make_status(
+          StatusCode::InvalidArgument,
+          "begin_link_direct requires an ordinary 16-bit word device");
+    }
+    status = client.validate_bit_in_word_plan(word_device);
+    if (!status.ok()) return status;
+    status = client.begin_compound_deadline(now_ms);
+    if (!status.ok()) return status;
+
+    initialize(client, Route::LinkDirect, bit_index, value, callback, user);
+    link_direct_device_ = word_device;
+    status = client.async_link_direct_batch_read_words(
+        now_ms,
+        word_device,
+        1U,
+        mcprotocol::serial::Span<std::uint16_t>(&word_, 1U),
+        &BitInWordWriteOperation::on_read_complete,
+        this);
+    if (!status.ok()) abort_begin(client);
+    return status;
+  }
+
+  [[nodiscard]] Status begin_qualified_buffer(
+      MelsecSerialClient& client,
+      std::uint32_t now_ms,
+      QualifiedBufferWordDevice word_device,
+      int bit_index,
+      bool value,
+      CompletionHandler callback,
+      void* user) noexcept {
+    Status status = validate_begin(bit_index, callback);
+    if (!status.ok()) return status;
+    status = client.validate_bit_in_word_plan(word_device);
+    if (!status.ok()) return status;
+    status = client.begin_compound_deadline(now_ms);
+    if (!status.ok()) return status;
+
+    initialize(client, Route::QualifiedBuffer, bit_index, value, callback, user);
+    qualified_buffer_device_ = word_device;
+    status = client.async_extended_batch_read_words(
+        now_ms,
+        word_device,
+        1U,
+        mcprotocol::serial::Span<std::uint16_t>(&word_, 1U),
+        &BitInWordWriteOperation::on_read_complete,
+        this);
+    if (!status.ok()) abort_begin(client);
+    return status;
+  }
+
+  void cancel() noexcept {
+    if (busy_ && client_ != nullptr) client_->cancel();
+  }
+
+  [[nodiscard]] bool busy() const noexcept { return busy_; }
+
+ private:
+  enum class Route : std::uint8_t {
+    Standard,
+    ExtendedFileRegister,
+    DirectExtendedFileRegister,
+    LinkDirect,
+    QualifiedBuffer
+  };
+
+  [[nodiscard]] Status validate_begin(
+      int bit_index,
+      CompletionHandler callback) const noexcept {
+    if (busy_) return make_status(StatusCode::Busy, "Bit-in-word operation is already active");
+    if (callback == nullptr) {
+      return make_status(StatusCode::InvalidArgument, "Completion callback must not be null");
+    }
+    if (bit_index < 0 || bit_index > 15) {
+      return make_status(StatusCode::InvalidArgument, "bit_index must be in range 0..15");
+    }
+    return ok_status();
+  }
+
+  void initialize(
+      MelsecSerialClient& client,
+      Route route,
+      int bit_index,
+      bool value,
+      CompletionHandler callback,
+      void* user) noexcept {
+    client_ = &client;
+    route_ = route;
+    word_ = 0U;
+    bit_index_ = bit_index;
+    value_ = value;
+    callback_ = callback;
+    user_ = user;
+    busy_ = true;
+  }
+
+  void abort_begin(MelsecSerialClient& client) noexcept {
+    client.end_compound_deadline();
+    clear();
+  }
+
+  static void on_read_complete(void* context, Status status) noexcept {
+    auto& self = *static_cast<BitInWordWriteOperation*>(context);
+    if (!status.ok()) {
+      self.finish(status);
+      return;
+    }
+    const std::uint16_t mask = static_cast<std::uint16_t>(1U << self.bit_index_);
+    self.word_ = self.value_
+                     ? static_cast<std::uint16_t>(self.word_ | mask)
+                     : static_cast<std::uint16_t>(self.word_ & static_cast<std::uint16_t>(~mask));
+    const mcprotocol::serial::Span<const std::uint16_t> words(&self.word_, 1U);
+    Status write_status = make_status(StatusCode::InvalidArgument, "Invalid bit-in-word route");
+    switch (self.route_) {
+      case Route::Standard: {
+        const BatchWriteWordsRequest request(self.device_, words);
+        write_status = self.client_->async_batch_write_words(
+            0U, request, &BitInWordWriteOperation::on_write_complete, &self);
+        break;
+      }
+      case Route::ExtendedFileRegister: {
+        const ExtendedFileRegisterBatchWriteWordsRequest request(
+            self.extended_file_register_device_, words);
+        write_status = self.client_->async_write_extended_file_register_words(
+            0U, request, &BitInWordWriteOperation::on_write_complete, &self);
+        break;
+      }
+      case Route::DirectExtendedFileRegister: {
+        const ExtendedFileRegisterDirectBatchWriteWordsRequest request(
+            self.direct_extended_file_register_device_, words);
+        write_status = self.client_->async_direct_write_extended_file_register_words(
+            0U, request, &BitInWordWriteOperation::on_write_complete, &self);
+        break;
+      }
+      case Route::LinkDirect:
+        write_status = self.client_->async_link_direct_batch_write_words(
+            0U,
+            self.link_direct_device_,
+            words,
+            &BitInWordWriteOperation::on_write_complete,
+            &self);
+        break;
+      case Route::QualifiedBuffer:
+        write_status = self.client_->async_extended_batch_write_words(
+            0U,
+            self.qualified_buffer_device_,
+            words,
+            &BitInWordWriteOperation::on_write_complete,
+            &self);
+        break;
+    }
+    if (!write_status.ok()) self.finish(write_status);
+  }
+
+  static void on_write_complete(void* context, Status status) noexcept {
+    static_cast<BitInWordWriteOperation*>(context)->finish(status);
+  }
+
+  void finish(Status status) noexcept {
+    MelsecSerialClient* client = client_;
+    CompletionHandler callback = callback_;
+    void* user = user_;
+    clear();
+    if (client != nullptr) client->end_compound_deadline();
+    if (callback != nullptr) callback(user, status);
+  }
+
+  void clear() noexcept {
+    client_ = nullptr;
+    callback_ = nullptr;
+    user_ = nullptr;
+    busy_ = false;
+  }
+
+  MelsecSerialClient* client_ = nullptr;
+  Route route_ = Route::Standard;
+  DeviceAddress device_ {DeviceCode::D, 0U};
+  ExtendedFileRegisterAddress extended_file_register_device_ {1U, 0U};
+  std::uint32_t direct_extended_file_register_device_ = 0U;
+  LinkDirectDevice link_direct_device_ {0U, DeviceAddress {DeviceCode::D, 0U}};
+  QualifiedBufferWordDevice qualified_buffer_device_ {
+      QualifiedBufferDeviceKind::G,
+      0U,
+      0U};
+  std::uint16_t word_ = 0U;
+  int bit_index_ = 0;
+  bool value_ = false;
+  CompletionHandler callback_ = nullptr;
+  void* user_ = nullptr;
+  bool busy_ = false;
+};
 
 /// \brief Builds one explicitly word-width sparse random-read item from a string address.
 [[nodiscard]] inline Status make_random_read_word_item(

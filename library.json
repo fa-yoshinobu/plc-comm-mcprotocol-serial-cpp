@@ -1,6 +1,6 @@
 {
   "name": "mcprotocol-serial-cpp",
-  "version": "3.2.2",
+  "version": "4.0.0",
   "description": "MC Protocol serial C++ library for Mitsubishi MELSEC PLCs in MCU-oriented environments with fixed caller-owned buffers and async request flow.",
   "keywords": [
     "plc-comm",

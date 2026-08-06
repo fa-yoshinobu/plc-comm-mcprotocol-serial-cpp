@@ -192,6 +192,26 @@ int main() {
 }
 ```
 
+### Explicit bit-in-word updates
+
+Use `PosixSyncClient::write_bit_in_word()` for an ordinary device such as `D100`.
+The synchronous facade also exposes route-specific forms for block-addressed
+extended file registers, direct extended file registers, `Jn\\...` link-direct
+devices, and qualified `Un\\Gn` / `Un\\HGn` word devices. The non-blocking
+`highlevel::BitInWordWriteOperation` exposes matching `begin()`,
+`begin_extended_file_register()`, `begin_direct_extended_file_register()`,
+`begin_link_direct()`, and `begin_qualified_buffer()` forms.
+
+Every form validates both requests and the immutable route before transmission,
+uses one absolute deadline, and always sends one read followed by one write even
+when the selected bit already has the requested state. This is not PLC-atomic:
+PLC logic or another connection can change the word between requests. If
+cancellation or failure occurs after the write may have started, the result is
+`StatusCode::OperationOutcomeUnknown`; reset/reopen the transport and reconcile
+PLC state before retrying. The operation supports only complete 16-bit word
+routes; bit devices, standalone `G`/`HG`, long-state helpers, random access,
+monitoring, and module/host byte-buffer APIs are not bit-in-word routes.
+
 ## Entry path 2: synchronous host facade
 
 `PosixSyncClient` opens a host serial port, configures the protocol client, transmits one request, waits for completion, and returns a `Status`.

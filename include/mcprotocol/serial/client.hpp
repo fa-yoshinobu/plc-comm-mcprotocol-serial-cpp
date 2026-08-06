@@ -27,6 +27,9 @@ namespace mcprotocol::serial {
 namespace detail {
 struct ClientAccess;
 }
+namespace highlevel {
+class BitInWordWriteOperation;
+}
 
 /// \brief Asynchronous MC protocol client for UART / serial integrations.
 ///
@@ -526,6 +529,7 @@ class MelsecSerialClient {
 
  private:
   friend class PosixSyncClient;
+  friend class highlevel::BitInWordWriteOperation;
   friend struct detail::ClientAccess;
 
   /// Stores a ProtocolConfig that has already passed FrameCodec::validate_config().
@@ -596,6 +600,20 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
   [[nodiscard]] Status validate_request_admission() const noexcept;
+  [[nodiscard]] Status validate_bit_in_word_plan(DeviceAddress device) noexcept;
+  [[nodiscard]] Status validate_bit_in_word_plan(
+      ExtendedFileRegisterAddress device) noexcept;
+  [[nodiscard]] Status validate_direct_bit_in_word_plan(
+      std::uint32_t device_number) noexcept;
+  [[nodiscard]] Status validate_bit_in_word_plan(
+      const LinkDirectDevice& device) noexcept;
+  [[nodiscard]] Status validate_bit_in_word_plan(
+      const QualifiedBufferWordDevice& device) noexcept;
+  [[nodiscard]] Status preflight_request(
+      OperationKind operation,
+      std::size_t request_data_size) noexcept;
+  [[nodiscard]] Status begin_compound_deadline(std::uint32_t now_ms) noexcept;
+  void end_compound_deadline() noexcept;
 
   [[nodiscard]] std::uint8_t expected_e1_response_subheader() const noexcept;
   [[nodiscard]] std::size_t expected_success_response_data_size(
@@ -622,6 +640,8 @@ class MelsecSerialClient {
   CompletionHandler callback_ = nullptr;
   void* callback_user_ = nullptr;
   std::uint32_t response_deadline_ms_ = 0;
+  bool compound_deadline_active_ = false;
+  std::uint32_t compound_deadline_ms_ = 0;
   std::uint32_t inter_byte_deadline_ms_ = 0;
   bool inter_byte_deadline_active_ = false;
   std::uint8_t next_format2_block_number_ = 0;
