@@ -215,6 +215,11 @@ monitoring, and module/host byte-buffer APIs are not bit-in-word routes.
 ## Entry path 2: synchronous host facade
 
 `PosixSyncClient` opens a host serial port, configures the protocol client, transmits one request, waits for completion, and returns a `Status`.
+Use `read_words_single_request`, `write_words_single_request`,
+`read_bits_single_request`, and `write_bits_single_request` for contiguous host
+access that must be one PLC request. The shorter synchronous names remain
+deprecated compatibility delegates; command-native `async_batch_*` APIs are
+unchanged.
 
 ### Read words
 
@@ -253,7 +258,7 @@ int main() {
   }
 
   std::array<std::uint16_t, 2> words {};
-  status = plc.read_words("D100", words);
+  status = plc.read_words_single_request("D100", words);
   if (!status.ok()) {
     return 1;
   }
@@ -304,12 +309,12 @@ int main() {
   }
 
   std::array<std::uint16_t, 2> original {};
-  if (!plc.read_words("D100", original).ok()) {
+  if (!plc.read_words_single_request("D100", original).ok()) {
     return 1;
   }
 
   const std::array<std::uint16_t, 2> words {0x1234, 0x5678};
-  const auto write_status = plc.write_words("D100", words);
+  const auto write_status = plc.write_words_single_request("D100", words);
   if (write_status.code == mcprotocol::serial::StatusCode::OperationOutcomeUnknown) {
     std::fprintf(
         stderr,
@@ -321,7 +326,7 @@ int main() {
     return 1;
   }
 
-  const auto restore_status = plc.write_words("D100", original);
+  const auto restore_status = plc.write_words_single_request("D100", original);
   if (restore_status.code == mcprotocol::serial::StatusCode::OperationOutcomeUnknown) {
     std::fprintf(
         stderr,
@@ -381,7 +386,7 @@ int main() {
   }
 
   std::array<std::uint16_t, 1> original_d101 {};
-  if (!plc.read_words("D101", original_d101).ok()) {
+  if (!plc.read_words_single_request("D101", original_d101).ok()) {
     return 1;
   }
 
@@ -395,7 +400,7 @@ int main() {
     // Report the confirmed failure before attempting any restoration request.
     return 1;
   }
-  const auto restore_status = plc.write_words("D101", original_d101);
+  const auto restore_status = plc.write_words_single_request("D101", original_d101);
   if (restore_status.code == mcprotocol::serial::StatusCode::OperationOutcomeUnknown) {
     // Reopen and inspect D101 manually; do not assume restoration succeeded.
     return 2;

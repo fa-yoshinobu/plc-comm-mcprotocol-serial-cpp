@@ -2472,13 +2472,29 @@ Status mcprotocol::serial::PosixSyncClient::initialize_c24_transmission_sequence
 
 Initializes C24 format-5 transmission sequence synchronously (1615).
 
+#### `read_words_single_request`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::read_words_single_request(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+```
+
+Reads contiguous words as exactly one PLC request.
+
+#### `read_words_single_request`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::read_words_single_request(std::string_view head_device, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+```
+
+Reads contiguous words as exactly one PLC request using out_words.size().
+
 #### `read_words`
 
 ```cpp
 Status mcprotocol::serial::PosixSyncClient::read_words(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
 ```
 
-Reads contiguous words synchronously from a string address such as D100.
+Compatibility alias for read_words_single_request.
 
 #### `read_words`
 
@@ -2486,7 +2502,7 @@ Reads contiguous words synchronously from a string address such as D100.
 Status mcprotocol::serial::PosixSyncClient::read_words(std::string_view head_device, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
 ```
 
-Reads contiguous words synchronously using out_words.size() as the point count.
+Compatibility alias for read_words_single_request.
 
 #### `read_extended_file_register_words`
 
@@ -2504,13 +2520,29 @@ Status mcprotocol::serial::PosixSyncClient::direct_read_extended_file_register_w
 
 Reads direct extended file-register words synchronously.
 
+#### `read_bits_single_request`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::read_bits_single_request(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+```
+
+Reads contiguous bits as exactly one PLC request.
+
+#### `read_bits_single_request`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::read_bits_single_request(std::string_view head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+```
+
+Reads contiguous bits as exactly one PLC request using out_bits.size().
+
 #### `read_bits`
 
 ```cpp
 Status mcprotocol::serial::PosixSyncClient::read_bits(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
 ```
 
-Reads contiguous bits synchronously from a string address such as M100.
+Compatibility alias for read_bits_single_request.
 
 #### `read_bits`
 
@@ -2518,7 +2550,7 @@ Reads contiguous bits synchronously from a string address such as M100.
 Status mcprotocol::serial::PosixSyncClient::read_bits(std::string_view head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
 ```
 
-Reads contiguous bits synchronously using out_bits.size() as the point count.
+Compatibility alias for read_bits_single_request.
 
 #### `read_link_direct_words`
 
@@ -2564,13 +2596,21 @@ Status mcprotocol::serial::PosixSyncClient::read_long_state_bits(std::string_vie
 
 Reads long timer/counter states using out_bits.size() as the point count.
 
+#### `write_words_single_request`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::write_words_single_request(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
+```
+
+Writes contiguous words as exactly one PLC request.
+
 #### `write_words`
 
 ```cpp
 Status mcprotocol::serial::PosixSyncClient::write_words(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
 ```
 
-Writes contiguous words synchronously to a string address such as D100.
+Compatibility alias for write_words_single_request.
 
 #### `write_bit_in_word`
 
@@ -2630,13 +2670,21 @@ Status mcprotocol::serial::PosixSyncClient::direct_write_extended_file_register_
 
 Writes direct extended file-register words synchronously.
 
+#### `write_bits_single_request`
+
+```cpp
+Status mcprotocol::serial::PosixSyncClient::write_bits_single_request(std::string_view head_device, mcprotocol::serial::Span< const BitValue > bits) noexcept
+```
+
+Writes contiguous bits as exactly one PLC request.
+
 #### `write_bits`
 
 ```cpp
 Status mcprotocol::serial::PosixSyncClient::write_bits(std::string_view head_device, mcprotocol::serial::Span< const BitValue > bits) noexcept
 ```
 
-Writes contiguous bits synchronously to a string address such as M100.
+Compatibility alias for write_bits_single_request.
 
 #### `write_link_direct_words`
 

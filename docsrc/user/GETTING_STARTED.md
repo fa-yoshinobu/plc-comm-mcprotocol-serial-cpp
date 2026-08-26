@@ -80,7 +80,7 @@ auto protocol = mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol(
 
 This CMake/source-tree example uses `PosixSyncClient`, explicit serial settings,
 `make_c4_ascii_format4_protocol(..., RouteConfig {HostStationRoute {}})`, and
-`read_words("D100", words)`. The PlatformIO package does not contain the host facade implementation.
+`read_words_single_request("D100", words)`. The PlatformIO package does not contain the host facade implementation.
 
 ```cpp
 #include <array>
@@ -124,9 +124,9 @@ int main() {
   }
 
   std::array<std::uint16_t, 1> words {};
-  status = plc.read_words("D100", words);
+  status = plc.read_words_single_request("D100", words);
   if (!status.ok()) {
-    std::fprintf(stderr, "read_words failed: %s\n", status.message);
+    std::fprintf(stderr, "read_words_single_request failed: %s\n", status.message);
     return 1;
   }
 

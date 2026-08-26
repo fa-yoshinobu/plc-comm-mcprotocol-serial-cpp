@@ -45,22 +45,22 @@ def check_contract(markdown: str) -> dict[str, str]:
 
     require_order(
         write_words,
-        'plc.read_words("D100", original)',
-        'plc.write_words("D100", words)',
+        'plc.read_words_single_request("D100", original)',
+        'plc.write_words_single_request("D100", words)',
         "StatusCode::OperationOutcomeUnknown",
         "if (!write_status.ok())",
-        'plc.write_words("D100", original)',
+        'plc.write_words_single_request("D100", original)',
         "restore_status.code ==",
         "if (!restore_status.ok())",
         "inspect and reconcile D100-D101 manually",
     )
     require_order(
         random_write,
-        'plc.read_words("D101", original_d101)',
+        'plc.read_words_single_request("D101", original_d101)',
         "plc.random_write_words(writes)",
         "StatusCode::OperationOutcomeUnknown",
         "if (!write_status.ok())",
-        'plc.write_words("D101", original_d101)',
+        'plc.write_words_single_request("D101", original_d101)',
         "restore_status.code ==",
         "if (!restore_status.ok())",
     )

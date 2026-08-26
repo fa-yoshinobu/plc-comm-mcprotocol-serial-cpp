@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Library: Added canonical synchronous `read/write_words_single_request` and `read/write_bits_single_request` host APIs; the shorter sync names remain deprecated delegates and command-native `async_batch_*` APIs are unchanged.
+
 ## [4.0.0] - 2026-08-07
 
 - Release: Bumped CMake, PlatformIO, Arduino, and public version metadata to `4.0.0` for the approved breaking contract release.

@@ -52,9 +52,9 @@ int main() {
 
   std::array<std::uint16_t, 2> words {};
   // Batch reads are the simplest data path for contiguous word devices.
-  status = plc.read_words("D100", words);
+  status = plc.read_words_single_request("D100", words);
   if (!status.ok()) {
-    std::fprintf(stderr, "read_words failed: %s\n", status.message);
+    std::fprintf(stderr, "read_words_single_request failed: %s\n", status.message);
     return 1;
   }
 

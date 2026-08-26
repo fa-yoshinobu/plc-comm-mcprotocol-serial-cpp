@@ -296,7 +296,7 @@ Status PosixSyncClient::initialize_c24_transmission_sequence() noexcept {
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_words(
+Status PosixSyncClient::read_words_single_request(
     std::string_view head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
@@ -318,7 +318,7 @@ Status PosixSyncClient::read_words(
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_words(
+Status PosixSyncClient::read_words_single_request(
     std::string_view head_device,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   std::uint16_t points = 0;
@@ -329,7 +329,20 @@ Status PosixSyncClient::read_words(
   if (!status.ok()) {
     return status;
   }
-  return read_words(head_device, points, out_words);
+  return read_words_single_request(head_device, points, out_words);
+}
+
+Status PosixSyncClient::read_words(
+    std::string_view head_device,
+    std::uint16_t points,
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
+  return read_words_single_request(head_device, points, out_words);
+}
+
+Status PosixSyncClient::read_words(
+    std::string_view head_device,
+    mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
+  return read_words_single_request(head_device, out_words);
 }
 
 Status PosixSyncClient::read_extended_file_register_words(
@@ -362,7 +375,7 @@ Status PosixSyncClient::direct_read_extended_file_register_words(
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_bits(
+Status PosixSyncClient::read_bits_single_request(
     std::string_view head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
@@ -400,7 +413,7 @@ Status PosixSyncClient::read_bits(
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_bits(
+Status PosixSyncClient::read_bits_single_request(
     std::string_view head_device,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   std::uint16_t points = 0;
@@ -411,7 +424,20 @@ Status PosixSyncClient::read_bits(
   if (!status.ok()) {
     return status;
   }
-  return read_bits(head_device, points, out_bits);
+  return read_bits_single_request(head_device, points, out_bits);
+}
+
+Status PosixSyncClient::read_bits(
+    std::string_view head_device,
+    std::uint16_t points,
+    mcprotocol::serial::Span<BitValue> out_bits) noexcept {
+  return read_bits_single_request(head_device, points, out_bits);
+}
+
+Status PosixSyncClient::read_bits(
+    std::string_view head_device,
+    mcprotocol::serial::Span<BitValue> out_bits) noexcept {
+  return read_bits_single_request(head_device, out_bits);
 }
 
 Status PosixSyncClient::read_link_direct_words(
@@ -594,7 +620,7 @@ Status PosixSyncClient::read_long_state_bits(
   return read_long_state_bits(head_device, points, out_bits);
 }
 
-Status PosixSyncClient::write_words(
+Status PosixSyncClient::write_words_single_request(
     std::string_view head_device,
     mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
   BatchWriteWordsRequest request(DeviceAddress {DeviceCode::D, 0U}, {});
@@ -612,6 +638,12 @@ Status PosixSyncClient::write_words(
     return status;
   }
   return run_until_complete();
+}
+
+Status PosixSyncClient::write_words(
+    std::string_view head_device,
+    mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
+  return write_words_single_request(head_device, words);
 }
 
 Status PosixSyncClient::write_bit_in_word(
@@ -645,7 +677,7 @@ Status PosixSyncClient::write_bit_in_word(
   }
 
   std::uint16_t word = 0U;
-  status = read_words(
+  status = read_words_single_request(
       word_device,
       mcprotocol::serial::Span<std::uint16_t>(&word, 1U));
   if (status.ok()) {
@@ -653,7 +685,7 @@ Status PosixSyncClient::write_bit_in_word(
     word = value
                ? static_cast<std::uint16_t>(word | mask)
                : static_cast<std::uint16_t>(word & static_cast<std::uint16_t>(~mask));
-    status = write_words(
+    status = write_words_single_request(
         word_device,
         mcprotocol::serial::Span<const std::uint16_t>(&word, 1U));
   }
@@ -1129,7 +1161,7 @@ Status PosixSyncClient::read_extended_file_register_monitor(
   return run_until_complete();
 }
 
-Status PosixSyncClient::write_bits(
+Status PosixSyncClient::write_bits_single_request(
     std::string_view head_device,
     mcprotocol::serial::Span<const BitValue> bits) noexcept {
   BatchWriteBitsRequest request(DeviceAddress {DeviceCode::M, 0U}, {});
@@ -1147,6 +1179,12 @@ Status PosixSyncClient::write_bits(
     return status;
   }
   return run_until_complete();
+}
+
+Status PosixSyncClient::write_bits(
+    std::string_view head_device,
+    mcprotocol::serial::Span<const BitValue> bits) noexcept {
+  return write_bits_single_request(head_device, bits);
 }
 
 }  // namespace mcprotocol::serial

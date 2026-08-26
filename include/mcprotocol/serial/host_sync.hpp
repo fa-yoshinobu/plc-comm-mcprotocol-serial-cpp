@@ -114,14 +114,25 @@ class PosixSyncClient {
   /// \brief Initializes C24 format-5 transmission sequence synchronously (`1615`).
   [[nodiscard]] Status initialize_c24_transmission_sequence() noexcept;
 
-  /// \brief Reads contiguous words synchronously from a string address such as `D100`.
-  [[nodiscard]] Status read_words(
+  /// \brief Reads contiguous words as exactly one PLC request.
+  [[nodiscard]] Status read_words_single_request(
       std::string_view head_device,
       std::uint16_t points,
       mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
-  /// \brief Reads contiguous words synchronously using `out_words.size()` as the point count.
-  [[nodiscard]] Status read_words(
+  /// \brief Reads contiguous words as exactly one PLC request using `out_words.size()`.
+  [[nodiscard]] Status read_words_single_request(
+      std::string_view head_device,
+      mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
+
+  /// \brief Compatibility alias for `read_words_single_request`.
+  [[nodiscard, deprecated("use read_words_single_request")]] Status read_words(
+      std::string_view head_device,
+      std::uint16_t points,
+      mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
+
+  /// \brief Compatibility alias for `read_words_single_request`.
+  [[nodiscard, deprecated("use read_words_single_request")]] Status read_words(
       std::string_view head_device,
       mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
@@ -135,14 +146,25 @@ class PosixSyncClient {
       const ExtendedFileRegisterDirectBatchReadWordsRequest& request,
       mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
-  /// \brief Reads contiguous bits synchronously from a string address such as `M100`.
-  [[nodiscard]] Status read_bits(
+  /// \brief Reads contiguous bits as exactly one PLC request.
+  [[nodiscard]] Status read_bits_single_request(
       std::string_view head_device,
       std::uint16_t points,
       mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
-  /// \brief Reads contiguous bits synchronously using `out_bits.size()` as the point count.
-  [[nodiscard]] Status read_bits(
+  /// \brief Reads contiguous bits as exactly one PLC request using `out_bits.size()`.
+  [[nodiscard]] Status read_bits_single_request(
+      std::string_view head_device,
+      mcprotocol::serial::Span<BitValue> out_bits) noexcept;
+
+  /// \brief Compatibility alias for `read_bits_single_request`.
+  [[nodiscard, deprecated("use read_bits_single_request")]] Status read_bits(
+      std::string_view head_device,
+      std::uint16_t points,
+      mcprotocol::serial::Span<BitValue> out_bits) noexcept;
+
+  /// \brief Compatibility alias for `read_bits_single_request`.
+  [[nodiscard, deprecated("use read_bits_single_request")]] Status read_bits(
       std::string_view head_device,
       mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
@@ -185,8 +207,13 @@ class PosixSyncClient {
       std::string_view head_device,
       mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
-  /// \brief Writes contiguous words synchronously to a string address such as `D100`.
-  [[nodiscard]] Status write_words(
+  /// \brief Writes contiguous words as exactly one PLC request.
+  [[nodiscard]] Status write_words_single_request(
+      std::string_view head_device,
+      mcprotocol::serial::Span<const std::uint16_t> words) noexcept;
+
+  /// \brief Compatibility alias for `write_words_single_request`.
+  [[nodiscard, deprecated("use write_words_single_request")]] Status write_words(
       std::string_view head_device,
       mcprotocol::serial::Span<const std::uint16_t> words) noexcept;
 
@@ -233,8 +260,13 @@ class PosixSyncClient {
   [[nodiscard]] Status direct_write_extended_file_register_words(
       const ExtendedFileRegisterDirectBatchWriteWordsRequest& request) noexcept;
 
-  /// \brief Writes contiguous bits synchronously to a string address such as `M100`.
-  [[nodiscard]] Status write_bits(
+  /// \brief Writes contiguous bits as exactly one PLC request.
+  [[nodiscard]] Status write_bits_single_request(
+      std::string_view head_device,
+      mcprotocol::serial::Span<const BitValue> bits) noexcept;
+
+  /// \brief Compatibility alias for `write_bits_single_request`.
+  [[nodiscard, deprecated("use write_bits_single_request")]] Status write_bits(
       std::string_view head_device,
       mcprotocol::serial::Span<const BitValue> bits) noexcept;
 

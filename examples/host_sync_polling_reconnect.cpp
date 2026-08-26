@@ -224,7 +224,7 @@ int main(int argc, char** argv) {
     Status status = plc.open(serial, protocol);
     if (status.ok()) {
       std::array<std::uint16_t, 32> words {};
-      status = plc.read_words(
+      status = plc.read_words_single_request(
           options.head_device,
           static_cast<std::uint16_t>(options.points),
           mcprotocol::serial::Span<std::uint16_t>(words.data(), options.points));

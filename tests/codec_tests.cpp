@@ -7289,6 +7289,71 @@ void test_bit_in_word_sync_surface_covers_every_complete_word_route() {
   assert(qualified != nullptr);
 }
 
+void test_host_single_request_surface_and_deprecated_delegates() {
+  using Client = mcprotocol::serial::PosixSyncClient;
+  using ReadWordsSignature = Status (Client::*)(
+      std::string_view,
+      std::uint16_t,
+      mcprotocol::serial::Span<std::uint16_t>) noexcept;
+  using ReadBitsSignature = Status (Client::*)(
+      std::string_view,
+      std::uint16_t,
+      mcprotocol::serial::Span<BitValue>) noexcept;
+  using WriteWordsSignature = Status (Client::*)(
+      std::string_view,
+      mcprotocol::serial::Span<const std::uint16_t>) noexcept;
+  using WriteBitsSignature = Status (Client::*)(
+      std::string_view,
+      mcprotocol::serial::Span<const BitValue>) noexcept;
+
+  const ReadWordsSignature read_words = &Client::read_words_single_request;
+  const ReadBitsSignature read_bits = &Client::read_bits_single_request;
+  const WriteWordsSignature write_words = &Client::write_words_single_request;
+  const WriteBitsSignature write_bits = &Client::write_bits_single_request;
+  assert(read_words != nullptr);
+  assert(read_bits != nullptr);
+  assert(write_words != nullptr);
+  assert(write_bits != nullptr);
+
+  Client client;
+  std::array<std::uint16_t, 1> words {};
+  std::array<BitValue, 1> bits {};
+  const Status canonical_word_read = client.read_words_single_request("invalid", 1U, words);
+  const Status canonical_bit_read = client.read_bits_single_request("invalid", 1U, bits);
+  const Status canonical_word_write = client.write_words_single_request("invalid", words);
+  const Status canonical_bit_write = client.write_bits_single_request("invalid", bits);
+  assert(canonical_word_read.code == StatusCode::InvalidArgument);
+  assert(canonical_bit_read.code == StatusCode::InvalidArgument);
+  assert(canonical_word_write.code == StatusCode::InvalidArgument);
+  assert(canonical_bit_write.code == StatusCode::InvalidArgument);
+
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+  const Status legacy_word_read = client.read_words("invalid", 1U, words);
+  const Status legacy_bit_read = client.read_bits("invalid", 1U, bits);
+  const Status legacy_word_write = client.write_words("invalid", words);
+  const Status legacy_bit_write = client.write_bits("invalid", bits);
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+  assert(legacy_word_read.code == canonical_word_read.code);
+  assert(legacy_bit_read.code == canonical_bit_read.code);
+  assert(legacy_word_write.code == canonical_word_write.code);
+  assert(legacy_bit_write.code == canonical_bit_write.code);
+}
+
 void test_client_receive_failure_preserves_transport_status() {
   const auto config = make_binary_c4_config();
   MelsecSerialClient client;
@@ -11026,6 +11091,7 @@ int main() {
   test_bit_in_word_operation_contract();
   test_bit_in_word_operation_covers_every_complete_word_route();
   test_bit_in_word_sync_surface_covers_every_complete_word_route();
+  test_host_single_request_surface_and_deprecated_delegates();
   test_client_receive_failure_preserves_transport_status();
   test_client_busy_rejection_preserves_active_request_state();
   test_client_instances_have_independent_in_flight_state();
