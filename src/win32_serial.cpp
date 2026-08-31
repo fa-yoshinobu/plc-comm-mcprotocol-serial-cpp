@@ -120,7 +120,7 @@ namespace {
 [[nodiscard]] Status set_io_deadline_timeouts(HANDLE h, DWORD timeout_ms) noexcept {
   COMMTIMEOUTS timeouts {};
   timeouts.ReadIntervalTimeout = MAXDWORD;
-  timeouts.ReadTotalTimeoutMultiplier = 0;
+  timeouts.ReadTotalTimeoutMultiplier = MAXDWORD;
   timeouts.ReadTotalTimeoutConstant = timeout_ms;
   timeouts.WriteTotalTimeoutMultiplier = 0;
   timeouts.WriteTotalTimeoutConstant = timeout_ms;
