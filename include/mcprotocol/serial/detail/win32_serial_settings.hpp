@@ -25,6 +25,17 @@ namespace mcprotocol::serial::detail {
   return ok_status();
 }
 
+[[nodiscard]] inline COMMTIMEOUTS build_win32_deadline_timeouts(
+    DWORD timeout_ms) noexcept {
+  COMMTIMEOUTS timeouts {};
+  timeouts.ReadIntervalTimeout = MAXDWORD;
+  timeouts.ReadTotalTimeoutMultiplier = MAXDWORD;
+  timeouts.ReadTotalTimeoutConstant = timeout_ms;
+  timeouts.WriteTotalTimeoutMultiplier = 0;
+  timeouts.WriteTotalTimeoutConstant = timeout_ms;
+  return timeouts;
+}
+
 /// \brief Overwrites every behavior field while preserving driver-reserved DCB state.
 [[nodiscard]] inline Status build_win32_dcb(
     DCB& dcb,

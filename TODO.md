@@ -4,9 +4,9 @@ Current status and recently completed live-verification evidence.
 
 ## Current Status
 
-No active TODOs are currently tracked. Static implementation, mock/CLI validation, and the approved
-live serial checks for D-087 through D-092 are complete. The final Linux/POSIX evidence was recorded
-on 2026-07-18.
+No active confirmed-defect TODOs are currently tracked. The 2026-09-01 correction batch, including
+the Windows synchronous receive live acceptance, is complete. Completed acceptance evidence is
+kept in the maintainer GOAL and live-result records rather than as closed TODO items here.
 
 ## Resolved: D-087 through D-092 live serial verification (2026-07-18)
 

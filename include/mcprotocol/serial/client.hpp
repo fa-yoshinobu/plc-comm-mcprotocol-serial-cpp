@@ -221,7 +221,7 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
 
-  /// \brief Starts helper qualified word read over module-buffer access.
+  /// \brief Starts native-qualified word read (`0401`).
   [[nodiscard]] Status async_extended_batch_read_words(
       std::uint32_t now_ms,
       const QualifiedBufferWordDevice& device,
@@ -230,7 +230,7 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
 
-  /// \brief Starts helper qualified word write over module-buffer access.
+  /// \brief Starts native-qualified word write (`1401`).
   [[nodiscard]] Status async_extended_batch_write_words(
       std::uint32_t now_ms,
       const QualifiedBufferWordDevice& device,

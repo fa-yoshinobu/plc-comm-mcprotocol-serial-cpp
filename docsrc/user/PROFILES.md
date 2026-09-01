@@ -44,8 +44,8 @@ canonical value from `plc_profile_name(profile)`, not the display text.
 | `melsec:iq-f` | MELSEC iQ-F | MELSEC iQ-F / FX5 serial paths | `PlcProfile::MelsecIqF` | Separate public profile using the confirmed FX5 C4 binary support surface. Unsupported FX5 devices and routes are rejected locally. |
 | `melsec:qcpu` | MELSEC-Q | MELSEC-Q serial modules | `PlcProfile::MelsecQ` | Public Q profile. Currently grouped with the Q/L command-device layout used by the existing Q/L encoder path. |
 | `melsec:lcpu` | MELSEC-L | MELSEC-L serial modules | `PlcProfile::MelsecL` | Public L profile using the Q/L-compatible serial MC request shape. Keep it separate from `melsec:qcpu` for target-family evidence. |
-| `melsec:qna` | MELSEC QnA | MELSEC QnA-compatible targets | `PlcProfile::MelsecQnA` | QnA command-family branch. Current implementation groups the shared QnA/AnA/AnU command-family behavior where the codec has no separate rule. |
-| `melsec:ana-anu` | MELSEC AnA/AnU | MELSEC AnA / AnU-compatible targets | `PlcProfile::MelsecAnAAnU` | Public AnA/AnU profile. Currently shares the QnA-family internal branch until a manual-backed or measured difference is added. |
+| `melsec:qna` | MELSEC QnA | MELSEC QnA-compatible targets | `PlcProfile::MelsecQnA` | QnA command-family branch for operations with a shared wire shape. Direct extended file-register `NR/NW` and 1C module-buffer `TR/TW` are rejected for this physical profile. |
+| `melsec:ana-anu` | MELSEC AnA/AnU | MELSEC AnA / AnU-compatible targets | `PlcProfile::MelsecAnAAnU` | AnA/AnU physical profile. It uses direct extended file-register `NR/NW`, accepts 1C module-buffer `TR/TW`, and shares QnA-family command selection only for operations without a profile-specific rule. |
 | `melsec:a` | MELSEC-A | MELSEC-A-compatible targets | `PlcProfile::MelsecA` | A-series command-family branch. A-only paths such as ER/EW extended file-register commands require this profile. |
 
 ## SLMP name alignment
@@ -107,8 +107,8 @@ before transport is opened or request bytes are produced.
 | `melsec:iq-f` | Use for FX5/iQ-F serial paths. `V`, `ZR`, `DX`, `DY`, long timer/retentive-timer families, `Un\HG`, `Jn\...`, monitor, host-buffer, and module-buffer helper routes are not part of this profile. |
 | `melsec:qcpu` | Use for MELSEC-Q serial paths. The current implementation shares the Q/L request-shape branch but keeps Q as a separate public profile. |
 | `melsec:lcpu` | Use for MELSEC-L serial paths. The current implementation shares the Q/L request-shape branch but keeps L as a separate public profile. |
-| `melsec:qna` | Select only when the target should use QnA-style command selection. |
-| `melsec:ana-anu` | Select only when the target should use AnA/AnU command-family selection. |
+| `melsec:qna` | Select only for a QnA physical target. Do not use it for direct `NR/NW` or 1C `TR/TW`; those calls are rejected before serial I/O. |
+| `melsec:ana-anu` | Select for an AnA/AnU physical target. This is the required profile for direct `NR/NW` and is also accepted for 1C `TR/TW`. |
 | `melsec:a` | Select for A-series-compatible targets; extended file-register ER/EW commands require this profile. |
 
 The profile does not replace serial settings. Baud rate, parity, stop bits, frame type, sum-check

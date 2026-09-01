@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Library: Corrected 1C physical-profile validation so direct `NR/NW` accepts only `melsec:ana-anu`, while `TR/TW` accepts `melsec:a` and `melsec:ana-anu`; invalid QnA calls now fail before serial I/O.
+- Library: Rejected 2C link-direct extended random-read and monitor-registration selectors instead of silently encoding compact command `5` or `8` with the subcommand discarded.
+- Library: Restricted `HG` qualified access to `U3E0` through `U3E3` and stopped qualified helpers from converting CPU-buffer `G/HG` targets into `0601/1601`; callers must use native-qualified access for those targets.
+- Library: Corrected Windows synchronous receive timeouts so already-buffered response bytes return without waiting for the unused caller-buffer capacity while preserving the total deadline.
+- Tests: Made `codec_tests`, `host_sync_runner_tests`, and `cli_completion_tests` assertions active in Release/`NDEBUG` builds and added a negative probe that proves a failed assertion exits nonzero.
+
 ## [4.1.0] - 2026-08-27
 
 - Release: Bumped CMake, PlatformIO, Arduino, and public version metadata to `4.1.0`.

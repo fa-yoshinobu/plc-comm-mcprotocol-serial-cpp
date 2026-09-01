@@ -764,6 +764,27 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
       : C1CommandFamily::QnaCommon;
 }
 
+[[nodiscard]] Status validate_c1_direct_extended_file_register_profile(
+    const ProtocolConfig& config) noexcept {
+  if (config.plc_profile() != PlcProfile::MelsecAnAAnU) {
+    return make_status(
+        StatusCode::UnsupportedConfiguration,
+        "Direct extended file-register NR/NW commands require PlcProfile melsec:ana-anu");
+  }
+  return ok_status();
+}
+
+[[nodiscard]] Status validate_c1_module_buffer_profile(
+    const ProtocolConfig& config) noexcept {
+  if (config.plc_profile() != PlcProfile::MelsecA &&
+      config.plc_profile() != PlcProfile::MelsecAnAAnU) {
+    return make_status(
+        StatusCode::UnsupportedConfiguration,
+        "Module-buffer TR/TW commands require PlcProfile melsec:a or melsec:ana-anu");
+  }
+  return ok_status();
+}
+
 [[nodiscard]] bool append_c1_command(
     ByteWriter& writer,
     const ProtocolConfig& config,
@@ -1365,6 +1386,9 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     }
     if (series != PlcSeries::IQ_R) {
       return invalid_argument("HG device extension access requires MELSEC iQ-R series");
+    }
+    if (device.module_number < 0x03E0U || device.module_number > 0x03E3U) {
+      return invalid_argument("HG device extension access requires CPU No.1-4 (U3E0..U3E3)");
     }
   }
   if (is_ascii_mode(config) && device.module_number > 0x0FFFU) {
@@ -3970,6 +3994,7 @@ Status encode_direct_read_extended_file_register_words(
     const ExtendedFileRegisterDirectBatchReadWordsRequest& request,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
@@ -4004,10 +4029,9 @@ Status encode_direct_read_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::QnA) {
-    return make_status(
-        StatusCode::UnsupportedConfiguration,
-        "Direct extended file-register NR command requires PlcProfile melsec:ana-anu or melsec:qna");
+  const Status profile_status = validate_c1_direct_extended_file_register_profile(config);
+  if (!profile_status.ok()) {
+    return profile_status;
   }
   const Status head_status = validate_extended_file_register_direct_head(request.head_device_number);
   if (!head_status.ok()) {
@@ -4458,6 +4482,7 @@ Status encode_direct_write_extended_file_register_words(
     const ExtendedFileRegisterDirectBatchWriteWordsRequest& request,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
@@ -4493,10 +4518,9 @@ Status encode_direct_write_extended_file_register_words(
   if (!c1_status.ok()) {
     return c1_status;
   }
-  if (plc_series_from_profile(config.plc_profile()) != PlcSeries::QnA) {
-    return make_status(
-        StatusCode::UnsupportedConfiguration,
-        "Direct extended file-register NW command requires PlcProfile melsec:ana-anu or melsec:qna");
+  const Status profile_status = validate_c1_direct_extended_file_register_profile(config);
+  if (!profile_status.ok()) {
+    return profile_status;
   }
   const Status head_status = validate_extended_file_register_direct_head(request.head_device_number);
   if (!head_status.ok()) {
@@ -4754,6 +4778,10 @@ Status encode_link_direct_random_read(
     (void)out_request_data;
     (void)out_size;
     return unsupported("1E frame does not define link-direct access");
+  }
+  if (is_c2_frame(config)) {
+    return unsupported(
+        "2C frame cannot represent link-direct extended random-read subcommands; use 3C or 4C");
   }
   if (word_items.empty()) {
     return invalid_argument("Link direct random read requires at least one item");
@@ -6041,6 +6069,10 @@ Status encode_link_direct_register_monitor(
     (void)out_size;
     return unsupported("1E frame does not define link-direct access");
   }
+  if (is_c2_frame(config)) {
+    return unsupported(
+        "2C frame cannot represent link-direct extended monitor-registration subcommands; use 3C or 4C");
+  }
   if (request.word_items.empty()) {
     return invalid_argument("Link direct monitor registration requires at least one item");
   }
@@ -6994,6 +7026,7 @@ Status encode_read_module_buffer(
     const ModuleBufferReadRequest& request,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
@@ -7034,6 +7067,10 @@ Status encode_read_module_buffer(
     return ok_status();
   }
   if (is_c1_frame(config)) {
+    const Status profile_status = validate_c1_module_buffer_profile(config);
+    if (!profile_status.ok()) {
+      return profile_status;
+    }
     if (request.bytes == 0U || request.bytes > 128U) {
       return invalid_argument("1C module buffer read byte count must be in range 1..128");
     }
@@ -7104,6 +7141,7 @@ Status encode_write_module_buffer(
     const ModuleBufferWriteRequest& request,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
@@ -7145,6 +7183,10 @@ Status encode_write_module_buffer(
     return ok_status();
   }
   if (is_c1_frame(config)) {
+    const Status profile_status = validate_c1_module_buffer_profile(config);
+    if (!profile_status.ok()) {
+      return profile_status;
+    }
     if (request.bytes.empty() || request.bytes.size() > 128U) {
       return invalid_argument("1C module buffer write byte count must be in range 1..128");
     }
@@ -7189,6 +7231,7 @@ Status encode_read_module_buffer(
     const ModuleBufferReadRequest& request,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
@@ -7217,6 +7260,7 @@ Status encode_write_module_buffer(
     const ModuleBufferWriteRequest& request,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
+  out_size = 0U;
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;

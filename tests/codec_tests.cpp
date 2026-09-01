@@ -10,6 +10,8 @@
 #include <utility>
 #include <vector>
 
+#include "test_assert.hpp"
+
 #if defined(__unix__) || defined(__APPLE__)
 #include <fcntl.h>
 #include <stdlib.h>
@@ -2701,7 +2703,7 @@ void test_client_ascii_c1_register_monitor_roundtrip() {
 }
 
 void test_encode_ascii_c1_read_module_buffer_request_shape() {
-  const auto config = make_ascii_c1_format4_qna_config();
+  const auto config = make_ascii_c1_format4_a_config();
   std::array<std::uint8_t, 64> request_data {};
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_read_module_buffer(
@@ -2714,10 +2716,31 @@ void test_encode_ascii_c1_read_module_buffer_request_shape() {
   constexpr std::string_view expected = "TR0007F00413";
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+
+  const auto ana_config = config.with_plc_profile(PlcProfile::MelsecAnAAnU);
+  request_size = 0U;
+  Status ana_status = CommandCodec::encode_read_module_buffer(
+      ana_config,
+      ModuleBufferReadRequest(0x07F0U, 0x04U, 0x13U),
+      request_data,
+      request_size);
+  assert(ana_status.ok());
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+
+  const auto qna_config = config.with_plc_profile(PlcProfile::MelsecQnA);
+  request_size = 99U;
+  Status qna_status = CommandCodec::encode_read_module_buffer(
+      qna_config,
+      ModuleBufferReadRequest(0x07F0U, 0x04U, 0x13U),
+      request_data,
+      request_size);
+  assert(qna_status.code == StatusCode::UnsupportedConfiguration);
+  assert(request_size == 0U);
 }
 
 void test_encode_ascii_c1_write_module_buffer_request_shape() {
-  const auto config = make_ascii_c1_format4_qna_config();
+  const auto config = make_ascii_c1_format4_a_config();
   const std::array<mcprotocol::serial::Byte, 4> bytes {
       mcprotocol::serial::Byte {0xCD},
       mcprotocol::serial::Byte {0x01},
@@ -2736,6 +2759,27 @@ void test_encode_ascii_c1_write_module_buffer_request_shape() {
   constexpr std::string_view expected = "TW0027FA0413CD01EFAB";
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+
+  const auto ana_config = config.with_plc_profile(PlcProfile::MelsecAnAAnU);
+  request_size = 0U;
+  Status ana_status = CommandCodec::encode_write_module_buffer(
+      ana_config,
+      ModuleBufferWriteRequest(0x27FAU, 0x13U, mcprotocol::serial::Span<const mcprotocol::serial::Byte>(bytes.data(), bytes.size())),
+      request_data,
+      request_size);
+  assert(ana_status.ok());
+  assert(request_size == expected.size());
+  assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+
+  const auto qna_config = config.with_plc_profile(PlcProfile::MelsecQnA);
+  request_size = 99U;
+  Status qna_status = CommandCodec::encode_write_module_buffer(
+      qna_config,
+      ModuleBufferWriteRequest(0x27FAU, 0x13U, mcprotocol::serial::Span<const mcprotocol::serial::Byte>(bytes.data(), bytes.size())),
+      request_data,
+      request_size);
+  assert(qna_status.code == StatusCode::UnsupportedConfiguration);
+  assert(request_size == 0U);
 }
 
 void test_encode_ascii_c1_loopback_request_shape() {
@@ -2817,8 +2861,8 @@ void test_encode_ascii_c1_extended_file_register_read_a_request_shape() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
-void test_encode_ascii_c1_direct_extended_file_register_read_qna_request_shape() {
-  const auto config = make_ascii_c1_format4_qna_config();
+void test_encode_ascii_c1_direct_extended_file_register_read_ana_request_shape() {
+  const auto config = make_ascii_c1_format4_qna_config().with_plc_profile(PlcProfile::MelsecAnAAnU);
   std::array<std::uint8_t, 64> request_data {};
   std::size_t request_size = 0;
   const Status status = CommandCodec::encode_direct_read_extended_file_register_words(
@@ -2831,6 +2875,15 @@ void test_encode_ascii_c1_direct_extended_file_register_read_qna_request_shape()
   constexpr std::string_view expected = "NR0001638202";
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+
+  request_size = 99U;
+  const Status qna_status = CommandCodec::encode_direct_read_extended_file_register_words(
+      config.with_plc_profile(PlcProfile::MelsecQnA),
+      ExtendedFileRegisterDirectBatchReadWordsRequest(16382U, 2U),
+      request_data,
+      request_size);
+  assert(qna_status.code == StatusCode::UnsupportedConfiguration);
+  assert(request_size == 0U);
 }
 
 void test_encode_ascii_c1_extended_file_register_write_a_request_shape() {
@@ -2850,8 +2903,8 @@ void test_encode_ascii_c1_extended_file_register_write_a_request_shape() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
 }
 
-void test_encode_ascii_c1_direct_extended_file_register_write_qna_request_shape() {
-  const auto config = make_ascii_c1_format4_qna_config();
+void test_encode_ascii_c1_direct_extended_file_register_write_ana_request_shape() {
+  const auto config = make_ascii_c1_format4_qna_config().with_plc_profile(PlcProfile::MelsecAnAAnU);
   const std::array<std::uint16_t, 3> values {0x0123U, 0xABC7U, 0x3322U};
   std::array<std::uint8_t, 96> request_data {};
   std::size_t request_size = 0;
@@ -2865,6 +2918,15 @@ void test_encode_ascii_c1_direct_extended_file_register_write_qna_request_shape(
   constexpr std::string_view expected = "NW00090110030123ABC73322";
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+
+  request_size = 99U;
+  const Status qna_status = CommandCodec::encode_direct_write_extended_file_register_words(
+      config.with_plc_profile(PlcProfile::MelsecQnA),
+      ExtendedFileRegisterDirectBatchWriteWordsRequest(90110U, values),
+      request_data,
+      request_size);
+  assert(qna_status.code == StatusCode::UnsupportedConfiguration);
+  assert(request_size == 0U);
 }
 
 void test_encode_ascii_c1_extended_file_register_random_write_a_request_shape() {
@@ -4688,6 +4750,16 @@ void test_encode_extended_batch_read_words_binary_hg_matches_capture_shape() {
   };
   assert(request_size == expected.size());
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
+
+  request_size = 0U;
+  const QualifiedBufferWordDevice last_cpu(
+      QualifiedBufferDeviceKind::HG, 0x03E3U, 20U);
+  const Status last_cpu_status = CommandCodec::encode_extended_batch_read_words(
+      config, last_cpu, 1U, request_data, request_size);
+  assert(last_cpu_status.ok());
+  assert(request_size == expected.size());
+  assert(request_data[14] == 0xE3U);
+  assert(request_data[15] == 0x03U);
 }
 
 void test_encode_extended_batch_read_words_rejects_iq_l_hg() {
@@ -4734,6 +4806,60 @@ void test_encode_extended_batch_read_words_binary_module_access_ql_shape() {
   assert(std::memcmp(request_data.data(), expected.data(), expected.size()) == 0);
   assert(request_data[expected.size()] == 0x01);
   assert(request_data[expected.size() + 1U] == 0x00);
+}
+
+void test_qualified_hg_rejects_non_cpu_modules_before_send() {
+  struct LocalCapture {
+    bool called = false;
+  };
+  const auto local_callback = [](void* user, Status) noexcept {
+    static_cast<LocalCapture*>(user)->called = true;
+  };
+  const auto config = make_binary_c4_iqr_config();
+  const std::array<QualifiedBufferWordDevice, 3> invalid_devices {{
+      QualifiedBufferWordDevice(QualifiedBufferDeviceKind::HG, 0x0000U, 10U),
+      QualifiedBufferWordDevice(QualifiedBufferDeviceKind::HG, 0x03DFU, 10U),
+      QualifiedBufferWordDevice(QualifiedBufferDeviceKind::HG, 0x03E4U, 10U),
+  }};
+  const std::array<std::uint16_t, 1> write_words {0x1234U};
+
+  for (const QualifiedBufferWordDevice& device : invalid_devices) {
+    std::array<std::uint8_t, 64> request_data {};
+    std::size_t request_size = 0U;
+    Status status = CommandCodec::encode_extended_batch_read_words(
+        config, device, 1U, request_data, request_size);
+    assert(status.code == StatusCode::InvalidArgument);
+    assert(request_size == 0U);
+
+    status = CommandCodec::encode_extended_batch_write_words(
+        config, device, write_words, request_data, request_size);
+    assert(status.code == StatusCode::InvalidArgument);
+    assert(request_size == 0U);
+
+    MelsecSerialClient client;
+    assert(client.configure(config).ok());
+    std::array<std::uint16_t, 1> read_words {};
+    LocalCapture capture {};
+    status = client.async_extended_batch_read_words(
+        0U, device, 1U, read_words, local_callback, &capture);
+    assert(status.code == StatusCode::InvalidArgument);
+    assert(client.pending_tx_frame().empty());
+    assert(!client.busy());
+
+    status = client.async_extended_batch_write_words(
+        0U, device, write_words, local_callback, &capture);
+    assert(status.code == StatusCode::InvalidArgument);
+    assert(client.pending_tx_frame().empty());
+    assert(!client.busy());
+
+    mcprotocol::serial::highlevel::BitInWordWriteOperation operation;
+    status = operation.begin_qualified_buffer(
+        client, 0U, device, 0, true, local_callback, &capture);
+    assert(status.code == StatusCode::InvalidArgument);
+    assert(client.pending_tx_frame().empty());
+    assert(!client.busy());
+    assert(!operation.busy());
+  }
 }
 
 void test_encode_link_direct_batch_read_words_binary_iqr_matches_manual_shape() {
@@ -6491,30 +6617,66 @@ void test_encode_register_monitor_ascii_c2_reuses_compact_command_header() {
   assert(monitor_size == random_size);
   assert(monitor_request[0] == static_cast<std::uint8_t>('8'));
   assert(std::memcmp(monitor_request.data() + 1U, random_request.data() + 1U, random_size - 1U) == 0);
+
+  std::array<std::uint8_t, 16> read_monitor_request {};
+  std::size_t read_monitor_size = 0U;
+  status = CommandCodec::encode_read_monitor(
+      config, read_monitor_request, read_monitor_size);
+  assert(status.ok());
+  assert(read_monitor_size == 1U);
+  assert(read_monitor_request[0] == static_cast<std::uint8_t>('9'));
 }
 
-void test_encode_link_direct_register_monitor_ascii_c2_reuses_compact_command_header() {
-  const auto config = make_ascii_c2_format4_config();
+void test_link_direct_extended_random_and_monitor_reject_ascii_c2() {
+  struct LocalCapture {
+    bool called = false;
+  };
+  const auto local_callback = [](void* user, Status) noexcept {
+    static_cast<LocalCapture*>(user)->called = true;
+  };
+  const auto ql_config = make_ascii_c2_format4_config();
+  const std::array<ProtocolConfig, 2> configs {{
+      ql_config,
+      ql_config.with_plc_profile(PlcProfile::MelsecIqR),
+  }};
   const std::array<LinkDirectRandomReadWordItem, 1> items {{
       {LinkDirectDevice(0x0001U, DeviceAddress {mcprotocol::serial::DeviceCode::W, 0x0100U})},
   }};
-  std::array<std::uint8_t, 128> random_request {};
-  std::size_t random_size = 0;
-  Status status = CommandCodec::encode_link_direct_random_read(config, items, random_request, random_size);
-  assert(status.ok());
-  assert(random_request[0] == static_cast<std::uint8_t>('5'));
+  for (const ProtocolConfig& config : configs) {
+    std::array<std::uint8_t, 128> random_request {};
+    std::size_t random_size = 0;
+    Status status = CommandCodec::encode_link_direct_random_read(
+        config, items, random_request, random_size);
+    assert(status.code == StatusCode::UnsupportedConfiguration);
+    assert(random_size == 0U);
 
-  std::array<std::uint8_t, 128> monitor_request {};
-  std::size_t monitor_size = 0;
-  status = CommandCodec::encode_link_direct_register_monitor(
-      config,
-      LinkDirectMonitorRegistration(items),
-      monitor_request,
-      monitor_size);
-  assert(status.ok());
-  assert(monitor_size == random_size);
-  assert(monitor_request[0] == static_cast<std::uint8_t>('8'));
-  assert(std::memcmp(monitor_request.data() + 1U, random_request.data() + 1U, random_size - 1U) == 0);
+    std::array<std::uint8_t, 128> monitor_request {};
+    std::size_t monitor_size = 0;
+    status = CommandCodec::encode_link_direct_register_monitor(
+        config,
+        LinkDirectMonitorRegistration(items),
+        monitor_request,
+        monitor_size);
+    assert(status.code == StatusCode::UnsupportedConfiguration);
+    assert(monitor_size == 0U);
+
+    MelsecSerialClient client;
+    assert(client.configure(config).ok());
+    std::array<std::uint16_t, 1> values {};
+    LocalCapture capture {};
+    status = client.async_link_direct_random_read(
+        0U, items, values, local_callback, &capture);
+    assert(status.code == StatusCode::UnsupportedConfiguration);
+    assert(client.pending_tx_frame().empty());
+    assert(!client.busy());
+
+    status = client.async_link_direct_register_monitor(
+        0U, LinkDirectMonitorRegistration(items), local_callback, &capture);
+    assert(status.code == StatusCode::UnsupportedConfiguration);
+    assert(client.pending_tx_frame().empty());
+    assert(!client.busy());
+    assert(!capture.called);
+  }
 }
 
 void test_encode_success_response_large_sum_check_has_no_fixed_scratch_limit() {
@@ -6711,17 +6873,37 @@ void test_parse_qualified_buffer_word_device_accepts_g_and_hg() {
   assert(hg_device.kind == QualifiedBufferDeviceKind::HG);
   assert(hg_device.module_number == 0x03E0U);
   assert(hg_device.word_address == 20U);
+
+  status = parse_qualified_buffer_word_device("U3E3\\HG21", hg_device);
+  assert(status.ok());
+  assert(hg_device.module_number == 0x03E3U);
+
+  for (const std::string_view invalid : {
+           std::string_view {"U0\\HG0"},
+           std::string_view {"U3DF\\HG0"},
+           std::string_view {"U3E4\\HG0"}}) {
+    status = parse_qualified_buffer_word_device(invalid, hg_device);
+    assert(status.code == StatusCode::InvalidArgument);
+  }
 }
 
 void test_make_qualified_buffer_read_words_request_maps_to_module_buffer() {
-  const QualifiedBufferWordDevice device(QualifiedBufferDeviceKind::G, 0x03E0U, 10U);
+  const QualifiedBufferWordDevice device(QualifiedBufferDeviceKind::G, 0x0002U, 10U);
 
   ModuleBufferReadRequest request(0U, 0U, 0U);
   const Status status = make_qualified_buffer_read_words_request(device, 4U, request);
   assert(status.ok());
   assert(request.start_address == 20U);
   assert(request.bytes == 8U);
-  assert(request.module_number == 0x03E0U);
+  assert(request.module_number == 0x0002U);
+
+  for (const QualifiedBufferWordDevice invalid : {
+           QualifiedBufferWordDevice(QualifiedBufferDeviceKind::G, 0x03E0U, 10U),
+           QualifiedBufferWordDevice(QualifiedBufferDeviceKind::HG, 0x03E0U, 10U)}) {
+    const Status invalid_status =
+        make_qualified_buffer_read_words_request(invalid, 4U, request);
+    assert(invalid_status.code == StatusCode::UnsupportedConfiguration);
+  }
 }
 
 void test_validate_qualified_buffer_helper_route_rejects_q_l_equivalent_profiles() {
@@ -6739,7 +6921,19 @@ void test_validate_qualified_buffer_helper_route_rejects_q_l_equivalent_profiles
              "melsec:lcpu qualified buffer helper route is disabled; use native-qualified Un\\G access") == 0);
 
   status = validate_qualified_buffer_helper_route(PlcProfile::MelsecIqR, g_device);
-  assert(status.ok());
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(std::strcmp(
+             status.message,
+             "melsec:iq-r qualified buffer helper route is disabled; use the native-qualified API") == 0);
+
+  status = validate_qualified_buffer_helper_route(
+      PlcProfile::MelsecA,
+      QualifiedBufferWordDevice(QualifiedBufferDeviceKind::G, 0x03E0U, 10U));
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  status = validate_qualified_buffer_helper_route(
+      PlcProfile::MelsecAnAAnU,
+      QualifiedBufferWordDevice(QualifiedBufferDeviceKind::HG, 0x03E0U, 10U));
+  assert(status.code == StatusCode::UnsupportedConfiguration);
 
   status = validate_qualified_buffer_helper_route(PlcProfile::MelsecIqL, g_device);
   assert(status.code == StatusCode::UnsupportedConfiguration);
@@ -6747,7 +6941,7 @@ void test_validate_qualified_buffer_helper_route_rejects_q_l_equivalent_profiles
              status.message,
              "melsec:iq-l qualified buffer helper route is disabled; use native-qualified Un\\G access") == 0);
 
-  const QualifiedBufferWordDevice hg_device(QualifiedBufferDeviceKind::HG, 0x0001U, 10U);
+  const QualifiedBufferWordDevice hg_device(QualifiedBufferDeviceKind::HG, 0x03E0U, 10U);
   status = validate_qualified_buffer_helper_route(PlcProfile::MelsecIqL, hg_device);
   assert(status.code == StatusCode::UnsupportedConfiguration);
   assert(std::strcmp(status.message, "melsec:iq-l does not support Un\\HG; use Un\\G only") == 0);
@@ -6881,7 +7075,7 @@ void test_single_request_capacity_uses_complete_worst_case_wire_size() {
 }
 
 void test_make_qualified_buffer_write_words_request_encodes_little_endian_bytes() {
-  const QualifiedBufferWordDevice device(QualifiedBufferDeviceKind::HG, 0x03E0U, 20U);
+  const QualifiedBufferWordDevice device(QualifiedBufferDeviceKind::G, 0x0002U, 20U);
   const std::array<std::uint16_t, 2> words {0x1234U, 0xABCDU};
   std::array<mcprotocol::serial::Byte, 8> byte_storage {};
   ModuleBufferWriteRequest request(0U, 0U, {});
@@ -6896,12 +7090,22 @@ void test_make_qualified_buffer_write_words_request_encodes_little_endian_bytes(
   assert(status.ok());
   assert(byte_count == 4U);
   assert(request.start_address == 40U);
-  assert(request.module_number == 0x03E0U);
+  assert(request.module_number == 0x0002U);
   assert(request.bytes.size() == 4U);
   assert(mcprotocol::serial::byte_to_integer<std::uint8_t>(request.bytes[0]) == 0x34U);
   assert(mcprotocol::serial::byte_to_integer<std::uint8_t>(request.bytes[1]) == 0x12U);
   assert(mcprotocol::serial::byte_to_integer<std::uint8_t>(request.bytes[2]) == 0xCDU);
   assert(mcprotocol::serial::byte_to_integer<std::uint8_t>(request.bytes[3]) == 0xABU);
+
+  for (const QualifiedBufferWordDevice invalid : {
+           QualifiedBufferWordDevice(QualifiedBufferDeviceKind::G, 0x03E0U, 20U),
+           QualifiedBufferWordDevice(QualifiedBufferDeviceKind::HG, 0x03E0U, 20U)}) {
+    byte_count = 99U;
+    const Status invalid_status = make_qualified_buffer_write_words_request(
+        invalid, words, byte_storage, request, byte_count);
+    assert(invalid_status.code == StatusCode::UnsupportedConfiguration);
+    assert(byte_count == 0U);
+  }
 }
 
 void test_decode_qualified_buffer_word_values_decodes_little_endian_bytes() {
@@ -6928,6 +7132,137 @@ void completion_callback(void* user, Status status) {
   auto* capture = static_cast<CallbackCapture*>(user);
   capture->called = true;
   capture->status = status;
+}
+
+void test_c1_physical_profile_rejections_do_not_start_client_requests() {
+  const auto config = make_ascii_c1_format4_qna_config();
+  MelsecSerialClient client;
+  assert(client.configure(config).ok());
+  CallbackCapture capture {};
+  std::array<std::uint16_t, 1> words {};
+
+  Status status = client.async_direct_read_extended_file_register_words(
+      0U,
+      ExtendedFileRegisterDirectBatchReadWordsRequest(100U, 1U),
+      words,
+      completion_callback,
+      &capture);
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(client.pending_tx_frame().empty());
+  assert(!client.busy());
+
+  const std::array<std::uint16_t, 1> write_words {0x1234U};
+  status = client.async_direct_write_extended_file_register_words(
+      0U,
+      ExtendedFileRegisterDirectBatchWriteWordsRequest(100U, write_words),
+      completion_callback,
+      &capture);
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(client.pending_tx_frame().empty());
+  assert(!client.busy());
+
+  mcprotocol::serial::highlevel::BitInWordWriteOperation operation;
+  status = operation.begin_direct_extended_file_register(
+      client, 0U, 100U, 0, true, completion_callback, &capture);
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(client.pending_tx_frame().empty());
+  assert(!client.busy());
+  assert(!operation.busy());
+
+  std::array<mcprotocol::serial::Byte, 4> bytes {};
+  status = client.async_read_module_buffer(
+      0U,
+      ModuleBufferReadRequest(0x100U, 4U, 1U),
+      bytes,
+      completion_callback,
+      &capture);
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(client.pending_tx_frame().empty());
+  assert(!client.busy());
+
+  status = client.async_write_module_buffer(
+      0U,
+      ModuleBufferWriteRequest(0x100U, 1U, bytes),
+      completion_callback,
+      &capture);
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(client.pending_tx_frame().empty());
+  assert(!client.busy());
+  assert(!capture.called);
+}
+
+void configure_sync_client_without_open_transport(
+    PosixSyncClient& client,
+    const ProtocolConfig& config) {
+  const PosixSerialConfig serial(
+      ".", 19200U, 7U, 1U, SerialParity::Even, HardwareFlowControl::None);
+  const Status open_status = client.open(serial, config);
+  assert(!open_status.ok());
+  assert(!client.is_open());
+}
+
+void test_c1_direct_extended_file_register_sync_profile_paths() {
+  const auto qna_config = make_ascii_c1_format4_qna_config();
+  const ExtendedFileRegisterDirectBatchReadWordsRequest read_request(100U, 1U);
+  const std::array<std::uint16_t, 1> write_words {0x1234U};
+  const ExtendedFileRegisterDirectBatchWriteWordsRequest write_request(100U, write_words);
+  std::array<std::uint16_t, 1> read_words {};
+
+  PosixSyncClient qna_client;
+  configure_sync_client_without_open_transport(qna_client, qna_config);
+  Status status = qna_client.direct_read_extended_file_register_words(
+      read_request, read_words);
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(!qna_client.is_open());
+  status = qna_client.direct_write_extended_file_register_words(write_request);
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(!qna_client.is_open());
+  status = qna_client.direct_write_extended_file_register_bit_in_word(
+      100U, 0, true);
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(!qna_client.is_open());
+
+  PosixSyncClient ana_client;
+  configure_sync_client_without_open_transport(
+      ana_client, qna_config.with_plc_profile(PlcProfile::MelsecAnAAnU));
+  status = ana_client.direct_read_extended_file_register_words(
+      read_request, read_words);
+  assert(status.code == StatusCode::NotConnected);
+  status = ana_client.direct_write_extended_file_register_words(write_request);
+  assert(status.code == StatusCode::NotConnected);
+  status = ana_client.direct_write_extended_file_register_bit_in_word(
+      100U, 0, true);
+  assert(status.code == StatusCode::NotConnected);
+}
+
+void test_native_qualified_sync_hg_validation_precedes_transport() {
+  const auto config = make_binary_c4_iqr_config();
+  const std::array<std::uint16_t, 1> write_words {0x1234U};
+  std::array<std::uint16_t, 1> read_words {};
+
+  PosixSyncClient client;
+  configure_sync_client_without_open_transport(client, config);
+  for (const std::string_view invalid : {
+           std::string_view {"U0\\HG0"},
+           std::string_view {"U3DF\\HG0"},
+           std::string_view {"U3E4\\HG0"}}) {
+    Status status = client.read_native_qualified_words(invalid, 1U, read_words);
+    assert(status.code == StatusCode::InvalidArgument);
+    assert(!client.is_open());
+    status = client.write_native_qualified_words(invalid, write_words);
+    assert(status.code == StatusCode::InvalidArgument);
+    assert(!client.is_open());
+    status = client.write_native_qualified_bit_in_word(invalid, 0, true);
+    assert(status.code == StatusCode::InvalidArgument);
+    assert(!client.is_open());
+  }
+
+  Status status = client.read_native_qualified_words("U3E0\\HG0", 1U, read_words);
+  assert(status.code == StatusCode::NotConnected);
+  status = client.write_native_qualified_words("U3E3\\HG0", write_words);
+  assert(status.code == StatusCode::NotConnected);
+  status = client.write_native_qualified_bit_in_word("U3E0\\HG0", 0, true);
+  assert(status.code == StatusCode::NotConnected);
 }
 
 void test_bit_in_word_operation_contract() {
@@ -10387,7 +10722,8 @@ void test_wire_field_overflow_and_invalid_enum_regressions() {
     assert(status.code == StatusCode::InvalidArgument);
   }
 
-  const auto c1_config = make_ascii_c1_format4_qna_config();
+  const auto c1_config =
+      make_ascii_c1_format4_qna_config().with_plc_profile(PlcProfile::MelsecAnAAnU);
   Status status = CommandCodec::encode_read_module_buffer(
       c1_config,
       ModuleBufferReadRequest(0x100000U, 1U, 1U),
@@ -10798,6 +11134,16 @@ void test_win32_serial_io_size_boundaries() {
       "size rejected");
   assert(status.code == StatusCode::InvalidArgument);
 }
+
+void test_win32_deadline_timeouts_return_buffered_bytes_without_losing_deadline() {
+  const COMMTIMEOUTS timeouts =
+      mcprotocol::serial::detail::build_win32_deadline_timeouts(750U);
+  assert(timeouts.ReadIntervalTimeout == MAXDWORD);
+  assert(timeouts.ReadTotalTimeoutMultiplier == MAXDWORD);
+  assert(timeouts.ReadTotalTimeoutConstant == 750U);
+  assert(timeouts.WriteTotalTimeoutMultiplier == 0U);
+  assert(timeouts.WriteTotalTimeoutConstant == 750U);
+}
 #endif
 
 #if defined(__unix__) || defined(__APPLE__)
@@ -10899,6 +11245,7 @@ int main() {
 #if defined(_WIN32)
   test_win32_serial_dcb_is_fully_owned();
   test_win32_serial_io_size_boundaries();
+  test_win32_deadline_timeouts_return_buffered_bytes_without_losing_deadline();
 #endif
 #if defined(__unix__) || defined(__APPLE__)
   test_posix_serial_termios_is_fully_owned();
@@ -10971,9 +11318,9 @@ int main() {
   test_decode_ascii_c1_loopback_response();
   test_encode_ascii_c1_loopback_uses_internal_ff_pc_no();
   test_encode_ascii_c1_extended_file_register_read_a_request_shape();
-  test_encode_ascii_c1_direct_extended_file_register_read_qna_request_shape();
+  test_encode_ascii_c1_direct_extended_file_register_read_ana_request_shape();
   test_encode_ascii_c1_extended_file_register_write_a_request_shape();
-  test_encode_ascii_c1_direct_extended_file_register_write_qna_request_shape();
+  test_encode_ascii_c1_direct_extended_file_register_write_ana_request_shape();
   test_encode_ascii_c1_extended_file_register_random_write_a_request_shape();
   test_encode_ascii_c1_extended_file_register_monitor_a_request_shape();
   test_validate_e1_config_and_route_constraints();
@@ -11022,6 +11369,7 @@ int main() {
   test_encode_extended_batch_read_words_binary_hg_matches_capture_shape();
   test_encode_extended_batch_read_words_rejects_iq_l_hg();
   test_encode_extended_batch_read_words_binary_module_access_ql_shape();
+  test_qualified_hg_rejects_non_cpu_modules_before_send();
   test_encode_link_direct_batch_read_words_binary_iqr_matches_manual_shape();
   test_encode_link_direct_batch_read_bits_binary_iqr_matches_manual_shape();
   test_encode_batch_read_bits_binary_single_uses_addressed_point();
@@ -11076,7 +11424,7 @@ int main() {
   test_encode_multi_block_write_ascii_bit_blocks_use_lsb_first_word_packing();
   test_encode_register_monitor_ascii_reuses_random_read_layout();
   test_encode_register_monitor_ascii_c2_reuses_compact_command_header();
-  test_encode_link_direct_register_monitor_ascii_c2_reuses_compact_command_header();
+  test_link_direct_extended_random_and_monitor_reject_ascii_c2();
   test_encode_success_response_large_sum_check_has_no_fixed_scratch_limit();
   test_encode_register_monitor_binary_iqr_layout();
   test_encode_register_monitor_binary_iqr_allows_lz_shape();
@@ -11088,6 +11436,9 @@ int main() {
   test_validate_qualified_buffer_helper_route_rejects_q_l_equivalent_profiles();
   test_make_qualified_buffer_write_words_request_encodes_little_endian_bytes();
   test_decode_qualified_buffer_word_values_decodes_little_endian_bytes();
+  test_c1_physical_profile_rejections_do_not_start_client_requests();
+  test_c1_direct_extended_file_register_sync_profile_paths();
+  test_native_qualified_sync_hg_validation_precedes_transport();
   test_bit_in_word_operation_contract();
   test_bit_in_word_operation_covers_every_complete_word_route();
   test_bit_in_word_sync_surface_covers_every_complete_word_route();

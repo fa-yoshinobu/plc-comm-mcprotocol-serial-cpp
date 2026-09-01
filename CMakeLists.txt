@@ -185,6 +185,15 @@ else()
 endif()
 
 if(MCPROTOCOL_SERIAL_BUILD_TESTING)
+  add_executable(test_assert_negative_probe
+    tests/test_assert_negative_probe.cpp
+  )
+
+  target_compile_definitions(test_assert_negative_probe PRIVATE NDEBUG=1)
+
+  add_test(NAME test_assert_negative_probe COMMAND test_assert_negative_probe)
+  set_tests_properties(test_assert_negative_probe PROPERTIES WILL_FAIL TRUE)
+
   add_executable(codec_tests
     tests/codec_tests.cpp
   )

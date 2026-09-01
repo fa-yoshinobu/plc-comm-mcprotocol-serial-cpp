@@ -1202,14 +1202,6 @@ std::size_t mcprotocol::serial::kCpuModelNameLength = 16
 Integer mcprotocol::serial::byte_to_integer(Byte value) noexcept
 ```
 
-#### `qualified_buffer_kind_name`
-
-```cpp
-const char * mcprotocol::serial::qualified_buffer_kind_name(QualifiedBufferDeviceKind kind) noexcept
-```
-
-Returns "G" or "HG" for the helper device kind.
-
 #### `ok_status`
 
 ```cpp
@@ -1217,14 +1209,6 @@ Status mcprotocol::serial::ok_status() noexcept
 ```
 
 Returns the default success status.
-
-#### `qualified_buffer_word_to_byte_address`
-
-```cpp
-Status mcprotocol::serial::qualified_buffer_word_to_byte_address(std::uint32_t word_address, std::uint32_t &out_byte_address) noexcept
-```
-
-Converts a qualified word address to the corresponding module-buffer byte address.
 
 #### `make_status`
 
@@ -1248,21 +1232,27 @@ Status mcprotocol::serial::make_outcome_unknown_status(StatusCode cause, const c
 
 Builds an outcome-unknown status while retaining its machine-readable root reason.
 
-#### `validate_qualified_buffer_helper_route`
+#### `qualified_buffer_kind_name`
 
 ```cpp
-Status mcprotocol::serial::validate_qualified_buffer_helper_route(PlcProfile profile, const QualifiedBufferWordDevice &device) noexcept
+const char * mcprotocol::serial::qualified_buffer_kind_name(QualifiedBufferDeviceKind kind) noexcept
 ```
 
-Validates whether the helper 0601/1601 route may be used for a profile.
-
-This helper route maps Un\\G-style text onto module-buffer commands. Some profiles, such as MELSEC-Q, MELSEC-L, iQ-L, and iQ-F, require the native device-access route instead.
+Returns "G" or "HG" for the helper device kind.
 
 #### `validate_mc_serial_config`
 
 ```cpp
 Status mcprotocol::serial::validate_mc_serial_config(const PosixSerialConfig &serial_config, const ProtocolConfig &protocol_config) noexcept
 ```
+
+#### `qualified_buffer_word_to_byte_address`
+
+```cpp
+Status mcprotocol::serial::qualified_buffer_word_to_byte_address(std::uint32_t word_address, std::uint32_t &out_byte_address) noexcept
+```
+
+Converts a qualified word address to the corresponding module-buffer byte address.
 
 #### `sparse_native_requested_bit_value`
 
@@ -1284,13 +1274,23 @@ Returns the raw 16-point mask word from a sparse native bit result.
 
 Keep this raw word visible for diagnostics when the target-specific offset pattern matters.
 
+#### `validate_qualified_buffer_helper_route`
+
+```cpp
+Status mcprotocol::serial::validate_qualified_buffer_helper_route(PlcProfile profile, const QualifiedBufferWordDevice &device) noexcept
+```
+
+Validates whether the helper 0601/1601 route may be used for a profile.
+
+This helper route maps non-CPU Un\\G text onto module-buffer commands. CPU-buffer G/HG targets and profiles such as iQ-R, MELSEC-Q, MELSEC-L, iQ-L, and iQ-F require native access.
+
 #### `parse_qualified_buffer_word_device`
 
 ```cpp
 Status mcprotocol::serial::parse_qualified_buffer_word_device(std::string_view text, QualifiedBufferWordDevice &out_device) noexcept
 ```
 
-Parses a helper qualified device string such as U3E0\\G10 or U3E0\\HG20.
+Parses a qualified device string such as U3E0\\G10 or U3E0\\HG20.
 
 #### `parse_link_direct_device`
 
@@ -1299,14 +1299,6 @@ Status mcprotocol::serial::parse_link_direct_device(std::string_view text, LinkD
 ```
 
 Parses a Jn\\... link-direct device string such as J1\\W100 or J1\\X10.
-
-#### `make_qualified_buffer_read_words_request`
-
-```cpp
-Status mcprotocol::serial::make_qualified_buffer_read_words_request(const QualifiedBufferWordDevice &device, std::uint16_t word_length, ModuleBufferReadRequest &out_request) noexcept
-```
-
-Builds a module-buffer read request for a helper qualified word range.
 
 #### `frame_kind`
 
@@ -1330,13 +1322,13 @@ bool mcprotocol::serial::is_valid_code_mode(CodeMode code_mode) noexcept
 
 Returns whether code_mode is a defined public payload-encoding value.
 
-#### `encode_qualified_buffer_word_values`
+#### `make_qualified_buffer_read_words_request`
 
 ```cpp
-Status mcprotocol::serial::encode_qualified_buffer_word_values(mcprotocol::serial::Span< const std::uint16_t > words, mcprotocol::serial::Span< mcprotocol::serial::Byte > out_bytes, std::size_t &out_size) noexcept
+Status mcprotocol::serial::make_qualified_buffer_read_words_request(const QualifiedBufferWordDevice &device, std::uint16_t word_length, ModuleBufferReadRequest &out_request) noexcept
 ```
 
-Encodes helper qualified word values into little-endian module-buffer bytes.
+Builds a module-buffer read request for a non-CPU Un\\G helper range.
 
 #### `is_valid_sum_check_mode`
 
@@ -1346,14 +1338,6 @@ bool mcprotocol::serial::is_valid_sum_check_mode(SumCheckMode mode) noexcept
 
 Returns whether mode is a defined public sum-check value.
 
-#### `make_qualified_buffer_write_words_request`
-
-```cpp
-Status mcprotocol::serial::make_qualified_buffer_write_words_request(const QualifiedBufferWordDevice &device, mcprotocol::serial::Span< const std::uint16_t > words, mcprotocol::serial::Span< mcprotocol::serial::Byte > byte_storage, ModuleBufferWriteRequest &out_request, std::size_t &out_byte_count) noexcept
-```
-
-Builds a module-buffer write request for helper qualified word access.
-
 #### `is_valid_ascii_format`
 
 ```cpp
@@ -1361,6 +1345,14 @@ bool mcprotocol::serial::is_valid_ascii_format(AsciiFormat format) noexcept
 ```
 
 Returns whether format is a defined public ASCII framing value.
+
+#### `encode_qualified_buffer_word_values`
+
+```cpp
+Status mcprotocol::serial::encode_qualified_buffer_word_values(mcprotocol::serial::Span< const std::uint16_t > words, mcprotocol::serial::Span< mcprotocol::serial::Byte > out_bytes, std::size_t &out_size) noexcept
+```
+
+Encodes helper qualified word values into little-endian module-buffer bytes.
 
 #### `plc_profile_name`
 
@@ -1370,13 +1362,13 @@ const char * mcprotocol::serial::plc_profile_name(PlcProfile profile) noexcept
 
 Returns the canonical saved string for a PLC profile.
 
-#### `decode_qualified_buffer_word_values`
+#### `make_qualified_buffer_write_words_request`
 
 ```cpp
-Status mcprotocol::serial::decode_qualified_buffer_word_values(mcprotocol::serial::Span< const mcprotocol::serial::Byte > bytes, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+Status mcprotocol::serial::make_qualified_buffer_write_words_request(const QualifiedBufferWordDevice &device, mcprotocol::serial::Span< const std::uint16_t > words, mcprotocol::serial::Span< mcprotocol::serial::Byte > byte_storage, ModuleBufferWriteRequest &out_request, std::size_t &out_byte_count) noexcept
 ```
 
-Decodes little-endian module-buffer bytes into helper qualified word values.
+Builds a module-buffer write request for non-CPU Un\\G helper access.
 
 #### `plc_profile_display_name`
 
@@ -1395,6 +1387,14 @@ bool mcprotocol::serial::plc_profile_text_equals(const char *text, std::size_t t
 ```
 
 Compares a bounded text buffer with a canonical PLC profile string.
+
+#### `decode_qualified_buffer_word_values`
+
+```cpp
+Status mcprotocol::serial::decode_qualified_buffer_word_values(mcprotocol::serial::Span< const mcprotocol::serial::Byte > bytes, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+```
+
+Decodes little-endian module-buffer bytes into helper qualified word values.
 
 #### `parse_plc_profile`
 
@@ -1766,7 +1766,7 @@ Starts Jn\\... link-direct contiguous bit write over device extension specificat
 Status mcprotocol::serial::MelsecSerialClient::async_extended_batch_read_words(std::uint32_t now_ms, const QualifiedBufferWordDevice &device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words, CompletionHandler callback, void *user) noexcept
 ```
 
-Starts helper qualified word read over module-buffer access.
+Starts native-qualified word read (0401).
 
 #### `async_extended_batch_write_words`
 
@@ -1774,7 +1774,7 @@ Starts helper qualified word read over module-buffer access.
 Status mcprotocol::serial::MelsecSerialClient::async_extended_batch_write_words(std::uint32_t now_ms, const QualifiedBufferWordDevice &device, mcprotocol::serial::Span< const std::uint16_t > words, CompletionHandler callback, void *user) noexcept
 ```
 
-Starts helper qualified word write over module-buffer access.
+Starts native-qualified word write (1401).
 
 #### `async_random_read`
 

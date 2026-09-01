@@ -696,8 +696,8 @@ See [examples/mcu_async_batch_read.cpp](../../examples/mcu_async_batch_read.cpp)
 
 - Use `read_long_state_bits()` for `LTS/LTC/LSTS/LSTC/LCS/LCC` state reads. Timer and retentive timer state devices use the long-current status block internally; `LCS/LCC` use direct bit reads internally.
 - Use `read_link_direct_*()` / `write_link_direct_*()` for `Jn\X/Y/B/SB` bit devices and `Jn\W/SW` word devices. C4 Binary / Format5 and C4 ASCII / Format4 are both confirmed for the validated Q and iQ-R targets when the serial module is configured for the matching format.
-- Use `read_native_qualified_words()` / `write_native_qualified_words()` for profiles whose supported `Un\G` / `Un\HG` route is native device access.
-- The `0601/1601` qualified helper route is profile/target-specific and is rejected by profiles that require native-qualified access.
+- Use `read_native_qualified_words()` / `write_native_qualified_words()` for CPU-buffer `U3E0` through `U3E3` `G/HG` access and for profiles whose supported `Un\G` route is native device access.
+- The `0601/1601` qualified helper route accepts only non-CPU `Un\G` targets. It rejects `U3E0` through `U3E3`, every `HG` target, and profiles such as `melsec:iq-r` that require native-qualified access.
 - Set `MCPROTOCOL_SERIAL_TRACE=1` when using the synchronous host client to log MC TX/RX frame bytes to stderr.
 
 ## Build-time tuning

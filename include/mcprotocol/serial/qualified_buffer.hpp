@@ -34,6 +34,47 @@ struct QualifiedBufferWordDevice {
   std::uint32_t word_address;
 };
 
+namespace detail {
+
+[[nodiscard]] constexpr bool is_cpu_buffer_module_number(
+    std::uint16_t module_number) noexcept {
+  return module_number >= 0x03E0U && module_number <= 0x03E3U;
+}
+
+[[nodiscard]] inline Status validate_qualified_buffer_device_shape(
+    const QualifiedBufferWordDevice& device) noexcept {
+  if (device.kind != QualifiedBufferDeviceKind::G &&
+      device.kind != QualifiedBufferDeviceKind::HG) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "Qualified buffer device kind must be G or HG");
+  }
+  if (device.kind == QualifiedBufferDeviceKind::HG &&
+      !is_cpu_buffer_module_number(device.module_number)) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "HG qualified buffer access requires CPU No.1-4 (U3E0..U3E3)");
+  }
+  return ok_status();
+}
+
+[[nodiscard]] inline Status validate_module_buffer_helper_device(
+    const QualifiedBufferWordDevice& device) noexcept {
+  const Status shape_status = validate_qualified_buffer_device_shape(device);
+  if (!shape_status.ok()) {
+    return shape_status;
+  }
+  if (device.kind == QualifiedBufferDeviceKind::HG ||
+      is_cpu_buffer_module_number(device.module_number)) {
+    return make_status(
+        StatusCode::UnsupportedConfiguration,
+        "CPU-buffer qualified access requires the native-qualified API; the 0601/1601 helper route is not valid");
+  }
+  return ok_status();
+}
+
+}  // namespace detail
+
 /// \brief Returns `"G"` or `"HG"` for the helper device kind.
 [[nodiscard]] constexpr const char* qualified_buffer_kind_name(
     QualifiedBufferDeviceKind kind) noexcept {
@@ -63,16 +104,19 @@ struct QualifiedBufferWordDevice {
 
 /// \brief Validates whether the helper `0601/1601` route may be used for a profile.
 ///
-/// This helper route maps `Un\\G`-style text onto module-buffer commands. Some profiles, such
-/// as MELSEC-Q, MELSEC-L, iQ-L, and iQ-F, require the native device-access route instead.
+/// This helper route maps non-CPU `Un\\G` text onto module-buffer commands. CPU-buffer `G/HG`
+/// targets and profiles such as iQ-R, MELSEC-Q, MELSEC-L, iQ-L, and iQ-F require native access.
 [[nodiscard]] inline Status validate_qualified_buffer_helper_route(
     PlcProfile profile,
     const QualifiedBufferWordDevice& device) noexcept {
-  if (device.kind != QualifiedBufferDeviceKind::G &&
-      device.kind != QualifiedBufferDeviceKind::HG) {
+  const Status shape_status = detail::validate_qualified_buffer_device_shape(device);
+  if (!shape_status.ok()) {
+    return shape_status;
+  }
+  if (profile == PlcProfile::MelsecIqR) {
     return make_status(
-        StatusCode::InvalidArgument,
-        "Qualified buffer device kind must be G or HG");
+        StatusCode::UnsupportedConfiguration,
+        "melsec:iq-r qualified buffer helper route is disabled; use the native-qualified API");
   }
   if (profile == PlcProfile::MelsecIqL && device.kind == QualifiedBufferDeviceKind::HG) {
     return make_status(
@@ -104,7 +148,7 @@ struct QualifiedBufferWordDevice {
         StatusCode::UnsupportedConfiguration,
         "melsec:lcpu qualified buffer helper route is disabled; use native-qualified Un\\G access");
   }
-  return ok_status();
+  return detail::validate_module_buffer_helper_device(device);
 }
 
 namespace detail {
@@ -125,7 +169,7 @@ using mcprotocol::serial::detail::parse_u32;
 
 }  // namespace detail
 
-/// \brief Parses a helper qualified device string such as `U3E0\\G10` or `U3E0\\HG20`.
+/// \brief Parses a qualified device string such as `U3E0\\G10` or `U3E0\\HG20`.
 [[nodiscard]] inline Status parse_qualified_buffer_word_device(
     std::string_view text,
     QualifiedBufferWordDevice& out_device) noexcept {
@@ -187,16 +231,27 @@ using mcprotocol::serial::detail::parse_u32;
         "Qualified buffer device word address is invalid");
   }
 
+  if (kind == QualifiedBufferDeviceKind::HG &&
+      !detail::is_cpu_buffer_module_number(static_cast<std::uint16_t>(module_number))) {
+    return make_status(
+        StatusCode::InvalidArgument,
+        "HG qualified buffer access requires CPU No.1-4 (U3E0..U3E3)");
+  }
+
   out_device = QualifiedBufferWordDevice(
       kind, static_cast<std::uint16_t>(module_number), word_address);
   return ok_status();
 }
 
-/// \brief Builds a module-buffer read request for a helper qualified word range.
+/// \brief Builds a module-buffer read request for a non-CPU `Un\\G` helper range.
 [[nodiscard]] inline Status make_qualified_buffer_read_words_request(
     const QualifiedBufferWordDevice& device,
     std::uint16_t word_length,
     ModuleBufferReadRequest& out_request) noexcept {
+  const Status device_status = detail::validate_module_buffer_helper_device(device);
+  if (!device_status.ok()) {
+    return device_status;
+  }
   if (word_length == 0U) {
     return make_status(
         StatusCode::InvalidArgument,
@@ -256,7 +311,7 @@ using mcprotocol::serial::detail::parse_u32;
   return ok_status();
 }
 
-/// \brief Builds a module-buffer write request for helper qualified word access.
+/// \brief Builds a module-buffer write request for non-CPU `Un\\G` helper access.
 [[nodiscard]] inline Status make_qualified_buffer_write_words_request(
     const QualifiedBufferWordDevice& device,
     mcprotocol::serial::Span<const std::uint16_t> words,
@@ -264,6 +319,10 @@ using mcprotocol::serial::detail::parse_u32;
     ModuleBufferWriteRequest& out_request,
     std::size_t& out_byte_count) noexcept {
   out_byte_count = 0U;
+  const Status device_status = detail::validate_module_buffer_helper_device(device);
+  if (!device_status.ok()) {
+    return device_status;
+  }
   if (words.empty()) {
     return make_status(
         StatusCode::InvalidArgument,

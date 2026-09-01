@@ -2,6 +2,8 @@
 #include <cassert>
 #include <cstdint>
 
+#include "test_assert.hpp"
+
 #include "host_sync_runner.hpp"
 #include "mcprotocol/serial/high_level.hpp"
 

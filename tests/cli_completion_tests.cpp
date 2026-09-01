@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <string>
 
+#include "test_assert.hpp"
+
 #define MCPROTOCOL_SERIAL_CLI_TESTING 1
 #include "../tools/mcprotocol_cli.cpp"
 
@@ -291,6 +293,46 @@ void test_cli_bit_device_classification_includes_long_state_families() {
   assert(!is_bit_device(DeviceCode::HG));
 }
 
+void test_qualified_cli_preflight_rejects_invalid_hg_and_wrong_helper_routes() {
+  MelsecSerialClient client;
+  assert(client.configure(
+      cli_test_config().with_plc_profile(PlcProfile::MelsecIqR)).ok());
+  QualifiedBufferWordDevice device(QualifiedBufferDeviceKind::G, 0U, 0U);
+
+  // Both native-qualified CLI commands call this parser before their run helper.
+  for (const std::string_view invalid : {
+           std::string_view {"U0\\HG0"},
+           std::string_view {"U3DF\\HG0"},
+           std::string_view {"U3E4\\HG0"}}) {
+    const Status status = parse_qualified_buffer_word_device(invalid, device);
+    assert(status.code == StatusCode::InvalidArgument);
+    assert(client.pending_tx_frame().empty());
+    assert(!client.busy());
+  }
+
+  // Both 0601/1601 qualified CLI commands share this profile/device preflight.
+  Status status = parse_qualified_buffer_word_device("U2\\G0", device);
+  assert(status.ok());
+  status = validate_qualified_buffer_helper_route(PlcProfile::MelsecIqR, device);
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(client.pending_tx_frame().empty());
+  assert(!client.busy());
+
+  status = parse_qualified_buffer_word_device("U3E0\\G0", device);
+  assert(status.ok());
+  status = validate_qualified_buffer_helper_route(PlcProfile::MelsecAnAAnU, device);
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(client.pending_tx_frame().empty());
+  assert(!client.busy());
+
+  status = parse_qualified_buffer_word_device("U3E0\\HG0", device);
+  assert(status.ok());
+  status = validate_qualified_buffer_helper_route(PlcProfile::MelsecIqR, device);
+  assert(status.code == StatusCode::UnsupportedConfiguration);
+  assert(client.pending_tx_frame().empty());
+  assert(!client.busy());
+}
+
 }  // namespace
 
 int main() {
@@ -299,5 +341,6 @@ int main() {
   test_raw_cli_redecodes_remaining_bytes_after_foreign_format2_frame();
   test_raw_cli_discards_noise_before_starting_candidate_timeout();
   test_cli_bit_device_classification_includes_long_state_families();
+  test_qualified_cli_preflight_rejects_invalid_hg_and_wrong_helper_routes();
   return 0;
 }
