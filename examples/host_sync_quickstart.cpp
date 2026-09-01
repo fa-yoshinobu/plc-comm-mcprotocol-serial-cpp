@@ -8,16 +8,16 @@ int main() {
   using mcprotocol::serial::CpuModelInfo;
   using mcprotocol::serial::HardwareFlowControl;
   using mcprotocol::serial::PlcProfile;
-  using mcprotocol::serial::PosixSerialConfig;
-  using mcprotocol::serial::PosixSyncClient;
+  using mcprotocol::serial::HostSerialConfig;
+  using mcprotocol::serial::HostSyncClient;
   using mcprotocol::serial::SerialParity;
   using mcprotocol::serial::SumCheckMode;
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
-  PosixSyncClient plc;
+  HostSyncClient plc;
 
   // The serial port settings must match the PLC serial module exactly.
-  const PosixSerialConfig serial(
+  const HostSerialConfig serial(
 #if defined(_WIN32)
       "COM3",
 #else
@@ -60,9 +60,9 @@ int main() {
 
   std::uint16_t sparse_d100 = 0;
   // Random read shows the sparse-device path without writing to the PLC.
-  status = plc.random_read_word("D100", sparse_d100);
+  status = plc.read_random_word("D100", sparse_d100);
   if (!status.ok()) {
-    std::fprintf(stderr, "random_read failed: %s\n", status.message);
+    std::fprintf(stderr, "read_random_word failed: %s\n", status.message);
     return 1;
   }
 

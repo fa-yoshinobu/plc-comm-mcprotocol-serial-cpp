@@ -4,7 +4,7 @@ Status: maintainer draft, not a user-facing support contract.
 
 ## Target family
 
-MELSEC QnA-compatible targets using the older 1C/1E-oriented command family.
+MELSEC QnA-compatible targets using the older 1C-oriented command family.
 
 ## Evidence status
 
@@ -47,17 +47,17 @@ For 1C ASCII command paths, the QnA-family symbols are currently:
 
 ## Device-support inventory to test
 
-Current 1C/1E device acceptance in the codec is limited. Verify against manuals
+Current 1C device acceptance in the codec is limited. Verify against manuals
 and targets before documenting it as support.
 
 | Route | Candidate families in current codec surface |
 | --- | --- |
-| 1C/1E common devices | `X`, `Y`, `M`, `L`, `F`, `B`, `D`, `W`, `R`, `TS`, `TC`, `TN`, `CS`, `CC`, `CN` |
+| 1C common devices | `X`, `Y`, `M`, `L`, `F`, `B`, `D`, `W`, `R`, `TS`, `TC`, `TN`, `CS`, `CC`, `CN` |
 | Not supported | `S` |
 | Direct extended file register | QnA-family `NR` / `NW` paths are currently separate from A-series `ER` / `EW`. |
 
 ## Scope Boundary
 
 - Do not claim `melsec:qna` is identical to `melsec:ana-anu` for every implemented command.
-- Do not publish CPU/module-specific C1/E1 support from this draft alone.
+- Do not publish CPU/module-specific 1C support from this draft alone.
 - Do not publish point-count or address-range limits from codec acceptance alone.

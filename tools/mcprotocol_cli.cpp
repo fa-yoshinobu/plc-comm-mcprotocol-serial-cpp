@@ -12,7 +12,7 @@
 #include "mcprotocol/serial/client.hpp"
 #include "mcprotocol/serial/high_level.hpp"
 #include "mcprotocol/serial/link_direct.hpp"
-#include "mcprotocol/serial/posix_serial.hpp"
+#include "mcprotocol/serial/host_serial.hpp"
 #include "mcprotocol/serial/qualified_buffer.hpp"
 #include "../src/host_now_ms.hpp"
 #include "mcprotocol/serial/detail/fixed_item_array.hpp"
@@ -58,9 +58,6 @@ using mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest;
 using mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest;
 using mcprotocol::serial::ExtendedFileRegisterMonitorRegistration;
 using mcprotocol::serial::ExtendedFileRegisterRandomWriteWordItem;
-using mcprotocol::serial::E1PcTarget;
-using mcprotocol::serial::E1Route;
-using mcprotocol::serial::E1MonitoringTimer;
 using mcprotocol::serial::FrameKind;
 using mcprotocol::serial::GlobalSignalControlRequest;
 using mcprotocol::serial::GlobalSignalTarget;
@@ -86,8 +83,8 @@ using mcprotocol::serial::MultiBlockReadRequest;
 using mcprotocol::serial::MultiBlockWriteBlock;
 using mcprotocol::serial::MultiBlockWriteRequest;
 using mcprotocol::serial::PlcProfile;
-using mcprotocol::serial::PosixSerialConfig;
-using mcprotocol::serial::PosixSerialPort;
+using mcprotocol::serial::HostSerialConfig;
+using mcprotocol::serial::HostSerialPort;
 using mcprotocol::serial::ProtocolConfig;
 using mcprotocol::serial::QualifiedBufferWordDevice;
 using mcprotocol::serial::QualifiedBufferDeviceKind;
@@ -108,10 +105,10 @@ using mcprotocol::serial::Status;
 using mcprotocol::serial::StatusCode;
 using mcprotocol::serial::SumCheckMode;
 using mcprotocol::serial::deadline_reached;
-using mcprotocol::serial::UserFrameDeleteRequest;
-using mcprotocol::serial::UserFrameReadRequest;
+using mcprotocol::serial::UserFrameRegistrationDeleteRequest;
+using mcprotocol::serial::UserFrameRegistrationReadRequest;
 using mcprotocol::serial::UserFrameRegistrationData;
-using mcprotocol::serial::UserFrameWriteRequest;
+using mcprotocol::serial::UserFrameRegistrationWriteRequest;
 using mcprotocol::serial::decode_qualified_buffer_word_values;
 using mcprotocol::serial::highlevel::decode_long_state_bit;
 using mcprotocol::serial::highlevel::get_long_state_read_spec;
@@ -246,7 +243,6 @@ struct ProtocolConfigInput {
   SumCheckMode sum_check_mode = static_cast<SumCheckMode>(0xFF);
   RouteConfig route {};
   mcprotocol::serial::TimeoutConfig timeout {};
-  E1MonitoringTimer e1_monitoring_timer {};
 };
 
 struct CliOptions {
@@ -285,7 +281,6 @@ struct CliOptions {
   bool module_target_specified = false;
   bool topology_specified = false;
   bool self_station_specified = false;
-  bool e1_monitoring_timer_specified = false;
   RemoteOperationMode remote_run_mode = static_cast<RemoteOperationMode>(0U);
   RemoteRunClearMode remote_run_clear_mode = static_cast<RemoteRunClearMode>(0xFFU);
   RemoteOperationMode remote_pause_mode = static_cast<RemoteOperationMode>(0U);
@@ -470,32 +465,29 @@ constexpr std::size_t kCliMaxExtendedFileRegisterRandomWriteItems = 40U;
   return buffer_limit < protocol_limit ? buffer_limit : protocol_limit;
 }
 
-[[nodiscard]] constexpr bool cli_is_e1_frame(const ProtocolConfig& config) {
-  return config.frame_kind() == FrameKind::E1;
-}
-
-[[nodiscard]] constexpr std::size_t cli_max_extended_file_register_word_points(const ProtocolConfig& config) {
-  return cli_is_e1_frame(config) ? 256U : 64U;
+[[nodiscard]] constexpr std::size_t cli_max_extended_file_register_word_points(
+    const ProtocolConfig&) {
+  return 64U;
 }
 
 [[nodiscard]] constexpr std::size_t cli_max_extended_file_register_random_write_items(
-    const ProtocolConfig& config) {
-  return cli_is_e1_frame(config) ? 40U : 10U;
+    const ProtocolConfig&) {
+  return 10U;
 }
 
 [[nodiscard]] constexpr std::uint32_t cli_max_extended_file_register_block_number(
-    const ProtocolConfig& config) {
-  return cli_is_e1_frame(config) ? 0xFFFFU : 999U;
+    const ProtocolConfig&) {
+  return 999U;
 }
 
 [[nodiscard]] constexpr std::uint32_t cli_max_extended_file_register_word_number(
-    const ProtocolConfig& config) {
-  return cli_is_e1_frame(config) ? 0xFFFFU : 8191U;
+    const ProtocolConfig&) {
+  return 8191U;
 }
 
 [[nodiscard]] constexpr std::uint32_t cli_max_direct_extended_file_register_head_device_number(
-    const ProtocolConfig& config) {
-  return cli_is_e1_frame(config) ? 0xFFFFFFFFU : 9999999U;
+    const ProtocolConfig&) {
+  return 9999999U;
 }
 
 void print_usage() {
@@ -586,19 +578,18 @@ void print_usage() {
       "  --hardware-flow MODE       Required. none | rts-cts\n"
       "  --rts-toggle on|off        Toggle RTS during TX for RS-485 DE control\n"
       "  --dump-frames on|off       Print raw TX/RX frame bytes to stderr (default: off)\n"
-      "  --frame MODE               Required. c4-binary | c4-ascii-f1 | c4-ascii-f2 | c4-ascii-f3 | c4-ascii-f4 | c3-ascii-f1 | c3-ascii-f2 | c3-ascii-f3 | c3-ascii-f4 | c2-ascii-f1 | c2-ascii-f2 | c2-ascii-f3 | c2-ascii-f4 | c1-ascii-f1 | c1-ascii-f3 | c1-ascii-f4 | e1-binary | e1-ascii\n"
+      "  --frame MODE               Required. c4-binary | c4-ascii-f1 | c4-ascii-f2 | c4-ascii-f3 | c4-ascii-f4 | c3-ascii-f1 | c3-ascii-f2 | c3-ascii-f3 | c3-ascii-f4 | c2-ascii-f1 | c2-ascii-f2 | c2-ascii-f3 | c2-ascii-f4 | c1-ascii-f1 | c1-ascii-f3 | c1-ascii-f4\n"
       "  --plc-profile PROFILE      Required. Canonical PLC profile: melsec:iq-r | melsec:iq-l | melsec:iq-f | melsec:qcpu | melsec:lcpu | melsec:qna | melsec:ana-anu | melsec:a\n"
       "  --route ROUTE              Required. host | multidrop\n"
       "  --station N                Station number for an explicit multidrop route\n"
       "  --network N                Required for 3C/4C multidrop; invalid for 1C/2C/host\n"
-      "  --pc-target TARGET         Required for 3C/4C/1E non-host routes: 1..N | control | standby | special-fe | connected\n"
+      "  --pc-target TARGET         Required for 3C/4C non-host routes: 1..N | control | standby | special-fe | connected\n"
       "  --module-target TARGET     Required for 4C multidrop: own | cpu-1..cpu-4 | redundant-control | redundant-standby | redundant-a | redundant-b | explicit:IO:STATION\n"
       "  --topology TOPOLOGY        Required for 2C/3C/4C multidrop: standard (normal/1:n) | mn\n"
       "  --self-station N           Required only for mn topology (0..31)\n"
-      "  --sum-check on|off         Required for C1/C2/C3/C4; rejected for fixed 1E\n"
+      "  --sum-check on|off         Required for C1/C2/C3/C4\n"
       "  --response-timeout-ms N    Absolute first-TX-through-decode timeout (default: 3000)\n"
       "  --inter-byte-timeout-ms N  Retained-response inactivity timeout (default: 250)\n"
-      "  --e1-monitoring-timer-ms N PLC-side 1E timer in exact 250 ms units (default: 4000)\n"
       "\n"
       "Notes:\n"
       "  remote-run requires both conflict mode and clear mode; neither is inferred.\n"
@@ -614,12 +605,11 @@ void print_usage() {
       "  read-native-qualified-words / write-native-qualified-words use the native 0401/1401 Un\\G/Un\\HG route when the selected profile supports it.\n"
       "  read-qualified-words / write-qualified-words expose the 0601/1601 helper route; profiles that require native-qualified access reject it.\n"
       "  link-direct commands use the device extension specification for Jn\\\\X/Y/B/W/SB/SW in both binary and ASCII code modes.\n"
-      "  c1-ascii-* targets --plc-profile melsec:a, melsec:ana-anu, or melsec:qna. File-register commands also map onto e1-* where chapter-18 supports them.\n"
+      "  c1-ascii-* targets --plc-profile melsec:a, melsec:ana-anu, or melsec:qna.\n"
       "  loopback maps to TT on c1-ascii-* and 0619 on 2C/3C/4C.\n"
       "  read/register/delete-user-frame map to 0610/1610 on 2C/3C/4C only; HEXBYTES is raw registration data in hexadecimal.\n"
-      "  e1-* targets --plc-profile melsec:a, melsec:ana-anu, or melsec:qna. E1 exposes chapter-18 device-memory, extended-file-register, and special-function-module commands only.\n"
-      "  read/write/random-write/monitor-file-register use BLOCK:RDEVICE. On c1-ascii-* this is ER/EW/ET/EM/ME; on e1-* it is the chapter-18 block-addressed path.\n"
-      "  read/write-file-register-direct use a direct R-device number. On c1-ascii-* this is QnA-common NR/NW; on e1-* it is the chapter-18 direct path.\n"
+      "  read/write/random-write/monitor-file-register use BLOCK:RDEVICE; on c1-ascii-* this is ER/EW/ET/EM/ME.\n"
+      "  read/write-file-register-direct use a direct R-device number; on c1-ascii-* this is QnA-common NR/NW.\n"
       "  multi-block-read-link-direct-bits uses POINTS in 16-bit units.\n"
       "  multi-block-write-link-direct-bits expects a 0/1 bit string whose length is a multiple of 16.\n"
       "  probe-multi-block defaults to mixed; pass word-only/bit-only or a single block mode to isolate 1406 verification.\n"
@@ -808,15 +798,6 @@ void print_usage() {
       return C34PcTarget::number(number);
   }
   return C34PcTarget::number(number);
-}
-
-[[nodiscard]] constexpr E1PcTarget make_e1_pc_target(
-    CliPcTargetKind kind,
-    std::uint32_t number) noexcept {
-  return kind == CliPcTargetKind::ConnectedStation ||
-                 (kind == CliPcTargetKind::Number && number == 0xFFU)
-             ? E1PcTarget::connected_station()
-             : E1PcTarget::number(number);
 }
 
 [[nodiscard]] bool parse_module_target(
@@ -1103,18 +1084,6 @@ void print_usage() {
     config.frame_kind = FrameKind::C1;
     config.code_mode = CodeMode::Ascii;
     config.ascii_format = AsciiFormat::Format4;
-    return true;
-  }
-  if (text == "e1-binary") {
-    config.frame_kind = FrameKind::E1;
-    config.code_mode = CodeMode::Binary;
-    config.ascii_format = static_cast<AsciiFormat>(0xFF);
-    return true;
-  }
-  if (text == "e1-ascii") {
-    config.frame_kind = FrameKind::E1;
-    config.code_mode = CodeMode::Ascii;
-    config.ascii_format = static_cast<AsciiFormat>(0xFF);
     return true;
   }
   return false;
@@ -1496,13 +1465,6 @@ void print_usage() {
         return false;
       }
       options.protocol_input.timeout.inter_byte_timeout_ms = value;
-    } else if (arg == "--e1-monitoring-timer-ms" && (index + 1) < argc) {
-      std::uint32_t value = 0;
-      if (!parse_u32(argv[++index], value)) {
-        return false;
-      }
-      options.protocol_input.e1_monitoring_timer = E1MonitoringTimer::milliseconds(value);
-      options.e1_monitoring_timer_specified = true;
     } else if (!arg.empty() && arg.front() != '-') {
       if (arg == "cpu-model" || arg == "read-cpu-model") {
         options.command = CommandKind::CpuModel;
@@ -1661,18 +1623,10 @@ void print_usage() {
   }
 
   if (options.command != CommandKind::RecoverC24) {
-    const bool is_e1 = options.protocol_input.frame_kind == FrameKind::E1;
-    if ((is_e1 && options.sum_check_specified) ||
-        (!is_e1 && !options.sum_check_specified)) {
+    if (!options.sum_check_specified) {
       return false;
     }
   } else if (options.sum_check_specified) {
-    return false;
-  }
-
-  if (options.e1_monitoring_timer_specified &&
-      (options.command == CommandKind::RecoverC24 ||
-       options.protocol_input.frame_kind != FrameKind::E1)) {
     return false;
   }
 
@@ -1754,32 +1708,13 @@ void print_usage() {
                         options.module_station_number),
                     SelfStationNo::number(options.self_station_no)}};
           break;
-        case FrameKind::E1:
-          if (options.station_specified || options.network_specified ||
-              options.module_target_specified || options.topology_specified ||
-              options.self_station_specified ||
-              !options.pc_target_specified ||
-              (options.pc_target_kind != CliPcTargetKind::Number &&
-               options.pc_target_kind != CliPcTargetKind::ConnectedStation)) {
-            return false;
-          }
-          options.protocol_input.route = RouteConfig {E1Route {
-              make_e1_pc_target(options.pc_target_kind, options.pc_target_number)}};
-          break;
       }
     } else {
       return false;
     }
 
     const ProtocolConfigInput& input = options.protocol_input;
-    if (input.frame_kind == FrameKind::E1) {
-      options.protocol.emplace(ProtocolConfig::e1(
-          input.code_mode,
-          input.plc_profile,
-          input.route,
-          input.timeout,
-          input.e1_monitoring_timer));
-    } else if (input.code_mode == CodeMode::Binary) {
+    if (input.code_mode == CodeMode::Binary) {
       options.protocol.emplace(ProtocolConfig::c4_binary(
           input.plc_profile,
           input.sum_check_mode,
@@ -1956,12 +1891,12 @@ void request_complete(void* user, Status status) {
 }
 
 void on_tx_begin(void* user) {
-  auto* port = static_cast<PosixSerialPort*>(user);
+  auto* port = static_cast<HostSerialPort*>(user);
   (void)port->set_rts(true);
 }
 
 void on_tx_end(void* user) {
-  auto* port = static_cast<PosixSerialPort*>(user);
+  auto* port = static_cast<HostSerialPort*>(user);
   (void)port->set_rts(false);
 }
 
@@ -2037,7 +1972,7 @@ void print_hex_bytes(mcprotocol::serial::Span<const mcprotocol::serial::Byte> by
 }
 
 [[nodiscard]] Status run_c24_recovery(
-    PosixSerialPort& port,
+    HostSerialPort& port,
     bool rts_toggle,
     mcprotocol::serial::Byte control_code,
     bool dump_frames = false) {
@@ -2152,18 +2087,7 @@ struct RawResponseBufferResult {
 
 [[nodiscard]] bool is_raw_response_start_byte(
     const ProtocolConfig& config,
-    std::uint8_t expected_e1_response_subheader,
     std::uint8_t byte) noexcept {
-  if (config.frame_kind() == FrameKind::E1) {
-    if (config.code_mode() == CodeMode::Binary) {
-      return byte == expected_e1_response_subheader;
-    }
-    const auto upper = static_cast<std::uint8_t>(
-        expected_e1_response_subheader < 0xA0U
-            ? ('0' + (expected_e1_response_subheader >> 4U))
-            : ('A' + ((expected_e1_response_subheader >> 4U) - 10U)));
-    return byte == upper;
-  }
   if (config.code_mode() == CodeMode::Binary) {
     return byte == 0x10U;
   }
@@ -2175,23 +2099,10 @@ struct RawResponseBufferResult {
 
 [[nodiscard]] std::size_t raw_response_noise_prefix(
     const ProtocolConfig& config,
-    std::uint8_t expected_e1_response_subheader,
     const std::uint8_t* bytes,
     std::size_t size) noexcept {
   for (std::size_t offset = 0U; offset < size; ++offset) {
-    if (!is_raw_response_start_byte(config, expected_e1_response_subheader, bytes[offset])) {
-      continue;
-    }
-    if (config.frame_kind() != FrameKind::E1 || config.code_mode() != CodeMode::Ascii) {
-      return offset;
-    }
-    if ((offset + 1U) == size) {
-      return offset;
-    }
-    const std::uint8_t lower_nibble = expected_e1_response_subheader & 0x0FU;
-    const std::uint8_t expected_lower = static_cast<std::uint8_t>(
-        lower_nibble < 10U ? ('0' + lower_nibble) : ('A' + (lower_nibble - 10U)));
-    if (bytes[offset + 1U] == expected_lower) {
+    if (is_raw_response_start_byte(config, bytes[offset])) {
       return offset;
     }
   }
@@ -2202,14 +2113,12 @@ struct RawResponseBufferResult {
     const ProtocolConfig& config,
     mcprotocol::serial::FrameCodecContext frame_context,
     std::uint8_t* rx_frame,
-    std::size_t& rx_size,
-    std::uint8_t expected_e1_response_subheader = 0U) noexcept {
+    std::size_t& rx_size) noexcept {
   for (;;) {
     if (rx_size == 0U) {
       return {};
     }
-    const std::size_t noise_prefix = raw_response_noise_prefix(
-        config, expected_e1_response_subheader, rx_frame, rx_size);
+    const std::size_t noise_prefix = raw_response_noise_prefix(config, rx_frame, rx_size);
     if (noise_prefix != 0U) {
       const std::size_t remaining = rx_size - noise_prefix;
       std::memmove(rx_frame, rx_frame + noise_prefix, remaining);
@@ -2240,7 +2149,7 @@ struct RawResponseBufferResult {
 
 [[nodiscard]] Status run_raw_request(
     const ProtocolConfig& config,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     bool rts_toggle,
     mcprotocol::serial::Span<const std::uint8_t> request_data,
     mcprotocol::serial::RawResponseFrame& out_frame,
@@ -2248,48 +2157,11 @@ struct RawResponseBufferResult {
   static std::uint8_t next_raw_format2_block_number = 0U;
   const bool format2 = config.code_mode() == CodeMode::Ascii &&
                        config.frame_kind() != FrameKind::C1 &&
-                       config.frame_kind() != FrameKind::E1 &&
                        config.ascii_format() == AsciiFormat::Format2;
   const mcprotocol::serial::FrameCodecContext frame_context =
       format2
           ? mcprotocol::serial::FrameCodecContext::format2(next_raw_format2_block_number)
           : mcprotocol::serial::FrameCodecContext::none();
-  std::uint8_t expected_e1_response_subheader = 0U;
-  if (config.frame_kind() == FrameKind::E1) {
-    std::uint8_t request_subheader = 0U;
-    if (config.code_mode() == CodeMode::Binary) {
-      if (request_data.empty()) {
-        return mcprotocol::serial::make_status(
-            StatusCode::InvalidArgument, "1E binary request data has no subheader");
-      }
-      request_subheader = request_data[0];
-    } else {
-      if (request_data.size() < 2U) {
-        return mcprotocol::serial::make_status(
-            StatusCode::InvalidArgument, "1E ASCII request data has no subheader");
-      }
-      const auto nibble = [](std::uint8_t value) noexcept -> int {
-        if (value >= '0' && value <= '9') {
-          return value - '0';
-        }
-        if (value >= 'A' && value <= 'F') {
-          return 10 + (value - 'A');
-        }
-        if (value >= 'a' && value <= 'f') {
-          return 10 + (value - 'a');
-        }
-        return -1;
-      };
-      const int upper = nibble(request_data[0]);
-      const int lower = nibble(request_data[1]);
-      if (upper < 0 || lower < 0) {
-        return mcprotocol::serial::make_status(
-            StatusCode::InvalidArgument, "1E ASCII request subheader is not hexadecimal");
-      }
-      request_subheader = static_cast<std::uint8_t>((upper << 4U) | lower);
-    }
-    expected_e1_response_subheader = static_cast<std::uint8_t>(request_subheader | 0x80U);
-  }
   std::array<std::uint8_t, mcprotocol::serial::kMaxRequestFrameBytes> tx_frame {};
   std::size_t tx_size = 0;
   Status status = mcprotocol::serial::FrameCodec::encode_request(
@@ -2409,12 +2281,8 @@ struct RawResponseBufferResult {
         bytes_read);
     rx_size += bytes_read;
 
-    const RawResponseBufferResult decode = decode_raw_response_buffer(
-        config,
-        frame_context,
-        rx_frame.data(),
-        rx_size,
-        expected_e1_response_subheader);
+    const RawResponseBufferResult decode =
+        decode_raw_response_buffer(config, frame_context, rx_frame.data(), rx_size);
     if (decode.status == mcprotocol::serial::DecodeStatus::Complete) {
       out_frame = decode.frame;
       if (decode.frame.type == mcprotocol::serial::ResponseType::PlcError) {
@@ -2435,7 +2303,7 @@ struct RawResponseBufferResult {
 
 [[nodiscard]] Status run_read_monitor_raw(
     const ProtocolConfig& config,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     bool rts_toggle,
     mcprotocol::serial::RawResponseFrame& out_frame,
     bool dump_frames = false) {
@@ -2652,11 +2520,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
     return false;
   }
   const std::uint32_t max_block_number = cli_max_extended_file_register_block_number(config);
-  if (cli_is_e1_frame(config)) {
-    if (block_number > max_block_number) {
-      return false;
-    }
-  } else if (block_number == 0U || block_number > max_block_number) {
+  if (block_number == 0U || block_number > max_block_number) {
     return false;
   }
 
@@ -2697,7 +2561,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_batch_write_words_group(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const DeviceAddress& head_device,
     mcprotocol::serial::Span<const std::uint16_t> values) {
@@ -2717,7 +2581,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_read_extended_file_register_words(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const ExtendedFileRegisterBatchReadWordsRequest& request,
     mcprotocol::serial::Span<std::uint16_t> out_values) {
@@ -2738,7 +2602,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_direct_read_extended_file_register_words(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const ExtendedFileRegisterDirectBatchReadWordsRequest& request,
     mcprotocol::serial::Span<std::uint16_t> out_values) {
@@ -2759,7 +2623,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_write_extended_file_register_words(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const ExtendedFileRegisterBatchWriteWordsRequest& request) {
   command_state.done = false;
@@ -2778,7 +2642,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_direct_write_extended_file_register_words(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const ExtendedFileRegisterDirectBatchWriteWordsRequest& request) {
   command_state.done = false;
@@ -2797,7 +2661,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_random_write_extended_file_register_words(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<const ExtendedFileRegisterRandomWriteWordItem> items) {
   command_state.done = false;
@@ -2816,7 +2680,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_monitor_extended_file_register_words(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const ExtendedFileRegisterMonitorRegistration& request,
     mcprotocol::serial::Span<std::uint16_t> out_values) {
@@ -2851,7 +2715,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_extended_batch_read_words(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const QualifiedBufferWordDevice& device,
     std::uint16_t points,
@@ -2859,7 +2723,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
   command_state.done = false;
   command_state.status = Status {};
 
-  const Status start_status = client.async_extended_batch_read_words(
+  const Status start_status = client.async_qualified_buffer_batch_read_words(
       now_ms(),
       device,
       points,
@@ -2874,14 +2738,14 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_extended_batch_write_words(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const QualifiedBufferWordDevice& device,
     mcprotocol::serial::Span<const std::uint16_t> values) {
   command_state.done = false;
   command_state.status = Status {};
 
-  const Status start_status = client.async_extended_batch_write_words(
+  const Status start_status = client.async_qualified_buffer_batch_write_words(
       now_ms(),
       device,
       values,
@@ -2895,7 +2759,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_batch_read_words_group(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const DeviceAddress& head_device,
     std::uint16_t points,
@@ -2917,7 +2781,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_link_direct_batch_read_words(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const LinkDirectDevice& device,
     std::uint16_t points,
@@ -2940,7 +2804,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_batch_read_word(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const DeviceAddress& device,
     std::uint16_t& out_value) {
@@ -2961,7 +2825,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_batch_read_bit(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const DeviceAddress& device,
     BitValue& out_value) {
@@ -2982,7 +2846,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_batch_read_bits_group(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const DeviceAddress& head_device,
     std::uint16_t points,
@@ -3004,7 +2868,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_long_state_read_bits_group(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const DeviceAddress& head_device,
     std::uint16_t points,
@@ -3064,7 +2928,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_link_direct_batch_read_bits(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const LinkDirectDevice& device,
     std::uint16_t points,
@@ -3087,7 +2951,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_batch_write_word(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const DeviceAddress& device,
     std::uint16_t value) {
@@ -3097,7 +2961,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_link_direct_batch_write_words(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const LinkDirectDevice& device,
     mcprotocol::serial::Span<const std::uint16_t> values) {
@@ -3118,7 +2982,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_batch_write_bits_group(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const DeviceAddress& head_device,
     mcprotocol::serial::Span<const BitValue> values) {
@@ -3138,7 +3002,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_batch_write_bit(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const DeviceAddress& device,
     BitValue value) {
@@ -3148,7 +3012,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_link_direct_batch_write_bits(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const LinkDirectDevice& device,
     mcprotocol::serial::Span<const BitValue> values) {
@@ -3169,7 +3033,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_link_direct_random_read(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<const LinkDirectRandomReadWordItem> items,
     mcprotocol::serial::Span<std::uint16_t> out_values) {
@@ -3190,7 +3054,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_link_direct_random_read(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<const LinkDirectRandomReadWordItem> items,
     mcprotocol::serial::Span<std::uint32_t> out_values) {
@@ -3208,7 +3072,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_random_write_words(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<const RandomWriteWordItem> items) {
   command_state.done = false;
@@ -3228,7 +3092,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_random_write_dwords(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<const RandomWriteDWordItem> items) {
   command_state.done = false;
@@ -3243,7 +3107,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_link_direct_random_write_words(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<const LinkDirectRandomWriteWordItem> items) {
   command_state.done = false;
@@ -3262,7 +3126,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_random_read(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<const RandomReadWordItem> word_items,
     mcprotocol::serial::Span<const RandomReadDWordItem> dword_items,
@@ -3286,7 +3150,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_random_read(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<const RandomReadWordItem> items,
     mcprotocol::serial::Span<std::uint32_t> out_values) {
@@ -3304,7 +3168,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_link_direct_random_write_bits(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<const LinkDirectRandomWriteBitItem> items) {
   command_state.done = false;
@@ -3323,7 +3187,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_random_write_bits(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<const RandomWriteBitItem> items) {
   command_state.done = false;
@@ -3342,7 +3206,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_link_direct_multi_block_read(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const LinkDirectMultiBlockReadRequest& request,
     mcprotocol::serial::Span<std::uint16_t> out_words,
@@ -3367,7 +3231,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_multi_block_read(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const MultiBlockReadRequest& request,
     mcprotocol::serial::Span<std::uint16_t> out_words,
@@ -3392,7 +3256,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_link_direct_multi_block_write(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const LinkDirectMultiBlockWriteRequest& request) {
   command_state.done = false;
@@ -3411,7 +3275,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_multi_block_write(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const MultiBlockWriteRequest& request) {
   command_state.done = false;
@@ -3430,7 +3294,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_link_direct_register_monitor(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<const LinkDirectRandomReadWordItem> items) {
   command_state.done = false;
@@ -3449,14 +3313,14 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_register_monitor(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<const RandomReadWordItem> word_items,
     mcprotocol::serial::Span<const RandomReadDWordItem> dword_items) {
   command_state.done = false;
   command_state.status = Status {};
 
-  const Status start_status = client.async_register_monitor(
+  const Status start_status = client.async_register_monitor_devices(
       now_ms(),
       mcprotocol::serial::MonitorRegistration(word_items, dword_items),
       request_complete,
@@ -3469,7 +3333,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_register_monitor(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<const RandomReadWordItem> items) {
   return run_register_monitor(client, port, command_state, items, {});
@@ -3477,14 +3341,14 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_read_monitor(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<std::uint16_t> out_words,
     mcprotocol::serial::Span<std::uint32_t> out_dwords) {
   command_state.done = false;
   command_state.status = Status {};
 
-  const Status start_status = client.async_read_monitor(
+  const Status start_status = client.async_run_monitor_cycle(
       now_ms(),
       out_words,
       out_dwords,
@@ -3498,7 +3362,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_read_monitor(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     mcprotocol::serial::Span<std::uint32_t> out_values) {
   std::array<std::uint16_t, mcprotocol::serial::kMaxMonitorItems> words {};
@@ -3515,7 +3379,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_read_host_buffer(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const HostBufferReadRequest& request,
     mcprotocol::serial::Span<std::uint16_t> out_words) {
@@ -3536,7 +3400,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_read_module_buffer(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const ModuleBufferReadRequest& request,
     mcprotocol::serial::Span<mcprotocol::serial::Byte> out_bytes) {
@@ -3557,7 +3421,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_write_host_buffer(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const HostBufferWriteRequest& request) {
   command_state.done = false;
@@ -3576,7 +3440,7 @@ void print_sparse_native_bit_value(std::string_view label, std::uint32_t raw_val
 
 [[nodiscard]] Status run_write_module_buffer(
     MelsecSerialClient& client,
-    PosixSerialPort& port,
+    HostSerialPort& port,
     CommandState& command_state,
     const ModuleBufferWriteRequest& request) {
   command_state.done = false;
@@ -3604,7 +3468,7 @@ int main(int argc, char** argv) {
   }
   g_dump_frames = options.dump_frames;
 
-  const PosixSerialConfig serial(
+  const HostSerialConfig serial(
       options.serial_device,
       options.baud_rate,
       options.data_bits,
@@ -3629,7 +3493,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  PosixSerialPort port;
+  HostSerialPort port;
   status = port.open(serial);
   if (!status.ok()) {
     print_status_error("Failed to open serial port", status);
@@ -3921,9 +3785,9 @@ int main(int argc, char** argv) {
       }
 
       UserFrameRegistrationData data {};
-      status = client.async_read_user_frame(
+      status = client.async_read_user_frame_registration(
           now_ms(),
-          UserFrameReadRequest(static_cast<std::uint16_t>(frame_no)),
+          UserFrameRegistrationReadRequest(static_cast<std::uint16_t>(frame_no)),
           data,
           request_complete,
           &command_state);
@@ -3978,9 +3842,9 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      status = client.async_write_user_frame(
+      status = client.async_write_user_frame_registration(
           now_ms(),
-          UserFrameWriteRequest(static_cast<std::uint16_t>(frame_no), static_cast<std::uint16_t>(frame_bytes), mcprotocol::serial::Span<const mcprotocol::serial::Byte>(registration_data.data(), registration_size)),
+          UserFrameRegistrationWriteRequest(static_cast<std::uint16_t>(frame_no), static_cast<std::uint16_t>(frame_bytes), mcprotocol::serial::Span<const mcprotocol::serial::Byte>(registration_data.data(), registration_size)),
           request_complete,
           &command_state);
       if (!status.ok()) {
@@ -4010,9 +3874,9 @@ int main(int argc, char** argv) {
         return 2;
       }
 
-      status = client.async_delete_user_frame(
+      status = client.async_delete_user_frame_registration(
           now_ms(),
-          UserFrameDeleteRequest(static_cast<std::uint16_t>(frame_no)),
+          UserFrameRegistrationDeleteRequest(static_cast<std::uint16_t>(frame_no)),
           request_complete,
           &command_state);
       if (!status.ok()) {

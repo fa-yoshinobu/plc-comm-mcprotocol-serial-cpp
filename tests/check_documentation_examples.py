@@ -57,7 +57,7 @@ def check_contract(markdown: str) -> dict[str, str]:
     require_order(
         random_write,
         'plc.read_words_single_request("D101", original_d101)',
-        "plc.random_write_words(writes)",
+        "plc.write_random_words(writes)",
         "StatusCode::OperationOutcomeUnknown",
         "if (!write_status.ok())",
         'plc.write_words_single_request("D101", original_d101)',

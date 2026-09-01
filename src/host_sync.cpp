@@ -51,14 +51,14 @@ void trace_bytes(const char* label, mcprotocol::serial::Span<const mcprotocol::s
 
 }  // namespace
 
-void PosixSyncClient::on_request_complete(void* user, Status status) noexcept {
+void HostSyncClient::on_request_complete(void* user, Status status) noexcept {
   auto* state = static_cast<CompletionState*>(user);
   state->done = true;
   state->status = status;
 }
 
-Status PosixSyncClient::open(
-    const PosixSerialConfig& serial_config,
+Status HostSyncClient::open(
+    const HostSerialConfig& serial_config,
     const ProtocolConfig& protocol_config) noexcept {
   Status status = validate_mc_serial_config(serial_config, protocol_config);
   if (!status.ok()) {
@@ -82,7 +82,7 @@ Status PosixSyncClient::open(
   return ok_status();
 }
 
-void PosixSyncClient::close() noexcept {
+void HostSyncClient::close() noexcept {
   client_.cancel();
   port_.close();
   if (client_.busy()) {
@@ -91,15 +91,15 @@ void PosixSyncClient::close() noexcept {
   }
 }
 
-bool PosixSyncClient::is_open() const noexcept {
+bool HostSyncClient::is_open() const noexcept {
   return port_.is_open();
 }
 
-const ProtocolConfig& PosixSyncClient::protocol_config() const noexcept {
+const ProtocolConfig& HostSyncClient::protocol_config() const noexcept {
   return protocol_config_;
 }
 
-Status PosixSyncClient::run_until_complete() noexcept {
+Status HostSyncClient::run_until_complete() noexcept {
   return detail::run_synchronous_request(
       client_,
       port_,
@@ -113,11 +113,11 @@ Status PosixSyncClient::run_until_complete() noexcept {
       });
 }
 
-Status PosixSyncClient::read_cpu_model(CpuModelInfo& out_info) noexcept {
+Status HostSyncClient::read_cpu_model(CpuModelInfo& out_info) noexcept {
   const Status status = client_.async_read_cpu_model(
       now_ms(),
       out_info,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -125,14 +125,14 @@ Status PosixSyncClient::read_cpu_model(CpuModelInfo& out_info) noexcept {
   return run_until_complete();
 }
 
-Status PosixSyncClient::remote_run(
+Status HostSyncClient::remote_run(
     RemoteOperationMode mode,
     RemoteRunClearMode clear_mode) noexcept {
   const Status status = client_.async_remote_run(
       now_ms(),
       mode,
       clear_mode,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -140,10 +140,10 @@ Status PosixSyncClient::remote_run(
   return run_until_complete();
 }
 
-Status PosixSyncClient::remote_stop() noexcept {
+Status HostSyncClient::remote_stop() noexcept {
   const Status status = client_.async_remote_stop(
       now_ms(),
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -151,11 +151,11 @@ Status PosixSyncClient::remote_stop() noexcept {
   return run_until_complete();
 }
 
-Status PosixSyncClient::remote_pause(RemoteOperationMode mode) noexcept {
+Status HostSyncClient::remote_pause(RemoteOperationMode mode) noexcept {
   const Status status = client_.async_remote_pause(
       now_ms(),
       mode,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -163,10 +163,10 @@ Status PosixSyncClient::remote_pause(RemoteOperationMode mode) noexcept {
   return run_until_complete();
 }
 
-Status PosixSyncClient::remote_latch_clear() noexcept {
+Status HostSyncClient::remote_latch_clear() noexcept {
   const Status status = client_.async_remote_latch_clear(
       now_ms(),
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -174,11 +174,11 @@ Status PosixSyncClient::remote_latch_clear() noexcept {
   return run_until_complete();
 }
 
-Status PosixSyncClient::unlock_remote_password(std::string_view remote_password) noexcept {
+Status HostSyncClient::unlock_remote_password(std::string_view remote_password) noexcept {
   const Status status = client_.async_unlock_remote_password(
       now_ms(),
       remote_password,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -186,11 +186,11 @@ Status PosixSyncClient::unlock_remote_password(std::string_view remote_password)
   return run_until_complete();
 }
 
-Status PosixSyncClient::lock_remote_password(std::string_view remote_password) noexcept {
+Status HostSyncClient::lock_remote_password(std::string_view remote_password) noexcept {
   const Status status = client_.async_lock_remote_password(
       now_ms(),
       remote_password,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -198,10 +198,10 @@ Status PosixSyncClient::lock_remote_password(std::string_view remote_password) n
   return run_until_complete();
 }
 
-Status PosixSyncClient::clear_error_information() noexcept {
+Status HostSyncClient::clear_error_information() noexcept {
   const Status status = client_.async_clear_error_information(
       now_ms(),
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -209,10 +209,10 @@ Status PosixSyncClient::clear_error_information() noexcept {
   return run_until_complete();
 }
 
-Status PosixSyncClient::remote_reset() noexcept {
+Status HostSyncClient::remote_reset() noexcept {
   const Status status = client_.async_remote_reset(
       now_ms(),
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -220,14 +220,14 @@ Status PosixSyncClient::remote_reset() noexcept {
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_user_frame(
-    const UserFrameReadRequest& request,
+Status HostSyncClient::read_user_frame_registration(
+    const UserFrameRegistrationReadRequest& request,
     UserFrameRegistrationData& out_data) noexcept {
-  const Status status = client_.async_read_user_frame(
+  const Status status = client_.async_read_user_frame_registration(
       now_ms(),
       request,
       out_data,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -235,11 +235,12 @@ Status PosixSyncClient::read_user_frame(
   return run_until_complete();
 }
 
-Status PosixSyncClient::write_user_frame(const UserFrameWriteRequest& request) noexcept {
-  const Status status = client_.async_write_user_frame(
+Status HostSyncClient::write_user_frame_registration(
+    const UserFrameRegistrationWriteRequest& request) noexcept {
+  const Status status = client_.async_write_user_frame_registration(
       now_ms(),
       request,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -247,11 +248,12 @@ Status PosixSyncClient::write_user_frame(const UserFrameWriteRequest& request) n
   return run_until_complete();
 }
 
-Status PosixSyncClient::delete_user_frame(const UserFrameDeleteRequest& request) noexcept {
-  const Status status = client_.async_delete_user_frame(
+Status HostSyncClient::delete_user_frame_registration(
+    const UserFrameRegistrationDeleteRequest& request) noexcept {
+  const Status status = client_.async_delete_user_frame_registration(
       now_ms(),
       request,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -259,12 +261,12 @@ Status PosixSyncClient::delete_user_frame(const UserFrameDeleteRequest& request)
   return run_until_complete();
 }
 
-Status PosixSyncClient::control_global_signal(
+Status HostSyncClient::control_global_signal(
     const GlobalSignalControlRequest& request) noexcept {
   const Status status = client_.async_control_global_signal(
       now_ms(),
       request,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -272,12 +274,12 @@ Status PosixSyncClient::control_global_signal(
   return run_until_complete();
 }
 
-Status PosixSyncClient::switch_serial_module_mode(
+Status HostSyncClient::switch_serial_module_mode(
     const SerialModuleModeSwitchRequest& request) noexcept {
   const Status status = client_.async_switch_serial_module_mode(
       now_ms(),
       request,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -285,10 +287,10 @@ Status PosixSyncClient::switch_serial_module_mode(
   return run_until_complete();
 }
 
-Status PosixSyncClient::initialize_c24_transmission_sequence() noexcept {
+Status HostSyncClient::initialize_c24_transmission_sequence() noexcept {
   const Status status = client_.async_initialize_c24_transmission_sequence(
       now_ms(),
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -296,7 +298,7 @@ Status PosixSyncClient::initialize_c24_transmission_sequence() noexcept {
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_words_single_request(
+Status HostSyncClient::read_words_single_request(
     std::string_view head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
@@ -310,7 +312,7 @@ Status PosixSyncClient::read_words_single_request(
       now_ms(),
       request,
       out_words,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -318,7 +320,7 @@ Status PosixSyncClient::read_words_single_request(
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_words_single_request(
+Status HostSyncClient::read_words_single_request(
     std::string_view head_device,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   std::uint16_t points = 0;
@@ -332,27 +334,27 @@ Status PosixSyncClient::read_words_single_request(
   return read_words_single_request(head_device, points, out_words);
 }
 
-Status PosixSyncClient::read_words(
+Status HostSyncClient::read_words(
     std::string_view head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   return read_words_single_request(head_device, points, out_words);
 }
 
-Status PosixSyncClient::read_words(
+Status HostSyncClient::read_words(
     std::string_view head_device,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   return read_words_single_request(head_device, out_words);
 }
 
-Status PosixSyncClient::read_extended_file_register_words(
+Status HostSyncClient::read_extended_file_register_words(
     const ExtendedFileRegisterBatchReadWordsRequest& request,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   const Status status = client_.async_read_extended_file_register_words(
       now_ms(),
       request,
       out_words,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -360,14 +362,14 @@ Status PosixSyncClient::read_extended_file_register_words(
   return run_until_complete();
 }
 
-Status PosixSyncClient::direct_read_extended_file_register_words(
+Status HostSyncClient::read_direct_extended_file_register_words(
     const ExtendedFileRegisterDirectBatchReadWordsRequest& request,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   const Status status = client_.async_direct_read_extended_file_register_words(
       now_ms(),
       request,
       out_words,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -375,7 +377,7 @@ Status PosixSyncClient::direct_read_extended_file_register_words(
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_bits_single_request(
+Status HostSyncClient::read_bits_single_request(
     std::string_view head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
@@ -392,7 +394,7 @@ Status PosixSyncClient::read_bits_single_request(
   if (status.ok()) {
     return make_status(
         StatusCode::InvalidArgument,
-        "Long timer/counter state devices must be read with read_long_state_bits");
+        "Long timer/counter state devices must be read with read_long_timer_counter_state_bits");
   }
 
   BatchReadBitsRequest request(DeviceAddress {DeviceCode::M, 0U}, 0U);
@@ -405,7 +407,7 @@ Status PosixSyncClient::read_bits_single_request(
       now_ms(),
       request,
       out_bits,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -413,7 +415,7 @@ Status PosixSyncClient::read_bits_single_request(
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_bits_single_request(
+Status HostSyncClient::read_bits_single_request(
     std::string_view head_device,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   std::uint16_t points = 0;
@@ -427,20 +429,20 @@ Status PosixSyncClient::read_bits_single_request(
   return read_bits_single_request(head_device, points, out_bits);
 }
 
-Status PosixSyncClient::read_bits(
+Status HostSyncClient::read_bits(
     std::string_view head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   return read_bits_single_request(head_device, points, out_bits);
 }
 
-Status PosixSyncClient::read_bits(
+Status HostSyncClient::read_bits(
     std::string_view head_device,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   return read_bits_single_request(head_device, out_bits);
 }
 
-Status PosixSyncClient::read_link_direct_words(
+Status HostSyncClient::read_link_direct_words(
     std::string_view head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
@@ -455,7 +457,7 @@ Status PosixSyncClient::read_link_direct_words(
       device,
       points,
       out_words,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -463,7 +465,7 @@ Status PosixSyncClient::read_link_direct_words(
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_link_direct_bits(
+Status HostSyncClient::read_link_direct_bits(
     std::string_view head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
@@ -478,7 +480,7 @@ Status PosixSyncClient::read_link_direct_bits(
       device,
       points,
       out_bits,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -486,7 +488,7 @@ Status PosixSyncClient::read_link_direct_bits(
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_native_qualified_words(
+Status HostSyncClient::read_qualified_buffer_words(
     std::string_view head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
@@ -496,12 +498,12 @@ Status PosixSyncClient::read_native_qualified_words(
     return status;
   }
 
-  status = client_.async_extended_batch_read_words(
+  status = client_.async_qualified_buffer_batch_read_words(
       now_ms(),
       device,
       points,
       out_words,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -509,7 +511,7 @@ Status PosixSyncClient::read_native_qualified_words(
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_long_state_bits(
+Status HostSyncClient::read_long_timer_counter_state_bits(
     std::string_view head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
@@ -541,7 +543,7 @@ Status PosixSyncClient::read_long_state_bits(
         now_ms(),
         request,
         out_bits,
-        &PosixSyncClient::on_request_complete,
+        &HostSyncClient::on_request_complete,
         &completion_);
     if (!status.ok()) {
       return status;
@@ -595,7 +597,7 @@ Status PosixSyncClient::read_long_state_bits(
         now_ms(),
         request,
         status_block,
-        &PosixSyncClient::on_request_complete,
+        &HostSyncClient::on_request_complete,
         &completion_);
     if (!read_status.ok()) {
       return read_status;
@@ -606,7 +608,7 @@ Status PosixSyncClient::read_long_state_bits(
       spec, parsed.number, points, out_bits, read_one);
 }
 
-Status PosixSyncClient::read_long_state_bits(
+Status HostSyncClient::read_long_timer_counter_state_bits(
     std::string_view head_device,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   std::uint16_t points = 0;
@@ -617,10 +619,10 @@ Status PosixSyncClient::read_long_state_bits(
   if (!status.ok()) {
     return status;
   }
-  return read_long_state_bits(head_device, points, out_bits);
+  return read_long_timer_counter_state_bits(head_device, points, out_bits);
 }
 
-Status PosixSyncClient::write_words_single_request(
+Status HostSyncClient::write_words_single_request(
     std::string_view head_device,
     mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
   BatchWriteWordsRequest request(DeviceAddress {DeviceCode::D, 0U}, {});
@@ -632,7 +634,7 @@ Status PosixSyncClient::write_words_single_request(
   status = client_.async_batch_write_words(
       now_ms(),
       request,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -640,13 +642,13 @@ Status PosixSyncClient::write_words_single_request(
   return run_until_complete();
 }
 
-Status PosixSyncClient::write_words(
+Status HostSyncClient::write_words(
     std::string_view head_device,
     mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
   return write_words_single_request(head_device, words);
 }
 
-Status PosixSyncClient::write_bit_in_word(
+Status HostSyncClient::write_bit_in_word(
     std::string_view word_device,
     int bit_index,
     bool value) noexcept {
@@ -694,7 +696,7 @@ Status PosixSyncClient::write_bit_in_word(
   return status;
 }
 
-Status PosixSyncClient::write_extended_file_register_bit_in_word(
+Status HostSyncClient::write_extended_file_register_bit_in_word(
     ExtendedFileRegisterAddress word_device,
     int bit_index,
     bool value) noexcept {
@@ -725,7 +727,7 @@ Status PosixSyncClient::write_extended_file_register_bit_in_word(
   return status;
 }
 
-Status PosixSyncClient::direct_write_extended_file_register_bit_in_word(
+Status HostSyncClient::write_direct_extended_file_register_bit_in_word(
     std::uint32_t word_device_number,
     int bit_index,
     bool value) noexcept {
@@ -739,7 +741,7 @@ Status PosixSyncClient::direct_write_extended_file_register_bit_in_word(
 
   std::uint16_t word = 0U;
   const ExtendedFileRegisterDirectBatchReadWordsRequest read_request(word_device_number, 1U);
-  status = direct_read_extended_file_register_words(
+  status = read_direct_extended_file_register_words(
       read_request,
       mcprotocol::serial::Span<std::uint16_t>(&word, 1U));
   if (status.ok()) {
@@ -750,13 +752,13 @@ Status PosixSyncClient::direct_write_extended_file_register_bit_in_word(
     const ExtendedFileRegisterDirectBatchWriteWordsRequest write_request(
         word_device_number,
         mcprotocol::serial::Span<const std::uint16_t>(&word, 1U));
-    status = direct_write_extended_file_register_words(write_request);
+    status = write_direct_extended_file_register_words(write_request);
   }
   client_.end_compound_deadline();
   return status;
 }
 
-Status PosixSyncClient::write_link_direct_bit_in_word(
+Status HostSyncClient::write_link_direct_bit_in_word(
     std::string_view word_device,
     int bit_index,
     bool value) noexcept {
@@ -784,7 +786,7 @@ Status PosixSyncClient::write_link_direct_bit_in_word(
       parsed,
       1U,
       mcprotocol::serial::Span<std::uint16_t>(&word, 1U),
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (status.ok()) status = run_until_complete();
   if (status.ok()) {
@@ -796,7 +798,7 @@ Status PosixSyncClient::write_link_direct_bit_in_word(
         now_ms(),
         parsed,
         mcprotocol::serial::Span<const std::uint16_t>(&word, 1U),
-        &PosixSyncClient::on_request_complete,
+        &HostSyncClient::on_request_complete,
         &completion_);
     if (status.ok()) status = run_until_complete();
   }
@@ -804,7 +806,7 @@ Status PosixSyncClient::write_link_direct_bit_in_word(
   return status;
 }
 
-Status PosixSyncClient::write_native_qualified_bit_in_word(
+Status HostSyncClient::write_qualified_buffer_bit_in_word(
     std::string_view word_device,
     int bit_index,
     bool value) noexcept {
@@ -820,12 +822,12 @@ Status PosixSyncClient::write_native_qualified_bit_in_word(
   if (!status.ok()) return status;
 
   std::uint16_t word = 0U;
-  status = client_.async_extended_batch_read_words(
+  status = client_.async_qualified_buffer_batch_read_words(
       now_ms(),
       parsed,
       1U,
       mcprotocol::serial::Span<std::uint16_t>(&word, 1U),
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (status.ok()) status = run_until_complete();
   if (status.ok()) {
@@ -833,11 +835,11 @@ Status PosixSyncClient::write_native_qualified_bit_in_word(
     word = value
                ? static_cast<std::uint16_t>(word | mask)
                : static_cast<std::uint16_t>(word & static_cast<std::uint16_t>(~mask));
-    status = client_.async_extended_batch_write_words(
+    status = client_.async_qualified_buffer_batch_write_words(
         now_ms(),
         parsed,
         mcprotocol::serial::Span<const std::uint16_t>(&word, 1U),
-        &PosixSyncClient::on_request_complete,
+        &HostSyncClient::on_request_complete,
         &completion_);
     if (status.ok()) status = run_until_complete();
   }
@@ -845,7 +847,7 @@ Status PosixSyncClient::write_native_qualified_bit_in_word(
   return status;
 }
 
-Status PosixSyncClient::write_link_direct_words(
+Status HostSyncClient::write_link_direct_words(
     std::string_view head_device,
     mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
   LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
@@ -858,7 +860,7 @@ Status PosixSyncClient::write_link_direct_words(
       now_ms(),
       device,
       words,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -866,7 +868,7 @@ Status PosixSyncClient::write_link_direct_words(
   return run_until_complete();
 }
 
-Status PosixSyncClient::write_link_direct_bits(
+Status HostSyncClient::write_link_direct_bits(
     std::string_view head_device,
     mcprotocol::serial::Span<const BitValue> bits) noexcept {
   LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
@@ -879,7 +881,7 @@ Status PosixSyncClient::write_link_direct_bits(
       now_ms(),
       device,
       bits,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -887,7 +889,7 @@ Status PosixSyncClient::write_link_direct_bits(
   return run_until_complete();
 }
 
-Status PosixSyncClient::write_native_qualified_words(
+Status HostSyncClient::write_qualified_buffer_words(
     std::string_view head_device,
     mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
   QualifiedBufferWordDevice device(QualifiedBufferDeviceKind::G, 0U, 0U);
@@ -896,11 +898,11 @@ Status PosixSyncClient::write_native_qualified_words(
     return status;
   }
 
-  status = client_.async_extended_batch_write_words(
+  status = client_.async_qualified_buffer_batch_write_words(
       now_ms(),
       device,
       words,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -908,12 +910,12 @@ Status PosixSyncClient::write_native_qualified_words(
   return run_until_complete();
 }
 
-Status PosixSyncClient::write_extended_file_register_words(
+Status HostSyncClient::write_extended_file_register_words(
     const ExtendedFileRegisterBatchWriteWordsRequest& request) noexcept {
   const Status status = client_.async_write_extended_file_register_words(
       now_ms(),
       request,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -921,12 +923,12 @@ Status PosixSyncClient::write_extended_file_register_words(
   return run_until_complete();
 }
 
-Status PosixSyncClient::direct_write_extended_file_register_words(
+Status HostSyncClient::write_direct_extended_file_register_words(
     const ExtendedFileRegisterDirectBatchWriteWordsRequest& request) noexcept {
   const Status status = client_.async_direct_write_extended_file_register_words(
       now_ms(),
       request,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -934,7 +936,7 @@ Status PosixSyncClient::direct_write_extended_file_register_words(
   return run_until_complete();
 }
 
-Status PosixSyncClient::random_read(
+Status HostSyncClient::read_random(
     mcprotocol::serial::Span<const highlevel::RandomReadWordSpec> word_items,
     mcprotocol::serial::Span<const highlevel::RandomReadDWordSpec> dword_items,
     mcprotocol::serial::Span<std::uint16_t> out_words,
@@ -955,7 +957,7 @@ Status PosixSyncClient::random_read(
       request,
       out_words,
       out_dwords,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -963,25 +965,25 @@ Status PosixSyncClient::random_read(
   return run_until_complete();
 }
 
-Status PosixSyncClient::random_read_word(
+Status HostSyncClient::read_random_word(
     std::string_view device,
     std::uint16_t& out_value) noexcept {
   const std::array<highlevel::RandomReadWordSpec, 1> items {{
       highlevel::RandomReadWordSpec(device),
   }};
-  return random_read(items, {}, mcprotocol::serial::Span<std::uint16_t>(&out_value, 1U), {});
+  return read_random(items, {}, mcprotocol::serial::Span<std::uint16_t>(&out_value, 1U), {});
 }
 
-Status PosixSyncClient::random_read_dword(
+Status HostSyncClient::read_random_dword(
     std::string_view device,
     std::uint32_t& out_value) noexcept {
   const std::array<highlevel::RandomReadDWordSpec, 1> items {{
       highlevel::RandomReadDWordSpec(device),
   }};
-  return random_read({}, items, {}, mcprotocol::serial::Span<std::uint32_t>(&out_value, 1U));
+  return read_random({}, items, {}, mcprotocol::serial::Span<std::uint32_t>(&out_value, 1U));
 }
 
-Status PosixSyncClient::random_write_words(
+Status HostSyncClient::write_random_words(
     mcprotocol::serial::Span<const highlevel::RandomWriteWordSpec> items) noexcept {
   auto parsed_items = detail::make_filled_array<RandomWriteWordItem, kMaxRandomAccessItems>(
       RandomWriteWordItem(DeviceAddress {DeviceCode::D, 0U}, 0U));
@@ -995,7 +997,7 @@ Status PosixSyncClient::random_write_words(
       now_ms(),
       request_items,
       {},
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -1003,7 +1005,7 @@ Status PosixSyncClient::random_write_words(
   return run_until_complete();
 }
 
-Status PosixSyncClient::random_write_dwords(
+Status HostSyncClient::write_random_dwords(
     mcprotocol::serial::Span<const highlevel::RandomWriteDWordSpec> items) noexcept {
   auto parsed_items = detail::make_filled_array<RandomWriteDWordItem, kMaxRandomAccessItems>(
       RandomWriteDWordItem(DeviceAddress {DeviceCode::D, 0U}, 0U));
@@ -1013,19 +1015,19 @@ Status PosixSyncClient::random_write_dwords(
     return status;
   }
   status = client_.async_random_write_words(
-      now_ms(), {}, request_items, &PosixSyncClient::on_request_complete, &completion_);
+      now_ms(), {}, request_items, &HostSyncClient::on_request_complete, &completion_);
   if (!status.ok()) {
     return status;
   }
   return run_until_complete();
 }
 
-Status PosixSyncClient::random_write_extended_file_register_words(
+Status HostSyncClient::write_random_extended_file_register_words(
     mcprotocol::serial::Span<const ExtendedFileRegisterRandomWriteWordItem> items) noexcept {
   const Status status = client_.async_random_write_extended_file_register_words(
       now_ms(),
       items,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -1033,25 +1035,25 @@ Status PosixSyncClient::random_write_extended_file_register_words(
   return run_until_complete();
 }
 
-Status PosixSyncClient::random_write_word(
+Status HostSyncClient::write_random_word(
     std::string_view device,
     std::uint16_t value) noexcept {
   const std::array<highlevel::RandomWriteWordSpec, 1> items {{
       highlevel::RandomWriteWordSpec(device, value),
   }};
-  return random_write_words(items);
+  return write_random_words(items);
 }
 
-Status PosixSyncClient::random_write_dword(
+Status HostSyncClient::write_random_dword(
     std::string_view device,
     std::uint32_t value) noexcept {
   const std::array<highlevel::RandomWriteDWordSpec, 1> items {{
       highlevel::RandomWriteDWordSpec(device, value),
   }};
-  return random_write_dwords(items);
+  return write_random_dwords(items);
 }
 
-Status PosixSyncClient::random_write_bits(
+Status HostSyncClient::write_random_bits(
     mcprotocol::serial::Span<const highlevel::RandomWriteBitSpec> items) noexcept {
   auto parsed_items = detail::make_filled_array<RandomWriteBitItem, kMaxRandomAccessItems>(
       RandomWriteBitItem(DeviceAddress {DeviceCode::M, 0U}, false));
@@ -1064,7 +1066,7 @@ Status PosixSyncClient::random_write_bits(
   status = client_.async_random_write_bits(
       now_ms(),
       request_items,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -1072,16 +1074,115 @@ Status PosixSyncClient::random_write_bits(
   return run_until_complete();
 }
 
-Status PosixSyncClient::random_write_bit(
+Status HostSyncClient::write_random_bit(
     std::string_view device,
     BitValue value) noexcept {
   const std::array<highlevel::RandomWriteBitSpec, 1> items {{
       highlevel::RandomWriteBitSpec(device, value),
   }};
-  return random_write_bits(items);
+  return write_random_bits(items);
 }
 
-Status PosixSyncClient::register_monitor(
+Status HostSyncClient::read_random_link_direct_words(
+    Span<const LinkDirectRandomReadWordItem> word_items,
+    Span<std::uint16_t> out_words) noexcept {
+  const Status status = client_.async_link_direct_random_read(
+      now_ms(), word_items, out_words, &HostSyncClient::on_request_complete, &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status HostSyncClient::write_random_link_direct_words(
+    Span<const LinkDirectRandomWriteWordItem> items) noexcept {
+  const Status status = client_.async_link_direct_random_write_words(
+      now_ms(), items, &HostSyncClient::on_request_complete, &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status HostSyncClient::write_random_link_direct_bits(
+    Span<const LinkDirectRandomWriteBitItem> items) noexcept {
+  const Status status = client_.async_link_direct_random_write_bits(
+      now_ms(), items, &HostSyncClient::on_request_complete, &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status HostSyncClient::self_test_loopback(
+    Span<const char> hex_ascii,
+    Span<char> out_echoed) noexcept {
+  const Status status = client_.async_loopback(
+      now_ms(), hex_ascii, out_echoed, &HostSyncClient::on_request_complete, &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status HostSyncClient::read_block(
+    const MultiBlockReadRequest& request,
+    Span<std::uint16_t> out_words,
+    Span<BitValue> out_bits,
+    Span<MultiBlockReadBlockResult> out_results) noexcept {
+  const Status status = client_.async_multi_block_read(
+      now_ms(),
+      request,
+      out_words,
+      out_bits,
+      out_results,
+      &HostSyncClient::on_request_complete,
+      &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status HostSyncClient::write_block(const MultiBlockWriteRequest& request) noexcept {
+  const Status status = client_.async_multi_block_write(
+      now_ms(), request, &HostSyncClient::on_request_complete, &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status HostSyncClient::read_link_direct_block(
+    const LinkDirectMultiBlockReadRequest& request,
+    Span<std::uint16_t> out_words,
+    Span<BitValue> out_bits,
+    Span<MultiBlockReadBlockResult> out_results) noexcept {
+  const Status status = client_.async_link_direct_multi_block_read(
+      now_ms(),
+      request,
+      out_words,
+      out_bits,
+      out_results,
+      &HostSyncClient::on_request_complete,
+      &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status HostSyncClient::write_link_direct_block(
+    const LinkDirectMultiBlockWriteRequest& request) noexcept {
+  const Status status = client_.async_link_direct_multi_block_write(
+      now_ms(), request, &HostSyncClient::on_request_complete, &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status HostSyncClient::register_monitor_devices(
     mcprotocol::serial::Span<const highlevel::RandomReadWordSpec> word_items,
     mcprotocol::serial::Span<const highlevel::RandomReadDWordSpec> dword_items) noexcept {
   auto parsed_word_items = detail::make_filled_array<RandomReadWordItem, kMaxMonitorItems>(
@@ -1095,10 +1196,10 @@ Status PosixSyncClient::register_monitor(
     return status;
   }
 
-  status = client_.async_register_monitor(
+  status = client_.async_register_monitor_devices(
       now_ms(),
       request,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -1106,26 +1207,26 @@ Status PosixSyncClient::register_monitor(
   return run_until_complete();
 }
 
-Status PosixSyncClient::register_monitor_word(std::string_view device) noexcept {
+Status HostSyncClient::register_monitor_word(std::string_view device) noexcept {
   const std::array<highlevel::RandomReadWordSpec, 1> items {{
       highlevel::RandomReadWordSpec(device),
   }};
-  return register_monitor(items, {});
+  return register_monitor_devices(items, {});
 }
 
-Status PosixSyncClient::register_monitor_dword(std::string_view device) noexcept {
+Status HostSyncClient::register_monitor_dword(std::string_view device) noexcept {
   const std::array<highlevel::RandomReadDWordSpec, 1> items {{
       highlevel::RandomReadDWordSpec(device),
   }};
-  return register_monitor({}, items);
+  return register_monitor_devices({}, items);
 }
 
-Status PosixSyncClient::register_extended_file_register_monitor(
+Status HostSyncClient::register_extended_file_register_monitor(
     const ExtendedFileRegisterMonitorRegistration& request) noexcept {
   const Status status = client_.async_register_extended_file_register_monitor(
       now_ms(),
       request,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -1133,14 +1234,24 @@ Status PosixSyncClient::register_extended_file_register_monitor(
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_monitor(
+Status HostSyncClient::register_link_direct_monitor_devices(
+    const LinkDirectMonitorRegistration& request) noexcept {
+  const Status status = client_.async_link_direct_register_monitor(
+      now_ms(), request, &HostSyncClient::on_request_complete, &completion_);
+  if (!status.ok()) {
+    return status;
+  }
+  return run_until_complete();
+}
+
+Status HostSyncClient::run_monitor_cycle(
     mcprotocol::serial::Span<std::uint16_t> out_words,
     mcprotocol::serial::Span<std::uint32_t> out_dwords) noexcept {
-  const Status status = client_.async_read_monitor(
+  const Status status = client_.async_run_monitor_cycle(
       now_ms(),
       out_words,
       out_dwords,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -1148,12 +1259,12 @@ Status PosixSyncClient::read_monitor(
   return run_until_complete();
 }
 
-Status PosixSyncClient::read_extended_file_register_monitor(
+Status HostSyncClient::read_extended_file_register_monitor(
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   const Status status = client_.async_read_extended_file_register_monitor(
       now_ms(),
       out_words,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -1161,7 +1272,7 @@ Status PosixSyncClient::read_extended_file_register_monitor(
   return run_until_complete();
 }
 
-Status PosixSyncClient::write_bits_single_request(
+Status HostSyncClient::write_bits_single_request(
     std::string_view head_device,
     mcprotocol::serial::Span<const BitValue> bits) noexcept {
   BatchWriteBitsRequest request(DeviceAddress {DeviceCode::M, 0U}, {});
@@ -1173,7 +1284,7 @@ Status PosixSyncClient::write_bits_single_request(
   status = client_.async_batch_write_bits(
       now_ms(),
       request,
-      &PosixSyncClient::on_request_complete,
+      &HostSyncClient::on_request_complete,
       &completion_);
   if (!status.ok()) {
     return status;
@@ -1181,7 +1292,7 @@ Status PosixSyncClient::write_bits_single_request(
   return run_until_complete();
 }
 
-Status PosixSyncClient::write_bits(
+Status HostSyncClient::write_bits(
     std::string_view head_device,
     mcprotocol::serial::Span<const BitValue> bits) noexcept {
   return write_bits_single_request(head_device, bits);

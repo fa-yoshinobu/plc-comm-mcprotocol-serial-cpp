@@ -4,7 +4,7 @@
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| The request is sent, but no response arrives. | Baud rate, parity, and stop bits do not match the PLC serial module. All three must be correct at the same time. | Confirm the PLC serial module DIP switch or parameter settings, then set `PosixSerialConfig` or your MCU UART to the same values. |
+| The request is sent, but no response arrives. | Baud rate, parity, and stop bits do not match the PLC serial module. All three must be correct at the same time. | Confirm the PLC serial module DIP switch or parameter settings, then set `HostSerialConfig` or your MCU UART to the same values. |
 
 ## `PlcProfile::Unspecified`
 
@@ -36,13 +36,7 @@
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| Only one station responds, or no RS-485 station responds. | The selected frame-specific multidrop station/network/PC/destination-module target or connection topology does not match the serial-network configuration. | Construct the appropriate frame-specific route. For normal/1:n use a `*StandardMultidropRoute`; for m:n use a `*MnMultidropRoute` and the assigned mandatory `SelfStationNo` (0..31). Do not reuse a C24-side station number or infer station-count rules. For 3C/4C supply a `C34PcTarget`; 4C also requires `C4DestinationModule`; 1E requires `E1PcTarget`. For an RS-232C point-to-point connected station, select `RouteConfig {HostStationRoute {}}`. |
-
-## 1E timer changes when communication timeout changes
-
-| Symptom | Root cause | Fix |
-| --- | --- | --- |
-| A 1E request needs a different PLC processing timer than the host response deadline. | These are independent limits: response timeout controls host waiting, while the 1E monitoring timer is encoded into the PLC request. | Leave the common response timeout at 3000 ms or set it explicitly, and configure `E1MonitoringTimer::milliseconds(...)` separately in exact 250 ms units. No rounding or saturation is performed. |
+| Only one station responds, or no RS-485 station responds. | The selected frame-specific multidrop station/network/PC/destination-module target or connection topology does not match the serial-network configuration. | Construct the appropriate frame-specific route. For normal/1:n use a `*StandardMultidropRoute`; for m:n use a `*MnMultidropRoute` and the assigned mandatory `SelfStationNo` (0..31). Do not reuse a C24-side station number or infer station-count rules. For 3C/4C supply a `C34PcTarget`; 4C also requires `C4DestinationModule`. For an RS-232C point-to-point connected station, select `RouteConfig {HostStationRoute {}}`. |
 
 ## Response starts but times out before completion
 
@@ -78,7 +72,7 @@
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| `PosixSyncClient` or `PosixSerialConfig` is not found in a PlatformIO project. | The PlatformIO package intentionally compiles only the transport-agnostic core. Defining `MCPROTOCOL_SERIAL_ENABLE_HOST_API=1` would expose declarations whose implementations are not in that package. | Vendor the source repository in a CMake host project, link the host-enabled `mcprotocol_serial` target, and include `#include <mcprotocol/serial/host_sync.hpp>` explicitly. |
+| `HostSyncClient` or `HostSerialConfig` is not found in a PlatformIO project. | The PlatformIO package intentionally compiles only the transport-agnostic core. Defining `MCPROTOCOL_SERIAL_ENABLE_HOST_API=1` would expose declarations whose implementations are not in that package. | Vendor the source repository in a CMake host project, link the host-enabled `mcprotocol_serial` target, and include `#include <mcprotocol/serial/host_sync.hpp>` explicitly. |
 
 ## Constrained standard library
 

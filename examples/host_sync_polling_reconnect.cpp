@@ -11,8 +11,8 @@
 namespace {
 
 using mcprotocol::serial::PlcProfile;
-using mcprotocol::serial::PosixSerialConfig;
-using mcprotocol::serial::PosixSyncClient;
+using mcprotocol::serial::HostSerialConfig;
+using mcprotocol::serial::HostSyncClient;
 using mcprotocol::serial::ProtocolConfig;
 using mcprotocol::serial::Status;
 using mcprotocol::serial::SumCheckMode;
@@ -165,8 +165,8 @@ ProtocolConfig make_protocol(
   return protocol;
 }
 
-PosixSerialConfig make_serial_config(const Options& options) {
-  return PosixSerialConfig(
+HostSerialConfig make_serial_config(const Options& options) {
+  return HostSerialConfig(
       options.serial_device,
       static_cast<std::uint32_t>(options.baud),
       8,
@@ -200,7 +200,7 @@ int main(int argc, char** argv) {
 
   auto protocol = make_protocol(options.protocol, profile, options.sum_check_mode);
 
-  const PosixSerialConfig serial = make_serial_config(options);
+  const HostSerialConfig serial = make_serial_config(options);
   bool connected_once = false;
   bool online = false;
   unsigned backoff_ms = kInitialBackoffMs;
@@ -220,7 +220,7 @@ int main(int argc, char** argv) {
   log_state("reconnecting", start_message);
 
   while (true) {
-    PosixSyncClient plc;
+    HostSyncClient plc;
     Status status = plc.open(serial, protocol);
     if (status.ok()) {
       std::array<std::uint16_t, 32> words {};

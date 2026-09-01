@@ -49,15 +49,6 @@ template <typename T>
 #endif
 }
 
-[[nodiscard]] constexpr bool is_e1_frame(const ProtocolConfig& config) noexcept {
-#if MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
-  return config.frame_kind() == FrameKind::E1;
-#else
-  (void)config;
-  return false;
-#endif
-}
-
 [[nodiscard]] mcprotocol::serial::Span<const std::uint8_t> as_u8_span(mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes) noexcept {
   return {
       reinterpret_cast<const std::uint8_t*>(bytes.data()),
@@ -75,9 +66,6 @@ template <typename T>
 }
 
 [[nodiscard]] bool is_response_start_byte(const ProtocolConfig& config, std::uint8_t byte) noexcept {
-  if (is_e1_frame(config)) {
-    return false;
-  }
   if (is_ascii_mode(config)) {
     if (config.ascii_format() == AsciiFormat::Format3) {
       return byte == 0x02U;
@@ -105,7 +93,8 @@ struct StreamDecodeResult {
   std::size_t discard_prefix = 0;
 };
 
-[[maybe_unused]] [[nodiscard]] bool is_e1_bit_device(DeviceCode code) noexcept {
+#if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
+[[nodiscard]] bool is_c1_bit_device(DeviceCode code) noexcept {
   switch (code) {
     case DeviceCode::X:
     case DeviceCode::Y:
@@ -136,129 +125,14 @@ struct StreamDecodeResult {
       return false;
   }
 }
-
-[[nodiscard]] std::array<std::uint8_t, 2> ascii_hex_byte(std::uint8_t value) noexcept {
-  const auto nibble = [](std::uint8_t part) noexcept -> std::uint8_t {
-    return static_cast<std::uint8_t>(part < 10U ? ('0' + part) : ('A' + part - 10U));
-  };
-  return {
-      nibble(static_cast<std::uint8_t>((value >> 4U) & 0x0FU)),
-      nibble(static_cast<std::uint8_t>(value & 0x0FU)),
-  };
-}
+#endif
 
 [[nodiscard]] StreamDecodeResult decode_stream_buffer(
     const ProtocolConfig& config,
     FrameCodecContext frame_context,
-    std::uint8_t e1_response_subheader,
-    std::size_t e1_success_response_data_size,
     mcprotocol::serial::Span<const std::uint8_t> bytes) noexcept {
   StreamDecodeResult result {};
   if (bytes.empty()) {
-    return result;
-  }
-
-  if (is_e1_frame(config)) {
-    const std::size_t subheader_size = is_ascii_mode(config) ? 2U : 1U;
-    const std::size_t minimum_frame_size = subheader_size + (is_ascii_mode(config) ? 2U : 1U);
-    if (is_ascii_mode(config)) {
-      const auto expected = ascii_hex_byte(e1_response_subheader);
-      for (std::size_t offset = 0; offset < bytes.size(); ++offset) {
-        const std::size_t remaining = bytes.size() - offset;
-        if (remaining == 1U && bytes[offset] == expected[0]) {
-          result.discard_prefix = offset;
-          return result;
-        }
-        if (remaining < 2U) {
-          break;
-        }
-        if (bytes[offset] == expected[0] && bytes[offset + 1U] == expected[1]) {
-          if (offset != 0U) {
-            result.discard_prefix = offset;
-            return result;
-          }
-          if (bytes.size() < minimum_frame_size) {
-            return result;
-          }
-          std::uint32_t end_code = 0;
-          const auto nibble = [](std::uint8_t value) noexcept -> int {
-            if (value >= '0' && value <= '9') {
-              return value - '0';
-            }
-            if (value >= 'A' && value <= 'F') {
-              return 10 + (value - 'A');
-            }
-            if (value >= 'a' && value <= 'f') {
-              return 10 + (value - 'a');
-            }
-            return -1;
-          };
-          const int upper = nibble(bytes[2]);
-          const int lower = nibble(bytes[3]);
-          if (upper < 0 || lower < 0) {
-            result.status = DecodeStatus::Error;
-            result.decode = DecodeResult {
-                DecodeStatus::Error,
-                RawResponseFrame {},
-                make_status(StatusCode::Parse, "Failed to parse 1E ASCII end code"),
-                4U,
-            };
-            return result;
-          }
-          end_code = static_cast<std::uint32_t>((upper << 4U) | lower);
-          std::size_t total_size = 4U;
-          if (end_code == 0U) {
-            total_size += e1_success_response_data_size;
-          } else if (end_code == 0x5BU) {
-            total_size += 2U;
-          }
-          if (bytes.size() < total_size) {
-            return result;
-          }
-          DecodeResult candidate =
-              detail::decode_response_validated(
-                  config, frame_context, checked_first(bytes, total_size));
-          candidate.bytes_consumed = total_size;
-          result.status = candidate.status;
-          result.decode = candidate;
-          return result;
-        }
-      }
-      result.discard_prefix = bytes.size();
-      return result;
-    }
-
-    for (std::size_t offset = 0; offset < bytes.size(); ++offset) {
-      if (bytes[offset] != e1_response_subheader) {
-        continue;
-      }
-      if (offset != 0U) {
-        result.discard_prefix = offset;
-        return result;
-      }
-      if (bytes.size() < minimum_frame_size) {
-        return result;
-      }
-      const std::uint8_t end_code = bytes[1];
-      std::size_t total_size = 2U;
-      if (end_code == 0x00U) {
-        total_size += e1_success_response_data_size;
-      } else if (end_code == 0x5BU) {
-        total_size += 1U;
-      }
-      if (bytes.size() < total_size) {
-        return result;
-      }
-      DecodeResult candidate =
-          detail::decode_response_validated(
-              config, frame_context, checked_first(bytes, total_size));
-      candidate.bytes_consumed = total_size;
-      result.status = candidate.status;
-      result.decode = candidate;
-      return result;
-    }
-
-    result.discard_prefix = bytes.size();
     return result;
   }
 
@@ -496,8 +370,6 @@ void MelsecSerialClient::on_rx_bytes(
         active_format2_block_number_valid_
             ? FrameCodecContext::format2(active_format2_block_number_)
             : FrameCodecContext::none(),
-        expected_e1_response_subheader(),
-        expected_success_response_data_size(operation_),
         mcprotocol::serial::Span<const std::uint8_t>(rx_frame_.data(), rx_frame_size_));
     if (stream_decode.discard_prefix != 0U) {
       discard_rx_prefix(rx_frame_, rx_frame_size_, stream_decode.discard_prefix);
@@ -631,7 +503,6 @@ Status MelsecSerialClient::start_request(
   std::size_t encoded_size = 0;
   const bool format2 = is_ascii_mode(config_) &&
                        !is_c1_frame(config_) &&
-                       !is_e1_frame(config_) &&
                        config_.ascii_format() == AsciiFormat::Format2;
   const FrameCodecContext frame_context = format2
                                               ? FrameCodecContext::format2(next_format2_block_number_)
@@ -691,7 +562,6 @@ Status MelsecSerialClient::preflight_request(
   std::size_t encoded_size = 0U;
   const bool format2 = is_ascii_mode(config_) &&
                        !is_c1_frame(config_) &&
-                       !is_e1_frame(config_) &&
                        config_.ascii_format() == AsciiFormat::Format2;
   const FrameCodecContext frame_context = format2
                                               ? FrameCodecContext::format2(next_format2_block_number_)
@@ -837,69 +707,6 @@ void MelsecSerialClient::end_compound_deadline() noexcept {
   compound_deadline_ms_ = 0U;
 }
 
-std::uint8_t MelsecSerialClient::expected_e1_response_subheader() const noexcept {
-  switch (operation_) {
-    case OperationKind::BatchReadBits:
-      return 0x80U;
-    case OperationKind::BatchReadWords:
-      return 0x81U;
-    case OperationKind::BatchWriteBits:
-      return 0x82U;
-    case OperationKind::BatchWriteWords:
-      return 0x83U;
-    case OperationKind::ReadExtendedFileRegisterWords:
-      return 0x97U;
-    case OperationKind::WriteExtendedFileRegisterWords:
-      return 0x98U;
-#if MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS
-    case OperationKind::RandomWriteExtendedFileRegisterWords:
-      return 0x99U;
-    case OperationKind::RandomWriteBits:
-      return 0x84U;
-    case OperationKind::RandomWriteWords:
-      return 0x85U;
-#endif
-#if MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS
-    case OperationKind::RegisterMonitor:
-      if (pending_random_word_item_count_ == 0U || pending_random_dword_item_count_ != 0U) {
-        return 0x87U;
-      }
-      for (std::size_t index = 0; index < pending_random_word_item_count_; ++index) {
-        if (!is_e1_bit_device(pending_random_word_items_[index].device.code)) {
-          return 0x87U;
-        }
-      }
-      return 0x86U;
-    case OperationKind::ReadMonitor: {
-      bool bit_units = monitor_word_item_count_ != 0U && monitor_dword_item_count_ == 0U;
-      for (std::size_t index = 0; index < monitor_word_item_count_; ++index) {
-        if (!is_e1_bit_device(monitor_word_items_[index].device.code)) {
-          bit_units = false;
-          break;
-        }
-      }
-      return bit_units ? 0x88U : 0x89U;
-    }
-    case OperationKind::RegisterExtendedFileRegisterMonitor:
-      return 0x9AU;
-    case OperationKind::ReadExtendedFileRegisterMonitor:
-      return 0x9BU;
-#endif
-    case OperationKind::DirectReadExtendedFileRegisterWords:
-      return 0xBBU;
-    case OperationKind::DirectWriteExtendedFileRegisterWords:
-      return 0xBCU;
-#if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
-    case OperationKind::ReadModuleBuffer:
-      return 0x8EU;
-    case OperationKind::WriteModuleBuffer:
-      return 0x8FU;
-#endif
-    default:
-      return 0x00U;
-  }
-}
-
 std::size_t MelsecSerialClient::expected_success_response_data_size(
     OperationKind operation) const noexcept {
   const std::size_t ascii_word_size = config_.code_mode() == CodeMode::Ascii ? 4U : 2U;
@@ -912,11 +719,7 @@ std::size_t MelsecSerialClient::expected_success_response_data_size(
       return static_cast<std::size_t>(direct_extended_file_register_read_request_.points) * ascii_word_size;
     case OperationKind::BatchReadBits:
       if (config_.code_mode() == CodeMode::Ascii) {
-        return static_cast<std::size_t>(batch_read_bits_request_.points) +
-               (config_.frame_kind() == FrameKind::E1 &&
-                        (batch_read_bits_request_.points % 2U) != 0U
-                    ? 1U
-                    : 0U);
+        return static_cast<std::size_t>(batch_read_bits_request_.points);
       }
       return static_cast<std::size_t>((batch_read_bits_request_.points + 1U) / 2U);
     case OperationKind::ExtendedBatchReadWords:
@@ -961,7 +764,7 @@ std::size_t MelsecSerialClient::expected_success_response_data_size(
     case OperationKind::ReadMonitor: {
       bool bit_units = monitor_word_item_count_ != 0U && monitor_dword_item_count_ == 0U;
       for (std::size_t index = 0; index < monitor_word_item_count_; ++index) {
-        if (!is_e1_bit_device(monitor_word_items_[index].device.code)) {
+        if (!is_c1_bit_device(monitor_word_items_[index].device.code)) {
           bit_units = false;
           break;
         }
@@ -1338,7 +1141,7 @@ void MelsecSerialClient::clear_pending_outputs() noexcept {
   direct_extended_file_register_read_request_ =
       ExtendedFileRegisterDirectBatchReadWordsRequest(0U, 0U);
   batch_read_bits_request_ = BatchReadBitsRequest(DeviceAddress {DeviceCode::M, 0U}, 0U);
-  user_frame_read_request_ = UserFrameReadRequest(0U);
+  user_frame_read_request_ = UserFrameRegistrationReadRequest(0U);
   extended_batch_words_device_ =
       QualifiedBufferWordDevice(QualifiedBufferDeviceKind::G, 0U, 0U);
   extended_batch_words_points_ = 0U;
@@ -1676,7 +1479,7 @@ Status MelsecSerialClient::async_link_direct_batch_write_bits(
   return start_request(now_ms, OperationKind::BatchWriteBits, request_size, callback, user);
 }
 
-Status MelsecSerialClient::async_extended_batch_read_words(
+Status MelsecSerialClient::async_qualified_buffer_batch_read_words(
     std::uint32_t now_ms,
     const QualifiedBufferWordDevice& device,
     std::uint16_t points,
@@ -1707,7 +1510,7 @@ Status MelsecSerialClient::async_extended_batch_read_words(
   return start_request(now_ms, OperationKind::ExtendedBatchReadWords, request_size, callback, user);
 }
 
-Status MelsecSerialClient::async_extended_batch_write_words(
+Status MelsecSerialClient::async_qualified_buffer_batch_write_words(
     std::uint32_t now_ms,
     const QualifiedBufferWordDevice& device,
     mcprotocol::serial::Span<const std::uint16_t> words,
@@ -2137,7 +1940,7 @@ Status MelsecSerialClient::async_link_direct_multi_block_write(
 #endif
 }
 
-Status MelsecSerialClient::async_register_monitor(
+Status MelsecSerialClient::async_register_monitor_devices(
     std::uint32_t now_ms,
     const MonitorRegistration& request,
     CompletionHandler callback,
@@ -2255,7 +2058,7 @@ Status MelsecSerialClient::async_link_direct_register_monitor(
 #endif
 }
 
-Status MelsecSerialClient::async_read_monitor(
+Status MelsecSerialClient::async_run_monitor_cycle(
     std::uint32_t now_ms,
     mcprotocol::serial::Span<std::uint16_t> out_words,
     mcprotocol::serial::Span<std::uint32_t> out_dwords,
@@ -2640,9 +2443,9 @@ Status MelsecSerialClient::async_clear_error_information(
   return start_request(now_ms, OperationKind::ClearErrorInformation, request_size, callback, user);
 }
 
-Status MelsecSerialClient::async_read_user_frame(
+Status MelsecSerialClient::async_read_user_frame_registration(
     std::uint32_t now_ms,
-    const UserFrameReadRequest& request,
+    const UserFrameRegistrationReadRequest& request,
     UserFrameRegistrationData& out_data,
     CompletionHandler callback,
     void* user) noexcept {
@@ -2665,9 +2468,9 @@ Status MelsecSerialClient::async_read_user_frame(
   return start_request(now_ms, OperationKind::ReadUserFrame, request_size, callback, user);
 }
 
-Status MelsecSerialClient::async_write_user_frame(
+Status MelsecSerialClient::async_write_user_frame_registration(
     std::uint32_t now_ms,
-    const UserFrameWriteRequest& request,
+    const UserFrameRegistrationWriteRequest& request,
     CompletionHandler callback,
     void* user) noexcept {
   const Status admission_status = validate_request_admission();
@@ -2686,9 +2489,9 @@ Status MelsecSerialClient::async_write_user_frame(
   return start_request(now_ms, OperationKind::WriteUserFrame, request_size, callback, user);
 }
 
-Status MelsecSerialClient::async_delete_user_frame(
+Status MelsecSerialClient::async_delete_user_frame_registration(
     std::uint32_t now_ms,
-    const UserFrameDeleteRequest& request,
+    const UserFrameRegistrationDeleteRequest& request,
     CompletionHandler callback,
     void* user) noexcept {
   const Status admission_status = validate_request_admission();

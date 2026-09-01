@@ -47,7 +47,6 @@ elseif(MCPROTOCOL_FEATURE_PROFILE_NORMALIZED STREQUAL "reduced")
     MCPROTOCOL_SERIAL_ENABLE_FRAME_C3=0
     MCPROTOCOL_SERIAL_ENABLE_FRAME_C2=0
     MCPROTOCOL_SERIAL_ENABLE_FRAME_C1=0
-    MCPROTOCOL_SERIAL_ENABLE_FRAME_E1=0
   )
 elseif(MCPROTOCOL_FEATURE_PROFILE_NORMALIZED STREQUAL "ultra")
   list(APPEND MCPROTOCOL_PROFILE_COMPILE_DEFINITIONS
@@ -71,7 +70,6 @@ elseif(MCPROTOCOL_FEATURE_PROFILE_NORMALIZED STREQUAL "ultra")
     MCPROTOCOL_SERIAL_ENABLE_FRAME_C3=0
     MCPROTOCOL_SERIAL_ENABLE_FRAME_C2=0
     MCPROTOCOL_SERIAL_ENABLE_FRAME_C1=0
-    MCPROTOCOL_SERIAL_ENABLE_FRAME_E1=0
   )
 else()
   message(FATAL_ERROR
@@ -210,6 +208,14 @@ if(MCPROTOCOL_SERIAL_BUILD_TESTING)
 
   add_test(NAME standard_header_consumer COMMAND standard_header_consumer)
 
+  add_executable(compat_header_consumer
+    tests/compat_header_consumer.cpp
+  )
+
+  target_link_libraries(compat_header_consumer PRIVATE mcprotocol_serial)
+
+  add_test(NAME compat_header_consumer COMMAND compat_header_consumer)
+
   add_executable(bundled_algorithm_compat_tests
     tests/bundled_algorithm_compat_tests.cpp
   )
@@ -223,6 +229,11 @@ if(MCPROTOCOL_SERIAL_BUILD_TESTING)
       NAME performance_contract_tests
       COMMAND ${Python3_EXECUTABLE}
               ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_performance_contracts.py
+    )
+    add_test(
+      NAME host_sync_api_contract_tests
+      COMMAND ${Python3_EXECUTABLE}
+              ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_host_sync_api_contracts.py
     )
   endif()
 

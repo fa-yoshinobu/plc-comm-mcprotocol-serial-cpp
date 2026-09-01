@@ -1,6 +1,6 @@
 #if defined(_WIN32)
 
-#include "mcprotocol/serial/posix_serial.hpp"
+#include "mcprotocol/serial/host_serial.hpp"
 #include "mcprotocol/serial/detail/win32_serial_settings.hpp"
 #include "mcprotocol/serial/detail/yield_first_wait.hpp"
 #include "host_now_ms.hpp"
@@ -127,7 +127,7 @@ namespace {
   return ok_status();
 }
 
-[[nodiscard]] Status configure_comm(HANDLE h, const PosixSerialConfig& config) noexcept {
+[[nodiscard]] Status configure_comm(HANDLE h, const HostSerialConfig& config) noexcept {
   DCB dcb {};
   dcb.DCBlength = sizeof(dcb);
   if (!GetCommState(h, &dcb)) {
@@ -155,11 +155,11 @@ namespace {
 
 }  // namespace
 
-PosixSerialPort::~PosixSerialPort() {
+HostSerialPort::~HostSerialPort() {
   close();
 }
 
-Status PosixSerialPort::open(const PosixSerialConfig& config) noexcept {
+Status HostSerialPort::open(const HostSerialConfig& config) noexcept {
   const Status config_status = validate_serial_config(config);
   if (!config_status.ok()) {
     return config_status;
@@ -195,22 +195,22 @@ Status PosixSerialPort::open(const PosixSerialConfig& config) noexcept {
   return ok_status();
 }
 
-void PosixSerialPort::close() noexcept {
+void HostSerialPort::close() noexcept {
   if (fd_ >= 0) {
     CloseHandle(to_handle(fd_));
     fd_ = -1;
   }
 }
 
-bool PosixSerialPort::is_open() const noexcept {
+bool HostSerialPort::is_open() const noexcept {
   return fd_ >= 0;
 }
 
-std::intptr_t PosixSerialPort::native_handle() const noexcept {
+std::intptr_t HostSerialPort::native_handle() const noexcept {
   return fd_;
 }
 
-Status PosixSerialPort::write_all_until(
+Status HostSerialPort::write_all_until(
     mcprotocol::serial::Span<const mcprotocol::serial::Byte> bytes,
     std::uint32_t absolute_deadline_ms) noexcept {
   if (fd_ < 0) {
@@ -253,7 +253,7 @@ Status PosixSerialPort::write_all_until(
   return ok_status();
 }
 
-Status PosixSerialPort::read_some_until(
+Status HostSerialPort::read_some_until(
     mcprotocol::serial::Span<mcprotocol::serial::Byte> buffer,
     std::uint32_t absolute_deadline_ms,
     std::size_t& out_size) noexcept {
@@ -297,7 +297,7 @@ Status PosixSerialPort::read_some_until(
   return ok_status();
 }
 
-Status PosixSerialPort::flush_rx() noexcept {
+Status HostSerialPort::flush_rx() noexcept {
   if (fd_ < 0) {
     return make_status(StatusCode::NotConnected, "Serial port is not open");
   }
@@ -307,7 +307,7 @@ Status PosixSerialPort::flush_rx() noexcept {
   return ok_status();
 }
 
-Status PosixSerialPort::drain_tx_until(std::uint32_t absolute_deadline_ms) noexcept {
+Status HostSerialPort::drain_tx_until(std::uint32_t absolute_deadline_ms) noexcept {
   if (fd_ < 0) {
     return make_status(StatusCode::NotConnected, "Serial port is not open");
   }
@@ -335,7 +335,7 @@ Status PosixSerialPort::drain_tx_until(std::uint32_t absolute_deadline_ms) noexc
       sleep_one);
 }
 
-Status PosixSerialPort::set_rts(bool enabled) noexcept {
+Status HostSerialPort::set_rts(bool enabled) noexcept {
   if (fd_ < 0) {
     return make_status(StatusCode::NotConnected, "Serial port is not open");
   }

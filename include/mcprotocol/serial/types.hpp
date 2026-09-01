@@ -16,7 +16,7 @@
 ///
 /// - protocol-selection and routing enums
 /// - static buffer and feature-limit constants
-/// - request/response payload structs used by `MelsecSerialClient`, `PosixSyncClient`, and `CommandCodec`
+/// - request/response payload structs used by `MelsecSerialClient`, `HostSyncClient`, and `CommandCodec`
 /// - callback and transport hook types used by host and MCU integrations
 
 namespace mcprotocol::serial {
@@ -116,8 +116,8 @@ namespace mcprotocol::serial {
 #define MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 1
 #endif
 
-#ifndef MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
-#define MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 1
+#ifdef MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
+#error "MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 was removed with the unsupported MC Serial 1E surface"
 #endif
 /// @}
 
@@ -177,17 +177,13 @@ enum class FrameKind : std::uint8_t {
   C4,
   /// Shorter ASCII serial frame that reuses the `C4` payload codec.
   C3,
-  /// Smallest ASCII serial frame supported by this repository.
+  /// Smallest ASCII serial frame: compact selectors are exactly `0401/0001=1`, `0401/0000=2`, `1401/0001=3`, `1401/0000=4`, `0403/0000=5`, `1402/0001=6`, `1402/0000=7`, `0801/0000=8`, and `0802/0000=9`; only loopback `0619/0000` uses the full command header; every other pair returns `UnsupportedConfiguration` before transmission, while the same public operation remains usable through 3C or 4C when supported there.
   C2,
   /// Legacy ASCII serial frame with its own command naming and routing rules.
-  C1,
-  /// Legacy frame family used by chapter-18 style command layouts.
-  E1
+  C1
 };
 
 /// \brief Frame families whose public configuration includes an explicit ASCII format.
-///
-/// 1E is intentionally absent because its ASCII representation has no Format1/2/3/4 selector.
 enum class AsciiFrameKind : std::uint8_t {
   C4 = static_cast<std::uint8_t>(FrameKind::C4),
   C3 = static_cast<std::uint8_t>(FrameKind::C3),
@@ -206,7 +202,6 @@ enum class AsciiFrameKind : std::uint8_t {
     case FrameKind::C3:
     case FrameKind::C2:
     case FrameKind::C1:
-    case FrameKind::E1:
       return true;
   }
   return false;
@@ -594,33 +589,6 @@ struct TimeoutConfig {
   std::uint32_t inter_byte_timeout_ms = 250;
 };
 
-/// \brief PLC-side ACPU monitoring timer encoded in 1E requests.
-///
-/// This protocol field is independent of the host communication response timeout. Values are
-/// expressed in milliseconds at the public boundary and must be exact 250 ms units representable
-/// by the 16-bit wire field. Zero is preserved as the protocol's explicit zero value.
-class E1MonitoringTimer {
- public:
-  constexpr E1MonitoringTimer() noexcept = default;
-
-  [[nodiscard]] static constexpr E1MonitoringTimer milliseconds(
-      std::uint32_t value) noexcept {
-    return E1MonitoringTimer(value);
-  }
-
-  [[nodiscard]] constexpr std::uint32_t value_ms() const noexcept { return value_ms_; }
-  [[nodiscard]] constexpr std::uint32_t ticks() const noexcept { return value_ms_ / 250U; }
-  [[nodiscard]] constexpr bool is_valid() const noexcept {
-    return (value_ms_ % 250U) == 0U && ticks() <= 0xFFFFU;
-  }
-
- private:
-  constexpr explicit E1MonitoringTimer(std::uint32_t value_ms) noexcept
-      : value_ms_(value_ms) {}
-
-  std::uint32_t value_ms_ = 4000U;
-};
-
 /// \brief Connected host-station route.
 ///
 /// The connected-station header values are protocol constants and therefore are intentionally not
@@ -678,42 +646,6 @@ class C34PcTarget {
       : kind_(kind), value_(value) {}
 
   C34PcTargetKind kind_;
-  std::uint32_t value_;
-};
-
-/// \brief Meaning of a 1E PC target.
-enum class E1PcTargetKind : std::uint8_t {
-  Number,
-  ConnectedStation,
-};
-
-/// \brief Mandatory typed PC target for an explicit 1E route.
-class E1PcTarget {
- public:
-  [[nodiscard]] static constexpr E1PcTarget number(std::uint32_t value) noexcept {
-    return E1PcTarget(E1PcTargetKind::Number, value);
-  }
-  [[nodiscard]] static constexpr E1PcTarget connected_station() noexcept {
-    return E1PcTarget(E1PcTargetKind::ConnectedStation, 0xFFU);
-  }
-
-  [[nodiscard]] constexpr E1PcTargetKind kind() const noexcept { return kind_; }
-  [[nodiscard]] constexpr std::uint32_t value() const noexcept { return value_; }
-  [[nodiscard]] constexpr bool is_valid() const noexcept {
-    switch (kind_) {
-      case E1PcTargetKind::Number:
-        return value_ >= 0x01U && value_ <= 0x40U;
-      case E1PcTargetKind::ConnectedStation:
-        return value_ == 0xFFU;
-    }
-    return false;
-  }
-
- private:
-  constexpr E1PcTarget(E1PcTargetKind kind, std::uint32_t value) noexcept
-      : kind_(kind), value_(value) {}
-
-  E1PcTargetKind kind_;
   std::uint32_t value_;
 };
 
@@ -985,16 +917,6 @@ class C4MnMultidropRoute {
   SelfStationNo self_station_no_;
 };
 
-/// \brief Explicit non-default 1E route with a mandatory typed PC target.
-class E1Route {
- public:
-  constexpr explicit E1Route(E1PcTarget pc_target) noexcept : pc_target_(pc_target) {}
-  [[nodiscard]] constexpr E1PcTarget pc_target() const noexcept { return pc_target_; }
-
- private:
-  E1PcTarget pc_target_;
-};
-
 namespace detail {
 struct RouteConfigAccess;
 }
@@ -1046,10 +968,6 @@ class RouteConfig {
         destination_module_own_selector_(route.destination_module().is_own_station_selector()),
         mn_multidrop_(true), self_station_no_(route.self_station_no().value()),
         self_station_valid_(route.self_station_no().is_valid()) {}
-  constexpr explicit RouteConfig(E1Route route) noexcept
-      : kind_(RouteKind::MultidropStation), route_frame_(FrameKind::E1),
-        pc_no_(route.pc_target().value()), pc_target_valid_(route.pc_target().is_valid()) {}
-
   [[nodiscard]] constexpr RouteKind kind() const noexcept { return kind_; }
   [[nodiscard]] constexpr bool is_specified() const noexcept {
     return kind_ != RouteKind::Unspecified;
@@ -1127,7 +1045,7 @@ class RouteConfig {
 };
 
 class MelsecSerialClient;
-class PosixSyncClient;
+class HostSyncClient;
 
 /// \brief Immutable tagged protocol configuration shared by codecs and client requests.
 ///
@@ -1136,7 +1054,7 @@ class PosixSyncClient;
 ///
 /// - `FrameCodec` for frame wrapping and response decoding
 /// - `CommandCodec` for command subcommand/device-layout differences
-/// - `MelsecSerialClient` and `PosixSyncClient` for runtime request execution
+/// - `MelsecSerialClient` and `HostSyncClient` for runtime request execution
 class ProtocolConfig {
  public:
   ProtocolConfig() = delete;
@@ -1154,8 +1072,7 @@ class ProtocolConfig {
         plc_profile,
         sum_check_mode,
         route,
-        timeout,
-        E1MonitoringTimer {});
+        timeout);
   }
 
   /// \brief Constructs an explicit ASCII session with a mandatory framing format.
@@ -1173,32 +1090,13 @@ class ProtocolConfig {
         plc_profile,
         sum_check_mode,
         route,
-        timeout,
-        E1MonitoringTimer {});
-  }
-
-  /// \brief Constructs an explicit 1E session; 1E has no public ASCII-format input.
-  [[nodiscard]] static constexpr ProtocolConfig e1(
-      CodeMode code_mode,
-      PlcProfile plc_profile,
-      RouteConfig route,
-      TimeoutConfig timeout = {},
-      E1MonitoringTimer e1_monitoring_timer = {}) noexcept {
-    return ProtocolConfig(
-        FrameKind::E1,
-        code_mode,
-        static_cast<AsciiFormat>(0xFF),
-        plc_profile,
-        SumCheckMode::Disabled,
-        route,
-        timeout,
-        e1_monitoring_timer);
+        timeout);
   }
 
   [[nodiscard]] constexpr FrameKind frame_kind() const noexcept { return frame_kind_; }
   [[nodiscard]] constexpr CodeMode code_mode() const noexcept { return code_mode_; }
   [[nodiscard]] constexpr bool has_ascii_format() const noexcept {
-    return code_mode_ == CodeMode::Ascii && frame_kind_ != FrameKind::E1;
+    return code_mode_ == CodeMode::Ascii;
   }
   [[nodiscard]] constexpr AsciiFormat ascii_format() const noexcept { return ascii_format_; }
   [[nodiscard]] constexpr PlcProfile plc_profile() const noexcept { return plc_profile_; }
@@ -1207,29 +1105,23 @@ class ProtocolConfig {
   }
   [[nodiscard]] constexpr const RouteConfig& route() const noexcept { return route_; }
   [[nodiscard]] constexpr const TimeoutConfig& timeout() const noexcept { return timeout_; }
-  [[nodiscard]] constexpr const E1MonitoringTimer& e1_monitoring_timer() const noexcept {
-    return e1_monitoring_timer_;
-  }
 
   /// \brief Returns a new immutable session configuration with a different explicit profile.
   [[nodiscard]] constexpr ProtocolConfig with_plc_profile(PlcProfile value) const noexcept {
     return ProtocolConfig(
-        frame_kind_, code_mode_, ascii_format_, value, sum_check_mode_, route_, timeout_,
-        e1_monitoring_timer_);
+        frame_kind_, code_mode_, ascii_format_, value, sum_check_mode_, route_, timeout_);
   }
 
   /// \brief Returns a new immutable session configuration with a different typed route.
   [[nodiscard]] constexpr ProtocolConfig with_route(RouteConfig value) const noexcept {
     return ProtocolConfig(
-        frame_kind_, code_mode_, ascii_format_, plc_profile_, sum_check_mode_, value, timeout_,
-        e1_monitoring_timer_);
+        frame_kind_, code_mode_, ascii_format_, plc_profile_, sum_check_mode_, value, timeout_);
   }
 
   /// \brief Returns a new immutable session configuration with different host timeout settings.
   [[nodiscard]] constexpr ProtocolConfig with_timeout(TimeoutConfig value) const noexcept {
     return ProtocolConfig(
-        frame_kind_, code_mode_, ascii_format_, plc_profile_, sum_check_mode_, route_, value,
-        e1_monitoring_timer_);
+        frame_kind_, code_mode_, ascii_format_, plc_profile_, sum_check_mode_, route_, value);
   }
 
   [[nodiscard]] constexpr ProtocolConfig with_response_timeout_ms(
@@ -1257,16 +1149,14 @@ class ProtocolConfig {
       PlcProfile plc_profile,
       SumCheckMode sum_check_mode,
       RouteConfig route,
-      TimeoutConfig timeout,
-      E1MonitoringTimer e1_monitoring_timer) noexcept
+      TimeoutConfig timeout) noexcept
       : frame_kind_(frame_kind),
         code_mode_(code_mode),
         ascii_format_(ascii_format),
         plc_profile_(plc_profile),
         sum_check_mode_(sum_check_mode),
         route_(route),
-        timeout_(timeout),
-        e1_monitoring_timer_(e1_monitoring_timer) {}
+        timeout_(timeout) {}
 
   constexpr explicit ProtocolConfig(UnconfiguredTag) noexcept {}
   [[nodiscard]] static constexpr ProtocolConfig unconfigured_for_storage() noexcept {
@@ -1274,7 +1164,7 @@ class ProtocolConfig {
   }
 
   friend class MelsecSerialClient;
-  friend class PosixSyncClient;
+  friend class HostSyncClient;
 
   FrameKind frame_kind_ = static_cast<FrameKind>(0xFF);
   CodeMode code_mode_ = static_cast<CodeMode>(0xFF);
@@ -1283,7 +1173,6 @@ class ProtocolConfig {
   SumCheckMode sum_check_mode_ = static_cast<SumCheckMode>(0xFF);
   RouteConfig route_ {};
   TimeoutConfig timeout_ {};
-  E1MonitoringTimer e1_monitoring_timer_ {};
 };
 
 /// \brief Device code plus numeric address.
@@ -1302,8 +1191,7 @@ struct DeviceAddress {
 
 /// \brief Extended file-register address using block number plus `R` word number.
 ///
-/// This is the block-addressed form used by `1C ACPU-common` and by the chapter-18 block path on
-/// `1E`.
+/// This is the block-addressed form used by `1C ACPU-common`.
 struct ExtendedFileRegisterAddress {
   ExtendedFileRegisterAddress() = delete;
   constexpr ExtendedFileRegisterAddress(
@@ -1374,7 +1262,7 @@ struct BatchWriteBitsRequest {
 
 /// \name Extended File-Register Requests
 /// @{
-/// \brief Extended file-register batch read (`ER` on 1C ACPU-common, chapter-18 block path on 1E).
+/// \brief Extended file-register batch read (`ER` on 1C ACPU-common).
 struct ExtendedFileRegisterBatchReadWordsRequest {
   ExtendedFileRegisterBatchReadWordsRequest() = delete;
   constexpr ExtendedFileRegisterBatchReadWordsRequest(
@@ -1388,7 +1276,7 @@ struct ExtendedFileRegisterBatchReadWordsRequest {
   std::uint16_t points;
 };
 
-/// \brief Direct extended file-register batch read (`NR` on 1C AnA/AnUCPU common, chapter-18 direct path on 1E).
+/// \brief Direct extended file-register batch read (`NR` on 1C AnA/AnUCPU common).
 struct ExtendedFileRegisterDirectBatchReadWordsRequest {
   ExtendedFileRegisterDirectBatchReadWordsRequest() = delete;
   constexpr ExtendedFileRegisterDirectBatchReadWordsRequest(
@@ -1396,13 +1284,13 @@ struct ExtendedFileRegisterDirectBatchReadWordsRequest {
       std::uint16_t point_count) noexcept
       : head_device_number(first_device_number), points(point_count) {}
 
-  /// \brief `NR/NW` direct address on 1C or the chapter-18 direct `R` address on 1E.
+  /// \brief `NR/NW` direct address on 1C.
   std::uint32_t head_device_number;
   /// Number of words to read from the direct file-register range.
   std::uint16_t points;
 };
 
-/// \brief Extended file-register batch write (`EW` on 1C ACPU-common, chapter-18 block path on 1E).
+/// \brief Extended file-register batch write (`EW` on 1C ACPU-common).
 struct ExtendedFileRegisterBatchWriteWordsRequest {
   ExtendedFileRegisterBatchWriteWordsRequest() = delete;
   constexpr ExtendedFileRegisterBatchWriteWordsRequest(
@@ -1416,7 +1304,7 @@ struct ExtendedFileRegisterBatchWriteWordsRequest {
   mcprotocol::serial::Span<const std::uint16_t> words;
 };
 
-/// \brief Direct extended file-register batch write (`NW` on 1C AnA/AnUCPU common, chapter-18 direct path on 1E).
+/// \brief Direct extended file-register batch write (`NW` on 1C AnA/AnUCPU common).
 struct ExtendedFileRegisterDirectBatchWriteWordsRequest {
   ExtendedFileRegisterDirectBatchWriteWordsRequest() = delete;
   constexpr ExtendedFileRegisterDirectBatchWriteWordsRequest(
@@ -1424,13 +1312,13 @@ struct ExtendedFileRegisterDirectBatchWriteWordsRequest {
       mcprotocol::serial::Span<const std::uint16_t> write_words) noexcept
       : head_device_number(first_device_number), words(write_words) {}
 
-  /// \brief `NR/NW` direct address on 1C or the chapter-18 direct `R` address on 1E.
+  /// \brief `NR/NW` direct address on 1C.
   std::uint32_t head_device_number;
   /// Caller-owned word data to write starting at `head_device_number`.
   mcprotocol::serial::Span<const std::uint16_t> words;
 };
 
-/// \brief One item inside extended file-register random write (`ET` on 1C, chapter-18 on 1E).
+/// \brief One item inside extended file-register random write (`ET` on 1C).
 struct ExtendedFileRegisterRandomWriteWordItem {
   ExtendedFileRegisterRandomWriteWordItem() = delete;
   constexpr ExtendedFileRegisterRandomWriteWordItem(
@@ -1444,7 +1332,7 @@ struct ExtendedFileRegisterRandomWriteWordItem {
   std::uint16_t value;
 };
 
-/// \brief Extended file-register monitor registration (`EM` on 1C, chapter-18 on 1E).
+/// \brief Extended file-register monitor registration (`EM` on 1C).
 struct ExtendedFileRegisterMonitorRegistration {
   ExtendedFileRegisterMonitorRegistration() = delete;
   constexpr explicit ExtendedFileRegisterMonitorRegistration(
@@ -1630,7 +1518,7 @@ struct MonitorRegistration {
 
   /// Sparse 16-bit items registered first.
   mcprotocol::serial::Span<const RandomReadWordItem> word_items;
-  /// Sparse 32-bit items registered second. Unsupported for 1C and 1E monitor commands.
+  /// Sparse 32-bit items registered second. Unsupported for 1C monitor commands.
   mcprotocol::serial::Span<const RandomReadDWordItem> dword_items;
 };
 /// @}
@@ -1638,9 +1526,9 @@ struct MonitorRegistration {
 /// \name Serial-Module Dedicated Requests
 /// @{
 /// \brief User-frame registration-data read request (`0610`).
-struct UserFrameReadRequest {
-  UserFrameReadRequest() = delete;
-  constexpr explicit UserFrameReadRequest(std::uint16_t target_frame_no) noexcept
+struct UserFrameRegistrationReadRequest {
+  UserFrameRegistrationReadRequest() = delete;
+  constexpr explicit UserFrameRegistrationReadRequest(std::uint16_t target_frame_no) noexcept
       : frame_no(target_frame_no) {}
 
   /// User-frame number to read, typically in the documented `0x0000..0x03FF` or `0x8001..0x801F` ranges.
@@ -1658,9 +1546,9 @@ struct UserFrameRegistrationData {
 };
 
 /// \brief User-frame registration-data write request (`1610`, subcommand `0000`).
-struct UserFrameWriteRequest {
-  UserFrameWriteRequest() = delete;
-  constexpr UserFrameWriteRequest(
+struct UserFrameRegistrationWriteRequest {
+  UserFrameRegistrationWriteRequest() = delete;
+  constexpr UserFrameRegistrationWriteRequest(
       std::uint16_t target_frame_no,
       std::uint16_t target_frame_bytes,
       mcprotocol::serial::Span<const mcprotocol::serial::Byte> target_registration_data) noexcept
@@ -1677,14 +1565,24 @@ struct UserFrameWriteRequest {
 };
 
 /// \brief User-frame registration-data delete request (`1610`, subcommand `0001`).
-struct UserFrameDeleteRequest {
-  UserFrameDeleteRequest() = delete;
-  constexpr explicit UserFrameDeleteRequest(std::uint16_t target_frame_no) noexcept
+struct UserFrameRegistrationDeleteRequest {
+  UserFrameRegistrationDeleteRequest() = delete;
+  constexpr explicit UserFrameRegistrationDeleteRequest(std::uint16_t target_frame_no) noexcept
       : frame_no(target_frame_no) {}
 
   /// User-frame number to clear.
   std::uint16_t frame_no;
 };
+
+/// \brief One-release compatibility alias for `UserFrameRegistrationReadRequest`.
+using UserFrameReadRequest [[deprecated("use UserFrameRegistrationReadRequest")]] =
+    UserFrameRegistrationReadRequest;
+/// \brief One-release compatibility alias for `UserFrameRegistrationWriteRequest`.
+using UserFrameWriteRequest [[deprecated("use UserFrameRegistrationWriteRequest")]] =
+    UserFrameRegistrationWriteRequest;
+/// \brief One-release compatibility alias for `UserFrameRegistrationDeleteRequest`.
+using UserFrameDeleteRequest [[deprecated("use UserFrameRegistrationDeleteRequest")]] =
+    UserFrameRegistrationDeleteRequest;
 
 /// \brief C24 global-signal ON/OFF request (`1618`).
 struct GlobalSignalControlRequest {

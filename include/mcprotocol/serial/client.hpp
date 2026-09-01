@@ -222,7 +222,7 @@ class MelsecSerialClient {
       void* user) noexcept;
 
   /// \brief Starts native-qualified word read (`0401`).
-  [[nodiscard]] Status async_extended_batch_read_words(
+  [[nodiscard]] Status async_qualified_buffer_batch_read_words(
       std::uint32_t now_ms,
       const QualifiedBufferWordDevice& device,
       std::uint16_t points,
@@ -230,13 +230,37 @@ class MelsecSerialClient {
       CompletionHandler callback,
       void* user) noexcept;
 
+  /// \brief Compatibility alias for `async_qualified_buffer_batch_read_words`.
+  [[nodiscard, deprecated("use async_qualified_buffer_batch_read_words")]]
+  Status async_extended_batch_read_words(
+      std::uint32_t now_ms,
+      const QualifiedBufferWordDevice& device,
+      std::uint16_t points,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
+      CompletionHandler callback,
+      void* user) noexcept {
+    return async_qualified_buffer_batch_read_words(
+        now_ms, device, points, out_words, callback, user);
+  }
+
   /// \brief Starts native-qualified word write (`1401`).
-  [[nodiscard]] Status async_extended_batch_write_words(
+  [[nodiscard]] Status async_qualified_buffer_batch_write_words(
       std::uint32_t now_ms,
       const QualifiedBufferWordDevice& device,
       mcprotocol::serial::Span<const std::uint16_t> words,
       CompletionHandler callback,
       void* user) noexcept;
+
+  /// \brief Compatibility alias for `async_qualified_buffer_batch_write_words`.
+  [[nodiscard, deprecated("use async_qualified_buffer_batch_write_words")]]
+  Status async_extended_batch_write_words(
+      std::uint32_t now_ms,
+      const QualifiedBufferWordDevice& device,
+      mcprotocol::serial::Span<const std::uint16_t> words,
+      CompletionHandler callback,
+      void* user) noexcept {
+    return async_qualified_buffer_batch_write_words(now_ms, device, words, callback, user);
+  }
 
   /// \brief Starts native random read (`0403`).
   [[nodiscard]] Status async_random_read(
@@ -343,11 +367,20 @@ class MelsecSerialClient {
       void* user) noexcept;
 
   /// \brief Starts monitor registration (`0801`).
-  [[nodiscard]] Status async_register_monitor(
+  [[nodiscard]] Status async_register_monitor_devices(
       std::uint32_t now_ms,
       const MonitorRegistration& request,
       CompletionHandler callback,
       void* user) noexcept;
+
+  /// \brief Compatibility alias for `async_register_monitor_devices`.
+  [[nodiscard, deprecated("use async_register_monitor_devices")]] Status async_register_monitor(
+      std::uint32_t now_ms,
+      const MonitorRegistration& request,
+      CompletionHandler callback,
+      void* user) noexcept {
+    return async_register_monitor_devices(now_ms, request, callback, user);
+  }
 
   /// \brief Starts extended file-register monitor registration.
   [[nodiscard]] Status async_register_extended_file_register_monitor(
@@ -364,12 +397,22 @@ class MelsecSerialClient {
       void* user) noexcept;
 
   /// \brief Starts monitor read (`0802`) using the most recent registration.
-  [[nodiscard]] Status async_read_monitor(
+  [[nodiscard]] Status async_run_monitor_cycle(
       std::uint32_t now_ms,
       mcprotocol::serial::Span<std::uint16_t> out_words,
       mcprotocol::serial::Span<std::uint32_t> out_dwords,
       CompletionHandler callback,
       void* user) noexcept;
+
+  /// \brief Compatibility alias for `async_run_monitor_cycle`.
+  [[nodiscard, deprecated("use async_run_monitor_cycle")]] Status async_read_monitor(
+      std::uint32_t now_ms,
+      mcprotocol::serial::Span<std::uint16_t> out_words,
+      mcprotocol::serial::Span<std::uint32_t> out_dwords,
+      CompletionHandler callback,
+      void* user) noexcept {
+    return async_run_monitor_cycle(now_ms, out_words, out_dwords, callback, user);
+  }
 
   /// \brief Starts extended file-register monitor read.
   [[nodiscard]] Status async_read_extended_file_register_monitor(
@@ -478,26 +521,57 @@ class MelsecSerialClient {
       void* user) noexcept;
 
   /// \brief Starts user-frame registration-data read (`0610`).
-  [[nodiscard]] Status async_read_user_frame(
+  [[nodiscard]] Status async_read_user_frame_registration(
       std::uint32_t now_ms,
-      const UserFrameReadRequest& request,
+      const UserFrameRegistrationReadRequest& request,
       UserFrameRegistrationData& out_data,
       CompletionHandler callback,
       void* user) noexcept;
 
-  /// \brief Starts user-frame registration-data write (`1610`, subcommand `0000`).
-  [[nodiscard]] Status async_write_user_frame(
+  /// \brief Compatibility alias for `async_read_user_frame_registration`.
+  [[nodiscard, deprecated("use async_read_user_frame_registration")]]
+  Status async_read_user_frame(
       std::uint32_t now_ms,
-      const UserFrameWriteRequest& request,
+      const UserFrameRegistrationReadRequest& request,
+      UserFrameRegistrationData& out_data,
+      CompletionHandler callback,
+      void* user) noexcept {
+    return async_read_user_frame_registration(now_ms, request, out_data, callback, user);
+  }
+
+  /// \brief Starts user-frame registration-data write (`1610`, subcommand `0000`).
+  [[nodiscard]] Status async_write_user_frame_registration(
+      std::uint32_t now_ms,
+      const UserFrameRegistrationWriteRequest& request,
       CompletionHandler callback,
       void* user) noexcept;
 
-  /// \brief Starts user-frame registration-data delete (`1610`, subcommand `0001`).
-  [[nodiscard]] Status async_delete_user_frame(
+  /// \brief Compatibility alias for `async_write_user_frame_registration`.
+  [[nodiscard, deprecated("use async_write_user_frame_registration")]]
+  Status async_write_user_frame(
       std::uint32_t now_ms,
-      const UserFrameDeleteRequest& request,
+      const UserFrameRegistrationWriteRequest& request,
+      CompletionHandler callback,
+      void* user) noexcept {
+    return async_write_user_frame_registration(now_ms, request, callback, user);
+  }
+
+  /// \brief Starts user-frame registration-data delete (`1610`, subcommand `0001`).
+  [[nodiscard]] Status async_delete_user_frame_registration(
+      std::uint32_t now_ms,
+      const UserFrameRegistrationDeleteRequest& request,
       CompletionHandler callback,
       void* user) noexcept;
+
+  /// \brief Compatibility alias for `async_delete_user_frame_registration`.
+  [[nodiscard, deprecated("use async_delete_user_frame_registration")]]
+  Status async_delete_user_frame(
+      std::uint32_t now_ms,
+      const UserFrameRegistrationDeleteRequest& request,
+      CompletionHandler callback,
+      void* user) noexcept {
+    return async_delete_user_frame_registration(now_ms, request, callback, user);
+  }
 
   /// \brief Starts C24 global-signal ON/OFF control (`1618`).
   [[nodiscard]] Status async_control_global_signal(
@@ -528,7 +602,7 @@ class MelsecSerialClient {
       void* user) noexcept;
 
  private:
-  friend class PosixSyncClient;
+  friend class HostSyncClient;
   friend class highlevel::BitInWordWriteOperation;
   friend struct detail::ClientAccess;
 
@@ -615,7 +689,6 @@ class MelsecSerialClient {
   [[nodiscard]] Status begin_compound_deadline(std::uint32_t now_ms) noexcept;
   void end_compound_deadline() noexcept;
 
-  [[nodiscard]] std::uint8_t expected_e1_response_subheader() const noexcept;
   [[nodiscard]] std::size_t expected_success_response_data_size(
       OperationKind operation) const noexcept;
   [[nodiscard]] Status handle_response(mcprotocol::serial::Span<const std::uint8_t> response_data) noexcept;
@@ -659,7 +732,7 @@ class MelsecSerialClient {
       ExtendedFileRegisterAddress {1U, 0U}, 0U};
   ExtendedFileRegisterDirectBatchReadWordsRequest direct_extended_file_register_read_request_ {0U, 0U};
   BatchReadBitsRequest batch_read_bits_request_ {DeviceAddress {DeviceCode::M, 0U}, 0U};
-  UserFrameReadRequest user_frame_read_request_ {0U};
+  UserFrameRegistrationReadRequest user_frame_read_request_ {0U};
   QualifiedBufferWordDevice extended_batch_words_device_ {QualifiedBufferDeviceKind::G, 0U, 0U};
   std::uint16_t extended_batch_words_points_ = 0;
 #if MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS

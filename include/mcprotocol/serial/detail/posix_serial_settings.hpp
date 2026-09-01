@@ -5,14 +5,14 @@
 #include <cstring>
 #include <termios.h>
 
-#include "mcprotocol/serial/posix_serial.hpp"
+#include "mcprotocol/serial/host_serial.hpp"
 
 namespace mcprotocol::serial::detail {
 
 /// \brief Overwrites every behavior-affecting termios field for one configured speed.
 [[nodiscard]] inline Status build_posix_termios(
     termios& tty,
-    const PosixSerialConfig& config,
+    const HostSerialConfig& config,
     speed_t configured_speed) noexcept {
   tty.c_iflag = 0;
   tty.c_oflag = 0;

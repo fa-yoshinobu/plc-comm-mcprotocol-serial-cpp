@@ -28,8 +28,7 @@ pc_target="${MCPROTOCOL_PC_TARGET:-}"
 module_target="${MCPROTOCOL_MODULE_TARGET:-}"
 topology="${MCPROTOCOL_TOPOLOGY:-}"
 self_station="${MCPROTOCOL_SELF_STATION:-}"
-e1_monitoring_timer_ms="${MCPROTOCOL_E1_MONITORING_TIMER_MS:-}"
-if [[ "${route}" == "multidrop" && "${frame}" != e1-* && -z "${station}" ]]; then
+if [[ "${route}" == "multidrop" && -z "${station}" ]]; then
   echo "MCPROTOCOL_STATION is required for a multidrop route" >&2
   exit 2
 fi
@@ -37,8 +36,8 @@ if [[ "${route}" == "multidrop" && ( "${frame}" == c3-* || "${frame}" == c4-* ) 
   echo "MCPROTOCOL_NETWORK is required for a 3C/4C multidrop route" >&2
   exit 2
 fi
-if [[ "${route}" == "multidrop" && ( "${frame}" == c3-* || "${frame}" == c4-* || "${frame}" == e1-* ) && -z "${pc_target}" ]]; then
-  echo "MCPROTOCOL_PC_TARGET is required for a 3C/4C/1E non-host route" >&2
+if [[ "${route}" == "multidrop" && ( "${frame}" == c3-* || "${frame}" == c4-* ) && -z "${pc_target}" ]]; then
+  echo "MCPROTOCOL_PC_TARGET is required for a 3C/4C non-host route" >&2
   exit 2
 fi
 if [[ "${route}" == "multidrop" && "${frame}" == c4-* && -z "${module_target}" ]]; then
@@ -60,10 +59,6 @@ if [[ "${route}" == "multidrop" && "${frame}" == c[234]-* ]]; then
   fi
 elif [[ -n "${topology}" || -n "${self_station}" ]]; then
   echo "MCPROTOCOL_TOPOLOGY and MCPROTOCOL_SELF_STATION are invalid for this route/frame" >&2
-  exit 2
-fi
-if [[ "${frame}" != e1-* && -n "${e1_monitoring_timer_ms}" ]]; then
-  echo "MCPROTOCOL_E1_MONITORING_TIMER_MS is valid only for an E1 frame" >&2
   exit 2
 fi
 duration_sec="${MCPROTOCOL_DURATION_SEC:-10}"
@@ -100,9 +95,6 @@ if [[ -n "${topology}" ]]; then
 fi
 if [[ -n "${self_station}" ]]; then
   common_args+=(--self-station "${self_station}")
-fi
-if [[ -n "${e1_monitoring_timer_ms}" ]]; then
-  common_args+=(--e1-monitoring-timer-ms "${e1_monitoring_timer_ms}")
 fi
 end_time=$((SECONDS + duration_sec))
 completed_cycles=0

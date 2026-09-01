@@ -21,6 +21,7 @@ INPUTS = (
     "include/mcprotocol/serial/client.hpp",
     "include/mcprotocol/serial/high_level.hpp",
     "include/mcprotocol/serial/host_sync.hpp",
+    "include/mcprotocol/serial/host_serial.hpp",
     "include/mcprotocol/serial/posix_serial.hpp",
     "include/mcprotocol/serial/link_direct.hpp",
     "include/mcprotocol/serial/qualified_buffer.hpp",

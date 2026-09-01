@@ -10,7 +10,7 @@
 #endif
 #include <windows.h>
 
-#include "mcprotocol/serial/posix_serial.hpp"
+#include "mcprotocol/serial/host_serial.hpp"
 
 #include <cstdint>
 
@@ -39,7 +39,7 @@ namespace mcprotocol::serial::detail {
 /// \brief Overwrites every behavior field while preserving driver-reserved DCB state.
 [[nodiscard]] inline Status build_win32_dcb(
     DCB& dcb,
-    const PosixSerialConfig& config) noexcept {
+    const HostSerialConfig& config) noexcept {
   dcb.DCBlength = sizeof(dcb);
   dcb.BaudRate = static_cast<DWORD>(config.baud_rate);
 

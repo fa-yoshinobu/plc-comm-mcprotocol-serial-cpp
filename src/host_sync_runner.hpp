@@ -1,7 +1,7 @@
 #pragma once
 
 #include "mcprotocol/serial/client.hpp"
-#include "mcprotocol/serial/posix_serial.hpp"
+#include "mcprotocol/serial/host_serial.hpp"
 
 #include <cstdint>
 

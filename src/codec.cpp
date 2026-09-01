@@ -179,10 +179,6 @@ class ByteWriter {
     case FrameKind::C1:
       return true;
 #endif
-#if MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
-    case FrameKind::E1:
-      return true;
-#endif
     default:
       return false;
   }
@@ -207,26 +203,12 @@ class ByteWriter {
 }
 
 [[nodiscard]] constexpr bool is_c2_frame(const ProtocolConfig& config) noexcept {
-#if MCPROTOCOL_SERIAL_ENABLE_FRAME_C2
   return config.frame_kind() == FrameKind::C2;
-#else
-  (void)config;
-  return false;
-#endif
 }
 
 [[nodiscard]] constexpr bool is_c1_frame(const ProtocolConfig& config) noexcept {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_C1
   return config.frame_kind() == FrameKind::C1;
-#else
-  (void)config;
-  return false;
-#endif
-}
-
-[[nodiscard]] constexpr bool is_e1_frame(const ProtocolConfig& config) noexcept {
-#if MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
-  return config.frame_kind() == FrameKind::E1;
 #else
   (void)config;
   return false;
@@ -244,7 +226,7 @@ class ByteWriter {
 }
 
 [[nodiscard]] constexpr std::size_t ascii_block_number_length(const ProtocolConfig& config) noexcept {
-  return (!is_c1_frame(config) && !is_e1_frame(config) && config.ascii_format() == AsciiFormat::Format2) ? 2U : 0U;
+  return (!is_c1_frame(config) && config.ascii_format() == AsciiFormat::Format2) ? 2U : 0U;
 }
 
 [[nodiscard]] constexpr bool uses_format2_block_number(const ProtocolConfig& config) noexcept {
@@ -287,10 +269,6 @@ class ByteWriter {
     case FrameKind::C1:
       return 4;
 #endif
-#if MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
-    case FrameKind::E1:
-      return 0;
-#endif
     default:
       return 0;
   }
@@ -318,24 +296,21 @@ class ByteWriter {
 }
 
 [[nodiscard]] constexpr std::size_t ascii_error_code_width(const ProtocolConfig& config) noexcept {
-  return ((MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && config.frame_kind() == FrameKind::C1) ||
-          (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && config.frame_kind() == FrameKind::E1))
-             ? 2U
-             : 4U;
+  return (MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && config.frame_kind() == FrameKind::C1) ? 2U : 4U;
 }
 
 [[nodiscard]] inline std::string_view ascii_success_end_code(FrameKind frame_kind) noexcept {
   if (MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && frame_kind == FrameKind::C1) {
     return "GG";
   }
-  return (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && frame_kind == FrameKind::E1) ? "00" : "QACK";
+  return "QACK";
 }
 
 [[nodiscard]] inline std::string_view ascii_error_end_code(FrameKind frame_kind) noexcept {
   if (MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && frame_kind == FrameKind::C1) {
     return "NN";
   }
-  return (MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 && frame_kind == FrameKind::E1) ? "5B" : "QNAK";
+  return "QNAK";
 }
 
 [[nodiscard]] inline std::string_view ascii_alt_success_end_code(const ProtocolConfig& config) noexcept {
@@ -353,10 +328,6 @@ class ByteWriter {
 #if MCPROTOCOL_SERIAL_ENABLE_FRAME_C4
     case FrameKind::C4:
       return 7;
-#endif
-#if MCPROTOCOL_SERIAL_ENABLE_FRAME_E1
-    case FrameKind::E1:
-      return 0;
 #endif
     default:
       return 0;
@@ -403,8 +374,44 @@ class ByteWriter {
   return is_iq_r_series(config) ? 4U : 3U;
 }
 
-[[nodiscard]] constexpr std::size_t request_command_header_size(const ProtocolConfig& config) noexcept {
-  return is_ascii_mode(config) && is_c2_frame(config) ? 1U : (is_ascii_mode(config) ? 8U : 4U);
+[[nodiscard]] constexpr char c2_compact_command_code(
+    std::uint16_t command,
+    std::uint16_t subcommand) noexcept {
+  return command == 0x0401U && subcommand == 0x0001U ? '1'
+         : command == 0x0401U && subcommand == 0x0000U ? '2'
+         : command == 0x1401U && subcommand == 0x0001U ? '3'
+         : command == 0x1401U && subcommand == 0x0000U ? '4'
+         : command == 0x0403U && subcommand == 0x0000U ? '5'
+         : command == 0x1402U && subcommand == 0x0001U ? '6'
+         : command == 0x1402U && subcommand == 0x0000U ? '7'
+         : command == 0x0801U && subcommand == 0x0000U ? '8'
+         : command == 0x0802U && subcommand == 0x0000U ? '9'
+                                                          : '\0';
+}
+
+[[nodiscard]] constexpr bool is_c2_full_command(
+    std::uint16_t command,
+    std::uint16_t subcommand) noexcept {
+  return command == 0x0619U && subcommand == 0x0000U;
+}
+
+[[nodiscard]] constexpr bool is_c2_supported_command(
+    std::uint16_t command,
+    std::uint16_t subcommand) noexcept {
+  return c2_compact_command_code(command, subcommand) != '\0' ||
+         is_c2_full_command(command, subcommand);
+}
+
+[[nodiscard]] constexpr std::size_t request_command_header_size(
+    const ProtocolConfig& config,
+    std::uint16_t command,
+    std::uint16_t subcommand) noexcept {
+  if (is_ascii_mode(config) && is_c2_frame(config)) {
+    return c2_compact_command_code(command, subcommand) != '\0' ? 1U
+           : is_c2_full_command(command, subcommand)              ? 8U
+                                                                  : 0U;
+  }
+  return is_ascii_mode(config) ? 8U : 4U;
 }
 
 [[nodiscard]] constexpr std::size_t request_word_count_size(const ProtocolConfig& config) noexcept {
@@ -417,9 +424,11 @@ class ByteWriter {
 }
 
 [[nodiscard]] constexpr std::size_t batch_write_words_point_limit_for_buffer(
-    const ProtocolConfig& config) noexcept {
+    const ProtocolConfig& config,
+    std::uint16_t subcommand) noexcept {
   const std::size_t overhead =
-      request_command_header_size(config) + request_device_reference_size(config) + request_word_count_size(config);
+      request_command_header_size(config, 0x1401U, subcommand) +
+      request_device_reference_size(config) + request_word_count_size(config);
   if (kMaxRequestDataBytes <= overhead) {
     return 0U;
   }
@@ -428,9 +437,11 @@ class ByteWriter {
 }
 
 [[nodiscard]] constexpr std::size_t batch_write_bits_point_limit_for_buffer(
-    const ProtocolConfig& config) noexcept {
+    const ProtocolConfig& config,
+    std::uint16_t subcommand) noexcept {
   const std::size_t overhead =
-      request_command_header_size(config) + request_device_reference_size(config) + request_word_count_size(config);
+      request_command_header_size(config, 0x1401U, subcommand) +
+      request_device_reference_size(config) + request_word_count_size(config);
   if (kMaxRequestDataBytes <= overhead) {
     return 0U;
   }
@@ -490,11 +501,6 @@ class ByteWriter {
 [[nodiscard]] constexpr std::uint16_t multi_block_write_weight_coefficient(
     const ProtocolConfig& config) noexcept {
   return is_iq_r_series(config) ? 9U : 4U;
-}
-
-[[nodiscard]] constexpr std::uint16_t e1_acpu_monitoring_timer(
-    const ProtocolConfig& config) noexcept {
-  return static_cast<std::uint16_t>(config.e1_monitoring_timer().ticks());
 }
 
 [[nodiscard]] constexpr bool is_remote_password_iq_r(const ProtocolConfig& config) noexcept {
@@ -741,7 +747,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] Status validate_c1_supported_config(const ProtocolConfig& config) noexcept {
-  if (!is_c1_frame(config) && !is_e1_frame(config)) {
+  if (!is_c1_frame(config)) {
     return ok_status();
   }
   if (is_c1_frame(config) && !is_ascii_mode(config)) {
@@ -751,9 +757,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   if (!is_c1_supported_series(series)) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
-        is_e1_frame(config)
-            ? "1E command support currently targets PlcProfile melsec:a, melsec:ana-anu, or melsec:qna"
-            : "1C command support currently targets PlcProfile melsec:a, melsec:ana-anu, or melsec:qna");
+        "1C command support currently targets PlcProfile melsec:a, melsec:ana-anu, or melsec:qna");
   }
   return ok_status();
 }
@@ -774,6 +778,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
+#if MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS
 [[nodiscard]] Status validate_c1_module_buffer_profile(
     const ProtocolConfig& config) noexcept {
   if (config.plc_profile() != PlcProfile::MelsecA &&
@@ -784,6 +789,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   }
   return ok_status();
 }
+#endif
 
 [[nodiscard]] bool append_c1_command(
     ByteWriter& writer,
@@ -834,12 +840,6 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
-[[nodiscard]] Status validate_e1_extended_file_register_address(
-    const ExtendedFileRegisterAddress& address) noexcept {
-  (void)address;
-  return ok_status();
-}
-
 // User-frame and serial-module dedicated command validators.
 
 [[nodiscard]] constexpr bool is_user_frame_readable_frame_no(std::uint16_t frame_no) noexcept {
@@ -851,7 +851,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 }
 
 [[nodiscard]] Status validate_user_frame_command_config(const ProtocolConfig& config) noexcept {
-  if (is_c1_frame(config) || is_e1_frame(config)) {
+  if (is_c1_frame(config)) {
     return make_status(
         StatusCode::UnsupportedConfiguration,
         "User-frame commands are implemented only for 2C/3C/4C serial frames");
@@ -859,7 +859,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
-[[nodiscard]] Status validate_user_frame_read_request(const UserFrameReadRequest& request) noexcept {
+[[nodiscard]] Status validate_user_frame_read_request(
+    const UserFrameRegistrationReadRequest& request) noexcept {
   if (!is_user_frame_readable_frame_no(request.frame_no)) {
     return invalid_argument(
         "User-frame read frame number must be 0x0001..0x04AF or 0x8001..0x801F");
@@ -867,7 +868,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
-[[nodiscard]] Status validate_user_frame_write_request(const UserFrameWriteRequest& request) noexcept {
+[[nodiscard]] Status validate_user_frame_write_request(
+    const UserFrameRegistrationWriteRequest& request) noexcept {
   if (!is_user_frame_mutable_frame_no(request.frame_no)) {
     return invalid_argument(
         "User-frame write frame number must be 0x03E8..0x04AF or 0x8001..0x801F");
@@ -881,7 +883,8 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return ok_status();
 }
 
-[[nodiscard]] Status validate_user_frame_delete_request(const UserFrameDeleteRequest& request) noexcept {
+[[nodiscard]] Status validate_user_frame_delete_request(
+    const UserFrameRegistrationDeleteRequest& request) noexcept {
   if (!is_user_frame_mutable_frame_no(request.frame_no)) {
     return invalid_argument(
         "User-frame delete frame number must be 0x03E8..0x04AF or 0x8001..0x801F");
@@ -892,7 +895,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[nodiscard]] Status validate_serial_module_dedicated_command_config(
     const ProtocolConfig& config,
     const char* message) noexcept {
-  if (is_c1_frame(config) || is_e1_frame(config)) {
+  if (is_c1_frame(config)) {
     return make_status(StatusCode::UnsupportedConfiguration, message);
   }
   return ok_status();
@@ -985,108 +988,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
       (request.switch_communication_speed ? 0x04U : 0x00U));
 }
 
-// 1E and extended file-register address encoders.
-
-[[nodiscard]] bool append_e1_subheader(
-    ByteWriter& writer,
-    const ProtocolConfig& config,
-    std::uint8_t subheader) noexcept {
-  return is_ascii_mode(config) ? append_ascii_hex(writer, subheader, 2U)
-                                             : writer.push(subheader);
-}
-
-[[nodiscard]] bool append_e1_point_count(
-    ByteWriter& writer,
-    const ProtocolConfig& config,
-    std::uint16_t points) noexcept {
-  if (points == 0U || points > 256U) {
-    return false;
-  }
-  const std::uint16_t encoded = points == 256U ? 0U : points;
-  return is_ascii_mode(config) ? append_ascii_hex(writer, encoded, 2U)
-                                             : writer.push(static_cast<std::uint8_t>(encoded));
-}
-
-[[nodiscard]] bool append_e1_fixed_zero(
-    ByteWriter& writer,
-    const ProtocolConfig& config) noexcept {
-  return is_ascii_mode(config) ? append_ascii_hex(writer, 0U, 2U)
-                                             : writer.push(0x00U);
-}
-
-[[nodiscard]] constexpr std::uint16_t e1_ascii_device_code_word(
-    const DeviceAddress& device) noexcept {
-  switch (device.code) {
-    case DeviceCode::X:
-      return 0x5820U;
-    case DeviceCode::Y:
-      return 0x5920U;
-    case DeviceCode::M:
-      return 0x4D20U;
-    case DeviceCode::L:
-    case DeviceCode::S:
-      return 0x4D20U;
-    case DeviceCode::F:
-      return 0x4620U;
-    case DeviceCode::B:
-      return 0x4220U;
-    case DeviceCode::D:
-      return 0x4420U;
-    case DeviceCode::W:
-      return 0x5720U;
-    case DeviceCode::R:
-      return 0x5220U;
-    case DeviceCode::TS:
-      return 0x5453U;
-    case DeviceCode::TC:
-      return 0x5443U;
-    case DeviceCode::TN:
-      return 0x544EU;
-    case DeviceCode::CS:
-      return 0x4353U;
-    case DeviceCode::CC:
-      return 0x4343U;
-    case DeviceCode::CN:
-      return 0x434EU;
-    default:
-      return 0U;
-  }
-}
-
-[[nodiscard]] bool append_e1_device_reference(
-    ByteWriter& writer,
-    const ProtocolConfig& config,
-    const DeviceAddress& device) noexcept {
-  const std::uint16_t code = e1_ascii_device_code_word(device);
-  if (code == 0U || !is_c1_supported_device(device.code)) {
-    return false;
-  }
-  if (is_ascii_mode(config)) {
-    return append_ascii_hex(writer, code, 4U) &&
-           append_ascii_hex(writer, device.number, 8U);
-  }
-  return writer.append_le32(device.number, 4U) && writer.append_le16(code);
-}
-
-[[nodiscard]] bool append_e1_extended_file_register_address(
-    ByteWriter& writer,
-    const ProtocolConfig& config,
-    const ExtendedFileRegisterAddress& address) noexcept {
-  const DeviceAddress device(DeviceCode::R, address.word_number);
-  if (!append_e1_device_reference(writer, config, device)) {
-    return false;
-  }
-  return is_ascii_mode(config) ? append_ascii_hex(writer, address.block_number, 4U)
-                                             : writer.append_le16(address.block_number);
-}
-
-[[nodiscard]] bool append_e1_extended_file_register_direct_address(
-    ByteWriter& writer,
-    const ProtocolConfig& config,
-    std::uint32_t head_device_number) noexcept {
-  const DeviceAddress device(DeviceCode::R, head_device_number);
-  return append_e1_device_reference(writer, config, device);
-}
+// Extended file-register address encoders.
 
 [[nodiscard]] bool append_extended_file_register_address_ascii(
     ByteWriter& writer,
@@ -1241,14 +1143,6 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] std::uint16_t c1_batch_write_word_limit_for_device(DeviceCode code) noexcept {
   return is_bit_device_code(code) ? 10U : 64U;
-}
-
-[[nodiscard]] std::uint16_t e1_batch_read_word_limit_for_device(DeviceCode code) noexcept {
-  return is_bit_device_code(code) ? 128U : 256U;
-}
-
-[[nodiscard]] std::uint16_t e1_batch_write_word_limit_for_device(DeviceCode code) noexcept {
-  return is_bit_device_code(code) ? 40U : 256U;
 }
 
 [[maybe_unused]] [[nodiscard]] bool c1_monitor_uses_bit_units(
@@ -1640,6 +1534,20 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return make_status(StatusCode::UnsupportedConfiguration, message);
 }
 
+[[nodiscard]] Status validate_command_header_selection(
+    const ProtocolConfig& config,
+    std::uint16_t command,
+    std::uint16_t subcommand) noexcept {
+  if (!is_valid_frame_kind(config.frame_kind())) {
+    return unsupported("Selected frame is unknown or has been removed");
+  }
+  if (is_c2_frame(config) && !is_c2_supported_command(command, subcommand)) {
+    return unsupported(
+        "2C supports only compact command pairs 1..9 and full command 0619/0000");
+  }
+  return ok_status();
+}
+
 [[nodiscard]] Status invalid_argument(const char* message) noexcept {
   return make_status(StatusCode::InvalidArgument, message);
 }
@@ -1780,40 +1688,13 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     std::uint16_t subcommand) noexcept {
   if (is_ascii_mode(config)) {
     if (is_c2_frame(config)) {
-      switch (command) {
-        case 0x0401U:
-          if (subcommand == 0x0001U) {
-            return writer.push(static_cast<std::uint8_t>('1'));
-          }
-          if (subcommand == 0x0000U) {
-            return writer.push(static_cast<std::uint8_t>('2'));
-          }
-          break;
-        case 0x1401U:
-          if (subcommand == 0x0001U) {
-            return writer.push(static_cast<std::uint8_t>('3'));
-          }
-          if (subcommand == 0x0000U) {
-            return writer.push(static_cast<std::uint8_t>('4'));
-          }
-          break;
-        case 0x0403U:
-          return writer.push(static_cast<std::uint8_t>('5'));
-        case 0x1402U:
-          if (subcommand == 0x0001U) {
-            return writer.push(static_cast<std::uint8_t>('6'));
-          }
-          if (subcommand == 0x0000U) {
-            return writer.push(static_cast<std::uint8_t>('7'));
-          }
-          break;
-        case 0x0801U:
-          return writer.push(static_cast<std::uint8_t>('8'));
-        case 0x0802U:
-          return writer.push(static_cast<std::uint8_t>('9'));
-        default:
-          break;
+      const char compact_code = c2_compact_command_code(command, subcommand);
+      if (compact_code != '\0') {
+        return writer.push(static_cast<std::uint8_t>(compact_code));
       }
+      return is_c2_full_command(command, subcommand) &&
+             append_ascii_hex(writer, command, 4) &&
+             append_ascii_hex(writer, subcommand, 4);
     }
     return append_ascii_hex(writer, command, 4) && append_ascii_hex(writer, subcommand, 4);
   }
@@ -2009,19 +1890,6 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     mcprotocol::serial::Span<std::uint8_t> out_payload,
     std::size_t& out_size) noexcept {
   ByteWriter payload_writer(out_payload);
-  if (is_e1_frame(config)) {
-    if (request_data.size() < 2U) {
-      return invalid_argument("1E request data must begin with a command subheader");
-    }
-    if (!payload_writer.append(checked_first(request_data, 2U)) ||
-        !append_ascii_hex(payload_writer, config.route().pc_no(), 2U) ||
-        !append_ascii_hex(payload_writer, e1_acpu_monitoring_timer(config), 4U) ||
-        !payload_writer.append(checked_subspan(request_data, 2U))) {
-      return buffer_too_small("1E ASCII frame payload buffer is too small");
-    }
-    out_size = payload_writer.size();
-    return ok_status();
-  }
   if (is_c1_frame(config)) {
     if (!append_ascii_hex(payload_writer, config.route().station_no(), 2) ||
         !append_ascii_hex(payload_writer, config.route().pc_no(), 2) ||
@@ -2051,19 +1919,6 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
     mcprotocol::serial::Span<std::uint8_t> out_payload,
     std::size_t& out_size) noexcept {
   ByteWriter payload_writer(out_payload);
-  if (is_e1_frame(config)) {
-    if (request_data.empty()) {
-      return invalid_argument("1E request data must begin with a command subheader");
-    }
-    if (!payload_writer.push(request_data[0]) ||
-        !payload_writer.push(static_cast<std::uint8_t>(config.route().pc_no())) ||
-        !payload_writer.append_le16(e1_acpu_monitoring_timer(config)) ||
-        !payload_writer.append(checked_subspan(request_data, 1U))) {
-      return buffer_too_small("1E binary frame payload buffer is too small");
-    }
-    out_size = payload_writer.size();
-    return ok_status();
-  }
   if (!payload_writer.push(frame_id(config.frame_kind())) ||
       !encode_binary_route(payload_writer, config) ||
       !payload_writer.append(request_data)) {
@@ -2386,12 +2241,22 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 [[maybe_unused]] [[nodiscard]] Status validate_loopback_chars(
     const ProtocolConfig& config,
     mcprotocol::serial::Span<const char> hex_ascii) noexcept {
-  const std::size_t max_length = is_c1_frame(config) ? 254U : kMaxLoopbackBytes;
+  std::size_t max_length = is_c1_frame(config) ? 254U : kMaxLoopbackBytes;
+  if (!is_c1_frame(config)) {
+    const std::size_t overhead =
+        request_command_header_size(config, 0x0619U, 0x0000U) +
+        request_word_count_size(config);
+    const std::size_t buffer_limit =
+        kMaxRequestDataBytes > overhead ? kMaxRequestDataBytes - overhead : 0U;
+    if (buffer_limit < max_length) {
+      max_length = buffer_limit;
+    }
+  }
   if (hex_ascii.empty() || hex_ascii.size() > max_length) {
     return invalid_argument(
         is_c1_frame(config)
             ? "1C loopback data length must be in range 1..254"
-            : "Loopback data length must be in range 1..960");
+            : "Loopback data length exceeds the current request capacity");
   }
   for (const char ch : hex_ascii) {
     if (!std::isxdigit(static_cast<unsigned char>(ch))) {
@@ -2514,11 +2379,6 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     return invalid_argument("Inter-byte timeout must be in range 1..2147483647 ms");
   }
 
-  if (!config.e1_monitoring_timer().is_valid()) {
-    return invalid_argument(
-        "1E monitoring timer must be an exact 250 ms unit in range 0..16383750 ms");
-  }
-
   if (!config.route().is_specified()) {
     return invalid_argument("Route selection is required");
   }
@@ -2538,12 +2398,12 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     return unsupported("Selected code mode is compiled out");
   }
 
-  if (is_ascii_mode(config) && !is_e1_frame(config)) {
+  if (is_ascii_mode(config)) {
     if (!is_valid_ascii_format(config.ascii_format())) {
       return invalid_argument("Unknown ASCII format");
     }
-  } else if (!is_c4_frame(config) && !is_e1_frame(config)) {
-    return unsupported("Binary mode supports only 4C Format5 or 1E");
+  } else if (!is_c4_frame(config)) {
+    return unsupported("Binary mode supports only 4C Format5");
   }
 
   if (is_c1_frame(config)) {
@@ -2553,28 +2413,6 @@ Status FrameCodec::validate_config(const ProtocolConfig& config) noexcept {
     if (config.ascii_format() == AsciiFormat::Format2) {
       return unsupported("1C frames do not support ASCII Format2");
     }
-  }
-
-  if (is_e1_frame(config)) {
-    if (is_valid_ascii_format(config.ascii_format())) {
-      return invalid_argument("1E configuration does not accept an ASCII-format input");
-    }
-    if (config.sum_check_mode() != SumCheckMode::Disabled) {
-      return invalid_argument("1E has no configurable sum-check mode");
-    }
-    if (!config.route().pc_target_valid()) {
-      return invalid_argument("1E PC target is invalid");
-    }
-    if (config.route().station_no() != 0x00U ||
-        config.route().network_no() != 0x00U ||
-        config.route().request_destination_module_io_no() != module_io::OwnStation ||
-        config.route().request_destination_module_station_no() != 0x00U) {
-      return invalid_argument("1E frame uses only route.pc_no; keep the other route fields at defaults");
-    }
-    if (config.route().pc_no() != 0xFFU && (config.route().pc_no() == 0x00U || config.route().pc_no() > 0x40U)) {
-      return invalid_argument("1E PC No. must be 0xFF or in range 0x01..0x40");
-    }
-    return ok_status();
   }
 
   if (!config.route().self_station_valid()) {
@@ -2631,10 +2469,7 @@ Status detail::validate_request_capacity_validated(
   }
 
   std::size_t wire_size = 0U;
-  if (is_e1_frame(config)) {
-    const std::size_t e1_overhead = is_ascii_mode(config) ? 6U : 3U;
-    wire_size = request_data_size + e1_overhead;
-  } else if (is_ascii_mode(config)) {
+  if (is_ascii_mode(config)) {
     const std::size_t payload_prefix = is_c1_frame(config)
                                            ? 4U
                                            : ascii_block_number_length(config) +
@@ -2678,9 +2513,7 @@ Status detail::validate_response_capacity_validated(
   }
 
   std::size_t wire_size = 0U;
-  if (is_e1_frame(config)) {
-    wire_size = response_data_size + (is_ascii_mode(config) ? 4U : 2U);
-  } else if (is_ascii_mode(config)) {
+  if (is_ascii_mode(config)) {
     const std::size_t prefix =
         1U + ascii_block_number_length(config) + ascii_header_length(config.frame_kind());
     if (is_ascii_enq_family(config)) {
@@ -2763,15 +2596,6 @@ Status detail::encode_request_validated(
                       : encode_frame_payload_binary(config, request_data, payload_storage, payload_size);
   if (!status.ok()) {
     return status;
-  }
-
-  if (is_e1_frame(config)) {
-    if (payload_size > out_frame.size()) {
-      return buffer_too_small("1E request frame buffer is too small");
-    }
-    std::memcpy(out_frame.data(), payload_storage.data(), payload_size);
-    out_size = payload_size;
-    return ok_status();
   }
 
   ByteWriter frame_writer(out_frame);
@@ -2869,13 +2693,6 @@ Status FrameCodec::encode_success_response(
   const Status context_status = validate_frame_context(config, context);
   if (!context_status.ok()) {
     return context_status;
-  }
-
-  if (is_e1_frame(config)) {
-    (void)response_data;
-    (void)out_frame;
-    (void)out_size;
-    return unsupported("1E test response encoding requires an explicit command-specific subheader");
   }
 
   if (is_ascii_mode(config)) {
@@ -3003,13 +2820,6 @@ Status FrameCodec::encode_error_response(
   const Status context_status = validate_frame_context(config, context);
   if (!context_status.ok()) {
     return context_status;
-  }
-
-  if (is_e1_frame(config)) {
-    (void)error_code;
-    (void)out_frame;
-    (void)out_size;
-    return unsupported("1E test response encoding requires an explicit command-specific subheader");
   }
 
   if (is_ascii_mode(config)) {
@@ -3166,7 +2976,7 @@ DecodeResult detail::decode_response_validated(
     }
   }
 
-  if (is_ascii_mode(config) && !is_e1_frame(config) &&
+  if (is_ascii_mode(config) &&
       (bytes[0] == kAsciiAck || bytes[0] == kAsciiNak || bytes[0] == kAsciiStx)) {
     const std::size_t block_size = ascii_block_number_length(config);
     const std::size_t frame_id_size = ascii_frame_id_length(config.frame_kind());
@@ -3265,8 +3075,6 @@ DecodeResult detail::decode_response_validated(
                     SelfStationNo::number(self_station_no)}};
         }
         break;
-      case FrameKind::E1:
-        break;
     }
 
     if (!route_parse_ok) {
@@ -3293,127 +3101,6 @@ DecodeResult detail::decode_response_validated(
       }
       return foreign;
     }
-  }
-
-  if (is_e1_frame(config)) {
-    RawResponseFrame frame {};
-    if (is_ascii_mode(config)) {
-      if (bytes.size() < 4U) {
-        return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
-      }
-
-      std::uint32_t end_code = 0;
-      if (!parse_ascii_hex(checked_subspan(bytes, 2U, 2U), end_code) || end_code > 0xFFU) {
-        return DecodeResult {
-            DecodeStatus::Error,
-            RawResponseFrame {},
-            parse_error("Failed to parse 1E ASCII end code"),
-            4U,
-        };
-      }
-
-      if (end_code == 0U) {
-        frame.type = bytes.size() == 4U ? ResponseType::SuccessNoData : ResponseType::SuccessData;
-        frame.response_size = bytes.size() - 4U;
-        if (frame.response_size > frame.response_data.size()) {
-          return DecodeResult {
-              DecodeStatus::Error,
-              RawResponseFrame {},
-              buffer_too_small("1E ASCII response payload is too large"),
-              bytes.size(),
-          };
-        }
-        if (frame.response_size != 0U) {
-          std::memcpy(frame.response_data.data(), bytes.data() + 4U, frame.response_size);
-        }
-        return DecodeResult {
-            DecodeStatus::Complete,
-            frame,
-            ok_status(),
-            bytes.size(),
-        };
-      }
-
-      frame.type = ResponseType::PlcError;
-      if (end_code == 0x5BU) {
-        if (bytes.size() < 6U) {
-          return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
-        }
-        std::uint32_t abnormal = 0;
-        if (!parse_ascii_hex(checked_subspan(bytes, 4U, 2U), abnormal) || abnormal > 0xFFU) {
-          return DecodeResult {
-              DecodeStatus::Error,
-              RawResponseFrame {},
-              parse_error("Failed to parse 1E ASCII abnormal code"),
-              6U,
-          };
-        }
-        frame.error_code = static_cast<std::uint16_t>((end_code << 8U) | abnormal);
-        return DecodeResult {
-            DecodeStatus::Complete,
-            frame,
-            ok_status(),
-            6U,
-        };
-      }
-
-      frame.error_code = static_cast<std::uint16_t>(end_code);
-      return DecodeResult {
-          DecodeStatus::Complete,
-          frame,
-          ok_status(),
-          4U,
-      };
-    }
-
-    if (bytes.size() < 2U) {
-      return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
-    }
-
-    const std::uint8_t end_code = bytes[1];
-    if (end_code == 0x00U) {
-      frame.type = bytes.size() == 2U ? ResponseType::SuccessNoData : ResponseType::SuccessData;
-      frame.response_size = bytes.size() - 2U;
-      if (frame.response_size > frame.response_data.size()) {
-        return DecodeResult {
-            DecodeStatus::Error,
-            RawResponseFrame {},
-            buffer_too_small("1E binary response payload is too large"),
-            bytes.size(),
-        };
-      }
-      if (frame.response_size != 0U) {
-        std::memcpy(frame.response_data.data(), bytes.data() + 2U, frame.response_size);
-      }
-      return DecodeResult {
-          DecodeStatus::Complete,
-          frame,
-          ok_status(),
-          bytes.size(),
-      };
-    }
-
-    frame.type = ResponseType::PlcError;
-    if (end_code == 0x5BU) {
-      if (bytes.size() < 3U) {
-        return DecodeResult {DecodeStatus::Incomplete, RawResponseFrame {}, ok_status(), 0};
-      }
-      frame.error_code = static_cast<std::uint16_t>((static_cast<std::uint16_t>(end_code) << 8U) | bytes[2]);
-      return DecodeResult {
-          DecodeStatus::Complete,
-          frame,
-          ok_status(),
-          3U,
-      };
-    }
-
-    frame.error_code = end_code;
-    return DecodeResult {
-        DecodeStatus::Complete,
-        frame,
-        ok_status(),
-        2U,
-    };
   }
 
   if (is_ascii_mode(config)) {
@@ -3871,30 +3558,6 @@ Status encode_batch_read_words(
   if (is_c1_frame(config) && !is_c1_supported_device(request.head_device.code)) {
     return invalid_argument("1C batch read words does not support this device");
   }
-  if (is_e1_frame(config) && !is_c1_supported_device(request.head_device.code)) {
-    return invalid_argument("1E batch read words does not support this device");
-  }
-  if (is_e1_frame(config)) {
-    const Status bit_head_status = validate_word_unit_bit_head(
-        request.head_device,
-        "1E batch read words requires bit-device heads aligned to 16 points");
-    if (!bit_head_status.ok()) {
-      return bit_head_status;
-    }
-    const std::uint16_t limit = e1_batch_read_word_limit_for_device(request.head_device.code);
-    if (request.points == 0U || request.points > limit) {
-      return invalid_argument("1E batch read words points exceed the supported range for this device");
-    }
-    ByteWriter writer(out_request_data);
-    if (!append_e1_subheader(writer, config, 0x01U) ||
-        !append_e1_device_reference(writer, config, request.head_device) ||
-        !append_e1_point_count(writer, config, request.points) ||
-        !append_e1_fixed_zero(writer, config)) {
-      return buffer_too_small("1E batch read words request buffer is too small");
-    }
-    out_size = writer.size();
-    return ok_status();
-  }
   if (is_c1_frame(config)) {
     const Status bit_head_status = validate_word_unit_bit_head(
         request.head_device,
@@ -3919,6 +3582,11 @@ Status encode_batch_read_words(
     return invalid_argument("Batch read words points must be in range 1..960");
   }
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x0401U, word_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x0401U, word_subcommand(config)) ||
       !append_device_reference(writer, config, request.head_device) ||
       !append_word_count(writer, config, request.points)) {
@@ -3936,29 +3604,6 @@ Status encode_read_extended_file_register_words(
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
-  }
-  if (is_e1_frame(config)) {
-    const Status series_status = validate_c1_supported_config(config);
-    if (!series_status.ok()) {
-      return series_status;
-    }
-    const Status address_status = validate_e1_extended_file_register_address(request.head_device);
-    if (!address_status.ok()) {
-      return address_status;
-    }
-    if (request.points == 0U || request.points > 256U) {
-      return invalid_argument("1E extended file-register read points must be in range 1..256");
-    }
-
-    ByteWriter writer(out_request_data);
-    if (!append_e1_subheader(writer, config, 0x17U) ||
-        !append_e1_extended_file_register_address(writer, config, request.head_device) ||
-        !append_e1_point_count(writer, config, request.points) ||
-        !append_e1_fixed_zero(writer, config)) {
-      return buffer_too_small("1E extended file-register read request buffer is too small");
-    }
-    out_size = writer.size();
-    return ok_status();
   }
   const Status c1_status = validate_c1_only_config(
       config,
@@ -3999,30 +3644,6 @@ Status encode_direct_read_extended_file_register_words(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    const Status series_status = validate_c1_supported_config(config);
-    if (!series_status.ok()) {
-      return series_status;
-    }
-    if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
-      return make_status(
-          StatusCode::UnsupportedConfiguration,
-          "1E direct extended file-register read requires PlcProfile melsec:a");
-    }
-    if (request.points == 0U || request.points > 256U) {
-      return invalid_argument("1E direct extended file-register read points must be in range 1..256");
-    }
-
-    ByteWriter writer(out_request_data);
-    if (!append_e1_subheader(writer, config, 0x3BU) ||
-        !append_e1_extended_file_register_direct_address(writer, config, request.head_device_number) ||
-        !append_e1_point_count(writer, config, request.points) ||
-        !append_e1_fixed_zero(writer, config)) {
-      return buffer_too_small("1E direct extended file-register read request buffer is too small");
-    }
-    out_size = writer.size();
-    return ok_status();
-  }
   const Status c1_status = validate_c1_only_config(
       config,
       "Direct extended file-register read is implemented only for 1C ASCII");
@@ -4061,13 +3682,6 @@ Status encode_extended_batch_read_words(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)device;
-    (void)points;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define qualified module-buffer word access");
-  }
   if (points == 0U || points > kMaxBatchWordPoints) {
     return invalid_argument("Extended batch read words points must be in range 1..960");
   }
@@ -4077,6 +3691,11 @@ Status encode_extended_batch_read_words(
   }
   const ProtocolConfig wire_config = qualified_native_wire_config(config, device);
   ByteWriter writer(out_request_data);
+  const Status command_selection_status = validate_command_header_selection(
+      wire_config, 0x0401U, extended_word_subcommand(wire_config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, wire_config, 0x0401U, extended_word_subcommand(wire_config)) ||
       !append_extended_device_reference(writer, wire_config, device) ||
       !append_word_count(writer, wire_config, points)) {
@@ -4096,13 +3715,6 @@ Status encode_link_direct_batch_read_words(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)device;
-    (void)points;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define link-direct access");
-  }
   if (points == 0U || points > kMaxBatchWordPoints) {
     return invalid_argument("Link direct batch read words points must be in range 1..960");
   }
@@ -4111,6 +3723,11 @@ Status encode_link_direct_batch_read_words(
     return device_status;
   }
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x0401U, extended_word_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x0401U, extended_word_subcommand(config)) ||
       !append_link_direct_device_reference(writer, config, device) ||
       !append_word_count(writer, config, points)) {
@@ -4192,23 +3809,6 @@ Status encode_batch_read_bits(
   if (is_c1_frame(config) && !is_c1_supported_device(request.head_device.code)) {
     return invalid_argument("1C batch read bits does not support this device");
   }
-  if (is_e1_frame(config) && !is_c1_supported_device(request.head_device.code)) {
-    return invalid_argument("1E batch read bits does not support this device");
-  }
-  if (is_e1_frame(config)) {
-    if (request.points == 0U || request.points > 256U) {
-      return invalid_argument("1E batch read bits points must be in range 1..256");
-    }
-    ByteWriter writer(out_request_data);
-    if (!append_e1_subheader(writer, config, 0x00U) ||
-        !append_e1_device_reference(writer, config, request.head_device) ||
-        !append_e1_point_count(writer, config, request.points) ||
-        !append_e1_fixed_zero(writer, config)) {
-      return buffer_too_small("1E batch read bits request buffer is too small");
-    }
-    out_size = writer.size();
-    return ok_status();
-  }
   if (is_c1_frame(config)) {
     if (request.points == 0U || request.points > 256U) {
       return invalid_argument("1C batch read bits points must be in range 1..256");
@@ -4230,6 +3830,11 @@ Status encode_batch_read_bits(
   const DeviceAddress effective_head =
       effective_batch_read_bits_head_device(config, request.head_device, request.points);
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x0401U, bit_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x0401U, bit_subcommand(config)) ||
       !append_device_reference(writer, config, effective_head) ||
       !append_word_count(writer, config, request.points)) {
@@ -4249,13 +3854,6 @@ Status encode_link_direct_batch_read_bits(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)device;
-    (void)points;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define link-direct access");
-  }
   const std::uint16_t max_points =
       is_ascii_mode(config) ? kMaxBatchBitPointsAscii : kMaxBatchBitPointsBinary;
   if (points == 0U || points > max_points) {
@@ -4271,6 +3869,11 @@ Status encode_link_direct_batch_read_bits(
   LinkDirectDevice effective_device = device;
   effective_device.device = effective_batch_read_bits_head_device(config, device.device, points);
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x0401U, extended_bit_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x0401U, extended_bit_subcommand(config)) ||
       !append_link_direct_device_reference(writer, config, effective_device) ||
       !append_word_count(writer, config, points)) {
@@ -4289,9 +3892,7 @@ Status parse_batch_read_bits_response(
     return buffer_too_small("Batch read bits output buffer is too small");
   }
   if (is_ascii_mode(config)) {
-    const std::size_t expected_size =
-        is_e1_frame(config) ? static_cast<std::size_t>(request.points + ((request.points % 2U) == 0U ? 0U : 1U))
-                            : static_cast<std::size_t>(request.points);
+    const std::size_t expected_size = static_cast<std::size_t>(request.points);
     if (response_data.size() != expected_size) {
       return parse_error("Batch read bits ASCII response length mismatch");
     }
@@ -4353,31 +3954,6 @@ Status encode_batch_write_words(
   if (is_c1_frame(config) && !is_c1_supported_device(request.head_device.code)) {
     return invalid_argument("1C batch write words does not support this device");
   }
-  if (is_e1_frame(config) && !is_c1_supported_device(request.head_device.code)) {
-    return invalid_argument("1E batch write words does not support this device");
-  }
-  if (is_e1_frame(config)) {
-    const Status bit_head_status = validate_word_unit_bit_head(
-        request.head_device,
-        "1E batch write words requires bit-device heads aligned to 16 points");
-    if (!bit_head_status.ok()) {
-      return bit_head_status;
-    }
-    const std::uint16_t limit = e1_batch_write_word_limit_for_device(request.head_device.code);
-    if (request.words.empty() || request.words.size() > limit) {
-      return invalid_argument("1E batch write words count exceeds the supported range for this device");
-    }
-    ByteWriter writer(out_request_data);
-    if (!append_e1_subheader(writer, config, 0x03U) ||
-        !append_e1_device_reference(writer, config, request.head_device) ||
-        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(request.words.size())) ||
-        !append_e1_fixed_zero(writer, config) ||
-        !append_word_data(writer, config, request.words)) {
-      return buffer_too_small("1E batch write words request buffer is too small");
-    }
-    out_size = writer.size();
-    return ok_status();
-  }
   if (is_c1_frame(config)) {
     const Status bit_head_status = validate_word_unit_bit_head(
         request.head_device,
@@ -4399,11 +3975,17 @@ Status encode_batch_write_words(
     out_size = writer.size();
     return ok_status();
   }
-  const std::size_t max_points = batch_write_words_point_limit_for_buffer(config);
+  const std::size_t max_points =
+      batch_write_words_point_limit_for_buffer(config, word_subcommand(config));
   if (request.words.empty() || request.words.size() > max_points) {
     return invalid_argument("Batch write words count exceeds supported range for the current buffer/configuration");
   }
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1401U, word_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x1401U, word_subcommand(config)) ||
       !append_device_reference(writer, config, request.head_device) ||
       !append_word_count(writer, config, static_cast<std::uint16_t>(request.words.size())) ||
@@ -4422,30 +4004,6 @@ Status encode_write_extended_file_register_words(
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
-  }
-  if (is_e1_frame(config)) {
-    const Status series_status = validate_c1_supported_config(config);
-    if (!series_status.ok()) {
-      return series_status;
-    }
-    const Status address_status = validate_e1_extended_file_register_address(request.head_device);
-    if (!address_status.ok()) {
-      return address_status;
-    }
-    if (request.words.empty() || request.words.size() > 256U) {
-      return invalid_argument("1E extended file-register write points must be in range 1..256");
-    }
-
-    ByteWriter writer(out_request_data);
-    if (!append_e1_subheader(writer, config, 0x18U) ||
-        !append_e1_extended_file_register_address(writer, config, request.head_device) ||
-        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(request.words.size())) ||
-        !append_e1_fixed_zero(writer, config) ||
-        !append_word_data(writer, config, request.words)) {
-      return buffer_too_small("1E extended file-register write request buffer is too small");
-    }
-    out_size = writer.size();
-    return ok_status();
   }
   const Status c1_status = validate_c1_only_config(
       config,
@@ -4487,31 +4045,6 @@ Status encode_direct_write_extended_file_register_words(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    const Status series_status = validate_c1_supported_config(config);
-    if (!series_status.ok()) {
-      return series_status;
-    }
-    if (plc_series_from_profile(config.plc_profile()) != PlcSeries::A) {
-      return make_status(
-          StatusCode::UnsupportedConfiguration,
-          "1E direct extended file-register write requires PlcProfile melsec:a");
-    }
-    if (request.words.empty() || request.words.size() > 256U) {
-      return invalid_argument("1E direct extended file-register write points must be in range 1..256");
-    }
-
-    ByteWriter writer(out_request_data);
-    if (!append_e1_subheader(writer, config, 0x3CU) ||
-        !append_e1_extended_file_register_direct_address(writer, config, request.head_device_number) ||
-        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(request.words.size())) ||
-        !append_e1_fixed_zero(writer, config) ||
-        !append_word_data(writer, config, request.words)) {
-      return buffer_too_small("1E direct extended file-register write request buffer is too small");
-    }
-    out_size = writer.size();
-    return ok_status();
-  }
   const Status c1_status = validate_c1_only_config(
       config,
       "Direct extended file-register write is implemented only for 1C ASCII");
@@ -4551,14 +4084,8 @@ Status encode_link_direct_batch_write_words(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)device;
-    (void)words;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define link-direct access");
-  }
-  const std::size_t max_points = batch_write_words_point_limit_for_buffer(config);
+  const std::size_t max_points =
+      batch_write_words_point_limit_for_buffer(config, extended_word_subcommand(config));
   if (words.empty() || words.size() > max_points) {
     return invalid_argument(
         "Link direct batch write words count exceeds supported range for the current buffer/configuration");
@@ -4568,6 +4095,11 @@ Status encode_link_direct_batch_write_words(
     return device_status;
   }
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1401U, extended_word_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x1401U, extended_word_subcommand(config)) ||
       !append_link_direct_device_reference(writer, config, device) ||
       !append_word_count(writer, config, static_cast<std::uint16_t>(words.size())) ||
@@ -4588,14 +4120,10 @@ Status encode_extended_batch_write_words(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)device;
-    (void)words;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define qualified module-buffer word access");
-  }
-  const std::size_t max_points = batch_write_words_point_limit_for_buffer(config);
+  const ProtocolConfig wire_config = qualified_native_wire_config(config, device);
+  const std::size_t max_points =
+      batch_write_words_point_limit_for_buffer(
+          wire_config, extended_word_subcommand(wire_config));
   if (words.empty() || words.size() > max_points) {
     return invalid_argument("Extended batch write words count exceeds supported range for the current buffer/configuration");
   }
@@ -4603,8 +4131,12 @@ Status encode_extended_batch_write_words(
   if (!device_status.ok()) {
     return device_status;
   }
-  const ProtocolConfig wire_config = qualified_native_wire_config(config, device);
   ByteWriter writer(out_request_data);
+  const Status command_selection_status = validate_command_header_selection(
+      wire_config, 0x1401U, extended_word_subcommand(wire_config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, wire_config, 0x1401U, extended_word_subcommand(wire_config)) ||
       !append_extended_device_reference(writer, wire_config, device) ||
       !append_word_count(writer, wire_config, static_cast<std::uint16_t>(words.size())) ||
@@ -4654,25 +4186,6 @@ Status encode_batch_write_bits(
   if (is_c1_frame(config) && !is_c1_supported_device(request.head_device.code)) {
     return invalid_argument("1C batch write bits does not support this device");
   }
-  if (is_e1_frame(config) && !is_c1_supported_device(request.head_device.code)) {
-    return invalid_argument("1E batch write bits does not support this device");
-  }
-  if (is_e1_frame(config)) {
-    if (request.bits.empty() || request.bits.size() > 256U) {
-      return invalid_argument("1E batch write bits count must be in range 1..256");
-    }
-    ByteWriter writer(out_request_data);
-    if (!append_e1_subheader(writer, config, 0x02U) ||
-        !append_e1_device_reference(writer, config, request.head_device) ||
-        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(request.bits.size())) ||
-        !append_e1_fixed_zero(writer, config) ||
-        !(is_ascii_mode(config) ? append_bit_units_ascii(writer, request.bits)
-                                              : append_bit_units_binary(writer, request.bits))) {
-      return buffer_too_small("1E batch write bits request buffer is too small");
-    }
-    out_size = writer.size();
-    return ok_status();
-  }
   if (is_c1_frame(config)) {
     if (request.bits.empty() || request.bits.size() > 160U) {
       return invalid_argument("1C batch write bits count must be in range 1..160");
@@ -4687,13 +4200,19 @@ Status encode_batch_write_bits(
     out_size = writer.size();
     return ok_status();
   }
-  const std::size_t max_points = batch_write_bits_point_limit_for_buffer(config);
+  const std::size_t max_points =
+      batch_write_bits_point_limit_for_buffer(config, bit_subcommand(config));
   if (request.bits.empty() || request.bits.size() > max_points) {
     return invalid_argument("Batch write bits count exceeds supported range for the current buffer/configuration");
   }
   ByteWriter writer(out_request_data);
   const DeviceAddress effective_head =
       effective_batch_write_bits_head_device(config, request.head_device, request.bits);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1401U, bit_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x1401U, bit_subcommand(config)) ||
       !append_device_reference(writer, config, effective_head) ||
       !append_word_count(writer, config, static_cast<std::uint16_t>(request.bits.size()))) {
@@ -4720,14 +4239,8 @@ Status encode_link_direct_batch_write_bits(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)device;
-    (void)bits;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define link-direct access");
-  }
-  const std::size_t max_points = batch_write_bits_point_limit_for_buffer(config);
+  const std::size_t max_points =
+      batch_write_bits_point_limit_for_buffer(config, extended_bit_subcommand(config));
   if (bits.empty() || bits.size() > max_points) {
     return invalid_argument(
         "Link direct batch write bits count exceeds supported range for the current buffer/configuration");
@@ -4746,6 +4259,11 @@ Status encode_link_direct_batch_write_bits(
       effective_batch_write_bits_head_device(config, device.device, bits);
   const LinkDirectDevice effective_device(device.network_number, effective_head);
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1401U, extended_bit_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x1401U, extended_bit_subcommand(config)) ||
       !append_link_direct_device_reference(writer, config, effective_device) ||
       !append_word_count(writer, config, static_cast<std::uint16_t>(bits.size()))) {
@@ -4773,12 +4291,6 @@ Status encode_link_direct_random_read(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)word_items;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define link-direct access");
-  }
   if (is_c2_frame(config)) {
     return unsupported(
         "2C frame cannot represent link-direct extended random-read subcommands; use 3C or 4C");
@@ -4801,6 +4313,11 @@ Status encode_link_direct_random_read(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status = validate_command_header_selection(
+      config, 0x0403U, extended_word_subcommand(wire_config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x0403U, extended_word_subcommand(wire_config)) ||
       !append_random_word_dword_count(writer, wire_config, static_cast<std::uint16_t>(word_items.size())) ||
       !append_random_word_dword_count(writer, wire_config, 0U)) {
@@ -4825,12 +4342,6 @@ Status encode_random_read(
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
-  }
-  if (is_e1_frame(config)) {
-    (void)request;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define random-read commands");
   }
   if (request.word_items.empty() && request.dword_items.empty()) {
     return invalid_argument("Random read requires at least one item");
@@ -4864,6 +4375,11 @@ Status encode_random_read(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x0403U, word_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x0403U, word_subcommand(config)) ||
       !append_random_word_dword_count(writer, config, static_cast<std::uint16_t>(request.word_items.size())) ||
       !append_random_word_dword_count(writer, config, static_cast<std::uint16_t>(request.dword_items.size()))) {
@@ -4996,12 +4512,6 @@ Status encode_link_direct_random_write_words(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)items;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define link-direct access");
-  }
   if (items.empty()) {
     return invalid_argument("Link direct random write words requires at least one item");
   }
@@ -5023,6 +4533,11 @@ Status encode_link_direct_random_write_words(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status = validate_command_header_selection(
+      config, 0x1402U, extended_word_subcommand(wire_config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x1402U, extended_word_subcommand(wire_config)) ||
       !append_random_word_dword_count(writer, wire_config, static_cast<std::uint16_t>(items.size())) ||
       !append_random_word_dword_count(writer, wire_config, 0U)) {
@@ -5057,45 +4572,6 @@ Status encode_random_write_words(
   }
   if (word_items.empty() && dword_items.empty()) {
     return invalid_argument("Random write words requires at least one item");
-  }
-
-  if (is_e1_frame(config)) {
-    if (!dword_items.empty()) {
-      return invalid_argument("1E random write words does not support double-word items");
-    }
-    if (word_items.size() > 40U) {
-      return invalid_argument("1E random write words count must be in range 1..40");
-    }
-    ByteWriter writer(out_request_data);
-    if (!append_e1_subheader(writer, config, 0x05U) ||
-        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(word_items.size())) ||
-        !append_e1_fixed_zero(writer, config)) {
-      return buffer_too_small("1E random write words request buffer is too small");
-    }
-    for (const RandomWriteWordItem& item : word_items) {
-      const Status item_status = validate_random_item_device(
-          config,
-          item.device,
-          false,
-          "1E random write words requires supported word or 16-point bit devices",
-          "1E random write words does not support double-word items");
-      if (!item_status.ok()) {
-        return item_status;
-      }
-      if (!is_c1_supported_device(item.device.code)) {
-        return invalid_argument("1E random write words does not support this device");
-      }
-      if (is_bit_device_code(item.device.code) && (item.device.number % 16U) != 0U) {
-        return invalid_argument("1E random write words requires bit-device heads aligned to 16 points");
-      }
-      if (!append_e1_device_reference(writer, config, item.device) ||
-          !(is_ascii_mode(config) ? append_word_data_ascii(writer, item.value)
-                                  : writer.append_le16(item.value))) {
-        return buffer_too_small("1E random write words request buffer is too small");
-      }
-    }
-    out_size = writer.size();
-    return ok_status();
   }
 
   if (is_c1_frame(config)) {
@@ -5154,6 +4630,11 @@ Status encode_random_write_words(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1402U, word_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x1402U, word_subcommand(config)) ||
       !append_random_word_dword_count(writer, config, static_cast<std::uint16_t>(word_items.size())) ||
       !append_random_word_dword_count(writer, config, static_cast<std::uint16_t>(dword_items.size()))) {
@@ -5189,35 +4670,6 @@ Status encode_random_write_extended_file_register_words(
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
-  }
-  if (is_e1_frame(config)) {
-    const Status series_status = validate_c1_supported_config(config);
-    if (!series_status.ok()) {
-      return series_status;
-    }
-    if (items.empty() || items.size() > 40U) {
-      return invalid_argument("1E extended file-register random write count must be in range 1..40");
-    }
-
-    ByteWriter writer(out_request_data);
-    if (!append_e1_subheader(writer, config, 0x19U) ||
-        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(items.size())) ||
-        !append_e1_fixed_zero(writer, config)) {
-      return buffer_too_small("1E extended file-register random write request buffer is too small");
-    }
-    for (const ExtendedFileRegisterRandomWriteWordItem& item : items) {
-      const Status address_status = validate_e1_extended_file_register_address(item.device);
-      if (!address_status.ok()) {
-        return address_status;
-      }
-      if (!append_e1_extended_file_register_address(writer, config, item.device) ||
-          !(is_ascii_mode(config) ? append_word_data_ascii(writer, item.value)
-                                               : writer.append_le16(item.value))) {
-        return buffer_too_small("1E extended file-register random write request buffer is too small");
-      }
-    }
-    out_size = writer.size();
-    return ok_status();
   }
   const Status c1_status = validate_c1_only_config(
       config,
@@ -5327,49 +4779,6 @@ Status encode_random_write_bits(
       return invalid_argument("Random write bits requires each value to be Off or On");
     }
   }
-  if (is_e1_frame(config)) {
-    if (items.size() > 80U) {
-      return invalid_argument("1E random write bits count must be in range 1..80");
-    }
-    ByteWriter writer(out_request_data);
-    if (!append_e1_subheader(writer, config, 0x04U) ||
-        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(items.size())) ||
-        !append_e1_fixed_zero(writer, config)) {
-      return buffer_too_small("1E random write bits request buffer is too small");
-    }
-    for (const RandomWriteBitItem& item : items) {
-      const Status bit_status = validate_bit_device(config, item.device, "1E random write bits requires bit devices");
-      if (!bit_status.ok()) {
-        return bit_status;
-      }
-      const Status profile_status = validate_profile_plain_device_support(
-          config,
-          item.device.code,
-          "1E random write bits does not support this device for this PLC profile");
-      if (!profile_status.ok()) {
-        return profile_status;
-      }
-      const Status profile_write_status = validate_profile_plain_write_support(
-          config,
-          item.device.code,
-          "1E random write bits does not support this device for this PLC profile");
-      if (!profile_write_status.ok()) {
-        return profile_write_status;
-      }
-      if (!is_c1_supported_device(item.device.code)) {
-        return invalid_argument("1E random write bits does not support this device");
-      }
-      if (!append_e1_device_reference(writer, config, item.device) ||
-          !(is_ascii_mode(config)
-                ? writer.push(item.value == true ? static_cast<std::uint8_t>('1')
-                                                         : static_cast<std::uint8_t>('0'))
-                : writer.push(item.value == true ? 0x01U : 0x00U))) {
-        return buffer_too_small("1E random write bits request buffer is too small");
-      }
-    }
-    out_size = writer.size();
-    return ok_status();
-  }
   if (is_c1_frame(config)) {
     if (items.size() > 20U) {
       return invalid_argument("1C random write bits count must be in range 1..20");
@@ -5419,6 +4828,11 @@ Status encode_random_write_bits(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1402U, bit_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x1402U, bit_subcommand(config)) ||
       !append_random_write_bit_count(writer, config, static_cast<std::uint16_t>(items.size()))) {
     return buffer_too_small("Random write bits request buffer is too small");
@@ -5450,12 +4864,6 @@ Status encode_link_direct_random_write_bits(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)items;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define link-direct access");
-  }
   if (items.empty()) {
     return invalid_argument("Link direct random write bits requires at least one item");
   }
@@ -5477,6 +4885,11 @@ Status encode_link_direct_random_write_bits(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status = validate_command_header_selection(
+      config, 0x1402U, extended_bit_subcommand(wire_config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x1402U, extended_bit_subcommand(wire_config)) ||
       !append_random_write_bit_count(writer, wire_config, static_cast<std::uint16_t>(items.size()))) {
     return buffer_too_small("Link direct random write bits request buffer is too small");
@@ -5544,12 +4957,6 @@ Status encode_link_direct_multi_block_read(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)request;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define link-direct access");
-  }
   if (request.blocks.empty()) {
     return invalid_argument("Link direct multi-block read requires at least one block");
   }
@@ -5574,6 +4981,11 @@ Status encode_link_direct_multi_block_read(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x0406U, extended_word_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x0406U, extended_word_subcommand(config)) ||
       !append_multi_block_block_count(writer, config, word_blocks) ||
       !append_multi_block_block_count(writer, config, bit_blocks)) {
@@ -5609,12 +5021,6 @@ Status encode_multi_block_read(
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
-  }
-  if (is_e1_frame(config)) {
-    (void)request;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define multi-block access");
   }
   if (request.blocks.empty()) {
     return invalid_argument("Multi-block read requires at least one block");
@@ -5654,6 +5060,11 @@ Status encode_multi_block_read(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x0406U, word_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x0406U, word_subcommand(config)) ||
       !append_multi_block_block_count(writer, config, word_blocks) ||
       !append_multi_block_block_count(writer, config, bit_blocks)) {
@@ -5783,12 +5194,6 @@ Status encode_multi_block_write(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)request;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define multi-block access");
-  }
   if (request.blocks.empty()) {
     return invalid_argument("Multi-block write requires at least one block");
   }
@@ -5846,6 +5251,11 @@ Status encode_multi_block_write(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1406U, word_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x1406U, word_subcommand(config)) ||
       !append_multi_block_block_count(writer, config, word_blocks) ||
       !append_multi_block_block_count(writer, config, bit_blocks)) {
@@ -5889,12 +5299,6 @@ Status encode_link_direct_multi_block_write(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)request;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define link-direct access");
-  }
   if (request.blocks.empty()) {
     return invalid_argument("Link direct multi-block write requires at least one block");
   }
@@ -5937,6 +5341,11 @@ Status encode_link_direct_multi_block_write(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1406U, extended_word_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x1406U, extended_word_subcommand(config)) ||
       !append_multi_block_block_count(writer, config, word_blocks) ||
       !append_multi_block_block_count(writer, config, bit_blocks)) {
@@ -6063,18 +5472,14 @@ Status encode_link_direct_register_monitor(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)request;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define link-direct access");
-  }
-  if (is_c2_frame(config)) {
-    return unsupported(
-        "2C frame cannot represent link-direct extended monitor-registration subcommands; use 3C or 4C");
-  }
   if (request.word_items.empty()) {
     return invalid_argument("Link direct monitor registration requires at least one item");
+  }
+  const ProtocolConfig wire_config = link_direct_native_wire_config(config);
+  const Status command_selection_status = validate_command_header_selection(
+      config, 0x0801U, extended_word_subcommand(wire_config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
   }
   std::array<std::uint8_t, kMaxRequestDataBytes> random_request_data {};
   std::size_t inner_size = 0;
@@ -6084,13 +5489,13 @@ Status encode_link_direct_register_monitor(
     return status;
   }
 
-  const ProtocolConfig wire_config = link_direct_native_wire_config(config);
   ByteWriter patched(out_request_data);
   patched.clear();
   if (!append_command_header(patched, config, 0x0801U, extended_word_subcommand(wire_config))) {
     return buffer_too_small("Link direct monitor registration request buffer is too small");
   }
-  const std::size_t command_header_size = request_command_header_size(config);
+  const std::size_t command_header_size = request_command_header_size(
+      config, 0x0403U, extended_word_subcommand(wire_config));
   if (!patched.append(mcprotocol::serial::Span<const std::uint8_t>(
           random_request_data.data() + command_header_size,
           inner_size - command_header_size))) {
@@ -6121,35 +5526,6 @@ Status encode_register_monitor(
   }
   if (request.word_items.empty() && request.dword_items.empty()) {
     return invalid_argument("Monitor registration requires at least one item");
-  }
-  if (is_e1_frame(config)) {
-    if (!request.dword_items.empty()) {
-      return invalid_argument("1E monitor does not support double-word items");
-    }
-    const bool bit_units = c1_monitor_uses_bit_units(
-        request.word_items, request.dword_items);
-    const std::size_t limit = bit_units ? 40U : 20U;
-    if (request.word_items.size() > limit) {
-      return invalid_argument(bit_units ? "1E bit-unit monitor registration count must be in range 1..40"
-                                        : "1E word-unit monitor registration count must be in range 1..20");
-    }
-    ByteWriter writer(out_request_data);
-    if (!append_e1_subheader(writer, config, bit_units ? 0x06U : 0x07U) ||
-        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(request.word_items.size())) ||
-        !append_e1_fixed_zero(writer, config)) {
-      return buffer_too_small("1E monitor registration request buffer is too small");
-    }
-    for (const RandomReadWordItem& item : request.word_items) {
-      const Status item_status = validate_c1_monitor_item(config, item, bit_units);
-      if (!item_status.ok()) {
-        return item_status;
-      }
-      if (!append_e1_device_reference(writer, config, item.device)) {
-        return buffer_too_small("1E monitor registration request buffer is too small");
-      }
-    }
-    out_size = writer.size();
-    return ok_status();
   }
   if (is_c1_frame(config)) {
     if (!request.dword_items.empty()) {
@@ -6182,6 +5558,11 @@ Status encode_register_monitor(
     out_size = writer.size();
     return ok_status();
   }
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x0801U, word_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   RandomReadRequest random_request(request.word_items, request.dword_items);
   std::array<std::uint8_t, kMaxRequestDataBytes> random_request_data {};
   std::size_t inner_size = 0;
@@ -6195,7 +5576,8 @@ Status encode_register_monitor(
   if (!append_command_header(patched, config, 0x0801U, word_subcommand(config))) {
     return buffer_too_small("Monitor registration request buffer is too small");
   }
-  const std::size_t command_header_size = request_command_header_size(config);
+  const std::size_t command_header_size =
+      request_command_header_size(config, 0x0403U, word_subcommand(config));
   if (!patched.append(mcprotocol::serial::Span<const std::uint8_t>(
           random_request_data.data() + command_header_size,
           inner_size - command_header_size))) {
@@ -6213,33 +5595,6 @@ Status encode_register_extended_file_register_monitor(
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
-  }
-  if (is_e1_frame(config)) {
-    const Status series_status = validate_c1_supported_config(config);
-    if (!series_status.ok()) {
-      return series_status;
-    }
-    if (request.items.empty() || request.items.size() > 20U) {
-      return invalid_argument("1E extended file-register monitor registration count must be in range 1..20");
-    }
-
-    ByteWriter writer(out_request_data);
-    if (!append_e1_subheader(writer, config, 0x1AU) ||
-        !append_e1_point_count(writer, config, static_cast<std::uint16_t>(request.items.size())) ||
-        !append_e1_fixed_zero(writer, config)) {
-      return buffer_too_small("1E extended file-register monitor registration request buffer is too small");
-    }
-    for (const ExtendedFileRegisterAddress& item : request.items) {
-      const Status address_status = validate_e1_extended_file_register_address(item);
-      if (!address_status.ok()) {
-        return address_status;
-      }
-      if (!append_e1_extended_file_register_address(writer, config, item)) {
-        return buffer_too_small("1E extended file-register monitor registration request buffer is too small");
-      }
-    }
-    out_size = writer.size();
-    return ok_status();
   }
   const Status c1_status = validate_c1_only_config(
       config,
@@ -6282,9 +5637,6 @@ Status encode_read_monitor(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    return invalid_argument("1E monitor read requires registered item metadata");
-  }
   if (is_c1_frame(config)) {
     return invalid_argument("1C monitor read requires registered item metadata");
   }
@@ -6294,6 +5646,11 @@ Status encode_read_monitor(
     return unsupported("melsec:iq-f does not support monitor read");
   }
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x0802U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x0802U, 0x0000U)) {
     return buffer_too_small("Monitor read request buffer is too small");
   }
@@ -6321,28 +5678,6 @@ Status encode_read_monitor(
     return unsupported("melsec:iq-f does not support monitor read");
   }
   if (!is_c1_frame(config)) {
-    if (is_e1_frame(config)) {
-      if (registration.word_items.empty() && registration.dword_items.empty()) {
-        return invalid_argument("1E monitor read requires registered items");
-      }
-      if (!registration.dword_items.empty()) {
-        return invalid_argument("1E monitor does not support double-word items");
-      }
-      const bool bit_units = c1_monitor_uses_bit_units(
-          registration.word_items, registration.dword_items);
-      for (const RandomReadWordItem& item : registration.word_items) {
-        const Status item_status = validate_c1_monitor_item(config, item, bit_units);
-        if (!item_status.ok()) {
-          return item_status;
-        }
-      }
-      ByteWriter writer(out_request_data);
-      if (!append_e1_subheader(writer, config, bit_units ? 0x08U : 0x09U)) {
-        return buffer_too_small("1E monitor read request buffer is too small");
-      }
-      out_size = writer.size();
-      return ok_status();
-    }
     return encode_read_monitor(config, out_request_data, out_size);
   }
   if (registration.word_items.empty() && registration.dword_items.empty()) {
@@ -6379,27 +5714,6 @@ Status encode_read_extended_file_register_monitor(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    const Status series_status = validate_c1_supported_config(config);
-    if (!series_status.ok()) {
-      return series_status;
-    }
-    if (items.empty()) {
-      return invalid_argument("1E extended file-register monitor read requires registered items");
-    }
-    for (const ExtendedFileRegisterAddress& item : items) {
-      const Status address_status = validate_e1_extended_file_register_address(item);
-      if (!address_status.ok()) {
-        return address_status;
-      }
-    }
-    ByteWriter writer(out_request_data);
-    if (!append_e1_subheader(writer, config, 0x1BU)) {
-      return buffer_too_small("1E extended file-register monitor read request buffer is too small");
-    }
-    out_size = writer.size();
-    return ok_status();
-  }
   const Status c1_status = validate_c1_only_config(
       config,
       "Extended file-register monitor read is implemented only for 1C ASCII");
@@ -6435,38 +5749,14 @@ Status parse_read_monitor_response(
     mcprotocol::serial::Span<const std::uint8_t> response_data,
     mcprotocol::serial::Span<std::uint16_t> out_words,
     mcprotocol::serial::Span<std::uint32_t> out_dwords) noexcept {
-  if ((is_c1_frame(config) || is_e1_frame(config)) && c1_monitor_uses_bit_units(
+  if (is_c1_frame(config) && c1_monitor_uses_bit_units(
           registration.word_items, registration.dword_items)) {
     if (out_words.size() < registration.word_items.size()) {
       return buffer_too_small("Monitor output buffer is too small");
     }
-    if (is_e1_frame(config) && !is_ascii_mode(config)) {
-      const std::size_t expected_size = (registration.word_items.size() + 1U) / 2U;
-      if (response_data.size() != expected_size) {
-        return parse_error("1E bit-unit monitor binary response length mismatch");
-      }
-      for (std::size_t index = 0; index < registration.word_items.size(); ++index) {
-        const std::uint8_t packed = response_data[index / 2U];
-        const std::uint8_t nibble =
-            (index % 2U) == 0U
-                ? static_cast<std::uint8_t>((packed >> 4U) & 0x0FU)
-                : static_cast<std::uint8_t>(packed & 0x0FU);
-        if (nibble > 1U) {
-          return parse_error("1E bit-unit monitor binary payload contains an invalid bit nibble");
-        }
-        out_words[index] = nibble;
-      }
-      return ok_status();
-    }
-    const std::size_t expected_size =
-        is_e1_frame(config)
-            ? registration.word_items.size() +
-                  ((registration.word_items.size() % 2U) == 0U ? 0U : 1U)
-            : registration.word_items.size();
+    const std::size_t expected_size = registration.word_items.size();
     if (response_data.size() != expected_size) {
-      return parse_error(is_e1_frame(config)
-                             ? "1E bit-unit monitor response length mismatch"
-                             : "1C bit-unit monitor response length mismatch");
+      return parse_error("1C bit-unit monitor response length mismatch");
     }
     for (std::size_t index = 0; index < registration.word_items.size(); ++index) {
       if (response_data[index] == '0') {
@@ -6474,9 +5764,7 @@ Status parse_read_monitor_response(
       } else if (response_data[index] == '1') {
         out_words[index] = 1U;
       } else {
-        return parse_error(is_e1_frame(config)
-                               ? "1E bit-unit monitor payload contains an invalid bit"
-                               : "1C bit-unit monitor payload contains an invalid bit");
+        return parse_error("1C bit-unit monitor payload contains an invalid bit");
       }
     }
     return ok_status();
@@ -6628,7 +5916,7 @@ Status parse_read_extended_file_register_monitor_response(
 
 Status encode_read_user_frame(
     const ProtocolConfig& config,
-    const UserFrameReadRequest& request,
+    const UserFrameRegistrationReadRequest& request,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -6645,6 +5933,11 @@ Status encode_read_user_frame(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x0610U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x0610U, 0x0000U) ||
       !append_word_count(writer, config, request.frame_no)) {
     return buffer_too_small("User-frame read request buffer is too small");
@@ -6720,7 +6013,7 @@ Status parse_read_user_frame_response(
 
 Status encode_write_user_frame(
     const ProtocolConfig& config,
-    const UserFrameWriteRequest& request,
+    const UserFrameRegistrationWriteRequest& request,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -6737,6 +6030,11 @@ Status encode_write_user_frame(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1610U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x1610U, 0x0000U) ||
       !append_word_count(writer, config, request.frame_no) ||
       !append_word_count(writer, config, static_cast<std::uint16_t>(request.registration_data.size())) ||
@@ -6750,7 +6048,7 @@ Status encode_write_user_frame(
 
 Status encode_delete_user_frame(
     const ProtocolConfig& config,
-    const UserFrameDeleteRequest& request,
+    const UserFrameRegistrationDeleteRequest& request,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -6767,6 +6065,11 @@ Status encode_delete_user_frame(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1610U, 0x0001U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x1610U, 0x0001U) ||
       !append_word_count(writer, config, request.frame_no) ||
       !append_word_count(writer, config, 0U) ||
@@ -6802,6 +6105,11 @@ Status encode_control_global_signal(
   const std::uint16_t subcommand = request.value == true ? 0x0001U : 0x0000U;
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1618U, subcommand);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x1618U, subcommand) ||
       !append_word_count(writer, config, specification)) {
     return buffer_too_small("Global signal control request buffer is too small");
@@ -6835,6 +6143,11 @@ Status encode_switch_serial_module_mode(
   const auto communication_speed = static_cast<std::uint8_t>(request.communication_speed);
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1612U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   const bool fixed_part_ok =
       append_command_header(writer, config, 0x1612U, 0x0000U) &&
       append_byte_or_ascii_hex(writer, config, channel) &&
@@ -6868,6 +6181,11 @@ Status encode_initialize_transmission_sequence(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1615U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x1615U, 0x0000U)) {
     return buffer_too_small("Transmission-sequence initialization request buffer is too small");
   }
@@ -6887,12 +6205,6 @@ Status encode_read_host_buffer(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)request;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define host-buffer access");
-  }
   if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)request;
     (void)out_request_data;
@@ -6909,6 +6221,11 @@ Status encode_read_host_buffer(
     return invalid_argument("Host buffer read length must be in range 1..480");
   }
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x0613U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   const bool ok = append_command_header(writer, config, 0x0613U, 0x0000U) &&
                   (is_ascii_mode(config) ? append_ascii_hex(writer, request.start_address, 8)
                                                        : writer.append_le32(request.start_address, 4U)) &&
@@ -6941,12 +6258,6 @@ Status encode_write_host_buffer(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)request;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define host-buffer access");
-  }
   if (config.plc_profile() == PlcProfile::MelsecIqF) {
     (void)request;
     (void)out_request_data;
@@ -6963,6 +6274,11 @@ Status encode_write_host_buffer(
     return invalid_argument("Host buffer write length must be in range 1..480");
   }
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1613U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   const bool ok = append_command_header(writer, config, 0x1613U, 0x0000U) &&
                   (is_ascii_mode(config) ? append_ascii_hex(writer, request.start_address, 8)
                                                        : writer.append_le32(request.start_address, 4U)) &&
@@ -7041,31 +6357,6 @@ Status encode_read_module_buffer(
     (void)out_size;
     return unsupported("melsec:iq-f does not support module-buffer access");
   }
-  if (is_e1_frame(config)) {
-    if (request.bytes == 0U || request.bytes > 256U) {
-      return invalid_argument("1E module buffer read byte count must be in range 1..256");
-    }
-    if (request.start_address > 0xFFFFFFU || request.module_number > 0x00FFU ||
-        (static_cast<std::uint64_t>(request.start_address) + request.bytes) > 0x1000000ULL) {
-      return invalid_argument("1E module buffer read address/module/range exceeds the wire fields");
-    }
-    ByteWriter writer(out_request_data);
-    const std::uint8_t encoded_length =
-        request.bytes == 256U ? 0x00U : static_cast<std::uint8_t>(request.bytes);
-    const bool ok = append_e1_subheader(writer, config, 0x0EU) &&
-                    (is_ascii_mode(config) ? append_ascii_hex(writer, request.start_address, 6U)
-                                                         : writer.append_le32(request.start_address, 3U)) &&
-                    (is_ascii_mode(config) ? append_ascii_hex(writer, encoded_length, 2U)
-                                                         : writer.push(encoded_length)) &&
-                    (is_ascii_mode(config) ? append_ascii_hex(writer, request.module_number, 2U)
-                                                         : writer.push(static_cast<std::uint8_t>(request.module_number & 0xFFU))) &&
-                    append_e1_fixed_zero(writer, config);
-    if (!ok) {
-      return buffer_too_small("1E module buffer read request buffer is too small");
-    }
-    out_size = writer.size();
-    return ok_status();
-  }
   if (is_c1_frame(config)) {
     const Status profile_status = validate_c1_module_buffer_profile(config);
     if (!profile_status.ok()) {
@@ -7096,6 +6387,11 @@ Status encode_read_module_buffer(
     return invalid_argument("Module buffer read range exceeds the 32-bit address space");
   }
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x0601U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   const bool ok = append_command_header(writer, config, 0x0601U, 0x0000U) &&
                   (is_ascii_mode(config) ? append_ascii_hex(writer, request.start_address, 8)
                                                        : writer.append_le32(request.start_address, 4U)) &&
@@ -7156,32 +6452,6 @@ Status encode_write_module_buffer(
     (void)out_size;
     return unsupported("melsec:iq-f does not support module-buffer access");
   }
-  if (is_e1_frame(config)) {
-    if (request.bytes.empty() || request.bytes.size() > 256U) {
-      return invalid_argument("1E module buffer write byte count must be in range 1..256");
-    }
-    if (request.start_address > 0xFFFFFFU || request.module_number > 0x00FFU ||
-        (static_cast<std::uint64_t>(request.start_address) + request.bytes.size()) > 0x1000000ULL) {
-      return invalid_argument("1E module buffer write address/module/range exceeds the wire fields");
-    }
-    ByteWriter writer(out_request_data);
-    const std::uint8_t encoded_length =
-        request.bytes.size() == 256U ? 0x00U : static_cast<std::uint8_t>(request.bytes.size());
-    const bool ok = append_e1_subheader(writer, config, 0x0FU) &&
-                    (is_ascii_mode(config) ? append_ascii_hex(writer, request.start_address, 6U)
-                                                         : writer.append_le32(request.start_address, 3U)) &&
-                    (is_ascii_mode(config) ? append_ascii_hex(writer, encoded_length, 2U)
-                                                         : writer.push(encoded_length)) &&
-                    (is_ascii_mode(config) ? append_ascii_hex(writer, request.module_number, 2U)
-                                                         : writer.push(static_cast<std::uint8_t>(request.module_number & 0xFFU))) &&
-                    append_e1_fixed_zero(writer, config) &&
-                    append_byte_data(writer, config, request.bytes);
-    if (!ok) {
-      return buffer_too_small("1E module buffer write request buffer is too small");
-    }
-    out_size = writer.size();
-    return ok_status();
-  }
   if (is_c1_frame(config)) {
     const Status profile_status = validate_c1_module_buffer_profile(config);
     if (!profile_status.ok()) {
@@ -7213,6 +6483,11 @@ Status encode_write_module_buffer(
     return invalid_argument("Module buffer write range exceeds the 32-bit address space");
   }
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1601U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   const bool ok = append_command_header(writer, config, 0x1601U, 0x0000U) &&
                   (is_ascii_mode(config) ? append_ascii_hex(writer, request.start_address, 8)
                                                        : writer.append_le32(request.start_address, 4U)) &&
@@ -7284,12 +6559,12 @@ Status encode_read_cpu_model(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define read-CPU-model");
-  }
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x0101U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   if (!append_command_header(writer, config, 0x0101U, 0x0000U)) {
     return buffer_too_small("Read CPU model request buffer is too small");
   }
@@ -7359,13 +6634,6 @@ Status encode_remote_run(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)mode;
-    (void)clear_mode;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define remote RUN");
-  }
   const Status mode_status = validate_remote_operation_mode(mode);
   if (!mode_status.ok()) {
     return mode_status;
@@ -7376,6 +6644,11 @@ Status encode_remote_run(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1001U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   const bool ok = append_command_header(writer, config, 0x1001U, 0x0000U) &&
                   append_word_count(writer, config, static_cast<std::uint16_t>(mode)) &&
                   append_byte_or_ascii_hex(writer, config, static_cast<std::uint8_t>(clear_mode)) &&
@@ -7395,12 +6668,12 @@ Status encode_remote_stop(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define remote STOP");
-  }
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1002U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   const bool ok = append_command_header(writer, config, 0x1002U, 0x0000U) &&
                   append_word_count(writer, config, 0x0001U);
   if (!ok) {
@@ -7420,18 +6693,17 @@ Status encode_remote_pause(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)mode;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define remote PAUSE");
-  }
   const Status mode_status = validate_remote_operation_mode(mode);
   if (!mode_status.ok()) {
     return mode_status;
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1003U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   const bool ok = append_command_header(writer, config, 0x1003U, 0x0000U) &&
                   append_word_count(writer, config, static_cast<std::uint16_t>(mode));
   if (!ok) {
@@ -7449,12 +6721,12 @@ Status encode_remote_latch_clear(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define remote latch clear");
-  }
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1005U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   const bool ok = append_command_header(writer, config, 0x1005U, 0x0000U) &&
                   append_word_count(writer, config, 0x0001U);
   if (!ok) {
@@ -7472,12 +6744,12 @@ Status encode_remote_reset(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define remote RESET");
-  }
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1006U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   const bool ok = append_command_header(writer, config, 0x1006U, 0x0000U) &&
                   append_word_count(writer, config, 0x0001U);
   if (!ok) {
@@ -7496,12 +6768,6 @@ Status encode_unlock_remote_password(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)remote_password;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define remote password unlock");
-  }
   const Status route_status = validate_connected_station_only_command_config(
       config,
       "Remote password unlock is available only for the connected station route");
@@ -7514,6 +6780,11 @@ Status encode_unlock_remote_password(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1630U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   const bool header_ok = append_command_header(writer, config, 0x1630U, 0x0000U) &&
                          append_word_count(writer, config, static_cast<std::uint16_t>(remote_password.size()));
   if (!header_ok || !append_text_bytes(writer, remote_password)) {
@@ -7532,12 +6803,6 @@ Status encode_lock_remote_password(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)remote_password;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define remote password lock");
-  }
   const Status route_status = validate_connected_station_only_command_config(
       config,
       "Remote password lock is available only for the connected station route");
@@ -7550,6 +6815,11 @@ Status encode_lock_remote_password(
   }
 
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x1631U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   const bool header_ok = append_command_header(writer, config, 0x1631U, 0x0000U) &&
                          append_word_count(writer, config, static_cast<std::uint16_t>(remote_password.size()));
   if (!header_ok || !append_text_bytes(writer, remote_password)) {
@@ -7567,13 +6837,13 @@ Status encode_clear_error_information(
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
   }
-  if (is_e1_frame(config)) {
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define clear error information");
-  }
   ByteWriter writer(out_request_data);
   const std::uint16_t error_word = clear_error_information_word(config);
+  const Status command_selection_status = validate_command_header_selection(
+      config, 0x1617U, clear_error_information_subcommand(config));
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   const bool ok = append_command_header(writer, config, 0x1617U, clear_error_information_subcommand(config)) &&
                   append_word_count(writer, config, error_word) &&
                   append_word_count(writer, config, error_word);
@@ -7595,12 +6865,6 @@ Status encode_loopback(
   const Status plc_profile_status = validate_plc_profile_config(config);
   if (!plc_profile_status.ok()) {
     return plc_profile_status;
-  }
-  if (is_e1_frame(config)) {
-    (void)hex_ascii;
-    (void)out_request_data;
-    (void)out_size;
-    return unsupported("1E frame does not define loopback");
   }
   const Status validate = validate_loopback_chars(config, hex_ascii);
   if (!validate.ok()) {
@@ -7635,6 +6899,11 @@ Status encode_loopback(
     return route_status;
   }
   ByteWriter writer(out_request_data);
+  const Status command_selection_status =
+      validate_command_header_selection(config, 0x0619U, 0x0000U);
+  if (!command_selection_status.ok()) {
+    return command_selection_status;
+  }
   const bool header_ok = append_command_header(writer, config, 0x0619U, 0x0000U) &&
                          append_word_count(writer, config, static_cast<std::uint16_t>(hex_ascii.size()));
   if (!header_ok) {

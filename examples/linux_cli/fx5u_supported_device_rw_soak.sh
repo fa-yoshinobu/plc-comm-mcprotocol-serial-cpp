@@ -35,9 +35,6 @@ fi
 if [[ -n "${MCPROTOCOL_SELF_STATION:-}" ]]; then
   export MCPROTOCOL_SELF_STATION
 fi
-if [[ -n "${MCPROTOCOL_E1_MONITORING_TIMER_MS:-}" ]]; then
-  export MCPROTOCOL_E1_MONITORING_TIMER_MS
-fi
 : "${MCPROTOCOL_PLC_PROFILE:?set MCPROTOCOL_PLC_PROFILE explicitly, e.g. melsec:iq-f}"
 export MCPROTOCOL_PLC_PROFILE
 if [[ -n "${MCPROTOCOL_RESPONSE_TIMEOUT_MS:-}" ]]; then

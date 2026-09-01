@@ -10,7 +10,6 @@
 namespace {
 
 using mcprotocol::serial::Byte;
-using mcprotocol::serial::CodeMode;
 using mcprotocol::serial::DeviceAddress;
 using mcprotocol::serial::DeviceCode;
 using mcprotocol::serial::ExtendedFileRegisterAddress;
@@ -152,9 +151,11 @@ ProtocolConfig normal_monitor_config() {
 }
 
 ProtocolConfig extended_monitor_config() {
-  return ProtocolConfig::e1(
-             CodeMode::Binary,
+  return ProtocolConfig::ascii(
+             mcprotocol::serial::AsciiFrameKind::C1,
+             mcprotocol::serial::AsciiFormat::Format4,
              PlcProfile::MelsecA,
+             mcprotocol::serial::SumCheckMode::Disabled,
              RouteConfig {HostStationRoute {}})
       .with_response_timeout_ms(100U);
 }
@@ -178,7 +179,7 @@ Status run_normal_monitor(FailureStage failure, bool read_only = false) {
         &completion).ok());
   } else {
     const RandomReadWordItem item {DeviceAddress {DeviceCode::D, 100U}};
-    assert(client.async_register_monitor(
+    assert(client.async_register_monitor_devices(
         0U,
         MonitorRegistration(Span<const RandomReadWordItem>(&item, 1U), {}),
         capture_completion,

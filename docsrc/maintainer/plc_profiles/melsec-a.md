@@ -50,7 +50,7 @@ For 1C ASCII command paths, the ACPU common symbols are currently:
 
 | Route | Candidate families in current codec surface |
 | --- | --- |
-| 1C/1E common devices | `X`, `Y`, `M`, `L`, `F`, `B`, `D`, `W`, `R`, `TS`, `TC`, `TN`, `CS`, `CC`, `CN` |
+| 1C common devices | `X`, `Y`, `M`, `L`, `F`, `B`, `D`, `W`, `R`, `TS`, `TC`, `TN`, `CS`, `CC`, `CN` |
 | Not supported | `S` |
 | Extended file register | A-series `ER`, `EW`, and `ET` paths are currently A-only. |
 | Direct extended file register | Verify separately; current direct `NR` / `NW` paths are QnA-family, not A-series. |
@@ -58,5 +58,5 @@ For 1C ASCII command paths, the ACPU common symbols are currently:
 ## Scope Boundary
 
 - Do not widen A-series CPU/module scope from this draft alone.
-- Do not promote additional 1E binary/ASCII combinations without a deliberate support-contract update.
+- MC Serial 1E is not part of the public contract; do not reintroduce it from this profile draft.
 - Do not publish A-series extended file-register limits as supported ranges from codec acceptance alone.

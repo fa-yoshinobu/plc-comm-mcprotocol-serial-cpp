@@ -34,7 +34,7 @@ build_flags =
     -std=c++17
 ```
 
-The PlatformIO package contains the transport-agnostic `MelsecSerialClient`, codecs, high-level request builders, and MCU compatibility headers for ESP32 and RP2040. It intentionally does not compile the Windows/POSIX serial backend or `PosixSyncClient`. Use a source checkout with CMake for those host-only components.
+The PlatformIO package contains the transport-agnostic `MelsecSerialClient`, codecs, high-level request builders, and MCU compatibility headers for ESP32 and RP2040. It intentionally does not compile the Windows/POSIX serial backend or `HostSyncClient`. Use a source checkout with CMake for those host-only components.
 
 ## Core client start
 

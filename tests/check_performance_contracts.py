@@ -60,7 +60,7 @@ def check_configuration_validation() -> None:
         assert required in client, f"missing validated client codec path: {required}"
 
     host = read("src/host_sync.cpp")
-    open_body = function_body(host, "Status PosixSyncClient::open(")
+    open_body = function_body(host, "Status HostSyncClient::open(")
     assert open_body.count("FrameCodec::validate_config") == 1
     assert "client_.apply_validated_config" in open_body
     assert "client_.configure" not in open_body
@@ -72,7 +72,7 @@ def check_long_state_aggregate() -> None:
     host = read("src/host_sync.cpp")
     body = function_body(
         host,
-        "Status PosixSyncClient::read_long_state_bits(\n"
+        "Status HostSyncClient::read_long_timer_counter_state_bits(\n"
         "    std::string_view head_device,\n"
         "    std::uint16_t points,",
     )
@@ -112,13 +112,13 @@ def check_drain_deadline_and_wait_policy() -> None:
     cases = (
         (
             "src/posix_serial.cpp",
-            "Status PosixSerialPort::drain_tx_until(",
+            "Status HostSerialPort::drain_tx_until(",
             "::ioctl",
             "::poll",
         ),
         (
             "src/win32_serial.cpp",
-            "Status PosixSerialPort::drain_tx_until(",
+            "Status HostSerialPort::drain_tx_until(",
             "ClearCommError",
             "Sleep(",
         ),

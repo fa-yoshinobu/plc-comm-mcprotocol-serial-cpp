@@ -31,7 +31,6 @@ param(
     [ValidateSet("on", "off")]
     [string]$SumCheck,
     [int]$ResponseTimeoutMs = 3000,
-    [Nullable[int]]$E1MonitoringTimerMs,
     [int]$InterByteTimeoutMs = 250,
     [string]$Password = "",
     [switch]$AllowRemotePasswordCommands,
@@ -55,11 +54,8 @@ if ($InterByteTimeoutMs -le 0) {
     throw "InterByteTimeoutMs must be in range 1..2147483647."
 }
 
-if ($Route -eq "multidrop" -and $Frame -notmatch '^e1-' -and $null -eq $Station) {
+if ($Route -eq "multidrop" -and $null -eq $Station) {
     throw "Station is required when -Route multidrop is selected."
-}
-if ($Route -eq "multidrop" -and $Frame -match '^e1-' -and $null -ne $Station) {
-    throw "Station must not be specified for a 1E route."
 }
 if ($Route -eq "host" -and $null -ne $Station) {
     throw "Station must not be specified when -Route host is selected."
@@ -79,8 +75,8 @@ if ($Route -eq "multidrop" -and $Frame -match '^c[34]-' -and $null -eq $Network)
 if ($Route -eq "multidrop" -and $Frame -match '^c[12]-' -and $null -ne $Network) {
     throw "Network must not be specified for 1C/2C multidrop routes."
 }
-if ($Route -eq "multidrop" -and $Frame -match '^(c[34]|e1)-' -and [string]::IsNullOrEmpty($PcTarget)) {
-    throw "PcTarget is required for 3C/4C/1E non-host routes."
+if ($Route -eq "multidrop" -and $Frame -match '^c[34]-' -and [string]::IsNullOrEmpty($PcTarget)) {
+    throw "PcTarget is required for 3C/4C non-host routes."
 }
 if ($Route -eq "multidrop" -and $Frame -match '^c[12]-' -and -not [string]::IsNullOrEmpty($PcTarget)) {
     throw "PcTarget must not be specified for 1C/2C routes."
@@ -107,17 +103,6 @@ if ($Route -eq "multidrop" -and $Frame -match '^c[234]-') {
 } elseif (-not [string]::IsNullOrEmpty($Topology) -or $null -ne $SelfStation) {
     throw "Topology and SelfStation must not be specified for this route/frame."
 }
-if ($null -ne $E1MonitoringTimerMs) {
-    if ($Frame -notmatch '^e1-') {
-        throw "E1MonitoringTimerMs must not be specified outside an E1 frame."
-    }
-    if ($E1MonitoringTimerMs -lt 0 -or
-        $E1MonitoringTimerMs -gt 16383750 -or
-        ($E1MonitoringTimerMs % 250) -ne 0) {
-        throw "E1MonitoringTimerMs must be an exact 250 ms unit in range 0..16383750."
-    }
-}
-
 if (-not (Test-Path -LiteralPath $LogDirectory)) {
     New-Item -ItemType Directory -Path $LogDirectory | Out-Null
 }
@@ -159,10 +144,6 @@ if (-not [string]::IsNullOrEmpty($Topology)) {
 if ($null -ne $SelfStation) {
     $script:CommonArgs += @("--self-station", "$SelfStation")
 }
-if ($null -ne $E1MonitoringTimerMs) {
-    $script:CommonArgs += @("--e1-monitoring-timer-ms", "$E1MonitoringTimerMs")
-}
-
 function Write-LogLine {
     param([string]$Line)
     $Line | Tee-Object -FilePath $script:LogPath -Append
@@ -222,7 +203,6 @@ Write-LogLine "plc-profile=$PlcProfile"
 Write-LogLine "route=$Route station=$Station network=$Network pc_target=$PcTarget module_target=$ModuleTarget"
 Write-LogLine "sum-check=$SumCheck"
 Write-LogLine "response-timeout-ms=$ResponseTimeoutMs"
-Write-LogLine "e1-monitoring-timer-ms=$E1MonitoringTimerMs"
 Write-LogLine "inter-byte-timeout-ms=$InterByteTimeoutMs"
 if ([string]::IsNullOrEmpty($Password)) {
     Write-LogLine "password-length=<not provided>"

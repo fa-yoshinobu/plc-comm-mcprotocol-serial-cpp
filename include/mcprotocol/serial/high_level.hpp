@@ -571,7 +571,7 @@ class BitInWordWriteOperation {
 
     initialize(client, Route::QualifiedBuffer, bit_index, value, callback, user);
     qualified_buffer_device_ = word_device;
-    status = client.async_extended_batch_read_words(
+    status = client.async_qualified_buffer_batch_read_words(
         now_ms,
         word_device,
         1U,
@@ -674,7 +674,7 @@ class BitInWordWriteOperation {
             &self);
         break;
       case Route::QualifiedBuffer:
-        write_status = self.client_->async_extended_batch_write_words(
+        write_status = self.client_->async_qualified_buffer_batch_write_words(
             0U,
             self.qualified_buffer_device_,
             words,

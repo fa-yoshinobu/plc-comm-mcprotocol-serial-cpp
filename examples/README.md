@@ -65,7 +65,7 @@ Set `MCPROTOCOL_FRAME` and `MCPROTOCOL_PLC_PROFILE` before running the CLI wrapp
 
 | File or folder | Platform | What it demonstrates |
 | --- | --- | --- |
-| `host_sync_quickstart.cpp` | Host | `PosixSyncClient`, `make_c4_ascii_format4_protocol`, CPU model read, batch word read, and sparse random read. |
+| `host_sync_quickstart.cpp` | Host | `HostSyncClient`, `make_c4_ascii_format4_protocol`, CPU model read, batch word read, and sparse random read. |
 | `host_sync_polling_reconnect.cpp` | Host | Read-only serial polling of `D100-D103` with selectable Format4/Format5 reconnect/backoff state logs on Windows/POSIX host serial ports. |
 | `mcu_async_batch_read.cpp` | Host | Low-level `MelsecSerialClient` flow with a simulated success response. |
 | `linux_cli/safe_bringup_readonly.sh` | Linux host | Safe read-only CLI bring-up with explicit serial, frame, and PLC profile settings. |

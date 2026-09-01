@@ -14,6 +14,7 @@ Do not edit it manually; run `scripts/update_api_reference.py` instead.
 - `include/mcprotocol/serial/client.hpp`
 - `include/mcprotocol/serial/high_level.hpp`
 - `include/mcprotocol/serial/host_sync.hpp`
+- `include/mcprotocol/serial/host_serial.hpp`
 - `include/mcprotocol/serial/posix_serial.hpp`
 - `include/mcprotocol/serial/link_direct.hpp`
 - `include/mcprotocol/serial/qualified_buffer.hpp`
@@ -158,12 +159,6 @@ Do not edit it manually; run `scripts/update_api_reference.py` instead.
 
 ```cpp
 #define MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 1
-```
-
-#### `MCPROTOCOL_SERIAL_ENABLE_FRAME_E1`
-
-```cpp
-#define MCPROTOCOL_SERIAL_ENABLE_FRAME_E1 1
 ```
 
 ## Namespaces
@@ -605,7 +600,7 @@ Status mcprotocol::serial::CommandCodec::parse_read_extended_file_register_monit
 #### `encode_read_user_frame`
 
 ```cpp
-Status mcprotocol::serial::CommandCodec::encode_read_user_frame(const ProtocolConfig &config, const UserFrameReadRequest &request, mcprotocol::serial::Span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
+Status mcprotocol::serial::CommandCodec::encode_read_user_frame(const ProtocolConfig &config, const UserFrameRegistrationReadRequest &request, mcprotocol::serial::Span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
 ```
 
 #### `parse_read_user_frame_response`
@@ -617,13 +612,13 @@ Status mcprotocol::serial::CommandCodec::parse_read_user_frame_response(const Pr
 #### `encode_write_user_frame`
 
 ```cpp
-Status mcprotocol::serial::CommandCodec::encode_write_user_frame(const ProtocolConfig &config, const UserFrameWriteRequest &request, mcprotocol::serial::Span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
+Status mcprotocol::serial::CommandCodec::encode_write_user_frame(const ProtocolConfig &config, const UserFrameRegistrationWriteRequest &request, mcprotocol::serial::Span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
 ```
 
 #### `encode_delete_user_frame`
 
 ```cpp
-Status mcprotocol::serial::CommandCodec::encode_delete_user_frame(const ProtocolConfig &config, const UserFrameDeleteRequest &request, mcprotocol::serial::Span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
+Status mcprotocol::serial::CommandCodec::encode_delete_user_frame(const ProtocolConfig &config, const UserFrameRegistrationDeleteRequest &request, mcprotocol::serial::Span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
 ```
 
 #### `encode_control_global_signal`
@@ -861,15 +856,12 @@ MC protocol frame family used on the serial link.
 | --- | --- |
 | `C4` | Chapter-8/10/11/13 oriented serial frame with the fullest feature coverage in this repository. |
 | `C3` | Shorter ASCII serial frame that reuses the C4 payload codec. |
-| `C2` | Smallest ASCII serial frame supported by this repository. |
+| `C2` | Smallest ASCII serial frame: compact selectors are exactly 0401/0001=1, 0401/0000=2, 1401/0001=3, 1401/0000=4, 0403/0000=5, 1402/0001=6, 1402/0000=7, 0801/0000=8, and 0802/0000=9; only loopback 0619/0000 uses the full command header; every other pair returns UnsupportedConfiguration before transmission, while the same public operation remains usable through 3C or 4C when supported there. |
 | `C1` | Legacy ASCII serial frame with its own command naming and routing rules. |
-| `E1` | Legacy frame family used by chapter-18 style command layouts. |
 
 #### `AsciiFrameKind`
 
 Frame families whose public configuration includes an explicit ASCII format.
-
-1E is intentionally absent because its ASCII representation has no Format1/2/3/4 selector.
 
 | Value | Description |
 | --- | --- |
@@ -1097,15 +1089,6 @@ Meaning of a 3C/4C routed PC target.
 | `SpecialFe` |  |
 | `ConnectedStation` |  |
 
-#### `E1PcTargetKind`
-
-Meaning of a 1E PC target.
-
-| Value | Description |
-| --- | --- |
-| `Number` |  |
-| `ConnectedStation` |  |
-
 #### `C4DestinationModuleKind`
 
 Meaning of a mandatory 4C request-destination module target.
@@ -1221,7 +1204,7 @@ Builds a status value with an optional PLC end code.
 #### `validate_serial_config`
 
 ```cpp
-Status mcprotocol::serial::validate_serial_config(const PosixSerialConfig &config) noexcept
+Status mcprotocol::serial::validate_serial_config(const HostSerialConfig &config) noexcept
 ```
 
 #### `make_outcome_unknown_status`
@@ -1243,7 +1226,7 @@ Returns "G" or "HG" for the helper device kind.
 #### `validate_mc_serial_config`
 
 ```cpp
-Status mcprotocol::serial::validate_mc_serial_config(const PosixSerialConfig &serial_config, const ProtocolConfig &protocol_config) noexcept
+Status mcprotocol::serial::validate_mc_serial_config(const HostSerialConfig &serial_config, const ProtocolConfig &protocol_config) noexcept
 ```
 
 #### `qualified_buffer_word_to_byte_address`
@@ -1322,14 +1305,6 @@ bool mcprotocol::serial::is_valid_code_mode(CodeMode code_mode) noexcept
 
 Returns whether code_mode is a defined public payload-encoding value.
 
-#### `make_qualified_buffer_read_words_request`
-
-```cpp
-Status mcprotocol::serial::make_qualified_buffer_read_words_request(const QualifiedBufferWordDevice &device, std::uint16_t word_length, ModuleBufferReadRequest &out_request) noexcept
-```
-
-Builds a module-buffer read request for a non-CPU Un\\G helper range.
-
 #### `is_valid_sum_check_mode`
 
 ```cpp
@@ -1337,6 +1312,14 @@ bool mcprotocol::serial::is_valid_sum_check_mode(SumCheckMode mode) noexcept
 ```
 
 Returns whether mode is a defined public sum-check value.
+
+#### `make_qualified_buffer_read_words_request`
+
+```cpp
+Status mcprotocol::serial::make_qualified_buffer_read_words_request(const QualifiedBufferWordDevice &device, std::uint16_t word_length, ModuleBufferReadRequest &out_request) noexcept
+```
+
+Builds a module-buffer read request for a non-CPU Un\\G helper range.
 
 #### `is_valid_ascii_format`
 
@@ -1760,13 +1743,29 @@ Status mcprotocol::serial::MelsecSerialClient::async_link_direct_batch_write_bit
 
 Starts Jn\\... link-direct contiguous bit write over device extension specification.
 
+#### `async_qualified_buffer_batch_read_words`
+
+```cpp
+Status mcprotocol::serial::MelsecSerialClient::async_qualified_buffer_batch_read_words(std::uint32_t now_ms, const QualifiedBufferWordDevice &device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words, CompletionHandler callback, void *user) noexcept
+```
+
+Starts native-qualified word read (0401).
+
 #### `async_extended_batch_read_words`
 
 ```cpp
 Status mcprotocol::serial::MelsecSerialClient::async_extended_batch_read_words(std::uint32_t now_ms, const QualifiedBufferWordDevice &device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words, CompletionHandler callback, void *user) noexcept
 ```
 
-Starts native-qualified word read (0401).
+Compatibility alias for async_qualified_buffer_batch_read_words.
+
+#### `async_qualified_buffer_batch_write_words`
+
+```cpp
+Status mcprotocol::serial::MelsecSerialClient::async_qualified_buffer_batch_write_words(std::uint32_t now_ms, const QualifiedBufferWordDevice &device, mcprotocol::serial::Span< const std::uint16_t > words, CompletionHandler callback, void *user) noexcept
+```
+
+Starts native-qualified word write (1401).
 
 #### `async_extended_batch_write_words`
 
@@ -1774,7 +1773,7 @@ Starts native-qualified word read (0401).
 Status mcprotocol::serial::MelsecSerialClient::async_extended_batch_write_words(std::uint32_t now_ms, const QualifiedBufferWordDevice &device, mcprotocol::serial::Span< const std::uint16_t > words, CompletionHandler callback, void *user) noexcept
 ```
 
-Starts native-qualified word write (1401).
+Compatibility alias for async_qualified_buffer_batch_write_words.
 
 #### `async_random_read`
 
@@ -1874,13 +1873,21 @@ Status mcprotocol::serial::MelsecSerialClient::async_link_direct_multi_block_wri
 
 Starts native Jn\\... multi-block write (1406 + device extension specification).
 
+#### `async_register_monitor_devices`
+
+```cpp
+Status mcprotocol::serial::MelsecSerialClient::async_register_monitor_devices(std::uint32_t now_ms, const MonitorRegistration &request, CompletionHandler callback, void *user) noexcept
+```
+
+Starts monitor registration (0801).
+
 #### `async_register_monitor`
 
 ```cpp
 Status mcprotocol::serial::MelsecSerialClient::async_register_monitor(std::uint32_t now_ms, const MonitorRegistration &request, CompletionHandler callback, void *user) noexcept
 ```
 
-Starts monitor registration (0801).
+Compatibility alias for async_register_monitor_devices.
 
 #### `async_register_extended_file_register_monitor`
 
@@ -1898,13 +1905,21 @@ Status mcprotocol::serial::MelsecSerialClient::async_link_direct_register_monito
 
 Starts native Jn\\... monitor registration (0801 + device extension specification).
 
+#### `async_run_monitor_cycle`
+
+```cpp
+Status mcprotocol::serial::MelsecSerialClient::async_run_monitor_cycle(std::uint32_t now_ms, mcprotocol::serial::Span< std::uint16_t > out_words, mcprotocol::serial::Span< std::uint32_t > out_dwords, CompletionHandler callback, void *user) noexcept
+```
+
+Starts monitor read (0802) using the most recent registration.
+
 #### `async_read_monitor`
 
 ```cpp
 Status mcprotocol::serial::MelsecSerialClient::async_read_monitor(std::uint32_t now_ms, mcprotocol::serial::Span< std::uint16_t > out_words, mcprotocol::serial::Span< std::uint32_t > out_dwords, CompletionHandler callback, void *user) noexcept
 ```
 
-Starts monitor read (0802) using the most recent registration.
+Compatibility alias for async_run_monitor_cycle.
 
 #### `async_read_extended_file_register_monitor`
 
@@ -2024,29 +2039,53 @@ Starts remote RESET (1006).
 
 Completion means the request bytes were transmitted successfully. The command does not wait for a normal response and does not claim that the PLC completed its reset.
 
-#### `async_read_user_frame`
+#### `async_read_user_frame_registration`
 
 ```cpp
-Status mcprotocol::serial::MelsecSerialClient::async_read_user_frame(std::uint32_t now_ms, const UserFrameReadRequest &request, UserFrameRegistrationData &out_data, CompletionHandler callback, void *user) noexcept
+Status mcprotocol::serial::MelsecSerialClient::async_read_user_frame_registration(std::uint32_t now_ms, const UserFrameRegistrationReadRequest &request, UserFrameRegistrationData &out_data, CompletionHandler callback, void *user) noexcept
 ```
 
 Starts user-frame registration-data read (0610).
 
-#### `async_write_user_frame`
+#### `async_read_user_frame`
 
 ```cpp
-Status mcprotocol::serial::MelsecSerialClient::async_write_user_frame(std::uint32_t now_ms, const UserFrameWriteRequest &request, CompletionHandler callback, void *user) noexcept
+Status mcprotocol::serial::MelsecSerialClient::async_read_user_frame(std::uint32_t now_ms, const UserFrameRegistrationReadRequest &request, UserFrameRegistrationData &out_data, CompletionHandler callback, void *user) noexcept
+```
+
+Compatibility alias for async_read_user_frame_registration.
+
+#### `async_write_user_frame_registration`
+
+```cpp
+Status mcprotocol::serial::MelsecSerialClient::async_write_user_frame_registration(std::uint32_t now_ms, const UserFrameRegistrationWriteRequest &request, CompletionHandler callback, void *user) noexcept
 ```
 
 Starts user-frame registration-data write (1610, subcommand 0000).
 
-#### `async_delete_user_frame`
+#### `async_write_user_frame`
 
 ```cpp
-Status mcprotocol::serial::MelsecSerialClient::async_delete_user_frame(std::uint32_t now_ms, const UserFrameDeleteRequest &request, CompletionHandler callback, void *user) noexcept
+Status mcprotocol::serial::MelsecSerialClient::async_write_user_frame(std::uint32_t now_ms, const UserFrameRegistrationWriteRequest &request, CompletionHandler callback, void *user) noexcept
+```
+
+Compatibility alias for async_write_user_frame_registration.
+
+#### `async_delete_user_frame_registration`
+
+```cpp
+Status mcprotocol::serial::MelsecSerialClient::async_delete_user_frame_registration(std::uint32_t now_ms, const UserFrameRegistrationDeleteRequest &request, CompletionHandler callback, void *user) noexcept
 ```
 
 Starts user-frame registration-data delete (1610, subcommand 0001).
+
+#### `async_delete_user_frame`
+
+```cpp
+Status mcprotocol::serial::MelsecSerialClient::async_delete_user_frame(std::uint32_t now_ms, const UserFrameRegistrationDeleteRequest &request, CompletionHandler callback, void *user) noexcept
+```
+
+Compatibility alias for async_delete_user_frame_registration.
 
 #### `async_control_global_signal`
 
@@ -2284,604 +2323,42 @@ void mcprotocol::serial::highlevel::BitInWordWriteOperation::cancel() noexcept
 bool mcprotocol::serial::highlevel::BitInWordWriteOperation::busy() const noexcept
 ```
 
-### Class `mcprotocol::serial::PosixSyncClient`
+### Class `mcprotocol::serial::HostSerialPort`
 
-Host-side synchronous convenience wrapper built on PosixSerialPort and MelsecSerialClient.
+Minimal blocking host-side serial-port wrapper used by host tools.
 
-This class is intentionally small:
-
-- it keeps the existing low-level client unchanged - it opens a host-side serial port - it runs one request synchronously from TX to completion - it exposes string-address helpers for common contiguous, sparse random, and monitor operations
-
-Use it on Windows or POSIX hosts when you want a simpler bring-up path than manually driving pending_tx_frame(), notify_tx_complete(), on_rx_bytes(), and poll(). State-changing methods return OperationOutcomeUnknown whenever transmission may have begun but the PLC result cannot be confirmed. They are not retried automatically.
+This class is not required on MCU targets. It exists so the same request/response codec and client logic can be exercised from host-side validation tools on Windows and POSIX systems.
 
 #### Member Functions
 
-#### `PosixSyncClient`
+#### `HostSerialPort`
 
 ```cpp
-mcprotocol::serial::PosixSyncClient::PosixSyncClient()=default
+mcprotocol::serial::HostSerialPort::HostSerialPort()=default
 ```
 
-#### `PosixSyncClient`
+#### `~HostSerialPort`
 
 ```cpp
-mcprotocol::serial::PosixSyncClient::PosixSyncClient(const PosixSyncClient &)=delete
+mcprotocol::serial::HostSerialPort::~HostSerialPort()
+```
+
+#### `HostSerialPort`
+
+```cpp
+mcprotocol::serial::HostSerialPort::HostSerialPort(const HostSerialPort &)=delete
 ```
 
 #### `operator=`
 
 ```cpp
-PosixSyncClient & mcprotocol::serial::PosixSyncClient::operator=(const PosixSyncClient &)=delete
+HostSerialPort & mcprotocol::serial::HostSerialPort::operator=(const HostSerialPort &)=delete
 ```
 
 #### `open`
 
 ```cpp
-Status mcprotocol::serial::PosixSyncClient::open(const PosixSerialConfig &serial_config, const ProtocolConfig &protocol_config) noexcept
-```
-
-Opens the serial port and configures the underlying MC protocol client.
-
-#### `close`
-
-```cpp
-void mcprotocol::serial::PosixSyncClient::close() noexcept
-```
-
-Closes the serial port and clears any in-flight request state.
-
-#### `is_open`
-
-```cpp
-bool mcprotocol::serial::PosixSyncClient::is_open() const noexcept
-```
-
-Returns whether the underlying serial port is open.
-
-#### `protocol_config`
-
-```cpp
-const ProtocolConfig & mcprotocol::serial::PosixSyncClient::protocol_config() const noexcept
-```
-
-Returns the currently configured protocol settings.
-
-#### `read_cpu_model`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_cpu_model(CpuModelInfo &out_info) noexcept
-```
-
-Reads the remote CPU model synchronously.
-
-#### `remote_run`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::remote_run(RemoteOperationMode mode, RemoteRunClearMode clear_mode) noexcept
-```
-
-Issues remote RUN (1001) synchronously.
-
-Both the conflict policy and clear scope are mandatory. If transmission starts but the response cannot be confirmed, this returns StatusCode::OperationOutcomeUnknown.
-
-#### `remote_stop`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::remote_stop() noexcept
-```
-
-Issues remote STOP (1002) synchronously.
-
-#### `remote_pause`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::remote_pause(RemoteOperationMode mode) noexcept
-```
-
-Issues remote PAUSE (1003) synchronously.
-
-The conflict policy is mandatory. If transmission starts but the response cannot be confirmed, this returns StatusCode::OperationOutcomeUnknown.
-
-#### `remote_latch_clear`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::remote_latch_clear() noexcept
-```
-
-Issues remote latch clear (1005) synchronously.
-
-#### `unlock_remote_password`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::unlock_remote_password(std::string_view remote_password) noexcept
-```
-
-Unlocks remote-password-protected access (1630) synchronously.
-
-#### `lock_remote_password`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::lock_remote_password(std::string_view remote_password) noexcept
-```
-
-Locks remote-password-protected access (1631) synchronously.
-
-#### `clear_error_information`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::clear_error_information() noexcept
-```
-
-Clears serial/C24 error information (1617) synchronously.
-
-#### `remote_reset`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::remote_reset() noexcept
-```
-
-Issues remote RESET (1006) synchronously.
-
-Completion means the request bytes were transmitted successfully. It does not confirm the resulting PLC reset state.
-
-#### `read_user_frame`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_user_frame(const UserFrameReadRequest &request, UserFrameRegistrationData &out_data) noexcept
-```
-
-Reads user-frame registration data synchronously (0610).
-
-#### `write_user_frame`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::write_user_frame(const UserFrameWriteRequest &request) noexcept
-```
-
-Writes user-frame registration data synchronously (1610, subcommand 0000).
-
-#### `delete_user_frame`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::delete_user_frame(const UserFrameDeleteRequest &request) noexcept
-```
-
-Deletes user-frame registration data synchronously (1610, subcommand 0001).
-
-#### `control_global_signal`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::control_global_signal(const GlobalSignalControlRequest &request) noexcept
-```
-
-Controls C24 global signal ON/OFF synchronously (1618).
-
-#### `switch_serial_module_mode`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::switch_serial_module_mode(const SerialModuleModeSwitchRequest &request) noexcept
-```
-
-Switches C24 operation mode / transmission settings synchronously (1612).
-
-#### `initialize_c24_transmission_sequence`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::initialize_c24_transmission_sequence() noexcept
-```
-
-Initializes C24 format-5 transmission sequence synchronously (1615).
-
-#### `read_words_single_request`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_words_single_request(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
-```
-
-Reads contiguous words as exactly one PLC request.
-
-#### `read_words_single_request`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_words_single_request(std::string_view head_device, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
-```
-
-Reads contiguous words as exactly one PLC request using out_words.size().
-
-#### `read_words`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_words(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
-```
-
-Compatibility alias for read_words_single_request.
-
-#### `read_words`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_words(std::string_view head_device, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
-```
-
-Compatibility alias for read_words_single_request.
-
-#### `read_extended_file_register_words`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_extended_file_register_words(const ExtendedFileRegisterBatchReadWordsRequest &request, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
-```
-
-Reads extended file-register words synchronously.
-
-#### `direct_read_extended_file_register_words`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::direct_read_extended_file_register_words(const ExtendedFileRegisterDirectBatchReadWordsRequest &request, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
-```
-
-Reads direct extended file-register words synchronously.
-
-#### `read_bits_single_request`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_bits_single_request(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
-```
-
-Reads contiguous bits as exactly one PLC request.
-
-#### `read_bits_single_request`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_bits_single_request(std::string_view head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
-```
-
-Reads contiguous bits as exactly one PLC request using out_bits.size().
-
-#### `read_bits`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_bits(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
-```
-
-Compatibility alias for read_bits_single_request.
-
-#### `read_bits`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_bits(std::string_view head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
-```
-
-Compatibility alias for read_bits_single_request.
-
-#### `read_link_direct_words`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_link_direct_words(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
-```
-
-Reads contiguous Jn\\... link-direct words synchronously.
-
-#### `read_link_direct_bits`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_link_direct_bits(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
-```
-
-Reads contiguous Jn\\... link-direct bits synchronously.
-
-#### `read_native_qualified_words`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_native_qualified_words(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
-```
-
-Reads native-qualified Un\\Gn or Un\\HGn words.
-
-Use this for profiles whose qualified access route is native device access (0401). The 0601 helper route is profile/target-specific and may be rejected.
-
-#### `read_long_state_bits`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_long_state_bits(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
-```
-
-Reads long timer/counter contact or coil states through the dedicated status-block path.
-
-LTS/LTC/LSTS/LSTC with more than one point are explicitly aggregate reads: one four-word status-block request is issued per point, in address order. The complete plan is validated before transmission, the result is non-atomic across PLC scan times, and caller output is changed only after every internal request succeeds. LCS/LCC use one direct bit request and are not split. The host aggregate allocates ceil(points / 8) staging bytes before the first send and returns StatusCode::OutOfMemory if that allocation fails.
-
-#### `read_long_state_bits`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_long_state_bits(std::string_view head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
-```
-
-Reads long timer/counter states using out_bits.size() as the point count.
-
-#### `write_words_single_request`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::write_words_single_request(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
-```
-
-Writes contiguous words as exactly one PLC request.
-
-#### `write_words`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::write_words(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
-```
-
-Compatibility alias for write_words_single_request.
-
-#### `write_bit_in_word`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::write_bit_in_word(std::string_view word_device, int bit_index, bool value) noexcept
-```
-
-Writes one bit inside an ordinary 16-bit word by one read-modify-write turn.
-
-The complete two-request plan is validated before transmission. The read and write share one absolute deadline, and the write is always issued after a successful read even when the bit is already in the requested state. The operation is not PLC-atomic: PLC logic or another connection can modify the word between the read and write.
-
-#### `write_extended_file_register_bit_in_word`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::write_extended_file_register_bit_in_word(ExtendedFileRegisterAddress word_device, int bit_index, bool value) noexcept
-```
-
-Bit-in-word update through the block-addressed extended file-register route.
-
-#### `direct_write_extended_file_register_bit_in_word`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::direct_write_extended_file_register_bit_in_word(std::uint32_t word_device_number, int bit_index, bool value) noexcept
-```
-
-Bit-in-word update through the direct extended file-register route.
-
-#### `write_link_direct_bit_in_word`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::write_link_direct_bit_in_word(std::string_view word_device, int bit_index, bool value) noexcept
-```
-
-Bit-in-word update through one immutable Jn\\... link-direct route.
-
-#### `write_native_qualified_bit_in_word`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::write_native_qualified_bit_in_word(std::string_view word_device, int bit_index, bool value) noexcept
-```
-
-Bit-in-word update through one immutable qualified-buffer route.
-
-#### `write_extended_file_register_words`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::write_extended_file_register_words(const ExtendedFileRegisterBatchWriteWordsRequest &request) noexcept
-```
-
-Writes extended file-register words synchronously.
-
-#### `direct_write_extended_file_register_words`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::direct_write_extended_file_register_words(const ExtendedFileRegisterDirectBatchWriteWordsRequest &request) noexcept
-```
-
-Writes direct extended file-register words synchronously.
-
-#### `write_bits_single_request`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::write_bits_single_request(std::string_view head_device, mcprotocol::serial::Span< const BitValue > bits) noexcept
-```
-
-Writes contiguous bits as exactly one PLC request.
-
-#### `write_bits`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::write_bits(std::string_view head_device, mcprotocol::serial::Span< const BitValue > bits) noexcept
-```
-
-Compatibility alias for write_bits_single_request.
-
-#### `write_link_direct_words`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::write_link_direct_words(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
-```
-
-Writes contiguous Jn\\... link-direct words synchronously.
-
-#### `write_link_direct_bits`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::write_link_direct_bits(std::string_view head_device, mcprotocol::serial::Span< const BitValue > bits) noexcept
-```
-
-Writes contiguous Jn\\... link-direct bits synchronously.
-
-#### `write_native_qualified_words`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::write_native_qualified_words(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
-```
-
-Writes native-qualified Un\\Gn or Un\\HGn words.
-
-Use this for profiles whose qualified access route is native device access (1401). The 1601 helper route is profile/target-specific and may be rejected.
-
-#### `random_read`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::random_read(mcprotocol::serial::Span< const highlevel::RandomReadWordSpec > word_items, mcprotocol::serial::Span< const highlevel::RandomReadDWordSpec > dword_items, mcprotocol::serial::Span< std::uint16_t > out_words, mcprotocol::serial::Span< std::uint32_t > out_dwords) noexcept
-```
-
-Reads sparse Word and DWord items synchronously from explicit-width specs.
-
-#### `random_read_word`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::random_read_word(std::string_view device, std::uint16_t &out_value) noexcept
-```
-
-Reads one sparse Word item synchronously from a string address.
-
-#### `random_read_dword`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::random_read_dword(std::string_view device, std::uint32_t &out_value) noexcept
-```
-
-Reads one sparse DWord item synchronously from a string address.
-
-#### `random_write_words`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::random_write_words(mcprotocol::serial::Span< const highlevel::RandomWriteWordSpec > items) noexcept
-```
-
-Writes sparse Word items synchronously from string-address specs.
-
-Each spec requires an explicit value. A result that cannot be confirmed after transmission is reported as StatusCode::OperationOutcomeUnknown and is never retried automatically.
-
-#### `random_write_dwords`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::random_write_dwords(mcprotocol::serial::Span< const highlevel::RandomWriteDWordSpec > items) noexcept
-```
-
-Writes sparse DWord items synchronously from string-address specs.
-
-Each spec requires an explicit value. A result that cannot be confirmed after transmission is reported as StatusCode::OperationOutcomeUnknown and is never retried automatically.
-
-#### `random_write_extended_file_register_words`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::random_write_extended_file_register_words(mcprotocol::serial::Span< const ExtendedFileRegisterRandomWriteWordItem > items) noexcept
-```
-
-Writes extended file-register words randomly.
-
-#### `random_write_word`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::random_write_word(std::string_view device, std::uint16_t value) noexcept
-```
-
-Writes one sparse Word item synchronously from a string address.
-
-#### `random_write_dword`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::random_write_dword(std::string_view device, std::uint32_t value) noexcept
-```
-
-Writes one sparse DWord item synchronously from a string address.
-
-#### `random_write_bits`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::random_write_bits(mcprotocol::serial::Span< const highlevel::RandomWriteBitSpec > items) noexcept
-```
-
-Writes sparse bit items synchronously from string-address specs.
-
-Each spec requires an explicit Off or On. A result that cannot be confirmed after transmission is StatusCode::OperationOutcomeUnknown and is never retried automatically.
-
-#### `random_write_bit`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::random_write_bit(std::string_view device, BitValue value) noexcept
-```
-
-Writes one sparse bit item synchronously from a string address.
-
-#### `register_monitor`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::register_monitor(mcprotocol::serial::Span< const highlevel::RandomReadWordSpec > word_items, mcprotocol::serial::Span< const highlevel::RandomReadDWordSpec > dword_items) noexcept
-```
-
-Registers sparse Word and DWord monitor items from explicit-width specs.
-
-#### `register_monitor_word`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::register_monitor_word(std::string_view device) noexcept
-```
-
-Registers one sparse Word monitor item synchronously.
-
-#### `register_monitor_dword`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::register_monitor_dword(std::string_view device) noexcept
-```
-
-Registers one sparse DWord monitor item synchronously.
-
-#### `register_extended_file_register_monitor`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::register_extended_file_register_monitor(const ExtendedFileRegisterMonitorRegistration &request) noexcept
-```
-
-Registers extended file-register monitor data synchronously.
-
-#### `read_monitor`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_monitor(mcprotocol::serial::Span< std::uint16_t > out_words, mcprotocol::serial::Span< std::uint32_t > out_dwords) noexcept
-```
-
-Reads the most recently registered Word and DWord monitor items synchronously.
-
-#### `read_extended_file_register_monitor`
-
-```cpp
-Status mcprotocol::serial::PosixSyncClient::read_extended_file_register_monitor(mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
-```
-
-Reads the most recently registered extended file-register monitor items synchronously.
-
-### Class `mcprotocol::serial::PosixSerialPort`
-
-Minimal blocking host-side serial-port wrapper used by the CLI tools.
-
-This class is not required on MCU targets. It exists so the same request/response codec and client logic can be exercised from host-side validation tools.
-
-#### Member Functions
-
-#### `PosixSerialPort`
-
-```cpp
-mcprotocol::serial::PosixSerialPort::PosixSerialPort()=default
-```
-
-#### `~PosixSerialPort`
-
-```cpp
-mcprotocol::serial::PosixSerialPort::~PosixSerialPort()
-```
-
-#### `PosixSerialPort`
-
-```cpp
-mcprotocol::serial::PosixSerialPort::PosixSerialPort(const PosixSerialPort &)=delete
-```
-
-#### `operator=`
-
-```cpp
-PosixSerialPort & mcprotocol::serial::PosixSerialPort::operator=(const PosixSerialPort &)=delete
-```
-
-#### `open`
-
-```cpp
-Status mcprotocol::serial::PosixSerialPort::open(const PosixSerialConfig &config) noexcept
+Status mcprotocol::serial::HostSerialPort::open(const HostSerialConfig &config) noexcept
 ```
 
 Opens the serial port and replaces all inherited line settings with config.
@@ -2891,7 +2368,7 @@ Software flow control is disabled. RTS/CTS is disabled for None and owned by the
 #### `close`
 
 ```cpp
-void mcprotocol::serial::PosixSerialPort::close() noexcept
+void mcprotocol::serial::HostSerialPort::close() noexcept
 ```
 
 Closes the serial port if it is open.
@@ -2899,7 +2376,7 @@ Closes the serial port if it is open.
 #### `is_open`
 
 ```cpp
-bool mcprotocol::serial::PosixSerialPort::is_open() const noexcept
+bool mcprotocol::serial::HostSerialPort::is_open() const noexcept
 ```
 
 Returns whether the serial port is currently open.
@@ -2907,7 +2384,7 @@ Returns whether the serial port is currently open.
 #### `native_handle`
 
 ```cpp
-std::intptr_t mcprotocol::serial::PosixSerialPort::native_handle() const noexcept
+std::intptr_t mcprotocol::serial::HostSerialPort::native_handle() const noexcept
 ```
 
 Returns the native handle value, or -1 when closed.
@@ -2915,7 +2392,7 @@ Returns the native handle value, or -1 when closed.
 #### `write_all_until`
 
 ```cpp
-Status mcprotocol::serial::PosixSerialPort::write_all_until(mcprotocol::serial::Span< const mcprotocol::serial::Byte > bytes, std::uint32_t absolute_deadline_ms) noexcept
+Status mcprotocol::serial::HostSerialPort::write_all_until(mcprotocol::serial::Span< const mcprotocol::serial::Byte > bytes, std::uint32_t absolute_deadline_ms) noexcept
 ```
 
 Writes the entire byte range without exceeding absolute_deadline_ms.
@@ -2923,7 +2400,7 @@ Writes the entire byte range without exceeding absolute_deadline_ms.
 #### `read_some_until`
 
 ```cpp
-Status mcprotocol::serial::PosixSerialPort::read_some_until(mcprotocol::serial::Span< mcprotocol::serial::Byte > buffer, std::uint32_t absolute_deadline_ms, std::size_t &out_size) noexcept
+Status mcprotocol::serial::HostSerialPort::read_some_until(mcprotocol::serial::Span< mcprotocol::serial::Byte > buffer, std::uint32_t absolute_deadline_ms, std::size_t &out_size) noexcept
 ```
 
 Reads up to buffer.size() bytes without exceeding the same transaction deadline.
@@ -2931,7 +2408,7 @@ Reads up to buffer.size() bytes without exceeding the same transaction deadline.
 #### `flush_rx`
 
 ```cpp
-Status mcprotocol::serial::PosixSerialPort::flush_rx() noexcept
+Status mcprotocol::serial::HostSerialPort::flush_rx() noexcept
 ```
 
 Drops unread RX data that is already buffered by the driver.
@@ -2939,7 +2416,7 @@ Drops unread RX data that is already buffered by the driver.
 #### `drain_tx_until`
 
 ```cpp
-Status mcprotocol::serial::PosixSerialPort::drain_tx_until(std::uint32_t absolute_deadline_ms) noexcept
+Status mcprotocol::serial::HostSerialPort::drain_tx_until(std::uint32_t absolute_deadline_ms) noexcept
 ```
 
 Waits until queued TX data has physically drained, bounded by the transaction deadline.
@@ -2949,10 +2426,838 @@ Queue polling yields before its first recheck and after observed progress. Only 
 #### `set_rts`
 
 ```cpp
-Status mcprotocol::serial::PosixSerialPort::set_rts(bool enabled) noexcept
+Status mcprotocol::serial::HostSerialPort::set_rts(bool enabled) noexcept
 ```
 
 Sets the RTS line when the underlying driver supports it.
+
+### Class `mcprotocol::serial::HostSyncClient`
+
+Host-side synchronous convenience wrapper built on HostSerialPort and MelsecSerialClient.
+
+This class is intentionally small:
+
+- it keeps the existing low-level client unchanged - it opens a host-side serial port - it runs one request synchronously from TX to completion - it exposes string-address helpers for common contiguous, sparse random, and monitor operations
+
+Use it on Windows or POSIX hosts when you want a simpler bring-up path than manually driving pending_tx_frame(), notify_tx_complete(), on_rx_bytes(), and poll(). State-changing methods return OperationOutcomeUnknown whenever transmission may have begun but the PLC result cannot be confirmed. They are not retried automatically.
+
+#### Member Functions
+
+#### `HostSyncClient`
+
+```cpp
+mcprotocol::serial::HostSyncClient::HostSyncClient()=default
+```
+
+#### `HostSyncClient`
+
+```cpp
+mcprotocol::serial::HostSyncClient::HostSyncClient(const HostSyncClient &)=delete
+```
+
+#### `operator=`
+
+```cpp
+HostSyncClient & mcprotocol::serial::HostSyncClient::operator=(const HostSyncClient &)=delete
+```
+
+#### `open`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::open(const HostSerialConfig &serial_config, const ProtocolConfig &protocol_config) noexcept
+```
+
+Opens the serial port and configures the underlying MC protocol client.
+
+#### `close`
+
+```cpp
+void mcprotocol::serial::HostSyncClient::close() noexcept
+```
+
+Closes the serial port and clears any in-flight request state.
+
+#### `is_open`
+
+```cpp
+bool mcprotocol::serial::HostSyncClient::is_open() const noexcept
+```
+
+Returns whether the underlying serial port is open.
+
+#### `protocol_config`
+
+```cpp
+const ProtocolConfig & mcprotocol::serial::HostSyncClient::protocol_config() const noexcept
+```
+
+Returns the currently configured protocol settings.
+
+#### `read_cpu_model`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_cpu_model(CpuModelInfo &out_info) noexcept
+```
+
+Reads the remote CPU model synchronously.
+
+#### `remote_run`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::remote_run(RemoteOperationMode mode, RemoteRunClearMode clear_mode) noexcept
+```
+
+Issues remote RUN (1001) synchronously.
+
+Both the conflict policy and clear scope are mandatory. If transmission starts but the response cannot be confirmed, this returns StatusCode::OperationOutcomeUnknown.
+
+#### `remote_stop`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::remote_stop() noexcept
+```
+
+Issues remote STOP (1002) synchronously.
+
+#### `remote_pause`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::remote_pause(RemoteOperationMode mode) noexcept
+```
+
+Issues remote PAUSE (1003) synchronously.
+
+The conflict policy is mandatory. If transmission starts but the response cannot be confirmed, this returns StatusCode::OperationOutcomeUnknown.
+
+#### `remote_latch_clear`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::remote_latch_clear() noexcept
+```
+
+Issues remote latch clear (1005) synchronously.
+
+#### `unlock_remote_password`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::unlock_remote_password(std::string_view remote_password) noexcept
+```
+
+Unlocks remote-password-protected access (1630) synchronously.
+
+#### `lock_remote_password`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::lock_remote_password(std::string_view remote_password) noexcept
+```
+
+Locks remote-password-protected access (1631) synchronously.
+
+#### `clear_error_information`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::clear_error_information() noexcept
+```
+
+Clears serial/C24 error information (1617) synchronously.
+
+#### `remote_reset`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::remote_reset() noexcept
+```
+
+Issues remote RESET (1006) synchronously.
+
+Completion means the request bytes were transmitted successfully. It does not confirm the resulting PLC reset state.
+
+#### `read_user_frame_registration`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_user_frame_registration(const UserFrameRegistrationReadRequest &request, UserFrameRegistrationData &out_data) noexcept
+```
+
+Reads user-frame registration data synchronously (0610).
+
+#### `read_user_frame`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_user_frame(const UserFrameRegistrationReadRequest &request, UserFrameRegistrationData &out_data) noexcept
+```
+
+Compatibility alias for read_user_frame_registration.
+
+#### `write_user_frame_registration`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_user_frame_registration(const UserFrameRegistrationWriteRequest &request) noexcept
+```
+
+Writes user-frame registration data synchronously (1610, subcommand 0000).
+
+#### `write_user_frame`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_user_frame(const UserFrameRegistrationWriteRequest &request) noexcept
+```
+
+Compatibility alias for write_user_frame_registration.
+
+#### `delete_user_frame_registration`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::delete_user_frame_registration(const UserFrameRegistrationDeleteRequest &request) noexcept
+```
+
+Deletes user-frame registration data synchronously (1610, subcommand 0001).
+
+#### `delete_user_frame`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::delete_user_frame(const UserFrameRegistrationDeleteRequest &request) noexcept
+```
+
+Compatibility alias for delete_user_frame_registration.
+
+#### `control_global_signal`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::control_global_signal(const GlobalSignalControlRequest &request) noexcept
+```
+
+Controls C24 global signal ON/OFF synchronously (1618).
+
+#### `switch_serial_module_mode`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::switch_serial_module_mode(const SerialModuleModeSwitchRequest &request) noexcept
+```
+
+Switches C24 operation mode / transmission settings synchronously (1612).
+
+#### `initialize_c24_transmission_sequence`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::initialize_c24_transmission_sequence() noexcept
+```
+
+Initializes C24 format-5 transmission sequence synchronously (1615).
+
+#### `read_words_single_request`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_words_single_request(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+```
+
+Reads contiguous words as exactly one PLC request.
+
+#### `read_words_single_request`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_words_single_request(std::string_view head_device, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+```
+
+Reads contiguous words as exactly one PLC request using out_words.size().
+
+#### `read_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_words(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+```
+
+Compatibility alias for read_words_single_request.
+
+#### `read_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_words(std::string_view head_device, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+```
+
+Compatibility alias for read_words_single_request.
+
+#### `read_extended_file_register_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_extended_file_register_words(const ExtendedFileRegisterBatchReadWordsRequest &request, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+```
+
+Reads extended file-register words synchronously.
+
+#### `read_direct_extended_file_register_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_direct_extended_file_register_words(const ExtendedFileRegisterDirectBatchReadWordsRequest &request, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+```
+
+Reads direct extended file-register words synchronously.
+
+#### `direct_read_extended_file_register_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::direct_read_extended_file_register_words(const ExtendedFileRegisterDirectBatchReadWordsRequest &request, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+```
+
+Compatibility alias for read_direct_extended_file_register_words.
+
+#### `read_bits_single_request`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_bits_single_request(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+```
+
+Reads contiguous bits as exactly one PLC request.
+
+#### `read_bits_single_request`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_bits_single_request(std::string_view head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+```
+
+Reads contiguous bits as exactly one PLC request using out_bits.size().
+
+#### `read_bits`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_bits(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+```
+
+Compatibility alias for read_bits_single_request.
+
+#### `read_bits`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_bits(std::string_view head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+```
+
+Compatibility alias for read_bits_single_request.
+
+#### `read_link_direct_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_link_direct_words(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+```
+
+Reads contiguous Jn\\... link-direct words synchronously.
+
+#### `read_link_direct_bits`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_link_direct_bits(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+```
+
+Reads contiguous Jn\\... link-direct bits synchronously.
+
+#### `read_qualified_buffer_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_qualified_buffer_words(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+```
+
+Reads qualified-buffer Un\\Gn or Un\\HGn words.
+
+Use this for profiles whose qualified access route is native device access (0401). The 0601 helper route is profile/target-specific and may be rejected.
+
+#### `read_native_qualified_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_native_qualified_words(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+```
+
+Compatibility alias for read_qualified_buffer_words.
+
+#### `read_long_timer_counter_state_bits`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_long_timer_counter_state_bits(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+```
+
+Reads long timer/counter contact or coil states through the dedicated status-block path.
+
+LTS/LTC/LSTS/LSTC with more than one point are explicitly aggregate reads: one four-word status-block request is issued per point, in address order. The complete plan is validated before transmission, the result is non-atomic across PLC scan times, and caller output is changed only after every internal request succeeds. LCS/LCC use one direct bit request and are not split. The host aggregate allocates ceil(points / 8) staging bytes before the first send and returns StatusCode::OutOfMemory if that allocation fails.
+
+#### `read_long_timer_counter_state_bits`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_long_timer_counter_state_bits(std::string_view head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+```
+
+Reads long timer/counter states using out_bits.size() as the point count.
+
+#### `read_long_state_bits`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_long_state_bits(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+```
+
+Compatibility alias for read_long_timer_counter_state_bits.
+
+#### `read_long_state_bits`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_long_state_bits(std::string_view head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+```
+
+Compatibility alias for read_long_timer_counter_state_bits.
+
+#### `write_words_single_request`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_words_single_request(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
+```
+
+Writes contiguous words as exactly one PLC request.
+
+#### `write_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_words(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
+```
+
+Compatibility alias for write_words_single_request.
+
+#### `write_bit_in_word`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_bit_in_word(std::string_view word_device, int bit_index, bool value) noexcept
+```
+
+Writes one bit inside an ordinary 16-bit word by one read-modify-write turn.
+
+The complete two-request plan is validated before transmission. The read and write share one absolute deadline, and the write is always issued after a successful read even when the bit is already in the requested state. The operation is not PLC-atomic: PLC logic or another connection can modify the word between the read and write.
+
+#### `write_extended_file_register_bit_in_word`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_extended_file_register_bit_in_word(ExtendedFileRegisterAddress word_device, int bit_index, bool value) noexcept
+```
+
+Bit-in-word update through the block-addressed extended file-register route.
+
+#### `write_direct_extended_file_register_bit_in_word`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_direct_extended_file_register_bit_in_word(std::uint32_t word_device_number, int bit_index, bool value) noexcept
+```
+
+Bit-in-word update through the direct extended file-register route.
+
+#### `direct_write_extended_file_register_bit_in_word`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::direct_write_extended_file_register_bit_in_word(std::uint32_t word_device_number, int bit_index, bool value) noexcept
+```
+
+Compatibility alias for write_direct_extended_file_register_bit_in_word.
+
+#### `write_link_direct_bit_in_word`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_link_direct_bit_in_word(std::string_view word_device, int bit_index, bool value) noexcept
+```
+
+Bit-in-word update through one immutable Jn\\... link-direct route.
+
+#### `write_qualified_buffer_bit_in_word`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_qualified_buffer_bit_in_word(std::string_view word_device, int bit_index, bool value) noexcept
+```
+
+Bit-in-word update through one immutable qualified-buffer route.
+
+#### `write_native_qualified_bit_in_word`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_native_qualified_bit_in_word(std::string_view word_device, int bit_index, bool value) noexcept
+```
+
+Compatibility alias for write_qualified_buffer_bit_in_word.
+
+#### `write_extended_file_register_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_extended_file_register_words(const ExtendedFileRegisterBatchWriteWordsRequest &request) noexcept
+```
+
+Writes extended file-register words synchronously.
+
+#### `write_direct_extended_file_register_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_direct_extended_file_register_words(const ExtendedFileRegisterDirectBatchWriteWordsRequest &request) noexcept
+```
+
+Writes direct extended file-register words synchronously.
+
+#### `direct_write_extended_file_register_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::direct_write_extended_file_register_words(const ExtendedFileRegisterDirectBatchWriteWordsRequest &request) noexcept
+```
+
+Compatibility alias for write_direct_extended_file_register_words.
+
+#### `write_bits_single_request`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_bits_single_request(std::string_view head_device, mcprotocol::serial::Span< const BitValue > bits) noexcept
+```
+
+Writes contiguous bits as exactly one PLC request.
+
+#### `write_bits`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_bits(std::string_view head_device, mcprotocol::serial::Span< const BitValue > bits) noexcept
+```
+
+Compatibility alias for write_bits_single_request.
+
+#### `write_link_direct_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_link_direct_words(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
+```
+
+Writes contiguous Jn\\... link-direct words synchronously.
+
+#### `write_link_direct_bits`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_link_direct_bits(std::string_view head_device, mcprotocol::serial::Span< const BitValue > bits) noexcept
+```
+
+Writes contiguous Jn\\... link-direct bits synchronously.
+
+#### `write_qualified_buffer_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_qualified_buffer_words(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
+```
+
+Writes qualified-buffer Un\\Gn or Un\\HGn words.
+
+Use this for profiles whose qualified access route is native device access (1401). The 1601 helper route is profile/target-specific and may be rejected.
+
+#### `write_native_qualified_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_native_qualified_words(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
+```
+
+Compatibility alias for write_qualified_buffer_words.
+
+#### `read_random`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_random(mcprotocol::serial::Span< const highlevel::RandomReadWordSpec > word_items, mcprotocol::serial::Span< const highlevel::RandomReadDWordSpec > dword_items, mcprotocol::serial::Span< std::uint16_t > out_words, mcprotocol::serial::Span< std::uint32_t > out_dwords) noexcept
+```
+
+Reads sparse Word and DWord items synchronously from explicit-width specs.
+
+#### `random_read`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::random_read(mcprotocol::serial::Span< const highlevel::RandomReadWordSpec > word_items, mcprotocol::serial::Span< const highlevel::RandomReadDWordSpec > dword_items, mcprotocol::serial::Span< std::uint16_t > out_words, mcprotocol::serial::Span< std::uint32_t > out_dwords) noexcept
+```
+
+Compatibility alias for read_random.
+
+#### `read_random_word`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_random_word(std::string_view device, std::uint16_t &out_value) noexcept
+```
+
+Reads one sparse Word item synchronously from a string address.
+
+#### `random_read_word`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::random_read_word(std::string_view device, std::uint16_t &out_value) noexcept
+```
+
+Compatibility alias for read_random_word.
+
+#### `read_random_dword`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_random_dword(std::string_view device, std::uint32_t &out_value) noexcept
+```
+
+Reads one sparse DWord item synchronously from a string address.
+
+#### `random_read_dword`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::random_read_dword(std::string_view device, std::uint32_t &out_value) noexcept
+```
+
+Compatibility alias for read_random_dword.
+
+#### `write_random_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_random_words(mcprotocol::serial::Span< const highlevel::RandomWriteWordSpec > items) noexcept
+```
+
+Writes sparse Word items synchronously from string-address specs.
+
+Each spec requires an explicit value. A result that cannot be confirmed after transmission is reported as StatusCode::OperationOutcomeUnknown and is never retried automatically.
+
+#### `random_write_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::random_write_words(mcprotocol::serial::Span< const highlevel::RandomWriteWordSpec > items) noexcept
+```
+
+Compatibility alias for write_random_words.
+
+#### `write_random_dwords`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_random_dwords(mcprotocol::serial::Span< const highlevel::RandomWriteDWordSpec > items) noexcept
+```
+
+Writes sparse DWord items synchronously from string-address specs.
+
+Each spec requires an explicit value. A result that cannot be confirmed after transmission is reported as StatusCode::OperationOutcomeUnknown and is never retried automatically.
+
+#### `random_write_dwords`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::random_write_dwords(mcprotocol::serial::Span< const highlevel::RandomWriteDWordSpec > items) noexcept
+```
+
+Compatibility alias for write_random_dwords.
+
+#### `write_random_extended_file_register_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_random_extended_file_register_words(mcprotocol::serial::Span< const ExtendedFileRegisterRandomWriteWordItem > items) noexcept
+```
+
+Writes extended file-register words randomly.
+
+#### `random_write_extended_file_register_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::random_write_extended_file_register_words(mcprotocol::serial::Span< const ExtendedFileRegisterRandomWriteWordItem > items) noexcept
+```
+
+Compatibility alias for write_random_extended_file_register_words.
+
+#### `write_random_word`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_random_word(std::string_view device, std::uint16_t value) noexcept
+```
+
+Writes one sparse Word item synchronously from a string address.
+
+#### `random_write_word`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::random_write_word(std::string_view device, std::uint16_t value) noexcept
+```
+
+Compatibility alias for write_random_word.
+
+#### `write_random_dword`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_random_dword(std::string_view device, std::uint32_t value) noexcept
+```
+
+Writes one sparse DWord item synchronously from a string address.
+
+#### `random_write_dword`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::random_write_dword(std::string_view device, std::uint32_t value) noexcept
+```
+
+Compatibility alias for write_random_dword.
+
+#### `write_random_bits`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_random_bits(mcprotocol::serial::Span< const highlevel::RandomWriteBitSpec > items) noexcept
+```
+
+Writes sparse bit items synchronously from string-address specs.
+
+Each spec requires an explicit Off or On. A result that cannot be confirmed after transmission is StatusCode::OperationOutcomeUnknown and is never retried automatically.
+
+#### `random_write_bits`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::random_write_bits(mcprotocol::serial::Span< const highlevel::RandomWriteBitSpec > items) noexcept
+```
+
+Compatibility alias for write_random_bits.
+
+#### `write_random_bit`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_random_bit(std::string_view device, BitValue value) noexcept
+```
+
+Writes one sparse bit item synchronously from a string address.
+
+#### `random_write_bit`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::random_write_bit(std::string_view device, BitValue value) noexcept
+```
+
+Compatibility alias for write_random_bit.
+
+#### `read_random_link_direct_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_random_link_direct_words(Span< const LinkDirectRandomReadWordItem > word_items, Span< std::uint16_t > out_words) noexcept
+```
+
+Reads sparse link-direct word items in input order.
+
+Bit devices return one 16-point mask in the corresponding output word. The request is never split, retried, or routed through the plain-device random API.
+
+#### `write_random_link_direct_words`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_random_link_direct_words(Span< const LinkDirectRandomWriteWordItem > items) noexcept
+```
+
+Writes sparse link-direct word items as one request.
+
+#### `write_random_link_direct_bits`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_random_link_direct_bits(Span< const LinkDirectRandomWriteBitItem > items) noexcept
+```
+
+Writes sparse link-direct bit items as one request.
+
+#### `self_test_loopback`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::self_test_loopback(Span< const char > hex_ascii, Span< char > out_echoed) noexcept
+```
+
+Runs the existing MC Serial self-test loopback operation synchronously.
+
+Both spans remain caller-owned. out_echoed is NUL-terminated only when its capacity exceeds the echoed payload length, exactly as in MelsecSerialClient::async_loopback.
+
+#### `read_block`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_block(const MultiBlockReadRequest &request, Span< std::uint16_t > out_words, Span< BitValue > out_bits, Span< MultiBlockReadBlockResult > out_results) noexcept
+```
+
+Reads native multi-block data into caller-owned flat buffers and block metadata.
+
+Bit-block point counts are 16-bit units and expand to 16 BitValue entries per point. Outputs can be partially updated if response parsing fails.
+
+#### `write_block`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_block(const MultiBlockWriteRequest &request) noexcept
+```
+
+Writes native multi-block data as one request without automatic retry.
+
+#### `read_link_direct_block`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_link_direct_block(const LinkDirectMultiBlockReadRequest &request, Span< std::uint16_t > out_words, Span< BitValue > out_bits, Span< MultiBlockReadBlockResult > out_results) noexcept
+```
+
+Reads link-direct multi-block data into caller-owned flat buffers and block metadata.
+
+Result metadata retains each inner DeviceAddress; network numbers remain in request. Outputs can be partially updated if response parsing fails.
+
+#### `write_link_direct_block`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::write_link_direct_block(const LinkDirectMultiBlockWriteRequest &request) noexcept
+```
+
+Writes link-direct multi-block data as one request without automatic retry.
+
+#### `register_monitor_devices`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::register_monitor_devices(mcprotocol::serial::Span< const highlevel::RandomReadWordSpec > word_items, mcprotocol::serial::Span< const highlevel::RandomReadDWordSpec > dword_items) noexcept
+```
+
+Registers sparse Word and DWord monitor items from explicit-width specs.
+
+#### `register_monitor`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::register_monitor(mcprotocol::serial::Span< const highlevel::RandomReadWordSpec > word_items, mcprotocol::serial::Span< const highlevel::RandomReadDWordSpec > dword_items) noexcept
+```
+
+Compatibility alias for register_monitor_devices.
+
+#### `register_monitor_word`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::register_monitor_word(std::string_view device) noexcept
+```
+
+Registers one sparse Word monitor item synchronously.
+
+#### `register_monitor_dword`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::register_monitor_dword(std::string_view device) noexcept
+```
+
+Registers one sparse DWord monitor item synchronously.
+
+#### `register_extended_file_register_monitor`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::register_extended_file_register_monitor(const ExtendedFileRegisterMonitorRegistration &request) noexcept
+```
+
+Registers extended file-register monitor data synchronously.
+
+#### `register_link_direct_monitor_devices`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::register_link_direct_monitor_devices(const LinkDirectMonitorRegistration &request) noexcept
+```
+
+Registers link-direct monitor word items without running a monitor cycle.
+
+Use run_monitor_cycle(out_words, {}) explicitly after successful registration.
+
+#### `run_monitor_cycle`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::run_monitor_cycle(mcprotocol::serial::Span< std::uint16_t > out_words, mcprotocol::serial::Span< std::uint32_t > out_dwords) noexcept
+```
+
+Reads the most recently registered Word and DWord monitor items synchronously.
+
+#### `read_monitor`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_monitor(mcprotocol::serial::Span< std::uint16_t > out_words, mcprotocol::serial::Span< std::uint32_t > out_dwords) noexcept
+```
+
+Compatibility alias for run_monitor_cycle.
+
+#### `read_extended_file_register_monitor`
+
+```cpp
+Status mcprotocol::serial::HostSyncClient::read_extended_file_register_monitor(mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+```
+
+Reads the most recently registered extended file-register monitor items synchronously.
 
 ### Class `mcprotocol::serial::Span`
 
@@ -3138,44 +3443,6 @@ bool mcprotocol::serial::Span< T >::try_subspan(size_type offset, size_type coun
 
 Returns the checked [offset, offset + count) range through out.
 
-### Class `mcprotocol::serial::E1MonitoringTimer`
-
-PLC-side ACPU monitoring timer encoded in 1E requests.
-
-This protocol field is independent of the host communication response timeout. Values are expressed in milliseconds at the public boundary and must be exact 250 ms units representable by the 16-bit wire field. Zero is preserved as the protocol's explicit zero value.
-
-#### Member Functions
-
-#### `E1MonitoringTimer`
-
-```cpp
-mcprotocol::serial::E1MonitoringTimer::E1MonitoringTimer() noexcept=default
-```
-
-#### `milliseconds`
-
-```cpp
-static E1MonitoringTimer mcprotocol::serial::E1MonitoringTimer::milliseconds(std::uint32_t value) noexcept
-```
-
-#### `value_ms`
-
-```cpp
-std::uint32_t mcprotocol::serial::E1MonitoringTimer::value_ms() const noexcept
-```
-
-#### `ticks`
-
-```cpp
-std::uint32_t mcprotocol::serial::E1MonitoringTimer::ticks() const noexcept
-```
-
-#### `is_valid`
-
-```cpp
-bool mcprotocol::serial::E1MonitoringTimer::is_valid() const noexcept
-```
-
 ### Class `mcprotocol::serial::C34PcTarget`
 
 Mandatory typed PC target for 3C/4C multidrop routes.
@@ -3228,42 +3495,6 @@ std::uint32_t mcprotocol::serial::C34PcTarget::value() const noexcept
 
 ```cpp
 bool mcprotocol::serial::C34PcTarget::is_valid() const noexcept
-```
-
-### Class `mcprotocol::serial::E1PcTarget`
-
-Mandatory typed PC target for an explicit 1E route.
-
-#### Member Functions
-
-#### `number`
-
-```cpp
-static E1PcTarget mcprotocol::serial::E1PcTarget::number(std::uint32_t value) noexcept
-```
-
-#### `connected_station`
-
-```cpp
-static E1PcTarget mcprotocol::serial::E1PcTarget::connected_station() noexcept
-```
-
-#### `kind`
-
-```cpp
-E1PcTargetKind mcprotocol::serial::E1PcTarget::kind() const noexcept
-```
-
-#### `value`
-
-```cpp
-std::uint32_t mcprotocol::serial::E1PcTarget::value() const noexcept
-```
-
-#### `is_valid`
-
-```cpp
-bool mcprotocol::serial::E1PcTarget::is_valid() const noexcept
 ```
 
 ### Class `mcprotocol::serial::C4DestinationModule`
@@ -3572,24 +3803,6 @@ C4DestinationModule mcprotocol::serial::C4MnMultidropRoute::destination_module()
 SelfStationNo mcprotocol::serial::C4MnMultidropRoute::self_station_no() const noexcept
 ```
 
-### Class `mcprotocol::serial::E1Route`
-
-Explicit non-default 1E route with a mandatory typed PC target.
-
-#### Member Functions
-
-#### `E1Route`
-
-```cpp
-mcprotocol::serial::E1Route::E1Route(E1PcTarget pc_target) noexcept
-```
-
-#### `pc_target`
-
-```cpp
-E1PcTarget mcprotocol::serial::E1Route::pc_target() const noexcept
-```
-
 ### Class `mcprotocol::serial::RouteConfig`
 
 Explicit route selection for a protocol session.
@@ -3650,12 +3863,6 @@ mcprotocol::serial::RouteConfig::RouteConfig(C4StandardMultidropRoute route) noe
 
 ```cpp
 mcprotocol::serial::RouteConfig::RouteConfig(C4MnMultidropRoute route) noexcept
-```
-
-#### `RouteConfig`
-
-```cpp
-mcprotocol::serial::RouteConfig::RouteConfig(E1Route route) noexcept
 ```
 
 #### `kind`
@@ -3760,7 +3967,7 @@ Immutable tagged protocol configuration shared by codecs and client requests.
 
 Treat this as the immutable session configuration for one serial link. The same object is used by:
 
-- FrameCodec for frame wrapping and response decoding - CommandCodec for command subcommand/device-layout differences - MelsecSerialClient and PosixSyncClient for runtime request execution
+- FrameCodec for frame wrapping and response decoding - CommandCodec for command subcommand/device-layout differences - MelsecSerialClient and HostSyncClient for runtime request execution
 
 #### Member Functions
 
@@ -3785,14 +3992,6 @@ static ProtocolConfig mcprotocol::serial::ProtocolConfig::ascii(AsciiFrameKind a
 ```
 
 Constructs an explicit ASCII session with a mandatory framing format.
-
-#### `e1`
-
-```cpp
-static ProtocolConfig mcprotocol::serial::ProtocolConfig::e1(CodeMode code_mode, PlcProfile plc_profile, RouteConfig route, TimeoutConfig timeout={}, E1MonitoringTimer e1_monitoring_timer={}) noexcept
-```
-
-Constructs an explicit 1E session; 1E has no public ASCII-format input.
 
 #### `frame_kind`
 
@@ -3840,12 +4039,6 @@ const RouteConfig & mcprotocol::serial::ProtocolConfig::route() const noexcept
 
 ```cpp
 const TimeoutConfig & mcprotocol::serial::ProtocolConfig::timeout() const noexcept
-```
-
-#### `e1_monitoring_timer`
-
-```cpp
-const E1MonitoringTimer & mcprotocol::serial::ProtocolConfig::e1_monitoring_timer() const noexcept
 ```
 
 #### `with_plc_profile`
@@ -4186,20 +4379,78 @@ mcprotocol::serial::highlevel::LongStateReadSpec::LongStateReadSpec()=delete
 mcprotocol::serial::highlevel::LongStateReadSpec::LongStateReadSpec(LongStateReadRoute read_route, DeviceCode target_base_code, LongStateReadKind state_kind) noexcept
 ```
 
-### Struct `mcprotocol::serial::PosixSyncClient::CompletionState`
+### Struct `mcprotocol::serial::HostSerialConfig`
+
+Host-side serial-port configuration used by HostSerialPort.
+
+Every constructor argument is required. device_path accepts /dev/... style paths on POSIX systems and COM3 or \\.\COM10 style names on Windows. The referenced device-path text must remain alive while the configuration is used.
+
+#### Fields
+
+#### `device_path`
+
+```cpp
+std::string_view mcprotocol::serial::HostSerialConfig::device_path
+```
+
+#### `baud_rate`
+
+```cpp
+std::uint32_t mcprotocol::serial::HostSerialConfig::baud_rate
+```
+
+#### `data_bits`
+
+```cpp
+std::uint32_t mcprotocol::serial::HostSerialConfig::data_bits
+```
+
+#### `stop_bits`
+
+```cpp
+std::uint32_t mcprotocol::serial::HostSerialConfig::stop_bits
+```
+
+#### `parity`
+
+```cpp
+SerialParity mcprotocol::serial::HostSerialConfig::parity
+```
+
+#### `hardware_flow_control`
+
+```cpp
+HardwareFlowControl mcprotocol::serial::HostSerialConfig::hardware_flow_control
+```
+
+#### Member Functions
+
+#### `HostSerialConfig`
+
+```cpp
+mcprotocol::serial::HostSerialConfig::HostSerialConfig(std::string_view device_path_value, std::uint32_t baud_rate_value, std::uint32_t data_bits_value, std::uint32_t stop_bits_value, SerialParity parity_value, HardwareFlowControl hardware_flow_control_value) noexcept
+```
+
+#### `HostSerialConfig`
+
+```cpp
+mcprotocol::serial::HostSerialConfig::HostSerialConfig()=delete
+```
+
+### Struct `mcprotocol::serial::HostSyncClient::CompletionState`
 
 #### Fields
 
 #### `done`
 
 ```cpp
-bool mcprotocol::serial::PosixSyncClient::CompletionState::done = false
+bool mcprotocol::serial::HostSyncClient::CompletionState::done = false
 ```
 
 #### `status`
 
 ```cpp
-Status mcprotocol::serial::PosixSyncClient::CompletionState::status {}
+Status mcprotocol::serial::HostSyncClient::CompletionState::status {}
 ```
 
 ### Struct `mcprotocol::serial::LinkDirectDevice`
@@ -4492,64 +4743,6 @@ mcprotocol::serial::LinkDirectMonitorRegistration::LinkDirectMonitorRegistration
 mcprotocol::serial::LinkDirectMonitorRegistration::LinkDirectMonitorRegistration(mcprotocol::serial::Span< const LinkDirectRandomReadWordItem > monitor_items) noexcept
 ```
 
-### Struct `mcprotocol::serial::PosixSerialConfig`
-
-Host-side serial-port configuration used by PosixSerialPort.
-
-Every constructor argument is required. device_path accepts /dev/... style paths on POSIX systems and COM3 or \\.\COM10 style names on Windows. The referenced device-path text must remain alive while the configuration is used.
-
-#### Fields
-
-#### `device_path`
-
-```cpp
-std::string_view mcprotocol::serial::PosixSerialConfig::device_path
-```
-
-#### `baud_rate`
-
-```cpp
-std::uint32_t mcprotocol::serial::PosixSerialConfig::baud_rate
-```
-
-#### `data_bits`
-
-```cpp
-std::uint32_t mcprotocol::serial::PosixSerialConfig::data_bits
-```
-
-#### `stop_bits`
-
-```cpp
-std::uint32_t mcprotocol::serial::PosixSerialConfig::stop_bits
-```
-
-#### `parity`
-
-```cpp
-SerialParity mcprotocol::serial::PosixSerialConfig::parity
-```
-
-#### `hardware_flow_control`
-
-```cpp
-HardwareFlowControl mcprotocol::serial::PosixSerialConfig::hardware_flow_control
-```
-
-#### Member Functions
-
-#### `PosixSerialConfig`
-
-```cpp
-mcprotocol::serial::PosixSerialConfig::PosixSerialConfig(std::string_view device_path_value, std::uint32_t baud_rate_value, std::uint32_t data_bits_value, std::uint32_t stop_bits_value, SerialParity parity_value, HardwareFlowControl hardware_flow_control_value) noexcept
-```
-
-#### `PosixSerialConfig`
-
-```cpp
-mcprotocol::serial::PosixSerialConfig::PosixSerialConfig()=delete
-```
-
 ### Struct `mcprotocol::serial::QualifiedBufferWordDevice`
 
 Parsed U...\\G... or U...\\HG... qualified word device.
@@ -4700,7 +4893,7 @@ mcprotocol::serial::DeviceAddress::DeviceAddress(DeviceCode device_code, std::ui
 
 Extended file-register address using block number plus R word number.
 
-This is the block-addressed form used by 1C ACPU-common and by the chapter-18 block path on 1E.
+This is the block-addressed form used by 1C ACPU-common.
 
 #### Fields
 
@@ -4912,7 +5105,7 @@ mcprotocol::serial::ExtendedFileRegisterBatchReadWordsRequest::ExtendedFileRegis
 
 ### Struct `mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest`
 
-Direct extended file-register batch read (NR on 1C AnA/AnUCPU common, chapter-18 direct path on 1E).
+Direct extended file-register batch read (NR on 1C AnA/AnUCPU common).
 
 #### Fields
 
@@ -4922,7 +5115,7 @@ Direct extended file-register batch read (NR on 1C AnA/AnUCPU common, chapter-18
 std::uint32_t mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest::head_device_number
 ```
 
-NR/NW direct address on 1C or the chapter-18 direct R address on 1E.
+NR/NW direct address on 1C.
 
 #### `points`
 
@@ -4948,7 +5141,7 @@ mcprotocol::serial::ExtendedFileRegisterDirectBatchReadWordsRequest::ExtendedFil
 
 ### Struct `mcprotocol::serial::ExtendedFileRegisterBatchWriteWordsRequest`
 
-Extended file-register batch write (EW on 1C ACPU-common, chapter-18 block path on 1E).
+Extended file-register batch write (EW on 1C ACPU-common).
 
 #### Fields
 
@@ -4984,7 +5177,7 @@ mcprotocol::serial::ExtendedFileRegisterBatchWriteWordsRequest::ExtendedFileRegi
 
 ### Struct `mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest`
 
-Direct extended file-register batch write (NW on 1C AnA/AnUCPU common, chapter-18 direct path on 1E).
+Direct extended file-register batch write (NW on 1C AnA/AnUCPU common).
 
 #### Fields
 
@@ -4994,7 +5187,7 @@ Direct extended file-register batch write (NW on 1C AnA/AnUCPU common, chapter-1
 std::uint32_t mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest::head_device_number
 ```
 
-NR/NW direct address on 1C or the chapter-18 direct R address on 1E.
+NR/NW direct address on 1C.
 
 #### `words`
 
@@ -5020,7 +5213,7 @@ mcprotocol::serial::ExtendedFileRegisterDirectBatchWriteWordsRequest::ExtendedFi
 
 ### Struct `mcprotocol::serial::ExtendedFileRegisterRandomWriteWordItem`
 
-One item inside extended file-register random write (ET on 1C, chapter-18 on 1E).
+One item inside extended file-register random write (ET on 1C).
 
 #### Fields
 
@@ -5056,7 +5249,7 @@ mcprotocol::serial::ExtendedFileRegisterRandomWriteWordItem::ExtendedFileRegiste
 
 ### Struct `mcprotocol::serial::ExtendedFileRegisterMonitorRegistration`
 
-Extended file-register monitor registration (EM on 1C, chapter-18 on 1E).
+Extended file-register monitor registration (EM on 1C).
 
 #### Fields
 
@@ -5494,7 +5687,7 @@ Sparse 16-bit items registered first.
 mcprotocol::serial::Span<const RandomReadDWordItem> mcprotocol::serial::MonitorRegistration::dword_items
 ```
 
-Sparse 32-bit items registered second. Unsupported for 1C and 1E monitor commands.
+Sparse 32-bit items registered second. Unsupported for 1C monitor commands.
 
 #### Member Functions
 
@@ -5510,30 +5703,30 @@ mcprotocol::serial::MonitorRegistration::MonitorRegistration()=delete
 mcprotocol::serial::MonitorRegistration::MonitorRegistration(mcprotocol::serial::Span< const RandomReadWordItem > words, mcprotocol::serial::Span< const RandomReadDWordItem > dwords) noexcept
 ```
 
-### Struct `mcprotocol::serial::UserFrameReadRequest`
+### Struct `mcprotocol::serial::UserFrameRegistrationReadRequest`
 
 #### Fields
 
 #### `frame_no`
 
 ```cpp
-std::uint16_t mcprotocol::serial::UserFrameReadRequest::frame_no
+std::uint16_t mcprotocol::serial::UserFrameRegistrationReadRequest::frame_no
 ```
 
 User-frame number to read, typically in the documented 0x0000..0x03FF or 0x8001..0x801F ranges.
 
 #### Member Functions
 
-#### `UserFrameReadRequest`
+#### `UserFrameRegistrationReadRequest`
 
 ```cpp
-mcprotocol::serial::UserFrameReadRequest::UserFrameReadRequest()=delete
+mcprotocol::serial::UserFrameRegistrationReadRequest::UserFrameRegistrationReadRequest()=delete
 ```
 
-#### `UserFrameReadRequest`
+#### `UserFrameRegistrationReadRequest`
 
 ```cpp
-mcprotocol::serial::UserFrameReadRequest::UserFrameReadRequest(std::uint16_t target_frame_no) noexcept
+mcprotocol::serial::UserFrameRegistrationReadRequest::UserFrameRegistrationReadRequest(std::uint16_t target_frame_no) noexcept
 ```
 
 ### Struct `mcprotocol::serial::UserFrameRegistrationData`
@@ -5566,7 +5759,7 @@ std::array<mcprotocol::serial::Byte, kMaxUserFrameRegistrationBytes> mcprotocol:
 
 Raw user-frame registration bytes as returned by the target.
 
-### Struct `mcprotocol::serial::UserFrameWriteRequest`
+### Struct `mcprotocol::serial::UserFrameRegistrationWriteRequest`
 
 User-frame registration-data write request (1610, subcommand 0000).
 
@@ -5575,7 +5768,7 @@ User-frame registration-data write request (1610, subcommand 0000).
 #### `frame_no`
 
 ```cpp
-std::uint16_t mcprotocol::serial::UserFrameWriteRequest::frame_no
+std::uint16_t mcprotocol::serial::UserFrameRegistrationWriteRequest::frame_no
 ```
 
 User-frame number to overwrite.
@@ -5583,7 +5776,7 @@ User-frame number to overwrite.
 #### `frame_bytes`
 
 ```cpp
-std::uint16_t mcprotocol::serial::UserFrameWriteRequest::frame_bytes
+std::uint16_t mcprotocol::serial::UserFrameRegistrationWriteRequest::frame_bytes
 ```
 
 Frame-byte count encoded into the 1610 payload.
@@ -5591,26 +5784,26 @@ Frame-byte count encoded into the 1610 payload.
 #### `registration_data`
 
 ```cpp
-mcprotocol::serial::Span<const mcprotocol::serial::Byte> mcprotocol::serial::UserFrameWriteRequest::registration_data
+mcprotocol::serial::Span<const mcprotocol::serial::Byte> mcprotocol::serial::UserFrameRegistrationWriteRequest::registration_data
 ```
 
 Raw user-frame registration bytes to store.
 
 #### Member Functions
 
-#### `UserFrameWriteRequest`
+#### `UserFrameRegistrationWriteRequest`
 
 ```cpp
-mcprotocol::serial::UserFrameWriteRequest::UserFrameWriteRequest()=delete
+mcprotocol::serial::UserFrameRegistrationWriteRequest::UserFrameRegistrationWriteRequest()=delete
 ```
 
-#### `UserFrameWriteRequest`
+#### `UserFrameRegistrationWriteRequest`
 
 ```cpp
-mcprotocol::serial::UserFrameWriteRequest::UserFrameWriteRequest(std::uint16_t target_frame_no, std::uint16_t target_frame_bytes, mcprotocol::serial::Span< const mcprotocol::serial::Byte > target_registration_data) noexcept
+mcprotocol::serial::UserFrameRegistrationWriteRequest::UserFrameRegistrationWriteRequest(std::uint16_t target_frame_no, std::uint16_t target_frame_bytes, mcprotocol::serial::Span< const mcprotocol::serial::Byte > target_registration_data) noexcept
 ```
 
-### Struct `mcprotocol::serial::UserFrameDeleteRequest`
+### Struct `mcprotocol::serial::UserFrameRegistrationDeleteRequest`
 
 User-frame registration-data delete request (1610, subcommand 0001).
 
@@ -5619,23 +5812,23 @@ User-frame registration-data delete request (1610, subcommand 0001).
 #### `frame_no`
 
 ```cpp
-std::uint16_t mcprotocol::serial::UserFrameDeleteRequest::frame_no
+std::uint16_t mcprotocol::serial::UserFrameRegistrationDeleteRequest::frame_no
 ```
 
 User-frame number to clear.
 
 #### Member Functions
 
-#### `UserFrameDeleteRequest`
+#### `UserFrameRegistrationDeleteRequest`
 
 ```cpp
-mcprotocol::serial::UserFrameDeleteRequest::UserFrameDeleteRequest()=delete
+mcprotocol::serial::UserFrameRegistrationDeleteRequest::UserFrameRegistrationDeleteRequest()=delete
 ```
 
-#### `UserFrameDeleteRequest`
+#### `UserFrameRegistrationDeleteRequest`
 
 ```cpp
-mcprotocol::serial::UserFrameDeleteRequest::UserFrameDeleteRequest(std::uint16_t target_frame_no) noexcept
+mcprotocol::serial::UserFrameRegistrationDeleteRequest::UserFrameRegistrationDeleteRequest(std::uint16_t target_frame_no) noexcept
 ```
 
 ### Struct `mcprotocol::serial::GlobalSignalControlRequest`

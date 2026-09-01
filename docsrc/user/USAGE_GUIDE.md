@@ -43,20 +43,25 @@ request structs.
 - `ProtocolConfig::c4_binary(profile, sum_check_mode, route)` fixes C4 Binary/Format5 and exposes
   no ASCII-format input.
 - `ProtocolConfig::ascii(AsciiFrameKind::C4|C3|C2|C1, format, profile,
-  sum_check_mode, route)` requires an ASCII format and cannot select 1E.
-- `ProtocolConfig::e1(code_mode, profile, route)` fixes the 1E frame and exposes neither an ASCII
-  format nor a sum-check option because those fields do not exist in the 1E wire format.
+  sum_check_mode, route)` requires an ASCII format.
 
 The C-frame paths require `SumCheckMode::Enabled` or `SumCheckMode::Disabled`; the CLI likewise
-requires `--sum-check` for C1/C2/C3/C4 and rejects it for 1E. The library never switches frame,
-code mode, format, profile, sum-check policy, or route after an error or timeout.
+requires `--sum-check`. The library never switches frame, code mode, format, profile, sum-check
+policy, or route after an error or timeout.
+
+2C supports only the documented compact command pairs `0401/0001` (`1`), `0401/0000` (`2`),
+`1401/0001` (`3`), `1401/0000` (`4`), `0403/0000` (`5`), `1402/0001` (`6`),
+`1402/0000` (`7`), `0801/0000` (`8`), and `0802/0000` (`9`), plus the full loopback pair
+`0619/0000`. Any other command/subcommand selected through a public API returns
+`UnsupportedConfiguration` before serial output; 2C does not fall back to a generic full header.
+Those public command APIs remain available for their supported 3C/4C use.
 
 ### Route selection
 
 Use `RouteConfig {HostStationRoute {}}` for the connected host-station route. This type has no
 station, network, PC, destination-module, or self-station inputs; the protocol-defined connected
 station header is fixed internally. For multidrop, select the frame-specific type:
-`C1MultidropRoute(station)`, a 2C/3C/4C topology-specific route, or `E1Route(pc_target)`.
+`C1MultidropRoute(station)` or a 2C/3C/4C topology-specific route.
 For a normal or 1:n connection, use `C2StandardMultidropRoute(station)`,
 `C3StandardMultidropRoute(station, network, pc_target)`, or
 `C4StandardMultidropRoute(station, network, pc_target, destination_module)`. For an m:n
@@ -65,11 +70,10 @@ connection, use the corresponding `C2MnMultidropRoute`, `C3MnMultidropRoute`, or
 argument. Station zero, network zero, and m:n self-station zero remain valid only when explicitly
 passed. A 3C/4C PC target is constructed with
 `C34PcTarget::number(0x01U..0x78U)` or one of `control_system()`, `standby_system()`,
-`special_fe()`, and `connected_station()`. A 1E target uses
-`E1PcTarget::number(0x01U..0x40U)` or `connected_station()`. The special wire values cannot be
-passed through `number()`, which prevents an ordinary number from silently acquiring special
-meaning. Raw numeric CLI values `0x7D`, `0x7E`, `0xFE`, and `0xFF` are accepted only at that
-external boundary and normalized to the corresponding canonical selector before validation.
+`special_fe()`, and `connected_station()`. The special wire values cannot be passed through
+`number()`, which prevents an ordinary number from silently acquiring special meaning. Raw numeric
+CLI values `0x7D`, `0x7E`, `0xFE`, and `0xFF` are accepted only at that external boundary and
+normalized to the corresponding canonical selector before validation.
 
 The 4C destination module is also mandatory. Use `C4DestinationModule::own_station()`,
 `multiple_cpu(1U..4U)`, one of the four `redundant_*_cpu()` selectors, or
@@ -84,9 +88,8 @@ infer the C24 station assignment or the total station-count constraints of a par
 parameter configuration. Assign those values from the actual serial-network configuration and do
 not reuse a C24-side station number accidentally.
 
-`RouteConfig {}` is invalid. The CLI likewise requires `--route host` or `--route multidrop`;
-3C/4C additionally require `--network` and `--pc-target`, while 1E multidrop requires
-`--pc-target`. A 4C multidrop route additionally requires `--module-target`; use
+`RouteConfig {}` is invalid. The CLI likewise requires `--route host` or `--route multidrop`.
+3C/4C additionally require `--network` and `--pc-target`. A 4C multidrop route additionally requires `--module-target`; use
 `--module-target own` when the explicit own-station selector is correct. Every 2C/3C/4C multidrop
 CLI command also requires `--topology standard|mn`. `standard` rejects `--self-station`; `mn`
 requires `--self-station 0..31`, including an explicit zero when zero is assigned. A station, PC,
@@ -95,13 +98,11 @@ module, topology, or self-station value never selects or changes a route implici
 Every response route header field that exists in the selected frame is compared with the
 configured route. A complete 2C/3C/4C response from a different self-station—or a 3C/4C response
 from a different station, network, or PC target, or a 4C response from a different destination module—is
-discarded while the client continues waiting for the matching response. The 1E response message
-does not echo its request PC target, so the PC target is enforced on request construction and
-encoding rather than inferred from response bytes. Malformed ASCII route hexadecimal is reported
-as a parse error. Timeout, NAK, malformed input, or mismatch never causes automatic route discovery
-or fallback.
+discarded while the client continues waiting for the matching response. Malformed ASCII route
+hexadecimal is reported as a parse error. Timeout, NAK, malformed input, or mismatch never causes
+automatic route discovery or fallback.
 
-### Absolute transaction timeout, response inactivity, and 1E monitoring timer
+### Absolute transaction timeout and response inactivity
 
 `TimeoutConfig::response_timeout_ms` is the one absolute transaction deadline. Its omitted value
 is 3000 ms for every frame and code mode. Call `notify_tx_started(now_ms)` immediately before the
@@ -123,7 +124,7 @@ This is library-observed RX inactivity. When one OS read or UART callback delive
 physical bytes together, the library cannot observe or time the physical gaps inside that chunk.
 
 Every timeout sets `requires_transport_reset()`, including Format2. Abort, drain, and close/reopen
-the exact UART generation, then call `configure()` before another request. `PosixSyncClient` does
+the exact UART generation, then call `configure()` before another request. `HostSyncClient` does
 this retirement itself and must be opened again. The timed-out request is not retried.
 
 For the low-level async client, a deadline reached while physical TX is still pending is latched
@@ -133,13 +134,6 @@ or abort the UART/DMA operation and always call `notify_tx_complete()`. That not
 TX ownership once and publishes `Timeout` for a read, or `OperationOutcomeUnknown` with cause
 `Timeout` for a state-changing request, even if the later physical notification reports another
 transport status. If it is never reported, the client intentionally remains busy.
-
-The 1E ACPU monitoring timer is a different PLC-side protocol field. It defaults independently to
-4000 ms (`0x0010` in 250 ms wire units). Set it with
-`config.e1_monitoring_timer = E1MonitoringTimer::milliseconds(value)`. Explicit values must be
-exact 250 ms units from 0 through 16383750 ms; the library never rounds or saturates them and never
-derives them from the communication timeout. The CLI equivalent is
-`--e1-monitoring-timer-ms`; it is rejected for non-1E frames.
 
 Remote RESET is the dedicated no-normal-response operation. Its completion means that the request
 bytes were transmitted; it does not wait three seconds and does not confirm that the PLC reset.
@@ -194,7 +188,7 @@ int main() {
 
 ### Explicit bit-in-word updates
 
-Use `PosixSyncClient::write_bit_in_word()` for an ordinary device such as `D100`.
+Use `HostSyncClient::write_bit_in_word()` for an ordinary device such as `D100`.
 The synchronous facade also exposes route-specific forms for block-addressed
 extended file registers, direct extended file registers, `Jn\\...` link-direct
 devices, and qualified `Un\\Gn` / `Un\\HGn` word devices. The non-blocking
@@ -214,12 +208,71 @@ monitoring, and module/host byte-buffer APIs are not bit-in-word routes.
 
 ## Entry path 2: synchronous host facade
 
-`PosixSyncClient` opens a host serial port, configures the protocol client, transmits one request, waits for completion, and returns a `Status`.
+`HostSyncClient` opens a host serial port, configures the protocol client, transmits one request, waits for completion, and returns a `Status`.
 Use `read_words_single_request`, `write_words_single_request`,
 `read_bits_single_request`, and `write_bits_single_request` for contiguous host
 access that must be one PLC request. The shorter synchronous names remain
 deprecated compatibility delegates; command-native `async_batch_*` APIs are
 unchanged.
+
+### MC Serial 1E removal
+
+MC Serial 1E has no public configuration, route, codec, client, CLI, or build-feature entry.
+Existing 1E callers must select the supported 1C, 2C, 3C, or 4C frame that is actually configured
+on the target serial module; there is no compatibility alias or automatic fallback. This removal
+does not add or redirect callers to Ethernet 1E. Ethernet integrations use their separately
+supported 3E/4E contract.
+
+### API name migration
+
+New code should include `mcprotocol/serial/host_serial.hpp` for `HostSerialConfig` and
+`HostSerialPort`, and `mcprotocol/serial/host_sync.hpp` for `HostSyncClient`. The host-enabled
+`mcprotocol_serial.hpp` umbrella includes both. The old names remain deprecated delegates or type
+aliases to the same implementation for one compatibility release; request bytes, results,
+timeouts, and state transitions are unchanged. The old `mcprotocol/serial/posix_serial.hpp` header
+is also a one-release compatibility include.
+
+| Deprecated name | Canonical name |
+| --- | --- |
+| `PosixSerialConfig` | `HostSerialConfig` |
+| `PosixSerialPort` | `HostSerialPort` |
+| `PosixSyncClient` | `HostSyncClient` |
+| `async_extended_batch_read_words` | `async_qualified_buffer_batch_read_words` |
+| `async_extended_batch_write_words` | `async_qualified_buffer_batch_write_words` |
+| `read_native_qualified_words` | `read_qualified_buffer_words` |
+| `write_native_qualified_words` | `write_qualified_buffer_words` |
+| `write_native_qualified_bit_in_word` | `write_qualified_buffer_bit_in_word` |
+| `direct_read_extended_file_register_words` | `read_direct_extended_file_register_words` |
+| `direct_write_extended_file_register_words` | `write_direct_extended_file_register_words` |
+| `direct_write_extended_file_register_bit_in_word` | `write_direct_extended_file_register_bit_in_word` |
+| `read_long_state_bits` (both overloads) | `read_long_timer_counter_state_bits` |
+| `async_read_user_frame` | `async_read_user_frame_registration` |
+| `async_write_user_frame` | `async_write_user_frame_registration` |
+| `async_delete_user_frame` | `async_delete_user_frame_registration` |
+| `read_user_frame` | `read_user_frame_registration` |
+| `write_user_frame` | `write_user_frame_registration` |
+| `delete_user_frame` | `delete_user_frame_registration` |
+| `UserFrameReadRequest` | `UserFrameRegistrationReadRequest` |
+| `UserFrameWriteRequest` | `UserFrameRegistrationWriteRequest` |
+| `UserFrameDeleteRequest` | `UserFrameRegistrationDeleteRequest` |
+| `async_register_monitor` | `async_register_monitor_devices` |
+| `async_read_monitor` | `async_run_monitor_cycle` |
+| `register_monitor` | `register_monitor_devices` |
+| `read_monitor` | `run_monitor_cycle` |
+| `random_read` | `read_random` |
+| `random_read_word` | `read_random_word` |
+| `random_read_dword` | `read_random_dword` |
+| `random_write_words` | `write_random_words` |
+| `random_write_dwords` | `write_random_dwords` |
+| `random_write_word` | `write_random_word` |
+| `random_write_dword` | `write_random_dword` |
+| `random_write_bits` | `write_random_bits` |
+| `random_write_bit` | `write_random_bit` |
+| `random_write_extended_file_register_words` | `write_random_extended_file_register_words` |
+
+`begin_qualified_buffer`, command codec names, the async direct-file-register names, single-item
+monitor helpers, extended-file-register/link-direct monitor APIs, and CLI command names are not
+renamed by this migration.
 
 ### Read words
 
@@ -233,13 +286,13 @@ unchanged.
 int main() {
   using mcprotocol::serial::HardwareFlowControl;
   using mcprotocol::serial::PlcProfile;
-  using mcprotocol::serial::PosixSerialConfig;
-  using mcprotocol::serial::PosixSyncClient;
+  using mcprotocol::serial::HostSerialConfig;
+  using mcprotocol::serial::HostSyncClient;
   using mcprotocol::serial::SerialParity;
   using mcprotocol::serial::Status;
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
-  const PosixSerialConfig serial(
+  const HostSerialConfig serial(
       "/dev/ttyUSB0",
       19200,
       8,
@@ -251,7 +304,7 @@ int main() {
       PlcProfile::MelsecQ,
       mcprotocol::serial::SumCheckMode::Disabled,
       mcprotocol::serial::RouteConfig {mcprotocol::serial::HostStationRoute {}});
-  PosixSyncClient plc;
+  HostSyncClient plc;
   Status status = plc.open(serial, protocol);
   if (!status.ok()) {
     return 1;
@@ -287,19 +340,19 @@ under an explicit application safety policy.
 int main() {
   using mcprotocol::serial::HardwareFlowControl;
   using mcprotocol::serial::PlcProfile;
-  using mcprotocol::serial::PosixSerialConfig;
-  using mcprotocol::serial::PosixSyncClient;
+  using mcprotocol::serial::HostSerialConfig;
+  using mcprotocol::serial::HostSyncClient;
   using mcprotocol::serial::SerialParity;
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
-  const PosixSerialConfig serial(
+  const HostSerialConfig serial(
       "/dev/ttyUSB0",
       19200,
       8,
       1,
       SerialParity::Even,
       HardwareFlowControl::None);
-  PosixSyncClient plc;
+  HostSyncClient plc;
   auto protocol = make_c4_ascii_format4_protocol(
       PlcProfile::MelsecQ,
       mcprotocol::serial::SumCheckMode::Disabled,
@@ -357,21 +410,21 @@ the device, and reconciling it manually under an explicit safety policy.
 int main() {
   using mcprotocol::serial::HardwareFlowControl;
   using mcprotocol::serial::PlcProfile;
-  using mcprotocol::serial::PosixSerialConfig;
-  using mcprotocol::serial::PosixSyncClient;
+  using mcprotocol::serial::HostSerialConfig;
+  using mcprotocol::serial::HostSyncClient;
   using mcprotocol::serial::SerialParity;
   using mcprotocol::serial::highlevel::RandomWriteDWordSpec;
   using mcprotocol::serial::highlevel::RandomWriteWordSpec;
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
-  const PosixSerialConfig serial(
+  const HostSerialConfig serial(
       "/dev/ttyUSB0",
       19200,
       8,
       1,
       SerialParity::Even,
       HardwareFlowControl::None);
-  PosixSyncClient plc;
+  HostSyncClient plc;
   auto protocol = make_c4_ascii_format4_protocol(
       PlcProfile::MelsecQ,
       mcprotocol::serial::SumCheckMode::Disabled,
@@ -381,7 +434,7 @@ int main() {
   }
 
   std::uint16_t d100 = 0;
-  if (!plc.random_read_word("D100", d100).ok()) {
+  if (!plc.read_random_word("D100", d100).ok()) {
     return 1;
   }
 
@@ -391,7 +444,7 @@ int main() {
   }
 
   const std::array<RandomWriteWordSpec, 1> writes {{RandomWriteWordSpec("D101", d100)}};
-  const auto write_status = plc.random_write_words(writes);
+  const auto write_status = plc.write_random_words(writes);
   if (write_status.code == mcprotocol::serial::StatusCode::OperationOutcomeUnknown) {
     // The PLC may already have applied the value. Inspect the target; do not retry automatically.
     return 2;
@@ -431,21 +484,21 @@ int main() {
   using mcprotocol::serial::CpuModelInfo;
   using mcprotocol::serial::HardwareFlowControl;
   using mcprotocol::serial::PlcProfile;
-  using mcprotocol::serial::PosixSerialConfig;
-  using mcprotocol::serial::PosixSyncClient;
+  using mcprotocol::serial::HostSerialConfig;
+  using mcprotocol::serial::HostSyncClient;
   using mcprotocol::serial::RemoteOperationMode;
   using mcprotocol::serial::RemoteRunClearMode;
   using mcprotocol::serial::SerialParity;
   using mcprotocol::serial::highlevel::make_c4_ascii_format4_protocol;
 
-  const PosixSerialConfig serial(
+  const HostSerialConfig serial(
       "/dev/ttyUSB0",
       19200,
       8,
       1,
       SerialParity::Even,
       HardwareFlowControl::None);
-  PosixSyncClient plc;
+  HostSyncClient plc;
   auto protocol = make_c4_ascii_format4_protocol(
       PlcProfile::MelsecQ,
       mcprotocol::serial::SumCheckMode::Disabled,
@@ -498,8 +551,8 @@ int main() {
 }
 ```
 
-Sparse access never infers width from the device name. Use `random_read_word`/
-`RandomWriteWordSpec` for 16-bit data and `random_read_dword`/`RandomWriteDWordSpec` for 32-bit
+Sparse access never infers width from the device name. Use `read_random_word`/
+`RandomWriteWordSpec` for 16-bit data and `read_random_dword`/`RandomWriteDWordSpec` for 32-bit
 data. Mixed low-level requests keep separate `word_items`/`dword_items` and separate typed output
 spans. `LZ`, `LTN`, `LSTN`, and `LCN` require the DWord path. Link-direct sparse read, write, and
 monitor APIs are Word-only.
@@ -511,6 +564,54 @@ The CLI follows the same rule: use `random-write-words D100=0`, `random-write-dw
 `random-write-bits M100=0`; a missing `=VALUE` is rejected before the serial device is opened.
 After transmission begins, an unconfirmed random-write result is `OperationOutcomeUnknown`, because
 the PLC may already have changed. The library clears the pending frame and never retries the write.
+
+### Additional synchronous single-request facades
+
+`HostSyncClient` also exposes the existing async link-direct, loopback, multi-block, and
+link-direct-monitor operations without changing their request or output types:
+
+```cpp
+std::array<mcprotocol::serial::LinkDirectRandomReadWordItem, 2> sparse {{
+    {{1, {mcprotocol::serial::DeviceCode::W, 0x100}}},
+    {{2, {mcprotocol::serial::DeviceCode::X, 0x10}}},
+}};
+std::array<std::uint16_t, 2> sparse_words {};
+auto status = plc.read_random_link_direct_words(sparse, sparse_words);
+
+std::array<char, 8> echoed {};
+status = plc.self_test_loopback(mcprotocol::serial::Span<const char>("0123", 4), echoed);
+
+std::array<std::uint16_t, 8> block_words {};
+std::array<mcprotocol::serial::BitValue, 32> block_bits {};
+std::array<mcprotocol::serial::MultiBlockReadBlockResult, 2> block_results {};
+status = plc.read_block(request, block_words, block_bits, block_results);
+
+status = plc.register_link_direct_monitor_devices(registration);
+if (status.ok()) {
+  status = plc.run_monitor_cycle(monitor_words, {});
+}
+```
+
+The complete synchronous additions are `read_random_link_direct_words`,
+`write_random_link_direct_words`, `write_random_link_direct_bits`, `self_test_loopback`,
+`read_block`, `write_block`, `read_link_direct_block`, `write_link_direct_block`, and
+`register_link_direct_monitor_devices`. Each method passes caller-owned spans and the existing
+request type directly to the corresponding async operation, waits for that one request, and returns
+the same status. There is no allocation, request splitting, fallback, or automatic retry in these
+facades.
+
+For multi-block reads, `out_results` follows request order. Word and bit blocks have independent
+offset domains in their respective flat output buffers. A bit-block `points` value counts 16-bit
+units, so one point expands to 16 `BitValue` entries. A parse failure can leave output and result
+spans partially updated; the facade does not add an all-or-nothing guarantee. Link-direct result
+metadata retains the inner `DeviceAddress`; each network number remains in the original request.
+
+`self_test_loopback` writes the echo into `out_echoed`; a buffer exactly as long as the input is not
+NUL-terminated, while a buffer with spare capacity receives the parser's trailing NUL. Link-direct
+monitor registration remains separate from the common `run_monitor_cycle`: registration is
+word-only (a bit-device item still occupies one `std::uint16_t` result slot), and a cycle never
+registers implicitly. Any unconfirmed post-send write or registration result is
+`OperationOutcomeUnknown`; inspect state and do not resend automatically.
 
 This unknown-outcome rule applies to every state-changing command, including contiguous and block
 writes, buffer and file-register writes, remote control, password lock state, user-frame changes,
@@ -694,9 +795,9 @@ See [examples/mcu_async_batch_read.cpp](../../examples/mcu_async_batch_read.cpp)
 
 ## Special helper notes
 
-- Use `read_long_state_bits()` for `LTS/LTC/LSTS/LSTC/LCS/LCC` state reads. Timer and retentive timer state devices use the long-current status block internally; `LCS/LCC` use direct bit reads internally.
+- Use `read_long_timer_counter_state_bits()` for `LTS/LTC/LSTS/LSTC/LCS/LCC` state reads. Timer and retentive timer state devices use the long-current status block internally; `LCS/LCC` use direct bit reads internally.
 - Use `read_link_direct_*()` / `write_link_direct_*()` for `Jn\X/Y/B/SB` bit devices and `Jn\W/SW` word devices. C4 Binary / Format5 and C4 ASCII / Format4 are both confirmed for the validated Q and iQ-R targets when the serial module is configured for the matching format.
-- Use `read_native_qualified_words()` / `write_native_qualified_words()` for CPU-buffer `U3E0` through `U3E3` `G/HG` access and for profiles whose supported `Un\G` route is native device access.
+- Use `read_qualified_buffer_words()` / `write_qualified_buffer_words()` for CPU-buffer `U3E0` through `U3E3` `G/HG` access and for profiles whose supported `Un\G` route is native device access.
 - The `0601/1601` qualified helper route accepts only non-CPU `Un\G` targets. It rejects `U3E0` through `U3E3`, every `HG` target, and profiles such as `melsec:iq-r` that require native-qualified access.
 - Set `MCPROTOCOL_SERIAL_TRACE=1` when using the synchronous host client to log MC TX/RX frame bytes to stderr.
 
@@ -711,7 +812,7 @@ limit; binary calculations assume every escapable byte expands through DLE stuff
 cannot fit returns `InvalidArgument` before TX, while a caller output span that is independently too
 small returns `BufferTooSmall`.
 
-`PosixSyncClient::read_long_state_bits()` is explicitly aggregate when an
+`HostSyncClient::read_long_timer_counter_state_bits()` is explicitly aggregate when an
 `LTS`/`LTC`/`LSTS`/`LSTC` call requests more than one point. It validates the complete address,
 profile, request, and response plan before the first send; issues one four-word status-block request
 per point in address order; stops at the first failure; and changes caller output only after every
@@ -729,7 +830,7 @@ For small firmware builds, use the PlatformIO environments or define the same ma
 | --- | --- |
 | Buffer capacity | `MCPROTOCOL_SERIAL_MAX_REQUEST_FRAME_BYTES`, `MCPROTOCOL_SERIAL_MAX_RESPONSE_FRAME_BYTES`, `MCPROTOCOL_SERIAL_MAX_REQUEST_DATA_BYTES`, `MCPROTOCOL_SERIAL_MAX_RANDOM_ACCESS_ITEMS`, `MCPROTOCOL_SERIAL_MAX_MULTI_BLOCK_COUNT`, `MCPROTOCOL_SERIAL_MAX_MONITOR_ITEMS`, `MCPROTOCOL_SERIAL_MAX_LOOPBACK_BYTES` |
 | Command families | `MCPROTOCOL_SERIAL_ENABLE_RANDOM_COMMANDS`, `MCPROTOCOL_SERIAL_ENABLE_MULTI_BLOCK_COMMANDS`, `MCPROTOCOL_SERIAL_ENABLE_MONITOR_COMMANDS`, `MCPROTOCOL_SERIAL_ENABLE_HOST_BUFFER_COMMANDS`, `MCPROTOCOL_SERIAL_ENABLE_MODULE_BUFFER_COMMANDS`, `MCPROTOCOL_SERIAL_ENABLE_CPU_MODEL_COMMANDS`, `MCPROTOCOL_SERIAL_ENABLE_LOOPBACK_COMMANDS` |
-| Codec families | `MCPROTOCOL_SERIAL_ENABLE_ASCII_MODE`, `MCPROTOCOL_SERIAL_ENABLE_BINARY_MODE`, `MCPROTOCOL_SERIAL_ENABLE_FRAME_C4`, `MCPROTOCOL_SERIAL_ENABLE_FRAME_C3`, `MCPROTOCOL_SERIAL_ENABLE_FRAME_C2`, `MCPROTOCOL_SERIAL_ENABLE_FRAME_C1`, `MCPROTOCOL_SERIAL_ENABLE_FRAME_E1` |
+| Codec families | `MCPROTOCOL_SERIAL_ENABLE_ASCII_MODE`, `MCPROTOCOL_SERIAL_ENABLE_BINARY_MODE`, `MCPROTOCOL_SERIAL_ENABLE_FRAME_C4`, `MCPROTOCOL_SERIAL_ENABLE_FRAME_C3`, `MCPROTOCOL_SERIAL_ENABLE_FRAME_C2`, `MCPROTOCOL_SERIAL_ENABLE_FRAME_C1` |
 
 CMake exposes the same footprint presets through `MCPROTOCOL_FEATURE_PROFILE`:
 
@@ -747,7 +848,7 @@ and are not propagated to applications that link it.
 
 ## Serial config reference
 
-`PosixSerialConfig` has no default constructor. All six connection fields are required and are
+`HostSerialConfig` has no default constructor. All six connection fields are required and are
 validated before the OS serial handle is opened. Values must match the PLC serial module and host
 adapter; the library does not infer or retry a different setting. A successful open replaces the
 port's inherited line behavior: POSIX input/output/local modes are raw, and Win32 preserves only

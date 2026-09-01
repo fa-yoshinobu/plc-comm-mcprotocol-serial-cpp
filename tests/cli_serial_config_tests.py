@@ -69,8 +69,9 @@ def main() -> int:
         raise AssertionError("CLI usage must advertise the absolute 3000 ms transaction timeout")
     if "Retained-response inactivity timeout (default: 250)" not in usage.stderr:
         raise AssertionError("CLI usage must advertise the 250 ms inter-byte inactivity timeout")
-    if "1E timer in exact 250 ms units (default: 4000)" not in usage.stderr:
-        raise AssertionError("CLI usage must advertise the independent 4000 ms 1E timer default")
+    for removed_token in ("e1-binary", "e1-ascii", "--e1-monitoring-timer-ms"):
+        if removed_token in usage.stderr:
+            raise AssertionError(f"CLI usage must not expose removed 1E selector: {removed_token}")
     if "remote-run requires both conflict mode and clear mode" not in usage.stderr:
         raise AssertionError("CLI usage must require both remote-run policies")
     if "remote-run defaults to" in usage.stderr:
@@ -149,6 +150,65 @@ def main() -> int:
     ]
     binary_seven[binary_seven.index("--data-bits") + 1] = "7"
     require_validation_error(cli, binary_seven, "binary with seven data bits")
+
+    for frame, profile, label in (
+        ("c4-binary", "melsec:qcpu", "4C frame remains selectable"),
+        ("c3-ascii-f4", "melsec:qcpu", "3C frame remains selectable"),
+        ("c2-ascii-f4", "melsec:qcpu", "2C frame remains selectable"),
+        ("c1-ascii-f4", "melsec:qna", "1C frame remains selectable"),
+    ):
+        supported_frame = [
+            *explicit_serial[:-2],
+            "--frame",
+            frame,
+            "--plc-profile",
+            profile,
+            "--sum-check",
+            "on",
+            "--route",
+            "host",
+            "cpu-model",
+        ]
+        require_open_error(cli, supported_frame, label)
+
+    for removed_frame in ("e1-binary", "e1-ascii"):
+        removed_frame_input = [
+            *explicit_serial[:-2],
+            "--frame",
+            removed_frame,
+            "--plc-profile",
+            "melsec:a",
+            "--sum-check",
+            "on",
+            "--route",
+            "host",
+            "cpu-model",
+        ]
+        require_parse_error(
+            cli,
+            removed_frame_input,
+            f"removed frame selector {removed_frame} is rejected before serial open",
+        )
+
+    removed_timer_input = [
+        *explicit_serial[:-2],
+        "--frame",
+        "c4-binary",
+        "--plc-profile",
+        "melsec:qcpu",
+        "--sum-check",
+        "on",
+        "--route",
+        "host",
+        "--e1-monitoring-timer-ms",
+        "4000",
+        "cpu-model",
+    ]
+    require_parse_error(
+        cli,
+        removed_timer_input,
+        "removed 1E timer option is rejected before serial open",
+    )
 
     random_base = binary_seven.copy()
     random_base[random_base.index("--data-bits") + 1] = "8"
@@ -558,59 +618,6 @@ def main() -> int:
         canonical_special = explicit_zero_multidrop.copy()
         canonical_special[canonical_special.index("--pc-target") + 1] = value
         require_validation_error(cli, canonical_special, label)
-
-    e1_raw_connected = [
-        *explicit_serial[:-2],
-        "--frame",
-        "e1-binary",
-        "--plc-profile",
-        "melsec:a",
-        "--route",
-        "multidrop",
-        "--pc-target",
-        "0xff",
-        "cpu-model",
-    ]
-    e1_raw_connected[e1_raw_connected.index("--data-bits") + 1] = "7"
-    require_validation_error(cli, e1_raw_connected, "1E raw connected-station PC target")
-
-    e1_with_sum_check = e1_raw_connected.copy()
-    e1_with_sum_check[-1:-1] = ["--sum-check", "on"]
-    require_parse_error(cli, e1_with_sum_check, "1E rejects inactive sum-check option")
-
-    for value, label in (
-        ("0", "1E zero monitoring timer"),
-        ("250", "1E one-tick monitoring timer"),
-        ("4000", "1E default monitoring timer"),
-        ("16383750", "1E maximum monitoring timer"),
-    ):
-        valid_e1_timer = e1_raw_connected.copy()
-        valid_e1_timer[-1:-1] = ["--e1-monitoring-timer-ms", value]
-        require_validation_error(cli, valid_e1_timer, label)
-
-    for value, label in (
-        ("1", "1E non-unit monitoring timer"),
-        ("249", "1E below-one-tick monitoring timer"),
-        ("251", "1E non-unit monitoring timer above one tick"),
-        ("16384000", "1E monitoring timer overflow"),
-    ):
-        invalid_e1_timer = e1_raw_connected.copy()
-        invalid_e1_timer[invalid_e1_timer.index("--data-bits") + 1] = "8"
-        invalid_e1_timer[-1:-1] = ["--e1-monitoring-timer-ms", value]
-        require_protocol_validation_error(cli, invalid_e1_timer, label)
-
-    for value, label in (("-1", "negative 1E monitoring timer"), ("invalid", "nonnumeric 1E monitoring timer")):
-        invalid_e1_timer_text = e1_raw_connected.copy()
-        invalid_e1_timer_text[-1:-1] = ["--e1-monitoring-timer-ms", value]
-        require_parse_error(cli, invalid_e1_timer_text, label)
-
-    c4_with_e1_timer = explicit_zero_multidrop.copy()
-    c4_with_e1_timer[-1:-1] = ["--e1-monitoring-timer-ms", "4000"]
-    require_parse_error(cli, c4_with_e1_timer, "1E monitoring timer on a 4C route")
-
-    recover_with_e1_timer = explicit_serial.copy()
-    recover_with_e1_timer[-1:-1] = ["--e1-monitoring-timer-ms", "4000"]
-    require_parse_error(cli, recover_with_e1_timer, "1E monitoring timer on raw C24 recovery")
 
     recover_with_sum_check = explicit_serial.copy()
     recover_with_sum_check[-1:-1] = ["--sum-check", "off"]

@@ -467,7 +467,7 @@ namespace CommandCodec {
 /// @{
 [[nodiscard]] Status encode_read_user_frame(
     const ProtocolConfig& config,
-    const UserFrameReadRequest& request,
+    const UserFrameRegistrationReadRequest& request,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
@@ -478,13 +478,13 @@ namespace CommandCodec {
 
 [[nodiscard]] Status encode_write_user_frame(
     const ProtocolConfig& config,
-    const UserFrameWriteRequest& request,
+    const UserFrameRegistrationWriteRequest& request,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
 [[nodiscard]] Status encode_delete_user_frame(
     const ProtocolConfig& config,
-    const UserFrameDeleteRequest& request,
+    const UserFrameRegistrationDeleteRequest& request,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
