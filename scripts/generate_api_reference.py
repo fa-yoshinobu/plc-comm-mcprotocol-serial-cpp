@@ -17,6 +17,11 @@ from pathlib import Path
 
 MEMBER_ORDER = ("define", "typedef", "enum", "variable", "function", "friend")
 COMPOUND_ORDER = ("namespace", "class", "struct", "union")
+DEPRECATED_ALIAS_PATTERN = re.compile(
+    r"(?P<doc>(?:[ \t]*///[^\n]*\n)+)"
+    r"[ \t]*using[ \t]+(?P<name>[A-Za-z_]\w*)[ \t]*"
+    r"\[\[deprecated\([^\]]+\)\]\][ \t]*=[ \t]*(?P<target>[^;]+);"
+)
 
 
 @dataclass
@@ -344,8 +349,50 @@ def run_doxygen(
             for compound in [parse_compound(path)]
             if compound is not None
         ]
+        add_missing_deprecated_aliases(compounds, inputs)
         compounds.sort(key=lambda item: (item.kind != "file", item.location, item.line, item.name))
         return compounds
+
+
+def add_missing_deprecated_aliases(compounds: list[Compound], inputs: list[Path]) -> None:
+    """Normalize Doxygen versions that omit attributed C++ type aliases from XML."""
+    namespace = next(
+        (
+            compound
+            for compound in compounds
+            if compound.kind == "namespace" and compound.name == "mcprotocol::serial"
+        ),
+        None,
+    )
+    if namespace is None:
+        return
+
+    existing = {member.name for member in namespace.members}
+    for path in inputs:
+        source = path.read_text(encoding="utf-8")
+        for match in DEPRECATED_ALIAS_PATTERN.finditer(source):
+            name = match.group("name")
+            if name in existing:
+                continue
+            brief = normalize_space(
+                " ".join(
+                    re.sub(r"^[ \t]*///[ \t]*(?:\\brief[ \t]*)?", "", line)
+                    for line in match.group("doc").splitlines()
+                )
+            ).replace("`", "")
+            target = normalize_space(match.group("target"))
+            namespace.members.append(
+                Member(
+                    kind="typedef",
+                    name=name,
+                    signature=f"using mcprotocol::serial::{name} = {target}",
+                    brief=[brief] if brief else [],
+                    line=source.count("\n", 0, match.start("name")) + 1,
+                )
+            )
+            existing.add(name)
+
+    namespace.members.sort(key=lambda item: (item.line, item.kind, item.name))
 
 
 def render_member(member: Member, *, class_member: bool) -> list[str]:

@@ -759,6 +759,22 @@ Converts a logical buffer-memory word address plus module offset into a byte sta
 
 #### Aliases
 
+#### `PosixSerialConfig`
+
+```cpp
+using mcprotocol::serial::PosixSerialConfig = HostSerialConfig
+```
+
+One-release compatibility alias for HostSerialConfig.
+
+#### `PosixSerialPort`
+
+```cpp
+using mcprotocol::serial::PosixSerialPort = HostSerialPort
+```
+
+One-release compatibility alias for HostSerialPort.
+
 #### `BitValue`
 
 ```cpp
@@ -768,6 +784,38 @@ using mcprotocol::serial::BitValue = bool
 Native Boolean value used by every individual bit read/write API.
 
 Packed block words remain std::uint16_t; they are not individual bit-value inputs.
+
+#### `PosixSyncClient`
+
+```cpp
+using mcprotocol::serial::PosixSyncClient = HostSyncClient
+```
+
+One-release compatibility alias for HostSyncClient.
+
+#### `UserFrameReadRequest`
+
+```cpp
+using mcprotocol::serial::UserFrameReadRequest = UserFrameRegistrationReadRequest
+```
+
+One-release compatibility alias for UserFrameRegistrationReadRequest.
+
+#### `UserFrameWriteRequest`
+
+```cpp
+using mcprotocol::serial::UserFrameWriteRequest = UserFrameRegistrationWriteRequest
+```
+
+One-release compatibility alias for UserFrameRegistrationWriteRequest.
+
+#### `UserFrameDeleteRequest`
+
+```cpp
+using mcprotocol::serial::UserFrameDeleteRequest = UserFrameRegistrationDeleteRequest
+```
+
+One-release compatibility alias for UserFrameRegistrationDeleteRequest.
 
 #### `CompletionHandler`
 
