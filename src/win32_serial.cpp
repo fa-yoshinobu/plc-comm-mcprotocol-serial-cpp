@@ -118,9 +118,9 @@ namespace {
 }
 
 [[nodiscard]] Status set_io_deadline_timeouts(HANDLE h, DWORD timeout_ms) noexcept {
-  // MAXDWORD/MAXDWORD/constant returns already-buffered bytes without waiting for the caller's
-  // remaining buffer capacity while bounding the initial-byte wait by the deadline remainder.
-  COMMTIMEOUTS timeouts = detail::build_win32_deadline_timeouts(timeout_ms);
+    // MAXDWORD/MAXDWORD/constant returns already-buffered bytes without waiting for the caller's
+    // remaining buffer capacity while bounding the initial-byte wait by the deadline remainder.
+    COMMTIMEOUTS timeouts = detail::build_win32_deadline_timeouts(timeout_ms);
   if (!SetCommTimeouts(h, &timeouts)) {
     return transport_last_error(GetLastError(), "SetCommTimeouts failed");
   }
