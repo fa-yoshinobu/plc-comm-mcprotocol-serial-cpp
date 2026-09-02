@@ -4,9 +4,29 @@ Current status and recently completed live-verification evidence.
 
 ## Current Status
 
-No active confirmed-defect TODOs are currently tracked. The 2026-09-01 correction batch, including
-the Windows synchronous receive live acceptance, is complete. Completed acceptance evidence is
-kept in the maintainer GOAL and live-result records rather than as closed TODO items here.
+No active confirmed-defect TODOs are currently tracked. The 2026-09-01 correction batch and D-093
+are complete.
+
+## Resolved: D-093 C24 `1615` send-completion contract
+
+Implementation scope: synchronous and asynchronous transmission-sequence initialization in this
+repository. Target contract: because the tested C24 returns no frame for `1615/0000`, successful
+serial transmission completes the API successfully without waiting for RX. The result states that
+PLC internal state is not confirmed. Compatibility impact: a former response timeout becomes a
+successful send-completion result; the request frame is unchanged.
+
+1. `1615/0000` is emitted unchanged in C4 binary Format 5.
+2. Successful TX completion returns `StatusCode::Ok` without waiting for RX.
+3. A TX transport failure remains `OperationOutcomeUnknown`.
+4. Sync and async public APIs have the same completion contract.
+
+- [x] Implementation completed in this repository.
+- [x] Tests added for every acceptance criterion.
+- [x] Focused static, unit, adapter-build, and live checks passed.
+- [x] Codex self-review completed against the approved contract.
+- [x] Required live-PLC checks passed.
+- [x] Public API comments and CLI output agree with the implementation.
+- [x] Final acceptance criteria verified and the item marked complete.
 
 ## Resolved: D-087 through D-092 live serial verification (2026-07-18)
 

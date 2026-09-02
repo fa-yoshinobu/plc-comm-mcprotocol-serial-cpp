@@ -32,6 +32,18 @@ template <typename T>
       "Remote RESET request transmission completed; PLC reset state is not confirmed");
 }
 
+[[nodiscard]] constexpr Status global_signal_request_sent_status() noexcept {
+  return make_status(
+      StatusCode::Ok,
+      "Global-signal request transmission completed; PLC signal state is not confirmed");
+}
+
+[[nodiscard]] constexpr Status transmission_sequence_request_sent_status() noexcept {
+  return make_status(
+      StatusCode::Ok,
+      "Transmission-sequence initialization request transmission completed; PLC state is not confirmed");
+}
+
 [[nodiscard]] constexpr Status cancelled_status() noexcept {
   return make_status(StatusCode::Cancelled, "The active request was cancelled");
 }
@@ -321,6 +333,16 @@ Status MelsecSerialClient::notify_tx_complete(
 
   if (operation_ == OperationKind::RemoteReset) {
     complete(remote_reset_request_sent_status());
+    return ok_status();
+  }
+
+  if (operation_ == OperationKind::ControlGlobalSignal) {
+    complete(global_signal_request_sent_status());
+    return ok_status();
+  }
+
+  if (operation_ == OperationKind::InitializeTransmissionSequence) {
+    complete(transmission_sequence_request_sent_status());
     return ok_status();
   }
 

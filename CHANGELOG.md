@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-09-02
+
+- Release: Bumped CMake, PlatformIO, Arduino, and public version metadata to `4.2.0`.
+
 - Library: Added OS-neutral `HostSerialConfig`, `HostSerialPort`, and `HostSyncClient` names and canonical operation-first, qualified-buffer, user-frame-registration, and monitor-lifecycle API names. The replaced names and `posix_serial.hpp` remain deprecated delegates to the same implementation for one compatibility release; CLI command names and wire behavior are unchanged.
 - Library: Added nine allocation-free `HostSyncClient` facades for link-direct random access, self-test loopback, standard and link-direct multi-block access, and link-direct monitor registration. Each drives the corresponding existing async operation as one request without splitting, fallback, or automatic retry, and reuses the existing request/result types.
 - Library: Removed the unsupported MC Serial 1E public configuration, types, routes, codecs, client handling, CLI surface, and build feature switch without an alias or fallback. Supported MC Serial frame families are now 1C, 2C, 3C, and 4C. Existing 1E callers must select the serial frame actually configured on the target module; there is no one-to-one compatibility replacement, and this change does not add or redirect callers to Ethernet 1E. Ethernet integrations use their separately supported 3E/4E contract.
@@ -24,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: Restricted 2C encoding to the documented compact command pairs mapped to codes `1` through `9` and the full `0619/0000` loopback pair. Every other 2C command/subcommand now returns `UnsupportedConfiguration` before serial output instead of falling back to a generic full header or discarding a subcommand.
 - Library: Restricted `HG` qualified access to `U3E0` through `U3E3` and stopped qualified helpers from converting CPU-buffer `G/HG` targets into `0601/1601`; callers must use native-qualified access for those targets.
 - Library: Corrected Windows synchronous receive timeouts so already-buffered response bytes return without waiting for the unused caller-buffer capacity while preserving the total deadline.
+- Library: Corrected format-4 transmission-setting encoding so the setting and speed fields use their documented byte widths.
+- Library: Completed transmission-sequence initialization (`1615`) and global-signal control (`1618`) when transport transmission succeeds because these operations do not return an MC response; transport failure remains outcome-unknown.
 - Tests: Made `codec_tests`, `host_sync_runner_tests`, and `cli_completion_tests` assertions active in Release/`NDEBUG` builds and added a negative probe that proves a failed assertion exits nonzero.
 
 ## [4.1.0] - 2026-08-27

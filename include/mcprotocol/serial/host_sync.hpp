@@ -123,6 +123,8 @@ class HostSyncClient {
   }
 
   /// \brief Controls C24 global signal ON/OFF synchronously (`1618`).
+  ///
+  /// Success confirms request transmission; it does not confirm the PLC signal state.
   [[nodiscard]] Status control_global_signal(
       const GlobalSignalControlRequest& request) noexcept;
 
@@ -131,6 +133,8 @@ class HostSyncClient {
       const SerialModuleModeSwitchRequest& request) noexcept;
 
   /// \brief Initializes C24 format-5 transmission sequence synchronously (`1615`).
+  ///
+  /// Success confirms request transmission; it does not confirm the PLC state.
   [[nodiscard]] Status initialize_c24_transmission_sequence() noexcept;
 
   /// \brief Reads contiguous words as exactly one PLC request.

@@ -1060,7 +1060,7 @@ void test_encode_switch_serial_module_mode_ascii_request_matches_manual() {
       request_size);
   assert(status.ok());
 
-  constexpr std::string_view expected = "1612000001070100B00005";
+  constexpr std::string_view expected = "16120000010701B005";
   assert(request_size == expected.size());
   assert(std::equal(expected.begin(), expected.end(), request_data.begin()));
 }
@@ -9199,7 +9199,7 @@ void test_client_remote_reset_does_not_wait_for_response_timeout() {
   assert(failed_capture.status.code == StatusCode::OperationOutcomeUnknown);
 }
 
-void test_client_init_sequence_timeout_is_not_success() {
+void test_client_init_sequence_completes_when_transmission_completes() {
   auto config = make_binary_c4_config();
   config = config.with_response_timeout_ms(5);
 
@@ -9214,15 +9214,31 @@ void test_client_init_sequence_timeout_is_not_success() {
 
   status = start_and_notify_tx_complete(client, 1, mcprotocol::serial::ok_status());
   assert(status.ok());
-
-  client.poll(10);
   assert(capture.called);
-  assert(capture.status.code == StatusCode::OperationOutcomeUnknown);
-  assert(client.requires_transport_reset());
+  assert(capture.status.ok());
+  assert(
+      std::string_view(capture.status.message) ==
+      "Transmission-sequence initialization request transmission completed; PLC state is not confirmed");
+  assert(!client.requires_transport_reset());
   assert(!client.busy());
+
+  MelsecSerialClient failed_client;
+  status = failed_client.configure(config);
+  assert(status.ok());
+  CallbackCapture failed_capture;
+  status = failed_client.async_initialize_c24_transmission_sequence(
+      0, completion_callback, &failed_capture);
+  assert(status.ok());
+  status = start_and_notify_tx_complete(
+      failed_client,
+      1,
+      mcprotocol::serial::make_status(StatusCode::Transport, "test transport failure"));
+  assert(status.ok());
+  assert(failed_capture.called);
+  assert(failed_capture.status.code == StatusCode::OperationOutcomeUnknown);
 }
 
-void test_client_global_signal_timeout_is_not_success() {
+void test_client_global_signal_completes_when_transmission_completes() {
   auto config = make_binary_c4_config();
   config = config.with_response_timeout_ms(5);
 
@@ -9241,12 +9257,31 @@ void test_client_global_signal_timeout_is_not_success() {
 
   status = start_and_notify_tx_complete(client, 1, mcprotocol::serial::ok_status());
   assert(status.ok());
-
-  client.poll(10);
   assert(capture.called);
-  assert(capture.status.code == StatusCode::OperationOutcomeUnknown);
-  assert(client.requires_transport_reset());
+  assert(capture.status.ok());
+  assert(
+      std::string_view(capture.status.message) ==
+      "Global-signal request transmission completed; PLC signal state is not confirmed");
+  assert(!client.requires_transport_reset());
   assert(!client.busy());
+
+  MelsecSerialClient failed_client;
+  status = failed_client.configure(config);
+  assert(status.ok());
+  CallbackCapture failed_capture;
+  status = failed_client.async_control_global_signal(
+      0,
+      GlobalSignalControlRequest(GlobalSignalTarget::ReceivedSide, true),
+      completion_callback,
+      &failed_capture);
+  assert(status.ok());
+  status = start_and_notify_tx_complete(
+      failed_client,
+      1,
+      mcprotocol::serial::make_status(StatusCode::Transport, "test transport failure"));
+  assert(status.ok());
+  assert(failed_capture.called);
+  assert(failed_capture.status.code == StatusCode::OperationOutcomeUnknown);
 }
 
 void test_client_timeout() {
@@ -11144,8 +11179,8 @@ int main() {
   test_client_c24_small_command_roundtrips();
   test_client_remote_reset_completes_when_transmission_completes();
   test_client_remote_reset_does_not_wait_for_response_timeout();
-  test_client_init_sequence_timeout_is_not_success();
-  test_client_global_signal_timeout_is_not_success();
+  test_client_init_sequence_completes_when_transmission_completes();
+  test_client_global_signal_completes_when_transmission_completes();
   test_client_link_direct_random_read_roundtrip();
   test_client_link_direct_register_monitor_roundtrip();
   test_client_ascii_c1_register_monitor_roundtrip();

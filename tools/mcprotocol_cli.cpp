@@ -599,7 +599,7 @@ void print_usage() {
       "  error-clear sends C24 clear-error-information (1617); it is not the E71 COM.ERR-only variant.\n"
       "  remote-reset completes when request transmission finishes; it does not wait for a response or confirm PLC state.\n"
       "  global-signal maps to C24 command 1618 on 2C/3C/4C; STATION defaults to 0.\n"
-      "  init-sequence maps to 1615 and is binary 4C format-5 only; an unconfirmed result is outcome-unknown.\n"
+      "  init-sequence maps to 1615 and is binary 4C format-5 only; success confirms transmission, not PLC state.\n"
       "  recover-c24 requires eot or cl explicitly; no recovery control code is inferred.\n"
       "  Use recover-c24 after timeout or mixed-response states on C24 ASCII links; no reply is expected.\n"
       "  read-native-qualified-words / write-native-qualified-words use the native 0401/1401 Un\\G/Un\\HG route when the selected profile supports it.\n"
@@ -3729,7 +3729,7 @@ int main(int argc, char** argv) {
         print_status_error("init-sequence request failed", status);
         return 1;
       }
-      std::printf("init-sequence=ok response=ack\n");
+      std::printf("init-sequence=ok response=none transmission=completed\n");
       return 0;
     }
 

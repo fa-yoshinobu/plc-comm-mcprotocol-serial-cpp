@@ -574,6 +574,8 @@ class MelsecSerialClient {
   }
 
   /// \brief Starts C24 global-signal ON/OFF control (`1618`).
+  ///
+  /// Completion confirms successful request transmission; it does not confirm the PLC signal state.
   [[nodiscard]] Status async_control_global_signal(
       std::uint32_t now_ms,
       const GlobalSignalControlRequest& request,
@@ -588,6 +590,8 @@ class MelsecSerialClient {
       void* user) noexcept;
 
   /// \brief Starts C24 transmission-sequence initialization (`1615`).
+  ///
+  /// Completion confirms successful request transmission; it does not confirm the PLC state.
   [[nodiscard]] Status async_initialize_c24_transmission_sequence(
       std::uint32_t now_ms,
       CompletionHandler callback,

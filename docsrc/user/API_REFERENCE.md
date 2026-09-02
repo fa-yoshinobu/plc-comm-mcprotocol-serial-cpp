@@ -2095,6 +2095,8 @@ Status mcprotocol::serial::MelsecSerialClient::async_control_global_signal(std::
 
 Starts C24 global-signal ON/OFF control (1618).
 
+Completion confirms successful request transmission; it does not confirm the PLC signal state.
+
 #### `async_switch_serial_module_mode`
 
 ```cpp
@@ -2110,6 +2112,8 @@ Status mcprotocol::serial::MelsecSerialClient::async_initialize_c24_transmission
 ```
 
 Starts C24 transmission-sequence initialization (1615).
+
+Completion confirms successful request transmission; it does not confirm the PLC state.
 
 #### `async_loopback`
 
@@ -2627,6 +2631,8 @@ Status mcprotocol::serial::HostSyncClient::control_global_signal(const GlobalSig
 
 Controls C24 global signal ON/OFF synchronously (1618).
 
+Success confirms request transmission; it does not confirm the PLC signal state.
+
 #### `switch_serial_module_mode`
 
 ```cpp
@@ -2642,6 +2648,8 @@ Status mcprotocol::serial::HostSyncClient::initialize_c24_transmission_sequence(
 ```
 
 Initializes C24 format-5 transmission sequence synchronously (1615).
+
+Success confirms request transmission; it does not confirm the PLC state.
 
 #### `read_words_single_request`
 

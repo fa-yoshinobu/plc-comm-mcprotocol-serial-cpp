@@ -6154,8 +6154,8 @@ Status encode_switch_serial_module_mode(
       append_byte_or_ascii_hex(writer, config, mode_switch_instruction(request)) &&
       append_byte_or_ascii_hex(writer, config, mode_no);
   const bool variable_part_ok = is_ascii_mode(config)
-                                    ? append_ascii_hex(writer, request.transmission_setting, 4U) &&
-                                          append_ascii_hex(writer, communication_speed, 4U)
+                                    ? append_ascii_hex(writer, request.transmission_setting, 2U) &&
+                                          append_ascii_hex(writer, communication_speed, 2U)
                                     : writer.push(request.transmission_setting) &&
                                           writer.push(communication_speed);
   if (!fixed_part_ok || !variable_part_ok) {
