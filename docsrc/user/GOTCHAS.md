@@ -23,7 +23,7 @@
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| The MCU sample runs, but the values are always zero or do not match the PLC. | The sample UART pins are board defaults, not universal wiring rules. | Change the TX/RX pins to match your board wiring and check the shared [MC Protocol Serial setup guide](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/serial/). |
+| The MCU sample runs, but the values are always zero or do not match the PLC. | The sample UART pins are board defaults, not universal wiring rules. | Change the TX/RX pins to match your board wiring and check the shared [MC Protocol Serial setup guide](https://plc-comm-docs-site.fa-labo.com/plc-setup/mcprotocol/serial/). |
 
 ## Frame type mismatch
 
@@ -91,7 +91,7 @@
 
 | Symptom | Root cause | Fix |
 | --- | --- | --- |
-| A qualified `Un\G` / `Un\HG` command, link-direct command, or native helper fails on one target but not another. | Support depends on the selected PLC profile, serial module, mounted route, and command route. The `0601/1601` helper route is not a fallback for profiles that require native-qualified access. | Use the route required by the selected profile and check the shared [MC Protocol Serial supported registers](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/supported-registers/) page before changing code. |
+| A qualified `Un\G` / `Un\HG` command, link-direct command, or native helper fails on one target but not another. | Support depends on the selected PLC profile, serial module, mounted route, and command route. The `0601/1601` helper route is not a fallback for profiles that require native-qualified access. | Use the route required by the selected profile and check the shared [MC Protocol Serial supported registers](https://plc-comm-docs-site.fa-labo.com/plc-setup/mcprotocol/supported-registers/) page before changing code. |
 
 ## Typed suffix does not parse
 

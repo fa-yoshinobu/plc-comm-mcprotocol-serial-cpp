@@ -171,4 +171,4 @@ The serial values in examples are also sample defaults. Match the actual PLC ser
 | PLC error or framing error | Check that the PLC module is configured for the same frame type and code mode. |
 | RS-485 multi-drop does not answer | Select the frame-specific route and the actual topology. Use a `*StandardMultidropRoute` for normal/1:n or a `*MnMultidropRoute` with the assigned `SelfStationNo` for m:n. Ensure station—and for 3C/4C, network and PC target—matches the serial module. For 4C, also verify the mandatory destination-module target. |
 | MCU sample prints zeros or no values | Verify the UART TX/RX pins and the TTL-to-RS-232C or RS-485 interface. |
-| Wiring uncertainty | See the shared [MC Protocol Serial setup guide](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/serial/) before changing software settings. |
+| Wiring uncertainty | See the shared [MC Protocol Serial setup guide](https://plc-comm-docs-site.fa-labo.com/plc-setup/mcprotocol/serial/) before changing software settings. |

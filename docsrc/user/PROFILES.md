@@ -4,7 +4,7 @@ Each profile selects the command family and device-layout assumptions used by th
 
 Choose one explicit profile in your application or configuration UI. The library intentionally does not infer it from `ReadTypeName`, CPU model text, or omitted configuration.
 
-The supported device inventory is maintained in the shared [MC Protocol Serial supported registers](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/supported-registers/) page.
+The supported device inventory is maintained in the shared [MC Protocol Serial supported registers](https://plc-comm-docs-site.fa-labo.com/plc-setup/mcprotocol/supported-registers/) page.
 
 ## Verified hardware available for validation
 

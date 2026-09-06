@@ -11,15 +11,15 @@ supported; migrate those projects to a supported ESP32 target or maintain the AV
 
 ## PLC Comm Family
 
-This library is part of the plc-comm family. See the [package matrix](https://fa-yoshinobu.github.io/plc-comm-docs-site/package-matrix/) for protocol, language, registry, and install-command mapping.
+This library is part of the plc-comm family. See the [package matrix](https://plc-comm-docs-site.fa-labo.com/package-matrix/) for protocol, language, registry, and install-command mapping.
 
 ## Supported PLC profiles
 
-The maintained profile table is in the [MC Protocol Serial PLC profiles](https://fa-yoshinobu.github.io/plc-comm-docs-site/mcprotocol/cpp/PROFILES/) page. Choose one exact canonical PLC profile from that table.
+The maintained profile table is in the [MC Protocol Serial PLC profiles](https://plc-comm-docs-site.fa-labo.com/mcprotocol/cpp/PROFILES/) page. Choose one exact canonical PLC profile from that table.
 
 ## Supported device types
 
-The maintained device and range table is in the shared [MC Protocol Serial supported registers](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/supported-registers/) page. Use that page for supported device families, address syntax, and profile-specific notes.
+The maintained device and range table is in the shared [MC Protocol Serial supported registers](https://plc-comm-docs-site.fa-labo.com/plc-setup/mcprotocol/supported-registers/) page. Use that page for supported device families, address syntax, and profile-specific notes.
 
 ## Installation
 
@@ -58,17 +58,17 @@ See the maintained [PlatformIO and CMake examples](https://github.com/fa-yoshino
 
 | Page | Use it for |
 | --- | --- |
-| [Full documentation site](https://fa-yoshinobu.github.io/plc-comm-docs-site/) | Unified docs for all PLC communication libraries. |
-| [Getting started](https://fa-yoshinobu.github.io/plc-comm-docs-site/mcprotocol/cpp/GETTING_STARTED/) | Install the library, choose a profile, and perform your first read. |
-| [Usage guide](https://fa-yoshinobu.github.io/plc-comm-docs-site/mcprotocol/cpp/USAGE_GUIDE/) | Choose the high-level, host sync, or low-level async entry path. |
-| [API reference](https://fa-yoshinobu.github.io/plc-comm-docs-site/mcprotocol/cpp/API_REFERENCE/) | Generated reference for the public C++ headers. |
-| [PLC profiles](https://fa-yoshinobu.github.io/plc-comm-docs-site/mcprotocol/cpp/PROFILES/) | Choose the exact canonical profile for your target PLC. |
-| [Gotchas](https://fa-yoshinobu.github.io/plc-comm-docs-site/mcprotocol/cpp/GOTCHAS/) | Troubleshoot common profile, frame, serial, and address mistakes. |
-| [MC Protocol Serial setup](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/serial/) | Check PLC-side serial settings, station number, wiring shape, and bring-up order. |
-| [MC Protocol Serial supported registers](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/supported-registers/) | Check device families, address examples, and current string syntax. |
-| [Troubleshooting & Codes](https://fa-yoshinobu.github.io/plc-comm-docs-site/plc-setup/mcprotocol/troubleshooting-codes/) | Interpret library status codes and observed PLC/module error families. |
-| [Performance](https://fa-yoshinobu.github.io/plc-comm-docs-site/performance/) | See measured latency, throughput, and long-run soak results from real PLC hardware. |
-| [Choosing a Language](https://fa-yoshinobu.github.io/plc-comm-docs-site/choosing-a-language/) | Compare the .NET, Python, Rust, C++, and Node-RED implementations before you pick one. |
+| [Full documentation site](https://plc-comm-docs-site.fa-labo.com/) | Unified docs for all PLC communication libraries. |
+| [Getting started](https://plc-comm-docs-site.fa-labo.com/mcprotocol/cpp/GETTING_STARTED/) | Install the library, choose a profile, and perform your first read. |
+| [Usage guide](https://plc-comm-docs-site.fa-labo.com/mcprotocol/cpp/USAGE_GUIDE/) | Choose the high-level, host sync, or low-level async entry path. |
+| [API reference](https://plc-comm-docs-site.fa-labo.com/mcprotocol/cpp/API_REFERENCE/) | Generated reference for the public C++ headers. |
+| [PLC profiles](https://plc-comm-docs-site.fa-labo.com/mcprotocol/cpp/PROFILES/) | Choose the exact canonical profile for your target PLC. |
+| [Gotchas](https://plc-comm-docs-site.fa-labo.com/mcprotocol/cpp/GOTCHAS/) | Troubleshoot common profile, frame, serial, and address mistakes. |
+| [MC Protocol Serial setup](https://plc-comm-docs-site.fa-labo.com/plc-setup/mcprotocol/serial/) | Check PLC-side serial settings, station number, wiring shape, and bring-up order. |
+| [MC Protocol Serial supported registers](https://plc-comm-docs-site.fa-labo.com/plc-setup/mcprotocol/supported-registers/) | Check device families, address examples, and current string syntax. |
+| [Troubleshooting & Codes](https://plc-comm-docs-site.fa-labo.com/plc-setup/mcprotocol/troubleshooting-codes/) | Interpret library status codes and observed PLC/module error families. |
+| [Performance](https://plc-comm-docs-site.fa-labo.com/performance/) | See measured latency, throughput, and long-run soak results from real PLC hardware. |
+| [Choosing a Language](https://plc-comm-docs-site.fa-labo.com/choosing-a-language/) | Compare the .NET, Python, Rust, C++, and Node-RED implementations before you pick one. |
 | [Examples](https://github.com/fa-yoshinobu/plc-comm-mcprotocol-serial-cpp/tree/main/examples) | Run maintained host and MCU examples. |
 
 ## License and registry
