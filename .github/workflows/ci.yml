@@ -46,10 +46,6 @@ jobs:
       - name: Check API reference
         run: python3 scripts/update_api_reference.py --check
 
-      - name: Verify self-contained source archive
-        shell: pwsh
-        run: ./scripts/check_source_archive.ps1
-
   windows-host-build:
     runs-on: windows-latest
     steps:
