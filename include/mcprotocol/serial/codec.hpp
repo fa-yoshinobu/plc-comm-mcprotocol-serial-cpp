@@ -588,13 +588,13 @@ namespace CommandCodec {
 
 [[nodiscard]] Status encode_unlock_remote_password(
     const ProtocolConfig& config,
-    std::string_view remote_password,
+    StringView remote_password,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 
 [[nodiscard]] Status encode_lock_remote_password(
     const ProtocolConfig& config,
-    std::string_view remote_password,
+    StringView remote_password,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept;
 

@@ -30,7 +30,7 @@ enum class HardwareFlowControl : std::uint8_t {
 /// remain alive while the configuration is used.
 struct HostSerialConfig {
   constexpr HostSerialConfig(
-      std::string_view device_path_value,
+      StringView device_path_value,
       std::uint32_t baud_rate_value,
       std::uint32_t data_bits_value,
       std::uint32_t stop_bits_value,
@@ -45,7 +45,7 @@ struct HostSerialConfig {
 
   HostSerialConfig() = delete;
 
-  std::string_view device_path;
+  StringView device_path;
   std::uint32_t baud_rate;
   std::uint32_t data_bits;
   std::uint32_t stop_bits;
@@ -57,7 +57,7 @@ struct HostSerialConfig {
   if (config.device_path.empty()) {
     return make_status(StatusCode::InvalidArgument, "Device path must not be empty");
   }
-  if (config.device_path.find('\0') != std::string_view::npos) {
+  if (config.device_path.find('\0') != StringView::npos) {
     return make_status(StatusCode::InvalidArgument, "Device path must not contain embedded NUL");
   }
   if (config.baud_rate == 0U) {

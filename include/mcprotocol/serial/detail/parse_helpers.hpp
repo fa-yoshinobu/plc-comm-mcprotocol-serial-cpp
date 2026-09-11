@@ -15,7 +15,7 @@ namespace mcprotocol::serial::detail {
 }
 
 [[nodiscard]] inline bool parse_u32(
-    std::string_view text,
+    StringView text,
     std::uint32_t& out_value,
     int base) noexcept {
   if (text.empty()) {

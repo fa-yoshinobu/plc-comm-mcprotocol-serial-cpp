@@ -1,252 +1,93 @@
 #include <Arduino.h>
-
-#include "mcprotocol/serial/compat/array.hpp"
-#include "mcprotocol/serial/compat/cstddef.hpp"
-#include "mcprotocol/serial/compat/cstdint.hpp"
-
-#include "mcprotocol_serial.hpp"
-#include "mcprotocol/serial/span.hpp"
+#include "mcprotocol_serial_arduino_esp32.hpp"
 
 #ifndef MCPROTOCOL_EXAMPLE_PLC_BAUD
 #define MCPROTOCOL_EXAMPLE_PLC_BAUD 19200
 #endif
-
 #ifndef MCPROTOCOL_EXAMPLE_DEBUG_BAUD
 #define MCPROTOCOL_EXAMPLE_DEBUG_BAUD 115200
 #endif
+#ifndef MCPROTOCOL_EXAMPLE_POLL_INTERVAL_MS
+#define MCPROTOCOL_EXAMPLE_POLL_INTERVAL_MS 1000U
+#endif
 
 namespace {
+using namespace mcprotocol::serial;
 
-using mcprotocol::serial::AsciiFormat;
-using mcprotocol::serial::BatchReadWordsRequest;
-using mcprotocol::serial::CodeMode;
-using mcprotocol::serial::DeviceAddress;
-using mcprotocol::serial::DeviceCode;
-using mcprotocol::serial::FrameKind;
-using mcprotocol::serial::MelsecSerialClient;
-using mcprotocol::serial::PlcProfile;
-using mcprotocol::serial::ProtocolConfig;
-using mcprotocol::serial::RouteConfig;
-using mcprotocol::serial::HostStationRoute;
-using mcprotocol::serial::Status;
-using mcprotocol::serial::StatusCode;
+// Own UART1 exclusively; do not also initialize Serial1.
+// The adapter checks partial sends, physical TX completion and deadlines.
+// It does not flush away an early PLC response.
+Esp32UartClient plc(1);
+const auto protocol = ProtocolConfig::ascii(
+    AsciiFrameKind::C4, AsciiFormat::Format4, PlcProfile::MelsecQ,
+    SumCheckMode::Disabled, RouteConfig{HostStationRoute{}});
+std::uint16_t words[4] {};
+std::uint32_t next_read = 0;
+bool stopped = false;
+bool recovery_required = false;
+bool begun = false;
+bool online = false, connected_once = false;
 
-constexpr std::uint32_t kPollIntervalMs = 1000;
-constexpr std::uint32_t kInitialBackoffMs = 1000;
-constexpr std::uint32_t kMaxBackoffMs = 30000;
-constexpr std::uint32_t kPlcBaud = MCPROTOCOL_EXAMPLE_PLC_BAUD;
-constexpr int kRxPin = 6;
-constexpr int kTxPin = 7;
-constexpr DeviceAddress kHeadDevice {DeviceCode::D, 100};
-
-struct AppState {
-  MelsecSerialClient client;
-  std::array<std::uint16_t, 4> out_words {};
-  bool request_started = false;
-  bool tx_sent = false;
-  bool request_done = false;
-  bool connected_once = false;
-  bool online = false;
-  std::uint32_t next_request_ms = 0;
-  std::uint32_t reconnect_at_ms = 0;
-  std::uint32_t backoff_ms = kInitialBackoffMs;
-  Status completion_status {};
-};
-
-AppState g_app;
-HardwareSerial& g_plc_serial = Serial1;
-
-void log_state(const char* state, const char* message) {
-  Serial.printf("%lu [%s] %s\n", static_cast<unsigned long>(millis()), state, message);
-}
-
-ProtocolConfig make_protocol() {
-  return ProtocolConfig::ascii(
-      mcprotocol::serial::AsciiFrameKind::C4,
-      AsciiFormat::Format4,
-      PlcProfile::MelsecQ,
-      mcprotocol::serial::SumCheckMode::Disabled,
-      RouteConfig {HostStationRoute {}});
-}
-
-bool retryable(Status status) {
-  return status.code == StatusCode::Timeout
-      || status.code == StatusCode::Transport
-      || status.code == StatusCode::Framing
-      || status.code == StatusCode::Parse;
-}
-
-void reset_request_state() {
-  g_app.client.cancel();
-  g_app.request_started = false;
-  g_app.tx_sent = false;
-  g_app.request_done = false;
-}
-
-void schedule_reconnect(const char* reason, Status status) {
-  if (g_app.online) {
-    Serial.printf("%lu [lost] %s: %s\n", static_cast<unsigned long>(millis()), reason, status.message);
-  }
-  reset_request_state();
-  while (g_plc_serial.available() > 0) {
-    (void)g_plc_serial.read();
-  }
-  const Status configure_status = g_app.client.configure(make_protocol());
-  if (!configure_status.ok()) {
-    Serial.print("configure failed: ");
-    Serial.println(configure_status.message);
-  }
-  g_app.online = false;
-  g_app.reconnect_at_ms = millis() + g_app.backoff_ms;
-  Serial.printf("%lu [reconnecting] retry in %lu ms\n", static_cast<unsigned long>(millis()), static_cast<unsigned long>(g_app.backoff_ms));
-  g_app.backoff_ms = (g_app.backoff_ms >= (kMaxBackoffMs / 2U)) ? kMaxBackoffMs : (g_app.backoff_ms * 2U);
-}
-
-void on_request_complete(void* user, Status status) {
-  auto* app = static_cast<AppState*>(user);
-  app->request_done = true;
-  app->completion_status = status;
-  app->request_started = false;
-  app->tx_sent = false;
-}
-
-void configure_plc_uart() {
-  g_plc_serial.begin(kPlcBaud, SERIAL_8E1, kRxPin, kTxPin);
-}
-
-void maybe_mark_connected() {
-  if (!g_app.online) {
-    log_state(g_app.connected_once ? "recovered" : "connected", "D100 x4");
-    g_app.connected_once = true;
-    g_app.online = true;
-    g_app.backoff_ms = kInitialBackoffMs;
-  }
-}
-
-void pump_uart_tx(std::uint32_t now_ms) {
-  if (!g_app.request_started || g_app.tx_sent) {
-    return;
-  }
-
-  const mcprotocol::serial::Span<const mcprotocol::serial::Byte> frame = g_app.client.pending_tx_frame();
-  if (frame.empty()) {
-    return;
-  }
-
-  const Status tx_start_status = g_app.client.notify_tx_started(now_ms);
-  if (!tx_start_status.ok()) {
-    on_request_complete(&g_app, tx_start_status);
-    return;
-  }
-  const std::size_t written = g_plc_serial.write(
-      reinterpret_cast<const std::uint8_t*>(frame.data()),
-      frame.size());
-  g_plc_serial.flush();
-  const Status tx_status = (written == frame.size())
-      ? g_app.client.notify_tx_complete(now_ms, mcprotocol::serial::ok_status())
-      : mcprotocol::serial::make_status(StatusCode::Transport, "UART write failed");
-  if (!tx_status.ok()) {
-    on_request_complete(&g_app, tx_status);
-    return;
-  }
-
-  g_app.tx_sent = true;
-}
-
-void pump_uart_rx(std::uint32_t now_ms) {
-  std::array<char, 64> rx_chunk {};
-  while (g_plc_serial.available() > 0) {
-    const int available = g_plc_serial.available();
-    const std::size_t request_size = static_cast<std::size_t>(available > 0 ? available : 0);
-    const std::size_t read_size = request_size < rx_chunk.size() ? request_size : rx_chunk.size();
-    const std::size_t bytes_read = static_cast<std::size_t>(
-        g_plc_serial.readBytes(rx_chunk.data(), read_size));
-    if (bytes_read == 0) {
-      break;
-    }
-
-    g_app.client.on_rx_bytes(
-        now_ms,
-        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
-            reinterpret_cast<const mcprotocol::serial::Byte*>(rx_chunk.data()),
-            bytes_read));
-  }
-}
-
-void start_read_if_due(std::uint32_t now_ms) {
-  if (g_app.request_started || g_app.client.busy() || now_ms < g_app.next_request_ms || now_ms < g_app.reconnect_at_ms) {
-    return;
-  }
-
-  if (!g_app.online) {
-    log_state("reconnecting", "starting UART read");
-  }
-
-  g_app.request_done = false;
-  g_app.tx_sent = false;
-  const Status status = g_app.client.async_batch_read_words(
-      now_ms,
-      BatchReadWordsRequest(kHeadDevice, static_cast<std::uint16_t>(g_app.out_words.size())),
-      mcprotocol::serial::Span<std::uint16_t>(g_app.out_words.data(), g_app.out_words.size()),
-      on_request_complete,
-      &g_app);
+void completed(void*, Status status) {
   if (!status.ok()) {
-    schedule_reconnect("request start failed", status);
-    return;
-  }
-
-  g_app.request_started = true;
-}
-
-void report_done() {
-  if (!g_app.request_done) {
-    return;
-  }
-
-  g_app.request_done = false;
-  if (!g_app.completion_status.ok()) {
-    if (retryable(g_app.completion_status)) {
-      schedule_reconnect("request failed", g_app.completion_status);
+    Serial.printf("read failed: %s (PLC=%04X)\n", status.message,
+        static_cast<unsigned>(status.plc_error_code));
+    online = false;
+    if (plc.requires_transport_reset()) {
+      stopped = true;
+      recovery_required = begun;
+      Serial.println("Recovery required: exclude old replies first; then send r. See README.");
+    } else if (status.code == StatusCode::PlcError) {
+      // A complete PLC error response ended this read: no transport reset needed.
+      next_read = millis() + MCPROTOCOL_EXAMPLE_POLL_INTERVAL_MS;
+      Serial.println("Read-only retry after poll interval.");
     } else {
-      Serial.print("read failed: ");
-      Serial.println(g_app.completion_status.message);
-      g_app.next_request_ms = millis() + kPollIntervalMs;
+      stopped = true; // Configuration/admission errors need correction, not a retry loop.
+      Serial.println("Correct configuration, then RESET.");
     }
     return;
   }
-
-  maybe_mark_connected();
-  Serial.printf(
-      "%lu [read] D100=%04X D101=%04X D102=%04X D103=%04X\n",
-      static_cast<unsigned long>(millis()),
-      static_cast<unsigned>(g_app.out_words[0]),
-      static_cast<unsigned>(g_app.out_words[1]),
-      static_cast<unsigned>(g_app.out_words[2]),
-      static_cast<unsigned>(g_app.out_words[3]));
-  g_app.next_request_ms = millis() + kPollIntervalMs;
+  if (!online) {
+    Serial.println(connected_once ? "recovered" : "connected");
+    online = connected_once = true;
+  }
+  Serial.printf("D100=%04X D101=%04X D102=%04X D103=%04X\n",
+      unsigned(words[0]), unsigned(words[1]), unsigned(words[2]), unsigned(words[3]));
+  next_read = millis() + MCPROTOCOL_EXAMPLE_POLL_INTERVAL_MS;
 }
-
-}  // namespace
+} // namespace
 
 void setup() {
   Serial.begin(MCPROTOCOL_EXAMPLE_DEBUG_BAUD);
-  configure_plc_uart();
-  const Status status = g_app.client.configure(make_protocol());
-  if (!status.ok()) {
-    g_app.completion_status = status;
-    g_app.request_done = true;
-  }
-  log_state("reconnecting", "waiting for first UART read");
+  Esp32UartConfig uart;
+  uart.baud = MCPROTOCOL_EXAMPLE_PLC_BAUD;
+  uart.format = SERIAL_8E1;
+  uart.rx_pin = 6;
+  uart.tx_pin = 7;
+  // Default: externally controlled direction (e.g. auto-direction transceiver).
+  // For RS-485 RTS direction, set uart.direction and uart.rts_pin for your wiring.
+  const Status status = plc.begin(uart, protocol);
+  begun = status.ok();
+  if (!status.ok()) completed(nullptr, status);
 }
 
 void loop() {
-  const std::uint32_t now = millis();
-  pump_uart_rx(now);
-  pump_uart_tx(now);
-  if (g_app.request_started) {
-    g_app.client.poll(now);
+  // 'r' acknowledges a site-specific PLC/line reset, not just a quiet UART.
+  // Never send it until an old response can no longer arrive.
+  const int command = Serial.read();
+  if (command == 'r' && recovery_required && !plc.busy()) {
+    const Status status = plc.recover(protocol);
+    if (status.ok()) {
+      stopped = recovery_required = false;
+      next_read = millis();
+      Serial.println("reconnecting");
+    } else completed(nullptr, status);
   }
-  report_done();
-  start_read_if_due(now);
-  delay(5);
+  plc.update(); // Nonblocking TX/RX; callbacks run here, never in an ISR.
+  if (!stopped && !plc.busy() &&
+      static_cast<std::int32_t>(millis() - next_read) >= 0) {
+    const Status status = plc.async_read_words({DeviceCode::D, 100}, words, completed);
+    if (!status.ok()) completed(nullptr, status); // Admission failure has no callback.
+  }
+  delay(1);
 }

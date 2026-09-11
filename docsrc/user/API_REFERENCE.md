@@ -214,7 +214,7 @@ Format2 is the Format1 style ENQ/ACK/NAK/STX/ETX link with an extra 1-byte block
 #### `parse_device_address`
 
 ```cpp
-Status mcprotocol::serial::highlevel::parse_device_address(std::string_view text, DeviceAddress &out_device) noexcept
+Status mcprotocol::serial::highlevel::parse_device_address(StringView text, DeviceAddress &out_device) noexcept
 ```
 
 Parses a plain MC device string such as D100, M100, X10, or B20.
@@ -242,7 +242,7 @@ Decodes the contact/coil bit from a long-family 4-word status block.
 #### `make_batch_read_words_request`
 
 ```cpp
-Status mcprotocol::serial::highlevel::make_batch_read_words_request(std::string_view head_device, std::uint16_t points, BatchReadWordsRequest &out_request) noexcept
+Status mcprotocol::serial::highlevel::make_batch_read_words_request(StringView head_device, std::uint16_t points, BatchReadWordsRequest &out_request) noexcept
 ```
 
 Builds a contiguous word-read request from a string address such as D100.
@@ -250,7 +250,7 @@ Builds a contiguous word-read request from a string address such as D100.
 #### `make_batch_read_bits_request`
 
 ```cpp
-Status mcprotocol::serial::highlevel::make_batch_read_bits_request(std::string_view head_device, std::uint16_t points, BatchReadBitsRequest &out_request) noexcept
+Status mcprotocol::serial::highlevel::make_batch_read_bits_request(StringView head_device, std::uint16_t points, BatchReadBitsRequest &out_request) noexcept
 ```
 
 Builds a contiguous bit-read request from a string address such as M100.
@@ -258,7 +258,7 @@ Builds a contiguous bit-read request from a string address such as M100.
 #### `make_batch_write_words_request`
 
 ```cpp
-Status mcprotocol::serial::highlevel::make_batch_write_words_request(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words, BatchWriteWordsRequest &out_request) noexcept
+Status mcprotocol::serial::highlevel::make_batch_write_words_request(StringView head_device, mcprotocol::serial::Span< const std::uint16_t > words, BatchWriteWordsRequest &out_request) noexcept
 ```
 
 Builds a contiguous word-write request from a string address such as D100.
@@ -266,7 +266,7 @@ Builds a contiguous word-write request from a string address such as D100.
 #### `make_batch_write_bits_request`
 
 ```cpp
-Status mcprotocol::serial::highlevel::make_batch_write_bits_request(std::string_view head_device, mcprotocol::serial::Span< const BitValue > bits, BatchWriteBitsRequest &out_request) noexcept
+Status mcprotocol::serial::highlevel::make_batch_write_bits_request(StringView head_device, mcprotocol::serial::Span< const BitValue > bits, BatchWriteBitsRequest &out_request) noexcept
 ```
 
 Builds a contiguous bit-write request from a string address such as M100.
@@ -274,7 +274,7 @@ Builds a contiguous bit-write request from a string address such as M100.
 #### `make_random_read_word_item`
 
 ```cpp
-Status mcprotocol::serial::highlevel::make_random_read_word_item(std::string_view device, RandomReadWordItem &out_item) noexcept
+Status mcprotocol::serial::highlevel::make_random_read_word_item(StringView device, RandomReadWordItem &out_item) noexcept
 ```
 
 Builds one explicitly word-width sparse random-read item from a string address.
@@ -282,7 +282,7 @@ Builds one explicitly word-width sparse random-read item from a string address.
 #### `make_random_read_dword_item`
 
 ```cpp
-Status mcprotocol::serial::highlevel::make_random_read_dword_item(std::string_view device, RandomReadDWordItem &out_item) noexcept
+Status mcprotocol::serial::highlevel::make_random_read_dword_item(StringView device, RandomReadDWordItem &out_item) noexcept
 ```
 
 Builds one explicitly double-word-width sparse random-read item.
@@ -290,7 +290,7 @@ Builds one explicitly double-word-width sparse random-read item.
 #### `make_random_write_word_item`
 
 ```cpp
-Status mcprotocol::serial::highlevel::make_random_write_word_item(std::string_view device, std::uint16_t value, RandomWriteWordItem &out_item) noexcept
+Status mcprotocol::serial::highlevel::make_random_write_word_item(StringView device, std::uint16_t value, RandomWriteWordItem &out_item) noexcept
 ```
 
 Builds one sparse random word-write item from a string address.
@@ -298,7 +298,7 @@ Builds one sparse random word-write item from a string address.
 #### `make_random_write_dword_item`
 
 ```cpp
-Status mcprotocol::serial::highlevel::make_random_write_dword_item(std::string_view device, std::uint32_t value, RandomWriteDWordItem &out_item) noexcept
+Status mcprotocol::serial::highlevel::make_random_write_dword_item(StringView device, std::uint32_t value, RandomWriteDWordItem &out_item) noexcept
 ```
 
 Builds one explicitly double-word-width sparse random write item.
@@ -306,7 +306,7 @@ Builds one explicitly double-word-width sparse random write item.
 #### `make_random_write_bit_item`
 
 ```cpp
-Status mcprotocol::serial::highlevel::make_random_write_bit_item(std::string_view device, BitValue value, RandomWriteBitItem &out_item) noexcept
+Status mcprotocol::serial::highlevel::make_random_write_bit_item(StringView device, BitValue value, RandomWriteBitItem &out_item) noexcept
 ```
 
 Builds one sparse random bit-write item from a string address.
@@ -720,13 +720,13 @@ Status mcprotocol::serial::CommandCodec::encode_remote_reset(const ProtocolConfi
 #### `encode_unlock_remote_password`
 
 ```cpp
-Status mcprotocol::serial::CommandCodec::encode_unlock_remote_password(const ProtocolConfig &config, std::string_view remote_password, mcprotocol::serial::Span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
+Status mcprotocol::serial::CommandCodec::encode_unlock_remote_password(const ProtocolConfig &config, StringView remote_password, mcprotocol::serial::Span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
 ```
 
 #### `encode_lock_remote_password`
 
 ```cpp
-Status mcprotocol::serial::CommandCodec::encode_lock_remote_password(const ProtocolConfig &config, std::string_view remote_password, mcprotocol::serial::Span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
+Status mcprotocol::serial::CommandCodec::encode_lock_remote_password(const ProtocolConfig &config, StringView remote_password, mcprotocol::serial::Span< std::uint8_t > out_request_data, std::size_t &out_size) noexcept
 ```
 
 #### `encode_clear_error_information`
@@ -1318,7 +1318,7 @@ This helper route maps non-CPU Un\\G text onto module-buffer commands. CPU-buffe
 #### `parse_qualified_buffer_word_device`
 
 ```cpp
-Status mcprotocol::serial::parse_qualified_buffer_word_device(std::string_view text, QualifiedBufferWordDevice &out_device) noexcept
+Status mcprotocol::serial::parse_qualified_buffer_word_device(StringView text, QualifiedBufferWordDevice &out_device) noexcept
 ```
 
 Parses a qualified device string such as U3E0\\G10 or U3E0\\HG20.
@@ -1326,7 +1326,7 @@ Parses a qualified device string such as U3E0\\G10 or U3E0\\HG20.
 #### `parse_link_direct_device`
 
 ```cpp
-Status mcprotocol::serial::parse_link_direct_device(std::string_view text, LinkDirectDevice &out_device) noexcept
+Status mcprotocol::serial::parse_link_direct_device(StringView text, LinkDirectDevice &out_device) noexcept
 ```
 
 Parses a Jn\\... link-direct device string such as J1\\W100 or J1\\X10.
@@ -2056,7 +2056,7 @@ Starts remote latch clear (1005).
 #### `async_unlock_remote_password`
 
 ```cpp
-Status mcprotocol::serial::MelsecSerialClient::async_unlock_remote_password(std::uint32_t now_ms, std::string_view remote_password, CompletionHandler callback, void *user) noexcept
+Status mcprotocol::serial::MelsecSerialClient::async_unlock_remote_password(std::uint32_t now_ms, StringView remote_password, CompletionHandler callback, void *user) noexcept
 ```
 
 Unlocks remote-password-protected access (1630).
@@ -2064,7 +2064,7 @@ Unlocks remote-password-protected access (1630).
 #### `async_lock_remote_password`
 
 ```cpp
-Status mcprotocol::serial::MelsecSerialClient::async_lock_remote_password(std::uint32_t now_ms, std::string_view remote_password, CompletionHandler callback, void *user) noexcept
+Status mcprotocol::serial::MelsecSerialClient::async_lock_remote_password(std::uint32_t now_ms, StringView remote_password, CompletionHandler callback, void *user) noexcept
 ```
 
 Locks remote-password-protected access (1631).
@@ -2336,7 +2336,7 @@ BitInWordWriteOperation & mcprotocol::serial::highlevel::BitInWordWriteOperation
 #### `begin`
 
 ```cpp
-Status mcprotocol::serial::highlevel::BitInWordWriteOperation::begin(MelsecSerialClient &client, std::uint32_t now_ms, std::string_view word_device, int bit_index, bool value, CompletionHandler callback, void *user) noexcept
+Status mcprotocol::serial::highlevel::BitInWordWriteOperation::begin(MelsecSerialClient &client, std::uint32_t now_ms, StringView word_device, int bit_index, bool value, CompletionHandler callback, void *user) noexcept
 ```
 
 #### `begin_extended_file_register`
@@ -2592,7 +2592,7 @@ Issues remote latch clear (1005) synchronously.
 #### `unlock_remote_password`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::unlock_remote_password(std::string_view remote_password) noexcept
+Status mcprotocol::serial::HostSyncClient::unlock_remote_password(StringView remote_password) noexcept
 ```
 
 Unlocks remote-password-protected access (1630) synchronously.
@@ -2600,7 +2600,7 @@ Unlocks remote-password-protected access (1630) synchronously.
 #### `lock_remote_password`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::lock_remote_password(std::string_view remote_password) noexcept
+Status mcprotocol::serial::HostSyncClient::lock_remote_password(StringView remote_password) noexcept
 ```
 
 Locks remote-password-protected access (1631) synchronously.
@@ -2702,7 +2702,7 @@ Success confirms request transmission; it does not confirm the PLC state.
 #### `read_words_single_request`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_words_single_request(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+Status mcprotocol::serial::HostSyncClient::read_words_single_request(StringView head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
 ```
 
 Reads contiguous words as exactly one PLC request.
@@ -2710,7 +2710,7 @@ Reads contiguous words as exactly one PLC request.
 #### `read_words_single_request`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_words_single_request(std::string_view head_device, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+Status mcprotocol::serial::HostSyncClient::read_words_single_request(StringView head_device, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
 ```
 
 Reads contiguous words as exactly one PLC request using out_words.size().
@@ -2718,7 +2718,7 @@ Reads contiguous words as exactly one PLC request using out_words.size().
 #### `read_words`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_words(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+Status mcprotocol::serial::HostSyncClient::read_words(StringView head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
 ```
 
 Compatibility alias for read_words_single_request.
@@ -2726,7 +2726,7 @@ Compatibility alias for read_words_single_request.
 #### `read_words`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_words(std::string_view head_device, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+Status mcprotocol::serial::HostSyncClient::read_words(StringView head_device, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
 ```
 
 Compatibility alias for read_words_single_request.
@@ -2758,7 +2758,7 @@ Compatibility alias for read_direct_extended_file_register_words.
 #### `read_bits_single_request`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_bits_single_request(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+Status mcprotocol::serial::HostSyncClient::read_bits_single_request(StringView head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
 ```
 
 Reads contiguous bits as exactly one PLC request.
@@ -2766,7 +2766,7 @@ Reads contiguous bits as exactly one PLC request.
 #### `read_bits_single_request`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_bits_single_request(std::string_view head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+Status mcprotocol::serial::HostSyncClient::read_bits_single_request(StringView head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
 ```
 
 Reads contiguous bits as exactly one PLC request using out_bits.size().
@@ -2774,7 +2774,7 @@ Reads contiguous bits as exactly one PLC request using out_bits.size().
 #### `read_bits`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_bits(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+Status mcprotocol::serial::HostSyncClient::read_bits(StringView head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
 ```
 
 Compatibility alias for read_bits_single_request.
@@ -2782,7 +2782,7 @@ Compatibility alias for read_bits_single_request.
 #### `read_bits`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_bits(std::string_view head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+Status mcprotocol::serial::HostSyncClient::read_bits(StringView head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
 ```
 
 Compatibility alias for read_bits_single_request.
@@ -2790,7 +2790,7 @@ Compatibility alias for read_bits_single_request.
 #### `read_link_direct_words`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_link_direct_words(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+Status mcprotocol::serial::HostSyncClient::read_link_direct_words(StringView head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
 ```
 
 Reads contiguous Jn\\... link-direct words synchronously.
@@ -2798,7 +2798,7 @@ Reads contiguous Jn\\... link-direct words synchronously.
 #### `read_link_direct_bits`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_link_direct_bits(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+Status mcprotocol::serial::HostSyncClient::read_link_direct_bits(StringView head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
 ```
 
 Reads contiguous Jn\\... link-direct bits synchronously.
@@ -2806,7 +2806,7 @@ Reads contiguous Jn\\... link-direct bits synchronously.
 #### `read_qualified_buffer_words`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_qualified_buffer_words(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+Status mcprotocol::serial::HostSyncClient::read_qualified_buffer_words(StringView head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
 ```
 
 Reads qualified-buffer Un\\Gn or Un\\HGn words.
@@ -2816,7 +2816,7 @@ Use this for profiles whose qualified access route is native device access (0401
 #### `read_native_qualified_words`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_native_qualified_words(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
+Status mcprotocol::serial::HostSyncClient::read_native_qualified_words(StringView head_device, std::uint16_t points, mcprotocol::serial::Span< std::uint16_t > out_words) noexcept
 ```
 
 Compatibility alias for read_qualified_buffer_words.
@@ -2824,7 +2824,7 @@ Compatibility alias for read_qualified_buffer_words.
 #### `read_long_timer_counter_state_bits`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_long_timer_counter_state_bits(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+Status mcprotocol::serial::HostSyncClient::read_long_timer_counter_state_bits(StringView head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
 ```
 
 Reads long timer/counter contact or coil states through the dedicated status-block path.
@@ -2834,7 +2834,7 @@ LTS/LTC/LSTS/LSTC with more than one point are explicitly aggregate reads: one f
 #### `read_long_timer_counter_state_bits`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_long_timer_counter_state_bits(std::string_view head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+Status mcprotocol::serial::HostSyncClient::read_long_timer_counter_state_bits(StringView head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
 ```
 
 Reads long timer/counter states using out_bits.size() as the point count.
@@ -2842,7 +2842,7 @@ Reads long timer/counter states using out_bits.size() as the point count.
 #### `read_long_state_bits`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_long_state_bits(std::string_view head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+Status mcprotocol::serial::HostSyncClient::read_long_state_bits(StringView head_device, std::uint16_t points, mcprotocol::serial::Span< BitValue > out_bits) noexcept
 ```
 
 Compatibility alias for read_long_timer_counter_state_bits.
@@ -2850,7 +2850,7 @@ Compatibility alias for read_long_timer_counter_state_bits.
 #### `read_long_state_bits`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_long_state_bits(std::string_view head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
+Status mcprotocol::serial::HostSyncClient::read_long_state_bits(StringView head_device, mcprotocol::serial::Span< BitValue > out_bits) noexcept
 ```
 
 Compatibility alias for read_long_timer_counter_state_bits.
@@ -2858,7 +2858,7 @@ Compatibility alias for read_long_timer_counter_state_bits.
 #### `write_words_single_request`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_words_single_request(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
+Status mcprotocol::serial::HostSyncClient::write_words_single_request(StringView head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
 ```
 
 Writes contiguous words as exactly one PLC request.
@@ -2866,7 +2866,7 @@ Writes contiguous words as exactly one PLC request.
 #### `write_words`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_words(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
+Status mcprotocol::serial::HostSyncClient::write_words(StringView head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
 ```
 
 Compatibility alias for write_words_single_request.
@@ -2874,7 +2874,7 @@ Compatibility alias for write_words_single_request.
 #### `write_bit_in_word`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_bit_in_word(std::string_view word_device, int bit_index, bool value) noexcept
+Status mcprotocol::serial::HostSyncClient::write_bit_in_word(StringView word_device, int bit_index, bool value) noexcept
 ```
 
 Writes one bit inside an ordinary 16-bit word by one read-modify-write turn.
@@ -2908,7 +2908,7 @@ Compatibility alias for write_direct_extended_file_register_bit_in_word.
 #### `write_link_direct_bit_in_word`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_link_direct_bit_in_word(std::string_view word_device, int bit_index, bool value) noexcept
+Status mcprotocol::serial::HostSyncClient::write_link_direct_bit_in_word(StringView word_device, int bit_index, bool value) noexcept
 ```
 
 Bit-in-word update through one immutable Jn\\... link-direct route.
@@ -2916,7 +2916,7 @@ Bit-in-word update through one immutable Jn\\... link-direct route.
 #### `write_qualified_buffer_bit_in_word`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_qualified_buffer_bit_in_word(std::string_view word_device, int bit_index, bool value) noexcept
+Status mcprotocol::serial::HostSyncClient::write_qualified_buffer_bit_in_word(StringView word_device, int bit_index, bool value) noexcept
 ```
 
 Bit-in-word update through one immutable qualified-buffer route.
@@ -2924,7 +2924,7 @@ Bit-in-word update through one immutable qualified-buffer route.
 #### `write_native_qualified_bit_in_word`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_native_qualified_bit_in_word(std::string_view word_device, int bit_index, bool value) noexcept
+Status mcprotocol::serial::HostSyncClient::write_native_qualified_bit_in_word(StringView word_device, int bit_index, bool value) noexcept
 ```
 
 Compatibility alias for write_qualified_buffer_bit_in_word.
@@ -2956,7 +2956,7 @@ Compatibility alias for write_direct_extended_file_register_words.
 #### `write_bits_single_request`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_bits_single_request(std::string_view head_device, mcprotocol::serial::Span< const BitValue > bits) noexcept
+Status mcprotocol::serial::HostSyncClient::write_bits_single_request(StringView head_device, mcprotocol::serial::Span< const BitValue > bits) noexcept
 ```
 
 Writes contiguous bits as exactly one PLC request.
@@ -2964,7 +2964,7 @@ Writes contiguous bits as exactly one PLC request.
 #### `write_bits`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_bits(std::string_view head_device, mcprotocol::serial::Span< const BitValue > bits) noexcept
+Status mcprotocol::serial::HostSyncClient::write_bits(StringView head_device, mcprotocol::serial::Span< const BitValue > bits) noexcept
 ```
 
 Compatibility alias for write_bits_single_request.
@@ -2972,7 +2972,7 @@ Compatibility alias for write_bits_single_request.
 #### `write_link_direct_words`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_link_direct_words(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
+Status mcprotocol::serial::HostSyncClient::write_link_direct_words(StringView head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
 ```
 
 Writes contiguous Jn\\... link-direct words synchronously.
@@ -2980,7 +2980,7 @@ Writes contiguous Jn\\... link-direct words synchronously.
 #### `write_link_direct_bits`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_link_direct_bits(std::string_view head_device, mcprotocol::serial::Span< const BitValue > bits) noexcept
+Status mcprotocol::serial::HostSyncClient::write_link_direct_bits(StringView head_device, mcprotocol::serial::Span< const BitValue > bits) noexcept
 ```
 
 Writes contiguous Jn\\... link-direct bits synchronously.
@@ -2988,7 +2988,7 @@ Writes contiguous Jn\\... link-direct bits synchronously.
 #### `write_qualified_buffer_words`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_qualified_buffer_words(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
+Status mcprotocol::serial::HostSyncClient::write_qualified_buffer_words(StringView head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
 ```
 
 Writes qualified-buffer Un\\Gn or Un\\HGn words.
@@ -2998,7 +2998,7 @@ Use this for profiles whose qualified access route is native device access (1401
 #### `write_native_qualified_words`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_native_qualified_words(std::string_view head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
+Status mcprotocol::serial::HostSyncClient::write_native_qualified_words(StringView head_device, mcprotocol::serial::Span< const std::uint16_t > words) noexcept
 ```
 
 Compatibility alias for write_qualified_buffer_words.
@@ -3022,7 +3022,7 @@ Compatibility alias for read_random.
 #### `read_random_word`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_random_word(std::string_view device, std::uint16_t &out_value) noexcept
+Status mcprotocol::serial::HostSyncClient::read_random_word(StringView device, std::uint16_t &out_value) noexcept
 ```
 
 Reads one sparse Word item synchronously from a string address.
@@ -3030,7 +3030,7 @@ Reads one sparse Word item synchronously from a string address.
 #### `random_read_word`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::random_read_word(std::string_view device, std::uint16_t &out_value) noexcept
+Status mcprotocol::serial::HostSyncClient::random_read_word(StringView device, std::uint16_t &out_value) noexcept
 ```
 
 Compatibility alias for read_random_word.
@@ -3038,7 +3038,7 @@ Compatibility alias for read_random_word.
 #### `read_random_dword`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::read_random_dword(std::string_view device, std::uint32_t &out_value) noexcept
+Status mcprotocol::serial::HostSyncClient::read_random_dword(StringView device, std::uint32_t &out_value) noexcept
 ```
 
 Reads one sparse DWord item synchronously from a string address.
@@ -3046,7 +3046,7 @@ Reads one sparse DWord item synchronously from a string address.
 #### `random_read_dword`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::random_read_dword(std::string_view device, std::uint32_t &out_value) noexcept
+Status mcprotocol::serial::HostSyncClient::random_read_dword(StringView device, std::uint32_t &out_value) noexcept
 ```
 
 Compatibility alias for read_random_dword.
@@ -3106,7 +3106,7 @@ Compatibility alias for write_random_extended_file_register_words.
 #### `write_random_word`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_random_word(std::string_view device, std::uint16_t value) noexcept
+Status mcprotocol::serial::HostSyncClient::write_random_word(StringView device, std::uint16_t value) noexcept
 ```
 
 Writes one sparse Word item synchronously from a string address.
@@ -3114,7 +3114,7 @@ Writes one sparse Word item synchronously from a string address.
 #### `random_write_word`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::random_write_word(std::string_view device, std::uint16_t value) noexcept
+Status mcprotocol::serial::HostSyncClient::random_write_word(StringView device, std::uint16_t value) noexcept
 ```
 
 Compatibility alias for write_random_word.
@@ -3122,7 +3122,7 @@ Compatibility alias for write_random_word.
 #### `write_random_dword`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_random_dword(std::string_view device, std::uint32_t value) noexcept
+Status mcprotocol::serial::HostSyncClient::write_random_dword(StringView device, std::uint32_t value) noexcept
 ```
 
 Writes one sparse DWord item synchronously from a string address.
@@ -3130,7 +3130,7 @@ Writes one sparse DWord item synchronously from a string address.
 #### `random_write_dword`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::random_write_dword(std::string_view device, std::uint32_t value) noexcept
+Status mcprotocol::serial::HostSyncClient::random_write_dword(StringView device, std::uint32_t value) noexcept
 ```
 
 Compatibility alias for write_random_dword.
@@ -3156,7 +3156,7 @@ Compatibility alias for write_random_bits.
 #### `write_random_bit`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::write_random_bit(std::string_view device, BitValue value) noexcept
+Status mcprotocol::serial::HostSyncClient::write_random_bit(StringView device, BitValue value) noexcept
 ```
 
 Writes one sparse bit item synchronously from a string address.
@@ -3164,7 +3164,7 @@ Writes one sparse bit item synchronously from a string address.
 #### `random_write_bit`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::random_write_bit(std::string_view device, BitValue value) noexcept
+Status mcprotocol::serial::HostSyncClient::random_write_bit(StringView device, BitValue value) noexcept
 ```
 
 Compatibility alias for write_random_bit.
@@ -3260,7 +3260,7 @@ Compatibility alias for register_monitor_devices.
 #### `register_monitor_word`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::register_monitor_word(std::string_view device) noexcept
+Status mcprotocol::serial::HostSyncClient::register_monitor_word(StringView device) noexcept
 ```
 
 Registers one sparse Word monitor item synchronously.
@@ -3268,7 +3268,7 @@ Registers one sparse Word monitor item synchronously.
 #### `register_monitor_dword`
 
 ```cpp
-Status mcprotocol::serial::HostSyncClient::register_monitor_dword(std::string_view device) noexcept
+Status mcprotocol::serial::HostSyncClient::register_monitor_dword(StringView device) noexcept
 ```
 
 Registers one sparse DWord monitor item synchronously.
@@ -4230,7 +4230,7 @@ String-address spec used to build sparse random-read or monitor requests.
 #### `device`
 
 ```cpp
-std::string_view mcprotocol::serial::highlevel::RandomReadWordSpec::device
+StringView mcprotocol::serial::highlevel::RandomReadWordSpec::device
 ```
 
 Plain device string such as D100 selected explicitly as 16-bit.
@@ -4246,7 +4246,7 @@ mcprotocol::serial::highlevel::RandomReadWordSpec::RandomReadWordSpec()=delete
 #### `RandomReadWordSpec`
 
 ```cpp
-mcprotocol::serial::highlevel::RandomReadWordSpec::RandomReadWordSpec(std::string_view target_device) noexcept
+mcprotocol::serial::highlevel::RandomReadWordSpec::RandomReadWordSpec(StringView target_device) noexcept
 ```
 
 ### Struct `mcprotocol::serial::highlevel::RandomReadDWordSpec`
@@ -4258,7 +4258,7 @@ String-address spec selected explicitly for 32-bit sparse read/monitor access.
 #### `device`
 
 ```cpp
-std::string_view mcprotocol::serial::highlevel::RandomReadDWordSpec::device
+StringView mcprotocol::serial::highlevel::RandomReadDWordSpec::device
 ```
 
 Plain device string such as D100, LZ0, or LCN10 selected explicitly as 32-bit.
@@ -4274,7 +4274,7 @@ mcprotocol::serial::highlevel::RandomReadDWordSpec::RandomReadDWordSpec()=delete
 #### `RandomReadDWordSpec`
 
 ```cpp
-mcprotocol::serial::highlevel::RandomReadDWordSpec::RandomReadDWordSpec(std::string_view target_device) noexcept
+mcprotocol::serial::highlevel::RandomReadDWordSpec::RandomReadDWordSpec(StringView target_device) noexcept
 ```
 
 ### Struct `mcprotocol::serial::highlevel::RandomWriteWordSpec`
@@ -4288,7 +4288,7 @@ Device and value must be supplied together. Explicit zero is valid.
 #### `device`
 
 ```cpp
-std::string_view mcprotocol::serial::highlevel::RandomWriteWordSpec::device
+StringView mcprotocol::serial::highlevel::RandomWriteWordSpec::device
 ```
 
 Plain device string such as D100 or LZ0.
@@ -4312,7 +4312,7 @@ mcprotocol::serial::highlevel::RandomWriteWordSpec::RandomWriteWordSpec()=delete
 #### `RandomWriteWordSpec`
 
 ```cpp
-mcprotocol::serial::highlevel::RandomWriteWordSpec::RandomWriteWordSpec(std::string_view target_device, std::uint16_t write_value) noexcept
+mcprotocol::serial::highlevel::RandomWriteWordSpec::RandomWriteWordSpec(StringView target_device, std::uint16_t write_value) noexcept
 ```
 
 ### Struct `mcprotocol::serial::highlevel::RandomWriteDWordSpec`
@@ -4326,7 +4326,7 @@ Device and value must be supplied together. Explicit zero is valid.
 #### `device`
 
 ```cpp
-std::string_view mcprotocol::serial::highlevel::RandomWriteDWordSpec::device
+StringView mcprotocol::serial::highlevel::RandomWriteDWordSpec::device
 ```
 
 Plain device string such as D100 or LZ0.
@@ -4350,7 +4350,7 @@ mcprotocol::serial::highlevel::RandomWriteDWordSpec::RandomWriteDWordSpec()=dele
 #### `RandomWriteDWordSpec`
 
 ```cpp
-mcprotocol::serial::highlevel::RandomWriteDWordSpec::RandomWriteDWordSpec(std::string_view target_device, std::uint32_t write_value) noexcept
+mcprotocol::serial::highlevel::RandomWriteDWordSpec::RandomWriteDWordSpec(StringView target_device, std::uint32_t write_value) noexcept
 ```
 
 ### Struct `mcprotocol::serial::highlevel::RandomWriteBitSpec`
@@ -4364,7 +4364,7 @@ Device and value must be supplied together. Explicit Off is valid.
 #### `device`
 
 ```cpp
-std::string_view mcprotocol::serial::highlevel::RandomWriteBitSpec::device
+StringView mcprotocol::serial::highlevel::RandomWriteBitSpec::device
 ```
 
 Plain bit-device string such as M100 or X10.
@@ -4388,7 +4388,7 @@ mcprotocol::serial::highlevel::RandomWriteBitSpec::RandomWriteBitSpec()=delete
 #### `RandomWriteBitSpec`
 
 ```cpp
-mcprotocol::serial::highlevel::RandomWriteBitSpec::RandomWriteBitSpec(std::string_view target_device, BitValue write_value) noexcept
+mcprotocol::serial::highlevel::RandomWriteBitSpec::RandomWriteBitSpec(StringView target_device, BitValue write_value) noexcept
 ```
 
 ### Struct `mcprotocol::serial::highlevel::LongStateReadSpec`
@@ -4446,7 +4446,7 @@ Every constructor argument is required. device_path accepts /dev/... style paths
 #### `device_path`
 
 ```cpp
-std::string_view mcprotocol::serial::HostSerialConfig::device_path
+StringView mcprotocol::serial::HostSerialConfig::device_path
 ```
 
 #### `baud_rate`
@@ -4484,7 +4484,7 @@ HardwareFlowControl mcprotocol::serial::HostSerialConfig::hardware_flow_control
 #### `HostSerialConfig`
 
 ```cpp
-mcprotocol::serial::HostSerialConfig::HostSerialConfig(std::string_view device_path_value, std::uint32_t baud_rate_value, std::uint32_t data_bits_value, std::uint32_t stop_bits_value, SerialParity parity_value, HardwareFlowControl hardware_flow_control_value) noexcept
+mcprotocol::serial::HostSerialConfig::HostSerialConfig(StringView device_path_value, std::uint32_t baud_rate_value, std::uint32_t data_bits_value, std::uint32_t stop_bits_value, SerialParity parity_value, HardwareFlowControl hardware_flow_control_value) noexcept
 ```
 
 #### `HostSerialConfig`

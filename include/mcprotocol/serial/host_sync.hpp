@@ -76,10 +76,10 @@ class HostSyncClient {
   [[nodiscard]] Status remote_latch_clear() noexcept;
 
   /// \brief Unlocks remote-password-protected access (`1630`) synchronously.
-  [[nodiscard]] Status unlock_remote_password(std::string_view remote_password) noexcept;
+  [[nodiscard]] Status unlock_remote_password(StringView remote_password) noexcept;
 
   /// \brief Locks remote-password-protected access (`1631`) synchronously.
-  [[nodiscard]] Status lock_remote_password(std::string_view remote_password) noexcept;
+  [[nodiscard]] Status lock_remote_password(StringView remote_password) noexcept;
 
   /// \brief Clears serial/C24 error information (`1617`) synchronously.
   [[nodiscard]] Status clear_error_information() noexcept;
@@ -139,24 +139,24 @@ class HostSyncClient {
 
   /// \brief Reads contiguous words as exactly one PLC request.
   [[nodiscard]] Status read_words_single_request(
-      std::string_view head_device,
+      StringView head_device,
       std::uint16_t points,
       mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
   /// \brief Reads contiguous words as exactly one PLC request using `out_words.size()`.
   [[nodiscard]] Status read_words_single_request(
-      std::string_view head_device,
+      StringView head_device,
       mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
   /// \brief Compatibility alias for `read_words_single_request`.
   [[nodiscard, deprecated("use read_words_single_request")]] Status read_words(
-      std::string_view head_device,
+      StringView head_device,
       std::uint16_t points,
       mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
   /// \brief Compatibility alias for `read_words_single_request`.
   [[nodiscard, deprecated("use read_words_single_request")]] Status read_words(
-      std::string_view head_device,
+      StringView head_device,
       mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
   /// \brief Reads extended file-register words synchronously.
@@ -179,35 +179,35 @@ class HostSyncClient {
 
   /// \brief Reads contiguous bits as exactly one PLC request.
   [[nodiscard]] Status read_bits_single_request(
-      std::string_view head_device,
+      StringView head_device,
       std::uint16_t points,
       mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
   /// \brief Reads contiguous bits as exactly one PLC request using `out_bits.size()`.
   [[nodiscard]] Status read_bits_single_request(
-      std::string_view head_device,
+      StringView head_device,
       mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
   /// \brief Compatibility alias for `read_bits_single_request`.
   [[nodiscard, deprecated("use read_bits_single_request")]] Status read_bits(
-      std::string_view head_device,
+      StringView head_device,
       std::uint16_t points,
       mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
   /// \brief Compatibility alias for `read_bits_single_request`.
   [[nodiscard, deprecated("use read_bits_single_request")]] Status read_bits(
-      std::string_view head_device,
+      StringView head_device,
       mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
   /// \brief Reads contiguous `Jn\\...` link-direct words synchronously.
   [[nodiscard]] Status read_link_direct_words(
-      std::string_view head_device,
+      StringView head_device,
       std::uint16_t points,
       mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
   /// \brief Reads contiguous `Jn\\...` link-direct bits synchronously.
   [[nodiscard]] Status read_link_direct_bits(
-      std::string_view head_device,
+      StringView head_device,
       std::uint16_t points,
       mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
@@ -216,13 +216,13 @@ class HostSyncClient {
   /// Use this for profiles whose qualified access route is native device access (`0401`).
   /// The `0601` helper route is profile/target-specific and may be rejected.
   [[nodiscard]] Status read_qualified_buffer_words(
-      std::string_view head_device,
+      StringView head_device,
       std::uint16_t points,
       mcprotocol::serial::Span<std::uint16_t> out_words) noexcept;
 
   /// \brief Compatibility alias for `read_qualified_buffer_words`.
   [[nodiscard, deprecated("use read_qualified_buffer_words")]] Status read_native_qualified_words(
-      std::string_view head_device,
+      StringView head_device,
       std::uint16_t points,
       mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
     return read_qualified_buffer_words(head_device, points, out_words);
@@ -237,18 +237,18 @@ class HostSyncClient {
   /// request and are not split. The host aggregate allocates `ceil(points / 8)` staging bytes
   /// before the first send and returns `StatusCode::OutOfMemory` if that allocation fails.
   [[nodiscard]] Status read_long_timer_counter_state_bits(
-      std::string_view head_device,
+      StringView head_device,
       std::uint16_t points,
       mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
   /// \brief Reads long timer/counter states using `out_bits.size()` as the point count.
   [[nodiscard]] Status read_long_timer_counter_state_bits(
-      std::string_view head_device,
+      StringView head_device,
       mcprotocol::serial::Span<BitValue> out_bits) noexcept;
 
   /// \brief Compatibility alias for `read_long_timer_counter_state_bits`.
   [[nodiscard, deprecated("use read_long_timer_counter_state_bits")]] Status read_long_state_bits(
-      std::string_view head_device,
+      StringView head_device,
       std::uint16_t points,
       mcprotocol::serial::Span<BitValue> out_bits) noexcept {
     return read_long_timer_counter_state_bits(head_device, points, out_bits);
@@ -256,19 +256,19 @@ class HostSyncClient {
 
   /// \brief Compatibility alias for `read_long_timer_counter_state_bits`.
   [[nodiscard, deprecated("use read_long_timer_counter_state_bits")]] Status read_long_state_bits(
-      std::string_view head_device,
+      StringView head_device,
       mcprotocol::serial::Span<BitValue> out_bits) noexcept {
     return read_long_timer_counter_state_bits(head_device, out_bits);
   }
 
   /// \brief Writes contiguous words as exactly one PLC request.
   [[nodiscard]] Status write_words_single_request(
-      std::string_view head_device,
+      StringView head_device,
       mcprotocol::serial::Span<const std::uint16_t> words) noexcept;
 
   /// \brief Compatibility alias for `write_words_single_request`.
   [[nodiscard, deprecated("use write_words_single_request")]] Status write_words(
-      std::string_view head_device,
+      StringView head_device,
       mcprotocol::serial::Span<const std::uint16_t> words) noexcept;
 
   /// \brief Writes one bit inside an ordinary 16-bit word by one read-modify-write turn.
@@ -278,7 +278,7 @@ class HostSyncClient {
   /// already in the requested state. The operation is not PLC-atomic: PLC logic or another
   /// connection can modify the word between the read and write.
   [[nodiscard]] Status write_bit_in_word(
-      std::string_view word_device,
+      StringView word_device,
       int bit_index,
       bool value) noexcept;
 
@@ -305,20 +305,20 @@ class HostSyncClient {
 
   /// \brief Bit-in-word update through one immutable `Jn\\...` link-direct route.
   [[nodiscard]] Status write_link_direct_bit_in_word(
-      std::string_view word_device,
+      StringView word_device,
       int bit_index,
       bool value) noexcept;
 
   /// \brief Bit-in-word update through one immutable qualified-buffer route.
   [[nodiscard]] Status write_qualified_buffer_bit_in_word(
-      std::string_view word_device,
+      StringView word_device,
       int bit_index,
       bool value) noexcept;
 
   /// \brief Compatibility alias for `write_qualified_buffer_bit_in_word`.
   [[nodiscard, deprecated("use write_qualified_buffer_bit_in_word")]]
   Status write_native_qualified_bit_in_word(
-      std::string_view word_device,
+      StringView word_device,
       int bit_index,
       bool value) noexcept {
     return write_qualified_buffer_bit_in_word(word_device, bit_index, value);
@@ -341,22 +341,22 @@ class HostSyncClient {
 
   /// \brief Writes contiguous bits as exactly one PLC request.
   [[nodiscard]] Status write_bits_single_request(
-      std::string_view head_device,
+      StringView head_device,
       mcprotocol::serial::Span<const BitValue> bits) noexcept;
 
   /// \brief Compatibility alias for `write_bits_single_request`.
   [[nodiscard, deprecated("use write_bits_single_request")]] Status write_bits(
-      std::string_view head_device,
+      StringView head_device,
       mcprotocol::serial::Span<const BitValue> bits) noexcept;
 
   /// \brief Writes contiguous `Jn\\...` link-direct words synchronously.
   [[nodiscard]] Status write_link_direct_words(
-      std::string_view head_device,
+      StringView head_device,
       mcprotocol::serial::Span<const std::uint16_t> words) noexcept;
 
   /// \brief Writes contiguous `Jn\\...` link-direct bits synchronously.
   [[nodiscard]] Status write_link_direct_bits(
-      std::string_view head_device,
+      StringView head_device,
       mcprotocol::serial::Span<const BitValue> bits) noexcept;
 
   /// \brief Writes qualified-buffer `Un\\Gn` or `Un\\HGn` words.
@@ -364,12 +364,12 @@ class HostSyncClient {
   /// Use this for profiles whose qualified access route is native device access (`1401`).
   /// The `1601` helper route is profile/target-specific and may be rejected.
   [[nodiscard]] Status write_qualified_buffer_words(
-      std::string_view head_device,
+      StringView head_device,
       mcprotocol::serial::Span<const std::uint16_t> words) noexcept;
 
   /// \brief Compatibility alias for `write_qualified_buffer_words`.
   [[nodiscard, deprecated("use write_qualified_buffer_words")]] Status write_native_qualified_words(
-      std::string_view head_device,
+      StringView head_device,
       mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
     return write_qualified_buffer_words(head_device, words);
   }
@@ -392,24 +392,24 @@ class HostSyncClient {
 
   /// \brief Reads one sparse Word item synchronously from a string address.
   [[nodiscard]] Status read_random_word(
-      std::string_view device,
+      StringView device,
       std::uint16_t& out_value) noexcept;
 
   /// \brief Compatibility alias for `read_random_word`.
   [[nodiscard, deprecated("use read_random_word")]] Status random_read_word(
-      std::string_view device,
+      StringView device,
       std::uint16_t& out_value) noexcept {
     return read_random_word(device, out_value);
   }
 
   /// \brief Reads one sparse DWord item synchronously from a string address.
   [[nodiscard]] Status read_random_dword(
-      std::string_view device,
+      StringView device,
       std::uint32_t& out_value) noexcept;
 
   /// \brief Compatibility alias for `read_random_dword`.
   [[nodiscard, deprecated("use read_random_dword")]] Status random_read_dword(
-      std::string_view device,
+      StringView device,
       std::uint32_t& out_value) noexcept {
     return read_random_dword(device, out_value);
   }
@@ -453,24 +453,24 @@ class HostSyncClient {
 
   /// \brief Writes one sparse Word item synchronously from a string address.
   [[nodiscard]] Status write_random_word(
-      std::string_view device,
+      StringView device,
       std::uint16_t value) noexcept;
 
   /// \brief Compatibility alias for `write_random_word`.
   [[nodiscard, deprecated("use write_random_word")]] Status random_write_word(
-      std::string_view device,
+      StringView device,
       std::uint16_t value) noexcept {
     return write_random_word(device, value);
   }
 
   /// \brief Writes one sparse DWord item synchronously from a string address.
   [[nodiscard]] Status write_random_dword(
-      std::string_view device,
+      StringView device,
       std::uint32_t value) noexcept;
 
   /// \brief Compatibility alias for `write_random_dword`.
   [[nodiscard, deprecated("use write_random_dword")]] Status random_write_dword(
-      std::string_view device,
+      StringView device,
       std::uint32_t value) noexcept {
     return write_random_dword(device, value);
   }
@@ -490,12 +490,12 @@ class HostSyncClient {
 
   /// \brief Writes one sparse bit item synchronously from a string address.
   [[nodiscard]] Status write_random_bit(
-      std::string_view device,
+      StringView device,
       BitValue value) noexcept;
 
   /// \brief Compatibility alias for `write_random_bit`.
   [[nodiscard, deprecated("use write_random_bit")]] Status random_write_bit(
-      std::string_view device,
+      StringView device,
       BitValue value) noexcept {
     return write_random_bit(device, value);
   }
@@ -564,10 +564,10 @@ class HostSyncClient {
   }
 
   /// \brief Registers one sparse Word monitor item synchronously.
-  [[nodiscard]] Status register_monitor_word(std::string_view device) noexcept;
+  [[nodiscard]] Status register_monitor_word(StringView device) noexcept;
 
   /// \brief Registers one sparse DWord monitor item synchronously.
-  [[nodiscard]] Status register_monitor_dword(std::string_view device) noexcept;
+  [[nodiscard]] Status register_monitor_dword(StringView device) noexcept;
 
   /// \brief Registers extended file-register monitor data synchronously.
   [[nodiscard]] Status register_extended_file_register_monitor(

@@ -1,15 +1,22 @@
 # ESP32-C3 Arduino UART Example
 
-This sample is dedicated to the `esp32-c3-devkitm-1-uart-example` environment.
+This example reads D100-D103 using `Esp32UartClient`.
+UART1 is owned exclusively by the adapter; do not also initialize `Serial1`.
+Pins: RX=6, TX=7. Default: 19200 baud, 8E1, C4 ASCII Format4,
+MelsecQ profile, sum check disabled, host station route.
+Match the PLC settings and transceiver wiring before use.
+Direction control defaults to external/automatic; RTS direction needs explicit pins.
 
-Main file:
+The existing PlatformIO environment is `esp32-c3-devkitm-1-uart-example`.
+It retains C++17 and uses the reduced MCU buffer configuration.
 
-- [platformio_esp32c3_arduino_uart.cpp](platformio_esp32c3_arduino_uart.cpp)
+The adapter handles partial writes, physical transmission completion and the
+completion timestamp. Receive bytes are retained while waiting for TX completion.
+`update()` advances communication without blocking the application loop.
 
-Build:
+On any error this minimal example stops requesting data. It never retries writes.
+Correct the cause and exclude delayed replies **before** resetting the MCU.
+Resetting the MCU alone does not remove a response still pending at the PLC.
 
-```bash
-pio run -e esp32-c3-devkitm-1-uart-example
-```
-
-It uses `Serial1` on the ESP32-C3 with fixed example pins `RX=6` and `TX=7`.
+See the [recovery example](../platformio_esp32c3_arduino_async_polling_reconnect/README.md)
+for error categories and the explicit restart procedure.

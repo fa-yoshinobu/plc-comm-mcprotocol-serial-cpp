@@ -494,14 +494,14 @@ class MelsecSerialClient {
   /// \brief Unlocks remote-password-protected access (`1630`).
   [[nodiscard]] Status async_unlock_remote_password(
       std::uint32_t now_ms,
-      std::string_view remote_password,
+      StringView remote_password,
       CompletionHandler callback,
       void* user) noexcept;
 
   /// \brief Locks remote-password-protected access (`1631`).
   [[nodiscard]] Status async_lock_remote_password(
       std::uint32_t now_ms,
-      std::string_view remote_password,
+      StringView remote_password,
       CompletionHandler callback,
       void* user) noexcept;
 

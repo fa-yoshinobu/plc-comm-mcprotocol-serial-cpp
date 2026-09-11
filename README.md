@@ -92,3 +92,19 @@ See the maintained [PlatformIO and CMake examples](https://github.com/fa-yoshino
 If you plan to embed this library in a paid or commercial product, please consider a separate support agreement or supporting the project as a sponsor.
 
 Contact: <https://fa-labo.com/contact.html>
+
+## StringView compatibility
+
+Public APIs use `mcprotocol::serial::StringView`, declared in
+`mcprotocol/serial/string_view_compat.hpp`. On supported standard-library
+implementations (including ESP32 GCC 8), it is an alias of `std::string_view`:
+existing calls, types and API signatures remain compatible, with no wrapper or
+conversion overhead. When the standard implementation is unavailable, it aliases
+the library's `detail::StringView`. Selection is automatic.
+
+Applications that previously relied on the bundled fallback defining
+`std::string_view` must use `mcprotocol::serial::StringView` instead. String
+literals remain accepted. The fallback no longer defines a class in `namespace std`.
+Rebuild the library and consumers with the same toolchain and compatibility
+settings; do not mix standard and fallback builds. Other bundled compatibility
+types are outside the scope of this change.

@@ -299,26 +299,26 @@ class ByteWriter {
   return (MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && config.frame_kind() == FrameKind::C1) ? 2U : 4U;
 }
 
-[[nodiscard]] inline std::string_view ascii_success_end_code(FrameKind frame_kind) noexcept {
+[[nodiscard]] inline StringView ascii_success_end_code(FrameKind frame_kind) noexcept {
   if (MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && frame_kind == FrameKind::C1) {
     return "GG";
   }
   return "QACK";
 }
 
-[[nodiscard]] inline std::string_view ascii_error_end_code(FrameKind frame_kind) noexcept {
+[[nodiscard]] inline StringView ascii_error_end_code(FrameKind frame_kind) noexcept {
   if (MCPROTOCOL_SERIAL_ENABLE_FRAME_C1 && frame_kind == FrameKind::C1) {
     return "NN";
   }
   return "QNAK";
 }
 
-[[nodiscard]] inline std::string_view ascii_alt_success_end_code(const ProtocolConfig& config) noexcept {
+[[nodiscard]] inline StringView ascii_alt_success_end_code(const ProtocolConfig& config) noexcept {
   (void)config;
   return {};
 }
 
-[[nodiscard]] inline std::string_view ascii_alt_error_end_code(const ProtocolConfig& config) noexcept {
+[[nodiscard]] inline StringView ascii_alt_error_end_code(const ProtocolConfig& config) noexcept {
   (void)config;
   return {};
 }
@@ -2287,7 +2287,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
 
 [[nodiscard]] Status validate_remote_password(
     const ProtocolConfig& config,
-    std::string_view remote_password) noexcept {
+    StringView remote_password) noexcept {
   const std::size_t length = remote_password.size();
   if (is_remote_password_iq_r(config)) {
     if (length < 6U || length > 32U) {
@@ -2316,7 +2316,7 @@ constexpr C1CommandSymbols kC1WriteModuleBufferCommand {"TW", "TW"};
   return writer.push(value);
 }
 
-[[nodiscard]] bool append_text_bytes(ByteWriter& writer, std::string_view text) noexcept {
+[[nodiscard]] bool append_text_bytes(ByteWriter& writer, StringView text) noexcept {
   for (const char ch : text) {
     if (!writer.push(static_cast<std::uint8_t>(ch))) {
       return false;
@@ -2727,7 +2727,7 @@ Status FrameCodec::encode_success_response(
         }
       }
     } else {
-      const std::string_view end_code = ascii_success_end_code(config.frame_kind());
+      const StringView end_code = ascii_success_end_code(config.frame_kind());
       if (!writer.push(kAsciiStx) ||
           !writer.append(mcprotocol::serial::Span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
           !append_text_bytes(writer, end_code) ||
@@ -2835,7 +2835,7 @@ Status FrameCodec::encode_error_response(
     const std::size_t error_width = ascii_error_code_width(config);
     ByteWriter writer(out_frame);
     if (is_ascii_enq_family(config)) {
-      const std::string_view end_code = ascii_error_end_code(config.frame_kind());
+      const StringView end_code = ascii_error_end_code(config.frame_kind());
       if (!writer.push(kAsciiNak) ||
           !writer.append(mcprotocol::serial::Span<const std::uint8_t>(payload_storage.data(), prefix_size))) {
         return buffer_too_small("ASCII error response frame buffer is too small");
@@ -2847,7 +2847,7 @@ Status FrameCodec::encode_error_response(
         return buffer_too_small("ASCII error response frame buffer is too small");
       }
     } else {
-      const std::string_view end_code = ascii_error_end_code(config.frame_kind());
+      const StringView end_code = ascii_error_end_code(config.frame_kind());
       if (!writer.push(kAsciiStx) ||
           !writer.append(mcprotocol::serial::Span<const std::uint8_t>(payload_storage.data(), prefix_size)) ||
           !append_text_bytes(writer, end_code) ||
@@ -3129,7 +3129,7 @@ DecodeResult detail::decode_response_validated(
       }
 
       if (bytes[0] == kAsciiNak) {
-        const std::string_view end_code = ascii_error_end_code(config.frame_kind());
+        const StringView end_code = ascii_error_end_code(config.frame_kind());
         std::size_t end_code_width = 0U;
         if (!is_c1_frame(config) &&
             bytes.size() >= (prefix_size + end_code.size()) &&
@@ -3240,10 +3240,10 @@ DecodeResult detail::decode_response_validated(
       };
     }
 
-    const std::string_view success_end_code = ascii_success_end_code(config.frame_kind());
-    const std::string_view error_end_code = ascii_error_end_code(config.frame_kind());
-    const std::string_view alt_success_end_code = ascii_alt_success_end_code(config);
-    const std::string_view alt_error_end_code = ascii_alt_error_end_code(config);
+    const StringView success_end_code = ascii_success_end_code(config.frame_kind());
+    const StringView error_end_code = ascii_error_end_code(config.frame_kind());
+    const StringView alt_success_end_code = ascii_alt_success_end_code(config);
+    const StringView alt_error_end_code = ascii_alt_error_end_code(config);
     const std::size_t minimum_end_code_width = [=]() noexcept {
       std::size_t width = success_end_code.size();
       if (!alt_success_end_code.empty() && alt_success_end_code.size() < width) {
@@ -6761,7 +6761,7 @@ Status encode_remote_reset(
 
 Status encode_unlock_remote_password(
     const ProtocolConfig& config,
-    std::string_view remote_password,
+    StringView remote_password,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);
@@ -6796,7 +6796,7 @@ Status encode_unlock_remote_password(
 
 Status encode_lock_remote_password(
     const ProtocolConfig& config,
-    std::string_view remote_password,
+    StringView remote_password,
     mcprotocol::serial::Span<std::uint8_t> out_request_data,
     std::size_t& out_size) noexcept {
   const Status plc_profile_status = validate_plc_profile_config(config);

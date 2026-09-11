@@ -174,7 +174,7 @@ Status HostSyncClient::remote_latch_clear() noexcept {
   return run_until_complete();
 }
 
-Status HostSyncClient::unlock_remote_password(std::string_view remote_password) noexcept {
+Status HostSyncClient::unlock_remote_password(StringView remote_password) noexcept {
   const Status status = client_.async_unlock_remote_password(
       now_ms(),
       remote_password,
@@ -186,7 +186,7 @@ Status HostSyncClient::unlock_remote_password(std::string_view remote_password) 
   return run_until_complete();
 }
 
-Status HostSyncClient::lock_remote_password(std::string_view remote_password) noexcept {
+Status HostSyncClient::lock_remote_password(StringView remote_password) noexcept {
   const Status status = client_.async_lock_remote_password(
       now_ms(),
       remote_password,
@@ -299,7 +299,7 @@ Status HostSyncClient::initialize_c24_transmission_sequence() noexcept {
 }
 
 Status HostSyncClient::read_words_single_request(
-    std::string_view head_device,
+    StringView head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   BatchReadWordsRequest request(DeviceAddress {DeviceCode::D, 0U}, 0U);
@@ -321,7 +321,7 @@ Status HostSyncClient::read_words_single_request(
 }
 
 Status HostSyncClient::read_words_single_request(
-    std::string_view head_device,
+    StringView head_device,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   std::uint16_t points = 0;
   const Status status = span_size_to_points(
@@ -335,14 +335,14 @@ Status HostSyncClient::read_words_single_request(
 }
 
 Status HostSyncClient::read_words(
-    std::string_view head_device,
+    StringView head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   return read_words_single_request(head_device, points, out_words);
 }
 
 Status HostSyncClient::read_words(
-    std::string_view head_device,
+    StringView head_device,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   return read_words_single_request(head_device, out_words);
 }
@@ -378,7 +378,7 @@ Status HostSyncClient::read_direct_extended_file_register_words(
 }
 
 Status HostSyncClient::read_bits_single_request(
-    std::string_view head_device,
+    StringView head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   DeviceAddress parsed(DeviceCode::D, 0U);
@@ -416,7 +416,7 @@ Status HostSyncClient::read_bits_single_request(
 }
 
 Status HostSyncClient::read_bits_single_request(
-    std::string_view head_device,
+    StringView head_device,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   std::uint16_t points = 0;
   const Status status = span_size_to_points(
@@ -430,20 +430,20 @@ Status HostSyncClient::read_bits_single_request(
 }
 
 Status HostSyncClient::read_bits(
-    std::string_view head_device,
+    StringView head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   return read_bits_single_request(head_device, points, out_bits);
 }
 
 Status HostSyncClient::read_bits(
-    std::string_view head_device,
+    StringView head_device,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   return read_bits_single_request(head_device, out_bits);
 }
 
 Status HostSyncClient::read_link_direct_words(
-    std::string_view head_device,
+    StringView head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
@@ -466,7 +466,7 @@ Status HostSyncClient::read_link_direct_words(
 }
 
 Status HostSyncClient::read_link_direct_bits(
-    std::string_view head_device,
+    StringView head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
@@ -489,7 +489,7 @@ Status HostSyncClient::read_link_direct_bits(
 }
 
 Status HostSyncClient::read_qualified_buffer_words(
-    std::string_view head_device,
+    StringView head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<std::uint16_t> out_words) noexcept {
   QualifiedBufferWordDevice device(QualifiedBufferDeviceKind::G, 0U, 0U);
@@ -512,7 +512,7 @@ Status HostSyncClient::read_qualified_buffer_words(
 }
 
 Status HostSyncClient::read_long_timer_counter_state_bits(
-    std::string_view head_device,
+    StringView head_device,
     std::uint16_t points,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   if (points == 0U) {
@@ -609,7 +609,7 @@ Status HostSyncClient::read_long_timer_counter_state_bits(
 }
 
 Status HostSyncClient::read_long_timer_counter_state_bits(
-    std::string_view head_device,
+    StringView head_device,
     mcprotocol::serial::Span<BitValue> out_bits) noexcept {
   std::uint16_t points = 0;
   const Status status = span_size_to_points(
@@ -623,7 +623,7 @@ Status HostSyncClient::read_long_timer_counter_state_bits(
 }
 
 Status HostSyncClient::write_words_single_request(
-    std::string_view head_device,
+    StringView head_device,
     mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
   BatchWriteWordsRequest request(DeviceAddress {DeviceCode::D, 0U}, {});
   Status status = highlevel::make_batch_write_words_request(head_device, words, request);
@@ -643,13 +643,13 @@ Status HostSyncClient::write_words_single_request(
 }
 
 Status HostSyncClient::write_words(
-    std::string_view head_device,
+    StringView head_device,
     mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
   return write_words_single_request(head_device, words);
 }
 
 Status HostSyncClient::write_bit_in_word(
-    std::string_view word_device,
+    StringView word_device,
     int bit_index,
     bool value) noexcept {
   if (bit_index < 0 || bit_index > 15) {
@@ -759,7 +759,7 @@ Status HostSyncClient::write_direct_extended_file_register_bit_in_word(
 }
 
 Status HostSyncClient::write_link_direct_bit_in_word(
-    std::string_view word_device,
+    StringView word_device,
     int bit_index,
     bool value) noexcept {
   if (bit_index < 0 || bit_index > 15) {
@@ -807,7 +807,7 @@ Status HostSyncClient::write_link_direct_bit_in_word(
 }
 
 Status HostSyncClient::write_qualified_buffer_bit_in_word(
-    std::string_view word_device,
+    StringView word_device,
     int bit_index,
     bool value) noexcept {
   if (bit_index < 0 || bit_index > 15) {
@@ -848,7 +848,7 @@ Status HostSyncClient::write_qualified_buffer_bit_in_word(
 }
 
 Status HostSyncClient::write_link_direct_words(
-    std::string_view head_device,
+    StringView head_device,
     mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
   LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
   Status status = parse_link_direct_device(head_device, device);
@@ -869,7 +869,7 @@ Status HostSyncClient::write_link_direct_words(
 }
 
 Status HostSyncClient::write_link_direct_bits(
-    std::string_view head_device,
+    StringView head_device,
     mcprotocol::serial::Span<const BitValue> bits) noexcept {
   LinkDirectDevice device(0U, DeviceAddress {DeviceCode::D, 0U});
   Status status = parse_link_direct_device(head_device, device);
@@ -890,7 +890,7 @@ Status HostSyncClient::write_link_direct_bits(
 }
 
 Status HostSyncClient::write_qualified_buffer_words(
-    std::string_view head_device,
+    StringView head_device,
     mcprotocol::serial::Span<const std::uint16_t> words) noexcept {
   QualifiedBufferWordDevice device(QualifiedBufferDeviceKind::G, 0U, 0U);
   Status status = parse_qualified_buffer_word_device(head_device, device);
@@ -966,7 +966,7 @@ Status HostSyncClient::read_random(
 }
 
 Status HostSyncClient::read_random_word(
-    std::string_view device,
+    StringView device,
     std::uint16_t& out_value) noexcept {
   const std::array<highlevel::RandomReadWordSpec, 1> items {{
       highlevel::RandomReadWordSpec(device),
@@ -975,7 +975,7 @@ Status HostSyncClient::read_random_word(
 }
 
 Status HostSyncClient::read_random_dword(
-    std::string_view device,
+    StringView device,
     std::uint32_t& out_value) noexcept {
   const std::array<highlevel::RandomReadDWordSpec, 1> items {{
       highlevel::RandomReadDWordSpec(device),
@@ -1036,7 +1036,7 @@ Status HostSyncClient::write_random_extended_file_register_words(
 }
 
 Status HostSyncClient::write_random_word(
-    std::string_view device,
+    StringView device,
     std::uint16_t value) noexcept {
   const std::array<highlevel::RandomWriteWordSpec, 1> items {{
       highlevel::RandomWriteWordSpec(device, value),
@@ -1045,7 +1045,7 @@ Status HostSyncClient::write_random_word(
 }
 
 Status HostSyncClient::write_random_dword(
-    std::string_view device,
+    StringView device,
     std::uint32_t value) noexcept {
   const std::array<highlevel::RandomWriteDWordSpec, 1> items {{
       highlevel::RandomWriteDWordSpec(device, value),
@@ -1075,7 +1075,7 @@ Status HostSyncClient::write_random_bits(
 }
 
 Status HostSyncClient::write_random_bit(
-    std::string_view device,
+    StringView device,
     BitValue value) noexcept {
   const std::array<highlevel::RandomWriteBitSpec, 1> items {{
       highlevel::RandomWriteBitSpec(device, value),
@@ -1207,14 +1207,14 @@ Status HostSyncClient::register_monitor_devices(
   return run_until_complete();
 }
 
-Status HostSyncClient::register_monitor_word(std::string_view device) noexcept {
+Status HostSyncClient::register_monitor_word(StringView device) noexcept {
   const std::array<highlevel::RandomReadWordSpec, 1> items {{
       highlevel::RandomReadWordSpec(device),
   }};
   return register_monitor_devices(items, {});
 }
 
-Status HostSyncClient::register_monitor_dword(std::string_view device) noexcept {
+Status HostSyncClient::register_monitor_dword(StringView device) noexcept {
   const std::array<highlevel::RandomReadDWordSpec, 1> items {{
       highlevel::RandomReadDWordSpec(device),
   }};
@@ -1273,7 +1273,7 @@ Status HostSyncClient::read_extended_file_register_monitor(
 }
 
 Status HostSyncClient::write_bits_single_request(
-    std::string_view head_device,
+    StringView head_device,
     mcprotocol::serial::Span<const BitValue> bits) noexcept {
   BatchWriteBitsRequest request(DeviceAddress {DeviceCode::M, 0U}, {});
   Status status = highlevel::make_batch_write_bits_request(head_device, bits, request);
@@ -1293,7 +1293,7 @@ Status HostSyncClient::write_bits_single_request(
 }
 
 Status HostSyncClient::write_bits(
-    std::string_view head_device,
+    StringView head_device,
     mcprotocol::serial::Span<const BitValue> bits) noexcept {
   return write_bits_single_request(head_device, bits);
 }

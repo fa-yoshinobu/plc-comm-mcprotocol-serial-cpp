@@ -158,7 +158,7 @@ using mcprotocol::serial::detail::is_separator;
 using mcprotocol::serial::detail::parse_u32;
 
 [[nodiscard]] inline bool parse_u32_auto(
-    std::string_view text,
+    StringView text,
     std::uint32_t& out_value) noexcept {
   if (text.size() > 2U && text[0] == '0' &&
       (text[1] == 'x' || text[1] == 'X')) {
@@ -171,7 +171,7 @@ using mcprotocol::serial::detail::parse_u32;
 
 /// \brief Parses a qualified device string such as `U3E0\\G10` or `U3E0\\HG20`.
 [[nodiscard]] inline Status parse_qualified_buffer_word_device(
-    std::string_view text,
+    StringView text,
     QualifiedBufferWordDevice& out_device) noexcept {
   if (text.size() < 4U || detail::ascii_upper(text.front()) != 'U') {
     return make_status(
@@ -179,14 +179,14 @@ using mcprotocol::serial::detail::parse_u32;
         "Qualified buffer device must begin with U");
   }
 
-  std::size_t separator = std::string_view::npos;
+  std::size_t separator = StringView::npos;
   for (std::size_t index = 1U; index < text.size(); ++index) {
     if (detail::is_separator(text[index])) {
       separator = index;
       break;
     }
   }
-  if (separator == std::string_view::npos || separator <= 1U ||
+  if (separator == StringView::npos || separator <= 1U ||
       separator >= (text.size() - 1U)) {
     return make_status(
         StatusCode::InvalidArgument,
@@ -201,7 +201,7 @@ using mcprotocol::serial::detail::parse_u32;
         "Qualified buffer module number must be a 16-bit hexadecimal value");
   }
 
-  const std::string_view suffix = text.substr(separator + 1U);
+  const StringView suffix = text.substr(separator + 1U);
   QualifiedBufferDeviceKind kind = QualifiedBufferDeviceKind::G;
   std::size_t prefix_length = 0U;
   if (suffix.size() >= 2U &&

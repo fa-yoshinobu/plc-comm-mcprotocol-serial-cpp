@@ -47,7 +47,7 @@ namespace {
   return reinterpret_cast<HANDLE>(fd);
 }
 
-[[nodiscard]] constexpr bool has_windows_device_prefix(std::string_view path) noexcept {
+[[nodiscard]] constexpr bool has_windows_device_prefix(StringView path) noexcept {
   return path.size() >= 4 &&
          path[0] == '\\' &&
          path[1] == '\\' &&
@@ -60,15 +60,15 @@ namespace {
 [[nodiscard]] Status make_device_path(
     char* buf,
     std::size_t buf_size,
-    std::string_view path) noexcept {
+    StringView path) noexcept {
   if (path.empty()) {
     return make_status(StatusCode::InvalidArgument, "Device path must not be empty");
   }
-  if (path.find('\0') != std::string_view::npos) {
+  if (path.find('\0') != StringView::npos) {
     return make_status(StatusCode::InvalidArgument, "Device path must not contain embedded NUL");
   }
 
-  const std::string_view normalized = has_windows_device_prefix(path) ? path : std::string_view {};
+  const StringView normalized = has_windows_device_prefix(path) ? path : StringView {};
   const std::size_t required_size =
       normalized.empty() ? (4U + path.size() + 1U) : (normalized.size() + 1U);
   if (required_size > buf_size) {

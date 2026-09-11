@@ -155,7 +155,7 @@ constexpr LinkDirectParseSpec kLinkDirectParseSpecs[] = {
 };
 
 [[nodiscard]] inline bool parse_link_direct_inner_device(
-    std::string_view text,
+    StringView text,
     DeviceAddress& out_device) noexcept {
   for (const auto& spec : kLinkDirectParseSpecs) {
     if (text.size() <= spec.prefix_length) {
@@ -189,7 +189,7 @@ constexpr LinkDirectParseSpec kLinkDirectParseSpecs[] = {
 
 /// \brief Parses a `Jn\\...` link-direct device string such as `J1\\W100` or `J1\\X10`.
 [[nodiscard]] inline Status parse_link_direct_device(
-    std::string_view text,
+    StringView text,
     LinkDirectDevice& out_device) noexcept {
   if (text.size() < 4U || link_direct_detail::ascii_upper(text.front()) != 'J') {
     return make_status(
@@ -197,14 +197,14 @@ constexpr LinkDirectParseSpec kLinkDirectParseSpecs[] = {
         "Link direct device must begin with J");
   }
 
-  std::size_t separator = std::string_view::npos;
+  std::size_t separator = StringView::npos;
   for (std::size_t index = 1U; index < text.size(); ++index) {
     if (link_direct_detail::is_separator(text[index])) {
       separator = index;
       break;
     }
   }
-  if (separator == std::string_view::npos || separator <= 1U || separator >= (text.size() - 1U)) {
+  if (separator == StringView::npos || separator <= 1U || separator >= (text.size() - 1U)) {
     return make_status(
         StatusCode::InvalidArgument,
         "Link direct device must look like J1\\W100");

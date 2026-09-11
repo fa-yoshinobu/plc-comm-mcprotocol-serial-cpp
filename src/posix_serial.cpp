@@ -67,7 +67,7 @@ constexpr unsigned long kLinuxTcsets2 = _IOW('T', 0x2B, LinuxTermios2);
 [[nodiscard]] Status make_device_path(
     char* output,
     std::size_t output_size,
-    std::string_view device_path) noexcept {
+    StringView device_path) noexcept {
   if (output == nullptr || output_size == 0U || device_path.size() >= output_size) {
     return make_status(StatusCode::InvalidArgument, "Device path is too long");
   }

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "mcprotocol/serial/compat/cstddef.hpp"
-#include "mcprotocol/serial/compat/cstring.hpp"
 
 #if (!defined(MCPROTOCOL_SERIAL_USE_BUNDLED_STDLIB_COMPAT) || \
      !MCPROTOCOL_SERIAL_USE_BUNDLED_STDLIB_COMPAT) && \
@@ -12,14 +11,14 @@
 #endif
 
 // GCC 8 supplies every string_view operation used here with the 201603 value.
-// Do not redefine std::string_view merely because the feature macro is older.
+// Prefer the standard implementation; keep the fallback out of namespace std.
 #if !defined(__cpp_lib_string_view) || (__cpp_lib_string_view < 201603L)
-namespace std {
+namespace mcprotocol::serial::detail {
 
-class string_view {
+class StringView {
  public:
   using value_type = char;
-  using size_type = size_t;
+  using size_type = std::size_t;
   using pointer = const char*;
   using const_pointer = const char*;
   using const_reference = const char&;
@@ -27,11 +26,11 @@ class string_view {
 
   static constexpr size_type npos = static_cast<size_type>(-1);
 
-  constexpr string_view() noexcept = default;
+  constexpr StringView() noexcept = default;
 
-  constexpr string_view(const char* text, size_type size) noexcept : data_(text), size_(size) {}
+  constexpr StringView(const char* text, size_type size) noexcept : data_(text), size_(size) {}
 
-  constexpr string_view(const char* text) noexcept
+  constexpr StringView(const char* text) noexcept
       : data_(text ? text : ""), size_(literal_length(text)) {}
 
   [[nodiscard]] constexpr const_iterator begin() const noexcept { return data_; }
@@ -44,15 +43,15 @@ class string_view {
     return data_[index];
   }
 
-  [[nodiscard]] constexpr string_view substr(
+  [[nodiscard]] constexpr StringView substr(
       size_type pos,
       size_type count = npos) const noexcept {
     if (pos > size_) {
-      return string_view();
+      return StringView();
     }
     const size_type remaining = size_ - pos;
     const size_type actual = (count == npos || count > remaining) ? remaining : count;
-    return string_view(data_ + pos, actual);
+    return StringView(data_ + pos, actual);
   }
 
   constexpr void remove_prefix(size_type count) noexcept {
@@ -88,11 +87,11 @@ class string_view {
   size_type size_ = 0U;
 };
 
-[[nodiscard]] constexpr bool operator==(string_view lhs, string_view rhs) noexcept {
+[[nodiscard]] constexpr bool operator==(StringView lhs, StringView rhs) noexcept {
   if (lhs.size() != rhs.size()) {
     return false;
   }
-  for (string_view::size_type index = 0U; index < lhs.size(); ++index) {
+  for (StringView::size_type index = 0U; index < lhs.size(); ++index) {
     if (lhs[index] != rhs[index]) {
       return false;
     }
@@ -100,9 +99,17 @@ class string_view {
   return true;
 }
 
-[[nodiscard]] constexpr bool operator!=(string_view lhs, string_view rhs) noexcept {
+[[nodiscard]] constexpr bool operator!=(StringView lhs, StringView rhs) noexcept {
   return !(lhs == rhs);
 }
 
-}  // namespace std
+}  // namespace mcprotocol::serial::detail
+namespace mcprotocol::serial {
+using StringView = detail::StringView;
+}
+#else
+namespace mcprotocol::serial {
+// Preserve the standard type and existing API signatures on C++17 hosts.
+using StringView = std::string_view;
+}
 #endif

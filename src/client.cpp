@@ -2392,7 +2392,7 @@ Status MelsecSerialClient::async_remote_latch_clear(
 
 Status MelsecSerialClient::async_unlock_remote_password(
     std::uint32_t now_ms,
-    std::string_view remote_password,
+    StringView remote_password,
     CompletionHandler callback,
     void* user) noexcept {
   const Status admission_status = validate_request_admission();
@@ -2413,7 +2413,7 @@ Status MelsecSerialClient::async_unlock_remote_password(
 
 Status MelsecSerialClient::async_lock_remote_password(
     std::uint32_t now_ms,
-    std::string_view remote_password,
+    StringView remote_password,
     CompletionHandler callback,
     void* user) noexcept {
   const Status admission_status = validate_request_admission();

@@ -191,9 +191,25 @@ if(MCPROTOCOL_SERIAL_BUILD_TESTING)
   target_compile_definitions(esp32_uart_facade_tests PRIVATE ARDUINO=10800 ARDUINO_ARCH_ESP32=1)
   target_link_libraries(esp32_uart_facade_tests PRIVATE mcprotocol_serial)
   add_test(NAME esp32_uart_facade_tests COMMAND esp32_uart_facade_tests)
+  foreach(example_test uart_example_tests uart_reconnect_example_tests)
+    add_executable(${example_test} tests/uart_examples_tests.cpp)
+    target_include_directories(${example_test} PRIVATE tests/esp32_stubs)
+    target_compile_definitions(${example_test} PRIVATE ARDUINO=10800 ARDUINO_ARCH_ESP32=1)
+    target_link_libraries(${example_test} PRIVATE mcprotocol_serial)
+    add_test(NAME ${example_test} COMMAND ${example_test})
+  endforeach()
+  target_compile_definitions(uart_reconnect_example_tests PRIVATE TEST_RECONNECT=1)
   add_executable(string_view_gcc8_consumer tests/string_view_gcc8_consumer.cpp)
   target_link_libraries(string_view_gcc8_consumer PRIVATE mcprotocol_serial)
   add_test(NAME string_view_gcc8_consumer COMMAND string_view_gcc8_consumer)
+  add_executable(bundled_string_view_consumer tests/bundled_string_view_consumer.cpp)
+  target_include_directories(bundled_string_view_consumer PRIVATE include)
+  add_test(NAME bundled_string_view_consumer COMMAND bundled_string_view_consumer)
+  # Compile the complete core without the standard-library implementation too.
+  add_library(bundled_string_view_core OBJECT src/client.cpp src/codec.cpp)
+  target_include_directories(bundled_string_view_core PRIVATE include)
+  target_compile_definitions(bundled_string_view_core PRIVATE
+      MCPROTOCOL_SERIAL_USE_BUNDLED_STDLIB_COMPAT=1 MCPROTOCOL_SERIAL_ENABLE_HOST_API=0)
 
   add_executable(test_assert_negative_probe
     tests/test_assert_negative_probe.cpp

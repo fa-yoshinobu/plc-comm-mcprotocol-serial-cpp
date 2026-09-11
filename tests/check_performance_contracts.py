@@ -73,7 +73,7 @@ def check_long_state_aggregate() -> None:
     body = function_body(
         host,
         "Status HostSyncClient::read_long_timer_counter_state_bits(\n"
-        "    std::string_view head_device,\n"
+        "    StringView head_device,\n"
         "    std::uint16_t points,",
     )
     assert body.count("CommandCodec::encode_batch_read_words") == 1

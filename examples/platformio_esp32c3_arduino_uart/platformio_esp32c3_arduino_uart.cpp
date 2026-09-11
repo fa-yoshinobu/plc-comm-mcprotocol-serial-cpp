@@ -1,201 +1,63 @@
 #include <Arduino.h>
-
-#include "mcprotocol/serial/compat/array.hpp"
-#include "mcprotocol/serial/compat/cstddef.hpp"
-#include "mcprotocol/serial/compat/cstdint.hpp"
-
-#include "mcprotocol_serial.hpp"
-#include "mcprotocol/serial/span.hpp"
+#include "mcprotocol_serial_arduino_esp32.hpp"
 
 #ifndef MCPROTOCOL_EXAMPLE_PLC_BAUD
 #define MCPROTOCOL_EXAMPLE_PLC_BAUD 19200
 #endif
-
 #ifndef MCPROTOCOL_EXAMPLE_DEBUG_BAUD
 #define MCPROTOCOL_EXAMPLE_DEBUG_BAUD 115200
 #endif
-
 #ifndef MCPROTOCOL_EXAMPLE_POLL_INTERVAL_MS
 #define MCPROTOCOL_EXAMPLE_POLL_INTERVAL_MS 1000U
 #endif
 
 namespace {
+using namespace mcprotocol::serial;
 
-using mcprotocol::serial::AsciiFormat;
-using mcprotocol::serial::BatchReadWordsRequest;
-using mcprotocol::serial::CodeMode;
-using mcprotocol::serial::DeviceAddress;
-using mcprotocol::serial::DeviceCode;
-using mcprotocol::serial::FrameKind;
-using mcprotocol::serial::MelsecSerialClient;
-using mcprotocol::serial::PlcProfile;
-using mcprotocol::serial::ProtocolConfig;
-using mcprotocol::serial::RouteConfig;
-using mcprotocol::serial::HostStationRoute;
-using mcprotocol::serial::Status;
+// Own UART1 exclusively; do not also initialize Serial1.
+// The adapter checks partial sends, physical TX completion and deadlines.
+// It does not flush away an early PLC response.
+Esp32UartClient plc(1);
+const auto protocol = ProtocolConfig::ascii(
+    AsciiFrameKind::C4, AsciiFormat::Format4, PlcProfile::MelsecQ,
+    SumCheckMode::Disabled, RouteConfig{HostStationRoute{}});
+std::uint16_t words[4] {};
+std::uint32_t next_read = 0;
+bool stopped = false;
 
-constexpr std::uint32_t kPollIntervalMs = MCPROTOCOL_EXAMPLE_POLL_INTERVAL_MS;
-constexpr std::uint32_t kPlcBaud = MCPROTOCOL_EXAMPLE_PLC_BAUD;
-constexpr int kRxPin = 6;
-constexpr int kTxPin = 7;
-constexpr DeviceAddress kHeadDevice {DeviceCode::D, 100};
-
-struct AppState {
-  MelsecSerialClient client;
-  std::array<std::uint16_t, 4> out_words {};
-  bool request_started = false;
-  bool tx_sent = false;
-  bool request_done = false;
-  bool request_reported = false;
-  std::uint32_t next_request_ms = 0;
-  Status completion_status {};
-};
-
-AppState g_app;
-HardwareSerial& g_plc_serial = Serial1;
-
-ProtocolConfig make_protocol() {
-  // Keep frame/profile explicit. See docsrc/user/GOTCHAS.md before changing them.
-  return ProtocolConfig::ascii(
-      mcprotocol::serial::AsciiFrameKind::C4,
-      AsciiFormat::Format4,
-      PlcProfile::MelsecQ,
-      mcprotocol::serial::SumCheckMode::Disabled,
-      RouteConfig {HostStationRoute {}});
-}
-
-void on_request_complete(void* user, Status status) {
-  auto* app = static_cast<AppState*>(user);
-  app->request_done = true;
-  app->completion_status = status;
-  app->request_started = false;
-  app->tx_sent = false;
-  app->next_request_ms = millis() + kPollIntervalMs;
-}
-
-void configure_plc_uart() {
-  // PLC baud, parity, stop bits, and pins must match the serial module wiring.
-  g_plc_serial.begin(kPlcBaud, SERIAL_8E1, kRxPin, kTxPin);
-}
-
-void pump_uart_tx(std::uint32_t now_ms) {
-  if (!g_app.request_started || g_app.tx_sent) {
-    return;
-  }
-
-  // The client owns the encoded MC frame; this function only transmits bytes.
-  const mcprotocol::serial::Span<const mcprotocol::serial::Byte> frame = g_app.client.pending_tx_frame();
-  if (frame.empty()) {
-    return;
-  }
-
-  const Status tx_start_status = g_app.client.notify_tx_started(now_ms);
-  if (!tx_start_status.ok()) {
-    on_request_complete(&g_app, tx_start_status);
-    return;
-  }
-  g_plc_serial.write(reinterpret_cast<const std::uint8_t*>(frame.data()), frame.size());
-  g_plc_serial.flush();
-  // Notify only after the UART has accepted the frame for transmission.
-  const Status status = g_app.client.notify_tx_complete(now_ms, mcprotocol::serial::ok_status());
+void completed(void*, Status status) {
   if (!status.ok()) {
-    on_request_complete(&g_app, status);
+    Serial.printf("read failed: %s (PLC=%04X)\n", status.message,
+        static_cast<unsigned>(status.plc_error_code));
+    stopped = true;
+    Serial.println("Check PLC/line, exclude old replies, then RESET. See README.");
     return;
   }
-
-  g_app.tx_sent = true;
+  Serial.printf("D100=%04X D101=%04X D102=%04X D103=%04X\n",
+      unsigned(words[0]), unsigned(words[1]), unsigned(words[2]), unsigned(words[3]));
+  next_read = millis() + MCPROTOCOL_EXAMPLE_POLL_INTERVAL_MS;
 }
-
-void pump_uart_rx(std::uint32_t now_ms) {
-  std::array<char, 64> rx_chunk {};
-  while (g_plc_serial.available() > 0) {
-    const int available = g_plc_serial.available();
-    const std::size_t request_size =
-        static_cast<std::size_t>(available > 0 ? available : 0);
-    const std::size_t read_size =
-        request_size < rx_chunk.size() ? request_size : rx_chunk.size();
-    const std::size_t bytes_read = static_cast<std::size_t>(
-        g_plc_serial.readBytes(rx_chunk.data(), read_size));
-    if (bytes_read == 0) {
-      break;
-    }
-
-    // Feed raw response bytes back into the client decoder.
-    g_app.client.on_rx_bytes(
-        now_ms,
-        mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
-            reinterpret_cast<const mcprotocol::serial::Byte*>(rx_chunk.data()),
-            bytes_read));
-  }
-}
-
-void start_read_if_due(std::uint32_t now_ms) {
-  if (g_app.request_started || g_app.client.busy() || now_ms < g_app.next_request_ms) {
-    return;
-  }
-
-  g_app.request_done = false;
-  g_app.request_reported = false;
-  g_app.tx_sent = false;
-  // Start a read-only request. Check GOTCHAS.md before switching to writes.
-  const Status status = g_app.client.async_batch_read_words(
-      now_ms,
-      BatchReadWordsRequest(kHeadDevice, static_cast<std::uint16_t>(g_app.out_words.size())),
-      mcprotocol::serial::Span<std::uint16_t>(g_app.out_words.data(), g_app.out_words.size()),
-      on_request_complete,
-      &g_app);
-  if (!status.ok()) {
-    on_request_complete(&g_app, status);
-    return;
-  }
-
-  g_app.request_started = true;
-}
-
-void report_once() {
-  if (!g_app.request_done || g_app.request_reported) {
-    return;
-  }
-
-  g_app.request_reported = true;
-  if (!g_app.completion_status.ok()) {
-    Serial.print("esp32c3 uart example failed: ");
-    Serial.println(g_app.completion_status.message);
-    return;
-  }
-
-  Serial.print("esp32c3 uart read ok: D100=");
-  Serial.print(g_app.out_words[0], HEX);
-  Serial.print(" D101=");
-  Serial.print(g_app.out_words[1], HEX);
-  Serial.print(" D102=");
-  Serial.print(g_app.out_words[2], HEX);
-  Serial.print(" D103=");
-  Serial.println(g_app.out_words[3], HEX);
-}
-
-}  // namespace
+} // namespace
 
 void setup() {
   Serial.begin(MCPROTOCOL_EXAMPLE_DEBUG_BAUD);
-  configure_plc_uart();
-
-  // Configure once with the explicit protocol before starting requests.
-  const Status status = g_app.client.configure(make_protocol());
-  if (!status.ok()) {
-    on_request_complete(&g_app, status);
-    return;
-  }
-
-  g_app.next_request_ms = 0;
-  Serial.println("esp32c3 uart example: read-only D100-D103 via Serial1");
+  Esp32UartConfig uart;
+  uart.baud = MCPROTOCOL_EXAMPLE_PLC_BAUD;
+  uart.format = SERIAL_8E1;
+  uart.rx_pin = 6;
+  uart.tx_pin = 7;
+  // Default: externally controlled direction (e.g. auto-direction transceiver).
+  // For RS-485 RTS direction, set uart.direction and uart.rts_pin for your wiring.
+  const Status status = plc.begin(uart, protocol);
+  if (!status.ok()) completed(nullptr, status);
 }
 
 void loop() {
-  const std::uint32_t now_ms = millis();
-  start_read_if_due(now_ms);
-  pump_uart_tx(now_ms);
-  pump_uart_rx(now_ms);
-  g_app.client.poll(now_ms);
-  report_once();
+  plc.update(); // Nonblocking TX/RX; callbacks run here, never in an ISR.
+  if (!stopped && !plc.busy() &&
+      static_cast<std::int32_t>(millis() - next_read) >= 0) {
+    const Status status = plc.async_read_words({DeviceCode::D, 100}, words, completed);
+    if (!status.ok()) completed(nullptr, status); // Admission failure has no callback.
+  }
+  delay(1);
 }

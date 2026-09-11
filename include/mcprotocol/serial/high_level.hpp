@@ -158,21 +158,21 @@ using mcprotocol::serial::detail::parse_u32;
 /// \brief String-address spec used to build sparse random-read or monitor requests.
 struct RandomReadWordSpec {
   RandomReadWordSpec() = delete;
-  constexpr explicit RandomReadWordSpec(std::string_view target_device) noexcept
+  constexpr explicit RandomReadWordSpec(StringView target_device) noexcept
       : device(target_device) {}
 
   /// Plain device string such as `D100` selected explicitly as 16-bit.
-  std::string_view device;
+  StringView device;
 };
 
 /// \brief String-address spec selected explicitly for 32-bit sparse read/monitor access.
 struct RandomReadDWordSpec {
   RandomReadDWordSpec() = delete;
-  constexpr explicit RandomReadDWordSpec(std::string_view target_device) noexcept
+  constexpr explicit RandomReadDWordSpec(StringView target_device) noexcept
       : device(target_device) {}
 
   /// Plain device string such as `D100`, `LZ0`, or `LCN10` selected explicitly as 32-bit.
-  std::string_view device;
+  StringView device;
 };
 
 /// \brief String-address spec used to build sparse random word-write items.
@@ -180,11 +180,11 @@ struct RandomReadDWordSpec {
 /// Device and value must be supplied together. Explicit zero is valid.
 struct RandomWriteWordSpec {
   RandomWriteWordSpec() = delete;
-  constexpr RandomWriteWordSpec(std::string_view target_device, std::uint16_t write_value) noexcept
+  constexpr RandomWriteWordSpec(StringView target_device, std::uint16_t write_value) noexcept
       : device(target_device), value(write_value) {}
 
   /// Plain device string such as `D100` or `LZ0`.
-  std::string_view device;
+  StringView device;
   /// Explicit 16-bit word value written to `device`.
   std::uint16_t value;
 };
@@ -194,11 +194,11 @@ struct RandomWriteWordSpec {
 /// Device and value must be supplied together. Explicit zero is valid.
 struct RandomWriteDWordSpec {
   RandomWriteDWordSpec() = delete;
-  constexpr RandomWriteDWordSpec(std::string_view target_device, std::uint32_t write_value) noexcept
+  constexpr RandomWriteDWordSpec(StringView target_device, std::uint32_t write_value) noexcept
       : device(target_device), value(write_value) {}
 
   /// Plain device string such as `D100` or `LZ0`.
-  std::string_view device;
+  StringView device;
   /// Explicit 32-bit double-word value written to `device`.
   std::uint32_t value;
 };
@@ -208,11 +208,11 @@ struct RandomWriteDWordSpec {
 /// Device and value must be supplied together. Explicit `Off` is valid.
 struct RandomWriteBitSpec {
   RandomWriteBitSpec() = delete;
-  constexpr RandomWriteBitSpec(std::string_view target_device, BitValue write_value) noexcept
+  constexpr RandomWriteBitSpec(StringView target_device, BitValue write_value) noexcept
       : device(target_device), value(write_value) {}
 
   /// Plain bit-device string such as `M100` or `X10`.
-  std::string_view device;
+  StringView device;
   /// Bit value written to `device`.
   BitValue value;
 };
@@ -250,7 +250,7 @@ struct LongStateReadSpec {
 /// This helper is intentionally limited to plain device syntax. It does not parse `Jn\\...` link-
 /// direct addresses, helper-qualified `U...\\G...` addresses, or standalone `G` / `HG`.
 [[nodiscard]] inline Status parse_device_address(
-    std::string_view text,
+    StringView text,
     DeviceAddress& out_device) noexcept {
   for (const auto& spec : detail::kDeviceParseSpecs) {
     if (text.size() <= spec.prefix_length) {
@@ -341,7 +341,7 @@ struct LongStateReadSpec {
 
 /// \brief Builds a contiguous word-read request from a string address such as `D100`.
 [[nodiscard]] inline Status make_batch_read_words_request(
-    std::string_view head_device,
+    StringView head_device,
     std::uint16_t points,
     BatchReadWordsRequest& out_request) noexcept {
   DeviceAddress parsed(DeviceCode::D, 0U);
@@ -355,7 +355,7 @@ struct LongStateReadSpec {
 
 /// \brief Builds a contiguous bit-read request from a string address such as `M100`.
 [[nodiscard]] inline Status make_batch_read_bits_request(
-    std::string_view head_device,
+    StringView head_device,
     std::uint16_t points,
     BatchReadBitsRequest& out_request) noexcept {
   DeviceAddress parsed(DeviceCode::D, 0U);
@@ -369,7 +369,7 @@ struct LongStateReadSpec {
 
 /// \brief Builds a contiguous word-write request from a string address such as `D100`.
 [[nodiscard]] inline Status make_batch_write_words_request(
-    std::string_view head_device,
+    StringView head_device,
     mcprotocol::serial::Span<const std::uint16_t> words,
     BatchWriteWordsRequest& out_request) noexcept {
   DeviceAddress parsed(DeviceCode::D, 0U);
@@ -383,7 +383,7 @@ struct LongStateReadSpec {
 
 /// \brief Builds a contiguous bit-write request from a string address such as `M100`.
 [[nodiscard]] inline Status make_batch_write_bits_request(
-    std::string_view head_device,
+    StringView head_device,
     mcprotocol::serial::Span<const BitValue> bits,
     BatchWriteBitsRequest& out_request) noexcept {
   DeviceAddress parsed(DeviceCode::D, 0U);
@@ -411,7 +411,7 @@ class BitInWordWriteOperation {
   [[nodiscard]] Status begin(
       MelsecSerialClient& client,
       std::uint32_t now_ms,
-      std::string_view word_device,
+      StringView word_device,
       int bit_index,
       bool value,
       CompletionHandler callback,
@@ -725,7 +725,7 @@ class BitInWordWriteOperation {
 
 /// \brief Builds one explicitly word-width sparse random-read item from a string address.
 [[nodiscard]] inline Status make_random_read_word_item(
-    std::string_view device,
+    StringView device,
     RandomReadWordItem& out_item) noexcept {
   DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(device, parsed);
@@ -738,7 +738,7 @@ class BitInWordWriteOperation {
 
 /// \brief Builds one explicitly double-word-width sparse random-read item.
 [[nodiscard]] inline Status make_random_read_dword_item(
-    std::string_view device,
+    StringView device,
     RandomReadDWordItem& out_item) noexcept {
   DeviceAddress parsed(DeviceCode::D, 0U);
   const Status status = parse_device_address(device, parsed);
@@ -751,7 +751,7 @@ class BitInWordWriteOperation {
 
 /// \brief Builds one sparse random word-write item from a string address.
 [[nodiscard]] inline Status make_random_write_word_item(
-    std::string_view device,
+    StringView device,
     std::uint16_t value,
     RandomWriteWordItem& out_item) noexcept {
   DeviceAddress parsed(DeviceCode::D, 0U);
@@ -765,7 +765,7 @@ class BitInWordWriteOperation {
 
 /// \brief Builds one explicitly double-word-width sparse random write item.
 [[nodiscard]] inline Status make_random_write_dword_item(
-    std::string_view device,
+    StringView device,
     std::uint32_t value,
     RandomWriteDWordItem& out_item) noexcept {
   DeviceAddress parsed(DeviceCode::D, 0U);
@@ -779,7 +779,7 @@ class BitInWordWriteOperation {
 
 /// \brief Builds one sparse random bit-write item from a string address.
 [[nodiscard]] inline Status make_random_write_bit_item(
-    std::string_view device,
+    StringView device,
     BitValue value,
     RandomWriteBitItem& out_item) noexcept {
   if (value != false && value != true) {
