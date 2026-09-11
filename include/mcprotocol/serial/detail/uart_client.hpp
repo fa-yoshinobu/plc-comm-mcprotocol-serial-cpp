@@ -71,6 +71,17 @@ class UartClient {
   [[nodiscard]] Status read_word(DeviceAddress address, std::uint16_t& out) noexcept {
     return read_words(address, Span<std::uint16_t>(&out, 1));
   }
+  // Interpret the PLC word as signed 16-bit; preserve the output on failure.
+  [[nodiscard]] Status read_word(DeviceAddress address, std::int16_t& out) noexcept {
+    std::uint16_t raw = 0;
+    const Status status = read_word(address, raw);
+    if (status.ok()) {
+      const std::int32_t value = raw < 0x8000U
+          ? static_cast<std::int32_t>(raw) : static_cast<std::int32_t>(raw) - 65536;
+      out = static_cast<std::int16_t>(value);
+    }
+    return status;
+  }
   [[nodiscard]] Status read_bits(DeviceAddress address, Span<bool> out) noexcept {
     return wait(async_read_bits(address, out, nullptr));
   }

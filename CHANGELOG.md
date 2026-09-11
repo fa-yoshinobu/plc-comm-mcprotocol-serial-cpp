@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Library: Added signed `int16_t` UART `read_word` overload, preserving the caller's value on failure.
+
 - Samples: Added seven documented ESP32 usage examples including explicit-trigger writes and asynchronous M5 LCD/button handling. ESP32-S3 examples use 768/768/384-byte buffers with the standard Arduino stack.
 
 - Library: Added synchronous/asynchronous random read, random word/dword and bit writes, and multi-block read/write to the ESP32 UART adapter, reusing core validation and buffers.

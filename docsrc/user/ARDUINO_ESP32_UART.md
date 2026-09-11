@@ -96,7 +96,7 @@ if (status.ok()) {
 
 | Method | Data argument |
 | --- | --- |
-| `read_word(address, value)` | `uint16_t&` |
+| `read_word(address, value)` | `uint16_t&` or `int16_t&` (signed interpretation; output unchanged on failure) |
 | `read_words(address, values)` | `Span<uint16_t>` |
 | `read_bit(address, value)` | `bool&` |
 | `read_bits(address, values)` | `Span<bool>` |

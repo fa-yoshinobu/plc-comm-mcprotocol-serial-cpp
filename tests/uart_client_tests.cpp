@@ -263,9 +263,28 @@ void test_advanced_rejection_and_uncertain_write() {
   assert(client.requires_transport_reset());
 }
 
+void test_signed_word() {
+  FakeUart uart; Client client(uart);
+  assert(client.configure(protocol()).ok());
+  const std::uint16_t raw[] = {0, 32767, 32768, 65535, 65470};
+  const std::int16_t expected[] = {0, 32767, -32768, -1, -66};
+  std::int16_t value = 123;
+  for (unsigned i = 0; i < 5; ++i) {
+    const std::uint8_t data[] = {static_cast<std::uint8_t>(raw[i]),
+        static_cast<std::uint8_t>(raw[i] >> 8)};
+    response(uart, data);
+    assert(client.read_word(d100, value).ok() && value == expected[i]);
+  }
+  response(uart, {}, 0xC051);
+  assert(client.read_word(d100, value).code == StatusCode::PlcError && value == -66);
+  uart.rx.clear(); uart.rx_offset = 0;
+  assert(client.read_word(d100, value).code == StatusCode::Timeout && value == -66);
+}
+
 int main() {
   test_read_and_admission(); test_failures_and_recovery(); test_tx_deadline_and_cancel();
   test_transport_errors(); test_plc_error_and_writes(); test_bits_and_inter_byte_timeout();
   test_reentrant_callback();
   test_advanced_operations(); test_advanced_rejection_and_uncertain_write();
+  test_signed_word();
 }
