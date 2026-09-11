@@ -1,5 +1,10 @@
 # ESP32-S3 UART adapter: FX5U D100
 
+For WORD/bit/DWORD/float/random/multi-block read/write and a responsive M5 LCD
+example, see the [Japanese usage samples](../esp32_uart_usage/README.md).
+This environment now uses 768/768/384-byte frame/data buffers with the default
+Arduino loop stack; it does not reserve full-size 4096-byte frame buffers.
+
 Build from the repository root:
 
 ```sh

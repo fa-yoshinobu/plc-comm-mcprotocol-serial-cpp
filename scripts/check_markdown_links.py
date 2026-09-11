@@ -26,7 +26,7 @@ def iter_markdown_files() -> list[Path]:
         if path.is_file():
             files.append(path)
             continue
-        files.extend(sorted(path.rglob("*.md")))
+        files.extend(sorted(p for p in path.rglob("*.md") if ".pio" not in p.parts))
     return files
 
 

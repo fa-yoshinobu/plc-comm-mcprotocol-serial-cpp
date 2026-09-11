@@ -1,5 +1,8 @@
 # Arduino-ESP32 UART adapter
 
+See [seven Japanese usage examples](../../examples/esp32_uart_usage/README.md)
+for WORD, bit, DWORD, float, random, multi-block and asynchronous M5 LCD usage.
+
 `Esp32UartClient` is an opt-in adapter for Arduino-ESP32. It leaves the existing
 `MelsecSerialClient` API and non-Arduino builds intact. It owns one core client and
 one selected UART port; it does not depend on M5 libraries. This is a source-tree
@@ -230,6 +233,16 @@ the owned port. Prefer explicit cancellation and closing before releasing buffer
 Do not share or externally close/reopen the port underneath the adapter.
 
 ## Memory and validation
+
+The examples now select 768-byte request/response frames and 384-byte request
+data globally via build flags. The USB D100 example builds at 31,456 bytes of
+static RAM and 319,537 bytes of Flash. These settings retain command features
+but lower frame capacity. They use the standard 8KB Arduino loop stack.
+The original full-size configuration below overflowed that stack during request
+encoding on STAMPLC; it must not be assumed suitable for default MCU tasks.
+With reduced buffers, the separate LCD D100 demo was observed reading repeatedly
+with at least 2,376 bytes of loop stack remaining in the sampled run. This is
+not a worst-case stack guarantee for every command or application.
 
 The adapter contains one existing core client, not a second protocol implementation.
 Its additional state and HardwareSerial object are small, but the UART driver allocates
