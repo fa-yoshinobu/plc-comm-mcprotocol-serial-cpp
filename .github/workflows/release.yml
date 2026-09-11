@@ -50,12 +50,6 @@ jobs:
         with:
           ref: refs/tags/${{ steps.version.outputs.tag }}
 
-      # The GitHub-generated source zip is a release artifact, so it is verified
-      # here rather than on every push.
-      - name: Verify self-contained source archive
-        shell: pwsh
-        run: ./scripts/check_source_archive.ps1
-
       - name: Verify exact release tag
         run: |
           actual_tag="$(git describe --tags --exact-match HEAD)"
@@ -72,6 +66,12 @@ jobs:
           python -m pip install platformio
           sudo apt-get update
           sudo apt-get install -y cmake doxygen ninja-build zip
+
+      # The GitHub-generated source zip is a release artifact, so it is verified
+      # here rather than on every push, after its validation tools are installed.
+      - name: Verify self-contained source archive
+        shell: pwsh
+        run: ./scripts/check_source_archive.ps1
 
       - name: Check release metadata
         run: python3 scripts/sync_release_metadata.py --check --expected-version "${{ steps.version.outputs.version }}"
