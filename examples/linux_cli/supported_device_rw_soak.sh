@@ -268,13 +268,17 @@ exercise_target() {
     restore_note=" restore-mismatch"
   fi
 
-  printf '%-6s ok %s->%s->%s%s%s\n' \
+  local result="ok"
+  if [[ -n "${verify_note}${restore_note}" ]]; then result="fail"; fi
+  printf '%-6s %s %s->%s->%s%s%s\n' \
     "${target}" \
+    "${result}" \
     "$(format_value "${kind}" "${original}")" \
     "$(format_value "${kind}" "${test_value}")" \
     "$(format_value "${kind}" "${restored}")" \
     "${verify_note}" \
     "${restore_note}"
+  [[ "${result}" == "ok" ]]
 }
 
 if [[ ! "${duration_sec}" =~ ^[0-9]+$ ]]; then

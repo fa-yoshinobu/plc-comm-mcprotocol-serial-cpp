@@ -1,98 +1,73 @@
 # Examples
 
-These examples show host-side bring-up, MCU UART integration, and the low-level async client. Any example that talks to a real PLC needs a matching serial connection, explicit PLC profile, and matching baud/parity/stop-bit settings.
-
-Use only test addresses that are safe for your PLC program before you run any write example.
-
-## What is in this directory
-
-| Group | Files | Use it for |
-| --- | --- | --- |
-| Host sync | `host_sync_quickstart.cpp`, `host_sync_polling_reconnect.cpp` | First read and reconnect polling from a Windows, Linux, or POSIX host with the blocking facade. |
-| Linux CLI wrapper | `linux_cli/safe_bringup_readonly.sh` | Read-only CLI bring-up with explicit frame and profile environment variables. |
-| MCU UART | `platformio_*_arduino_uart/*.cpp` | Real UART reads from `D100-D103` on supported RP2040 and ESP32-C3 targets. |
-| Async state machine | `mcu_async_batch_read.cpp`, `platformio_*_arduino_async/*.cpp` | The transport-owned async flow with simulated PLC responses. |
-
-## How to run
-
-### Host sync
-
-```bash
-cmake -S . -B build -G Ninja && cmake --build build && ./build/mcprotocol_example_host_sync
-```
-
-```powershell
-cmake -S . -B build_win -G Ninja
-cmake --build build_win --target mcprotocol_example_host_polling_reconnect
-.\build_win\mcprotocol_example_host_polling_reconnect.exe COM3 melsec:qcpu D100 4 19200 format5 off
-```
-
-### PlatformIO
-
-```bash
-pio run -e rpipico-arduino-uart-example
-```
-
-```bash
-pio run -e esp32-c3-devkitm-1-uart-example
-```
-
-```bash
-pio run -e native-example
-```
-
-```bash
-pio run -e rpipico-arduino-example
-```
-
-```bash
-pio run -e esp32-c3-devkitm-1-example
-```
-
-```bash
-pio run -e esp32-c3-devkitm-1-polling-reconnect
-```
-
-### Linux CLI
-
-```bash
-bash examples/linux_cli/safe_bringup_readonly.sh
-```
-
-Set `MCPROTOCOL_FRAME` and `MCPROTOCOL_PLC_PROFILE` before running the CLI wrapper. The wrapper refuses to touch a PLC until both values are explicit.
+Choose an example for your board and purpose. Match the PLC profile, protocol,
+serial settings and wiring before connecting to a PLC.
+Writing examples change the listed devices; reserve those addresses for testing.
 
 ## Example index
 
-| File or folder | Platform | What it demonstrates |
+| Example | Purpose | PLC access |
 | --- | --- | --- |
-| `host_sync_quickstart.cpp` | Host | `HostSyncClient`, `make_c4_ascii_format4_protocol`, CPU model read, batch word read, and sparse random read. |
-| `host_sync_polling_reconnect.cpp` | Host | Read-only serial polling of `D100-D103` with selectable Format4/Format5 reconnect/backoff state logs on Windows/POSIX host serial ports. |
-| `mcu_async_batch_read.cpp` | Host | Low-level `MelsecSerialClient` flow with a simulated success response. |
-| `linux_cli/safe_bringup_readonly.sh` | Linux host | Safe read-only CLI bring-up with explicit serial, frame, and PLC profile settings. |
-| `platformio_rpipico_arduino_uart/` | RP2040 Arduino | Real `Serial1` UART read-only polling of `D100-D103`. |
-| `platformio_esp32c3_arduino_uart/` | ESP32-C3 Arduino | Real `Serial1` UART read-only polling with explicit RX/TX pins. |
-| `platformio_rpipico_arduino_async/` | RP2040 Arduino | Async client lifecycle with simulated response bytes. |
-| `platformio_esp32c3_arduino_async/` | ESP32-C3 Arduino | Async client lifecycle with simulated response bytes. |
-| `platformio_esp32c3_arduino_async_polling_reconnect/` | ESP32-C3 Arduino | Read-only async UART polling of `D100-D103` with reconnect/backoff state logs. |
+| [ESP32-S3 UART adapter](platformio_esp32s3_arduino_uart_adapter/README.md) | Minimal STAMPLC / FX5U D100 read | Read only |
+| [ESP32 / STAMPLC usage](esp32_uart_usage/README.md) | WORD, bit, DWORD, float, random, multi-block and asynchronous LCD examples | Six examples write on USB w; LCD example is read only |
+| [ESP32-C3 UART](platformio_esp32c3_arduino_uart/README.md) | Asynchronous D100-D103 polling through the UART adapter | Read only; stops on error |
+| [ESP32-C3 recovery](platformio_esp32c3_arduino_async_polling_reconnect/README.md) | Polling with explicit recovery after uncertain responses | Read only; manual r after required line recovery |
+| [Pico UART](platformio_rpipico_arduino_uart/README.md) | Direct core/UART integration on RP2040 | Read only; stops on error |
+| [Host quickstart](host_sync_quickstart.cpp) | CPU model, batch and random reads on Windows/POSIX | Read only |
+| [Host polling](host_sync_polling_reconnect.cpp) | Polling with retry for open failures and complete PLC error responses | Read only; stops on uncertain read errors |
+| [Core lifecycle](mcu_async_batch_read.cpp) | Low-level asynchronous state machine | Simulated response; no physical PLC |
+| [Pico simulation](platformio_rpipico_arduino_async/README.md) | Core lifecycle on Arduino | Simulated response |
+| [ESP32-C3 simulation](platformio_esp32c3_arduino_async/README.md) | Core lifecycle on Arduino | Simulated response |
+| [Read-only CLI bring-up](linux_cli/safe_bringup_readonly.sh) | Explicit serial/profile configuration | CPU model, loopback and word read |
+| [Cyclic CLI reads](linux_cli/cyclic_read_words.sh) | Timed repeated word reads | Read only |
+| [Device soak test](linux_cli/supported_device_rw_soak.sh) | Read/write/read/restore test | Writes; mismatch or restore failure exits with failure |
+| [FX5U soak preset](linux_cli/fx5u_supported_device_rw_soak.sh) | Device list preset for the soak test | Writes |
 
-## Real UART sample defaults
+The soak tests attempt restoration during normal execution, but restoration is not
+guaranteed after interruption or communication failure. They are test tools, not
+production control programs.
 
-The real-UART PlatformIO samples are read-only bring-up examples for `D100-D103`.
-They use explicit PLC profile and protocol settings in source, and the UART
-settings must match the PLC serial module.
+## Selecting a project
 
-| Board | UART | Pins | Serial | Protocol |
-| --- | --- | --- | --- | --- |
-| RP2040 / Raspberry Pi Pico | `Serial1` | TX `0`, RX `1` | `19200 / 8E1` | `4C ASCII Format4`, `CR/LF`, station `0`, sum check off |
-| ESP32-C3 DevKitM-1 | `Serial1` | TX `7`, RX `6` | `19200 / 8E1` | `4C ASCII Format4`, `CR/LF`, station `0`, sum check off |
+The repository root PlatformIO project contains the board-specific examples.
+Select its matching environment in PlatformIO.
+The seven usage examples have their own project in `esp32_uart_usage`.
+Host examples are CMake targets. The simulated examples do not test PLC wiring.
 
-Treat the pins and serial settings as sample defaults. Change them to match
-your board wiring, level shifter, and PLC serial module settings before live
-hardware use.
+## Real UART defaults
 
-Arduino Mega 2560 and other AVR/8-bit targets are not supported. Migrate an existing AVR project
-to ESP32 or maintain it as an unsupported downstream port.
+| Target | UART / pins | Serial | Protocol |
+| --- | --- | --- | --- |
+| STAMPLC / ESP32-S3 | UART1: RX39, TX0, DIR46 | 19200 / 8E1 | MelsecIqF, C4 Binary Format5, sum check on, station0 |
+| ESP32-C3 | UART1: RX6, TX7; external direction | 19200 / 8E1 | MelsecQ, C4 ASCII Format4, sum check off, station0 |
+| Raspberry Pi Pico | Serial1 / UART0: TX0, RX1 | 19200 / 8E1 | MelsecQ, C4 ASCII Format4, sum check off, station0 |
 
-## Before live hardware
+UART adapters exclusively own their UART: do not initialize Serial1 or Modbus on
+the same port. External direction requires an appropriate transceiver.
+The Pico hardware completion check is specific to UART0 on GPIO0/1.
 
-Read [Gotchas](../docsrc/user/GOTCHAS.md) before changing frame type, profile, serial settings, or write commands. Profile selection is not automatic, and serial framing must match the PLC serial module settings exactly.
+## Recovery
+
+A timeout or incomplete reply can leave a delayed PLC response in flight.
+Reopening a UART, resetting the MCU or waiting an arbitrary interval does not
+prove that the response has been excluded.
+Correct the cause and complete the PLC/interface-specific recovery procedure
+before restarting a stopped example.
+
+The ESP32-C3 recovery example accepts r only as acknowledgment of that external
+procedure. Complete PLC-error responses can be retried as reads after the poll
+interval. Do not apply that policy to writes whose execution result is unknown.
+
+Host polling accepts the serial device, PLC profile, head device, point count,
+baud, format4/format5 and sum-check selection as arguments; use its help display
+for the argument order. It retries open failures and complete PLC error responses
+with backoff, but exits on uncertain read errors instead of reopening blindly.
+
+## Verification and scope
+
+Host regression checks cover the example control flow and simulated UART events.
+A successful build or simulated test does not establish physical PLC compatibility.
+See each example's documentation for hardware verification status.
+Arduino Mega 2560 and other AVR/8-bit targets are not supported.
+
+See [Gotchas](../docsrc/user/GOTCHAS.md) for profile, framing and device constraints.

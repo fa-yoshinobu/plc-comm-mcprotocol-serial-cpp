@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <hardware/regs/uart.h>
+#include <hardware/regs/addressmap.h>
 
 #include "mcprotocol/serial/compat/array.hpp"
 #include "mcprotocol/serial/compat/cstddef.hpp"
@@ -43,6 +45,8 @@ struct AppState {
   std::array<std::uint16_t, 4> out_words {};
   bool request_started = false;
   bool tx_sent = false;
+  bool tx_started = false;
+  bool stopped = false;
   bool request_done = false;
   bool request_reported = false;
   std::uint32_t next_request_ms = 0;
@@ -68,6 +72,8 @@ void on_request_complete(void* user, Status status) {
   app->completion_status = status;
   app->request_started = false;
   app->tx_sent = false;
+  app->tx_started = false;
+  if (!status.ok()) app->stopped = true;
   app->next_request_ms = millis() + kPollIntervalMs;
 }
 
@@ -87,24 +93,45 @@ void pump_uart_tx(std::uint32_t now_ms) {
     return;
   }
 
-  const Status tx_start_status = g_app.client.notify_tx_started(now_ms);
-  if (!tx_start_status.ok()) {
-    on_request_complete(&g_app, tx_start_status);
+  if (!g_app.tx_started) {
+    const Status tx_start_status = g_app.client.notify_tx_started(now_ms);
+    if (!tx_start_status.ok()) {
+      on_request_complete(&g_app, tx_start_status);
+      return;
+    }
+    g_app.tx_started = true;
+    const auto written = g_plc_serial.write(
+        reinterpret_cast<const std::uint8_t*>(frame.data()), frame.size());
+    if (written != frame.size()) {
+      g_plc_serial.end(); // Stop physical TX before releasing the core transaction.
+      const auto status = g_app.client.notify_tx_complete(millis(),
+          mcprotocol::serial::make_status(mcprotocol::serial::StatusCode::Transport, "Partial UART write"));
+      if (!status.ok()) on_request_complete(&g_app, status);
+      return;
+    }
+  }
+  // Pico Serial1 is UART0 on GPIO0/1. Mbed flush() only checks FIFO writability,
+  // not physical TX completion. Check BUSY directly without discarding RX.
+  if (static_cast<std::int32_t>(millis() - g_app.client.transaction_deadline_ms()) >= 0) {
+    g_plc_serial.end();
+    const auto status = g_app.client.notify_tx_complete(millis(),
+        mcprotocol::serial::make_status(mcprotocol::serial::StatusCode::Timeout, "UART TX deadline"));
+    if (!status.ok()) on_request_complete(&g_app, status);
     return;
   }
-  g_plc_serial.write(reinterpret_cast<const std::uint8_t*>(frame.data()), frame.size());
-  g_plc_serial.flush();
-  // Notify only after the UART has accepted the frame for transmission.
-  const Status status = g_app.client.notify_tx_complete(now_ms, mcprotocol::serial::ok_status());
+  const auto* flags = reinterpret_cast<volatile const std::uint32_t*>(UART0_BASE + UART_UARTFR_OFFSET);
+  if (*flags & UART_UARTFR_BUSY_BITS) return;
+  const Status status = g_app.client.notify_tx_complete(millis(), mcprotocol::serial::ok_status());
   if (!status.ok()) {
     on_request_complete(&g_app, status);
     return;
   }
 
-  g_app.tx_sent = true;
+  if (g_app.request_started) g_app.tx_sent = true; // Completion may invoke callback.
 }
 
-void pump_uart_rx(std::uint32_t now_ms) {
+void pump_uart_rx() {
+  if (!g_app.tx_sent || !g_app.request_started) return; // Retain early responses.
   std::array<char, 64> rx_chunk {};
   while (g_plc_serial.available() > 0) {
     const int available = g_plc_serial.available();
@@ -120,7 +147,7 @@ void pump_uart_rx(std::uint32_t now_ms) {
 
     // Feed raw response bytes back into the client decoder.
     g_app.client.on_rx_bytes(
-        now_ms,
+        millis(),
         mcprotocol::serial::Span<const mcprotocol::serial::Byte>(
             reinterpret_cast<const mcprotocol::serial::Byte*>(rx_chunk.data()),
             bytes_read));
@@ -128,7 +155,9 @@ void pump_uart_rx(std::uint32_t now_ms) {
 }
 
 void start_read_if_due(std::uint32_t now_ms) {
-  if (g_app.request_started || g_app.client.busy() || now_ms < g_app.next_request_ms) {
+  if (g_app.stopped || g_app.client.requires_transport_reset() ||
+      g_app.request_started || g_app.client.busy() ||
+      static_cast<std::int32_t>(now_ms - g_app.next_request_ms) < 0) {
     return;
   }
 
@@ -159,6 +188,7 @@ void report_once() {
   if (!g_app.completion_status.ok()) {
     Serial.print("rpipico uart example failed: ");
     Serial.println(g_app.completion_status.message);
+    Serial.println("Stopped. Correct cause and exclude old replies before RESET.");
     return;
   }
 
@@ -193,7 +223,7 @@ void loop() {
   const std::uint32_t now_ms = millis();
   start_read_if_due(now_ms);
   pump_uart_tx(now_ms);
-  pump_uart_rx(now_ms);
-  g_app.client.poll(now_ms);
+  pump_uart_rx();
+  g_app.client.poll(millis());
   report_once();
 }

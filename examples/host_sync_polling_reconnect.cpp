@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cerrno>
+#include <limits>
 #include <thread>
 #include <chrono>
 
@@ -52,12 +54,14 @@ void print_usage(const char* argv0) {
 }
 
 bool parse_unsigned(const char* text, unsigned& out_value) {
-  if (text == nullptr || *text == '\0') {
+  if (text == nullptr || *text < '0' || *text > '9') {
     return false;
   }
   char* end = nullptr;
+  errno = 0;
   const unsigned long parsed = std::strtoul(text, &end, 10);
-  if (end == text || *end != '\0' || parsed > 0xFFFFUL) {
+  if (end == text || *end != '\0' || errno == ERANGE ||
+      parsed > std::numeric_limits<unsigned>::max()) {
     return false;
   }
   out_value = static_cast<unsigned>(parsed);
@@ -116,6 +120,10 @@ bool parse_args(int argc, char** argv, Options& out_options) {
     std::fprintf(stderr, "Invalid baud: %s\n", argv[5]);
     return false;
   }
+  if (out_options.baud == 0) {
+    std::fprintf(stderr, "baud must be positive\n");
+    return false;
+  }
   if (!parse_protocol(argv[6], out_options.protocol)) {
     std::fprintf(stderr, "Invalid protocol format: %s\n", argv[6]);
     return false;
@@ -143,6 +151,10 @@ const char* protocol_name(ProtocolSelection protocol) {
 
 void sleep_ms(unsigned ms) {
   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+}
+
+bool may_retry_read(Status status) {
+  return status.ok() || status.code == mcprotocol::serial::StatusCode::PlcError;
 }
 
 void log_state(const char* state, const char* message) {
@@ -229,6 +241,15 @@ int main(int argc, char** argv) {
           static_cast<std::uint16_t>(options.points),
           mcprotocol::serial::Span<std::uint16_t>(words.data(), options.points));
       plc.close();
+
+      // Only a complete PLC error response permits another read without a
+      // site-specific recovery procedure. Reopening cannot exclude a late reply.
+      if (!may_retry_read(status)) {
+        std::fprintf(stderr,
+            "Read stopped: %s. Correct the cause and exclude old PLC replies "
+            "using the PLC/interface reset procedure before restarting.\n", status.message);
+        return 1;
+      }
 
       if (status.ok()) {
         if (!online) {
