@@ -113,6 +113,11 @@ Only consume output data after success.
 
 ## Asynchronous usage
 
+`async_read_word(address, int16_t&, callback, user)` reads one signed word.
+The output must survive until completion/cancellation. Signed conversion occurs
+before the callback, and errors leave the output unchanged. The adapter reserves
+one word and an output pointer for this path; existing unsigned APIs remain available.
+
 ```cpp
 std::uint16_t value; // storage must outlive the pending request
 bool request_finished = false;

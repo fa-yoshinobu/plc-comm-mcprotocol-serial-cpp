@@ -42,6 +42,13 @@ class UartClient {
         BatchReadWordsRequest(address, static_cast<std::uint16_t>(out.size())),
         out, completed, this));
   }
+  // Output must remain alive until completion; signed conversion precedes callback.
+  [[nodiscard]] Status async_read_word(DeviceAddress address, std::int16_t& out,
+      CompletionHandler callback, void* user = nullptr) noexcept {
+    const Status s = async_read_words(address, {&signed_word_raw_, 1}, callback, user);
+    if (s.ok()) signed_word_out_ = &out;
+    return s;
+  }
   [[nodiscard]] Status async_read_bits(DeviceAddress address, Span<bool> out,
       CompletionHandler callback, void* user = nullptr) noexcept {
     Status s = admit(out.size(), callback, user);
@@ -76,9 +83,7 @@ class UartClient {
     std::uint16_t raw = 0;
     const Status status = read_word(address, raw);
     if (status.ok()) {
-      const std::int32_t value = raw < 0x8000U
-          ? static_cast<std::int32_t>(raw) : static_cast<std::int32_t>(raw) - 65536;
-      out = static_cast<std::int16_t>(value);
+      out = signed_word(raw);
     }
     return status;
   }
@@ -220,6 +225,10 @@ class UartClient {
   }
 
  private:
+  static std::int16_t signed_word(std::uint16_t raw) noexcept {
+    return static_cast<std::int16_t>(raw < 0x8000U
+        ? static_cast<std::int32_t>(raw) : static_cast<std::int32_t>(raw) - 65536);
+  }
   static Status busy_status() noexcept { return make_status(StatusCode::Busy, "UART client is busy"); }
   static Status closed_status() noexcept { return make_status(StatusCode::Closed, "UART is not open"); }
   Status admit(std::size_t count, CompletionHandler callback, void* user) noexcept {
@@ -233,6 +242,7 @@ class UartClient {
     if (busy()) return busy_status();
     if (!transport_.ready()) return closed_status();
     callback_ = callback;
+    signed_word_out_ = nullptr;
     user_ = user;
     active_ = true;
     tx_started_ = false;
@@ -246,6 +256,9 @@ class UartClient {
   }
   static void completed(void* user, Status s) noexcept {
     auto& self = *static_cast<UartClient*>(user);
+    if (s.ok() && self.signed_word_out_)
+      *self.signed_word_out_ = signed_word(self.signed_word_raw_);
+    self.signed_word_out_ = nullptr;
     self.active_ = false;
     self.result_ = s;
     const auto callback = self.callback_;
@@ -266,6 +279,8 @@ class UartClient {
     return result_;
   }
   Transport& transport_;
+  std::int16_t* signed_word_out_ = nullptr;
+  std::uint16_t signed_word_raw_ = 0;
   MelsecSerialClient core_;
   CompletionHandler callback_ = nullptr;
   void* user_ = nullptr;

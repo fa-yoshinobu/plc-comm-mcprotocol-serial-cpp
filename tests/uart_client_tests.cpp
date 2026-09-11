@@ -274,9 +274,30 @@ void test_signed_word() {
         static_cast<std::uint8_t>(raw[i] >> 8)};
     response(uart, data);
     assert(client.read_word(d100, value).ok() && value == expected[i]);
+    value = 123;
+    response(uart, data);
+    struct Context { std::int16_t* value; std::int16_t expected; int calls; } context{&value, expected[i], 0};
+    assert(client.async_read_word(d100, value, [](void* user, Status status) {
+      auto& c = *static_cast<Context*>(user);
+      assert(status.ok() && *c.value == c.expected);
+      ++c.calls;
+    }, &context).ok());
+    std::int16_t other = 99;
+    assert(client.async_read_word(d100, other, nullptr).code == StatusCode::Busy);
+    assert(value == 123);
+    pump(client, uart);
+    assert(value == expected[i] && context.calls == 1 && other == 99);
   }
   response(uart, {}, 0xC051);
   assert(client.read_word(d100, value).code == StatusCode::PlcError && value == -66);
+  response(uart, {}, 0xC051);
+  Completion completion;
+  assert(client.async_read_word(d100, value, Completion::callback, &completion).ok());
+  pump(client, uart);
+  assert(completion.count == 1 && completion.result.code == StatusCode::PlcError && value == -66);
+  assert(client.async_read_word(d100, value, nullptr).ok());
+  client.cancel();
+  assert(value == -66 && !client.busy());
   uart.rx.clear(); uart.rx_offset = 0;
   assert(client.read_word(d100, value).code == StatusCode::Timeout && value == -66);
 }
