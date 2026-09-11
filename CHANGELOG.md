@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Library: Added opt-in `Esp32UartClient` for Arduino-ESP32 with exclusive UART ownership, synchronous/asynchronous word and bit operations, incremental TX/RX, RTS half duplex, cancellation, and explicit recovery. Existing core and host APIs remain unchanged and Arduino-independent.
+- Library: Recognize GCC 8's `201603` string-view feature value to avoid duplicate `std::string_view` definitions in C++17 builds.
+- Samples: Added an ESP32-S3 / STAMPLC UART1 read-only FX5U D100 example and an adapter usage guide. Physical RS-485 verification remains pending.
+- Tests: Added transport-state-machine, stubbed ESP32 ownership/recovery, and GCC 8 string-view regression tests.
+- CI: Added an ESP32-S3 adapter consumer to packed-package checks, selecting GNU C++17 explicitly for Arduino-ESP32's SDK headers.
+
 ## [4.2.0] - 2026-09-02
 
 - Release: Bumped CMake, PlatformIO, Arduino, and public version metadata to `4.2.0`.

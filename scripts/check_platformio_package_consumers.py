@@ -13,13 +13,15 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ENVIRONMENTS = ("native-core", "esp32-c3-core")
+ENVIRONMENTS = ("native-core", "esp32-c3-core", "esp32-s3-uart")
 REQUIRED_FILES = (
     "LICENSE",
     "README.md",
     "library.json",
     "library.properties",
     "include/mcprotocol_serial.hpp",
+    "include/mcprotocol_serial_arduino_esp32.hpp",
+    "include/mcprotocol/serial/detail/uart_client.hpp",
     "examples/platformio_esp32c3_arduino_async/platformio_esp32c3_arduino_async.cpp",
 )
 REQUIRED_SOURCES = ("src/client.cpp", "src/codec.cpp")
@@ -141,7 +143,6 @@ build_unflags =
     -std=gnu++20
     -std=c++11
     -std=c++14
-    -std=c++17
     -std=c++20
 build_flags =
     -std=c++17
@@ -153,6 +154,18 @@ platform = native
 platform = espressif32
 board = esp32-c3-devkitm-1
 framework = arduino
+
+[env:esp32-s3-uart]
+platform = espressif32@6.12.0
+board = esp32-s3-devkitc-1
+framework = arduino
+build_unflags =
+    -std=gnu++11
+    -std=gnu++14
+    -std=c++17
+build_flags =
+    -std=gnu++17
+    -DMCPROTOCOL_TEST_ESP32_UART=1
 """,
         encoding="utf-8",
         newline="\n",
@@ -165,6 +178,11 @@ framework = arduino
 #endif
 
 #include "mcprotocol_serial.hpp"
+
+#if defined(MCPROTOCOL_TEST_ESP32_UART)
+#include "mcprotocol_serial_arduino_esp32.hpp"
+mcprotocol::serial::Esp32UartClient uart_client(1);
+#endif
 
 #if !defined(PLATFORMIO)
 #error "This smoke consumer must be built by PlatformIO"
@@ -185,6 +203,23 @@ int exercise_core_api() {
   if (!status.ok()) {
     return 1;
   }
+
+#if defined(MCPROTOCOL_TEST_ESP32_UART)
+  mcprotocol::serial::Esp32UartConfig uart;
+  uart.rx_pin = 39;
+  uart.tx_pin = 0;
+  uart.direction = mcprotocol::serial::Esp32Direction::Rs485Rts;
+  uart.rts_pin = 46;
+  auto uart_status = uart_client.begin(uart, protocol);
+  if (!uart_status.ok()) return 2;
+  std::uint16_t word = 0;
+  uart_status = uart_client.async_read_words(
+      {mcprotocol::serial::DeviceCode::D, 100}, {&word, 1}, nullptr);
+  if (!uart_status.ok()) return 3;
+  uart_client.update();
+  uart_client.cancel();
+  if (!uart_client.end().ok()) return 4;
+#endif
 
 #if !defined(ARDUINO)
   // A package must not shadow the host toolchain's complete standard <array> header.
@@ -258,7 +293,7 @@ def main() -> int:
         action="append",
         choices=ENVIRONMENTS,
         dest="environments",
-        help="environment to build; repeat to select more than one (default: both)",
+        help="environment to build; repeat to select more than one (default: all)",
     )
     args = parser.parse_args()
 

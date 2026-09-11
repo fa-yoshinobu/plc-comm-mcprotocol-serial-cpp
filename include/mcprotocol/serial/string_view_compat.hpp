@@ -11,7 +11,9 @@
 #endif
 #endif
 
-#if !defined(__cpp_lib_string_view) || (__cpp_lib_string_view < 201606L)
+// GCC 8 supplies every string_view operation used here with the 201603 value.
+// Do not redefine std::string_view merely because the feature macro is older.
+#if !defined(__cpp_lib_string_view) || (__cpp_lib_string_view < 201603L)
 namespace std {
 
 class string_view {

@@ -183,6 +183,18 @@ else()
 endif()
 
 if(MCPROTOCOL_SERIAL_BUILD_TESTING)
+  add_executable(uart_client_tests tests/uart_client_tests.cpp)
+  target_link_libraries(uart_client_tests PRIVATE mcprotocol_serial)
+  add_test(NAME uart_client_tests COMMAND uart_client_tests)
+  add_executable(esp32_uart_facade_tests tests/esp32_uart_facade_tests.cpp)
+  target_include_directories(esp32_uart_facade_tests PRIVATE tests/esp32_stubs)
+  target_compile_definitions(esp32_uart_facade_tests PRIVATE ARDUINO=10800 ARDUINO_ARCH_ESP32=1)
+  target_link_libraries(esp32_uart_facade_tests PRIVATE mcprotocol_serial)
+  add_test(NAME esp32_uart_facade_tests COMMAND esp32_uart_facade_tests)
+  add_executable(string_view_gcc8_consumer tests/string_view_gcc8_consumer.cpp)
+  target_link_libraries(string_view_gcc8_consumer PRIVATE mcprotocol_serial)
+  add_test(NAME string_view_gcc8_consumer COMMAND string_view_gcc8_consumer)
+
   add_executable(test_assert_negative_probe
     tests/test_assert_negative_probe.cpp
   )
