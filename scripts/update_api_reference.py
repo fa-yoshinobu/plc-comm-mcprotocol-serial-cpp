@@ -25,6 +25,17 @@ INPUTS = (
     "include/mcprotocol/serial/posix_serial.hpp",
     "include/mcprotocol/serial/link_direct.hpp",
     "include/mcprotocol/serial/qualified_buffer.hpp",
+    "include/mcprotocol_serial_arduino_esp32.hpp",
+    "include/mcprotocol/serial/detail/uart_client.hpp",
+    "include/mcprotocol/serial/string_view_compat.hpp",
+)
+
+PREDEFINED = (
+    "MCPROTOCOL_SERIAL_ENABLE_HOST_API=1",
+    "ARDUINO=10800",
+    "ARDUINO_ARCH_ESP32=1",
+    "__cplusplus=201703L",
+    "__cpp_lib_string_view=201603L",
 )
 
 
@@ -46,7 +57,8 @@ def main() -> int:
     ]
     for path in INPUTS:
         command.extend(("--input", path))
-    command.extend(("--predefine", "MCPROTOCOL_SERIAL_ENABLE_HOST_API=1"))
+    for define in PREDEFINED:
+        command.extend(("--predefine", define))
     if args.check:
         command.append("--check")
     return subprocess.run(command, cwd=ROOT, check=False).returncode

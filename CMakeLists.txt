@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(mcprotocol_serial_cpp VERSION 4.2.0 LANGUAGES CXX)
+project(mcprotocol_serial_cpp VERSION 4.2.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -257,6 +257,9 @@ if(MCPROTOCOL_SERIAL_BUILD_TESTING)
   add_test(NAME bundled_algorithm_compat_tests COMMAND bundled_algorithm_compat_tests)
 
   if(Python3_Interpreter_FOUND)
+    add_test(NAME uart_api_reference_tests
+      COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_uart_api_reference.py)
+    set_tests_properties(uart_api_reference_tests PROPERTIES SKIP_RETURN_CODE 77)
     add_test(
       NAME performance_contract_tests
       COMMAND ${Python3_EXECUTABLE}

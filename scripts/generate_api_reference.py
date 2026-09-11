@@ -254,11 +254,35 @@ def parse_compound(path: Path) -> Compound | None:
             line = 0
 
     members: list[Member] = []
+    inherited_members: list[Member] = []
+    inherited: set[tuple[str, str]] = set()
     for section in compound_node.findall("sectiondef"):
         section_kind = section.get("kind", "")
         if kind in {"class", "struct", "union"} and not section_kind.startswith("public"):
             continue
         for member_node in section.findall("memberdef"):
+            owner_id = member_node.get("id", "").rsplit("_1", 1)[0]
+            if (kind in {"class", "struct"} and member_node.get("kind") == "function"
+                    and owner_id != compound_node.get("id")):
+                # Doxygen's inline list determines visibility, but can omit inherited
+                # overloads. Read the full overload set from the declaring class.
+                member_name = xml_text(member_node, "name")
+                key = (owner_id, member_name)
+                if key in inherited:
+                    continue
+                inherited.add(key)
+                base = ET.parse(path.parent / f"{owner_id}.xml").getroot()
+                for base_member in base.findall("./compounddef/sectiondef/memberdef"):
+                    if xml_text(base_member, "name") != member_name:
+                        continue
+                    parsed = parse_member(base_member)
+                    if parsed is not None:
+                        parsed.signature = normalize_signature(
+                            f"{xml_text(base_member, 'type')} {name}::{member_name}"
+                            f"{xml_text(base_member, 'argsstring')}"
+                        )
+                        inherited_members.append(parsed)
+                continue
             parsed = parse_member(member_node)
             if parsed is not None:
                 members.append(parsed)
@@ -272,6 +296,7 @@ def parse_compound(path: Path) -> Compound | None:
         return None
 
     members.sort(key=lambda item: (item.line, item.kind, item.name))
+    members.extend(inherited_members)
     return Compound(
         kind=kind,
         name=name,
@@ -316,6 +341,7 @@ def run_doxygen(
                     "RECURSIVE = NO",
                     "EXTRACT_ALL = YES",
                     "EXTRACT_PRIVATE = NO",
+                    "INLINE_INHERITED_MEMB = YES",
                     "EXTRACT_STATIC = YES",
                     "HIDE_UNDOC_MEMBERS = NO",
                     "HIDE_UNDOC_CLASSES = NO",
@@ -332,7 +358,8 @@ def run_doxygen(
                     "ENABLE_PREPROCESSING = YES",
                     "MACRO_EXPANSION = NO",
                     f"PREDEFINED = {predefined_values}",
-                    "EXCLUDE_SYMBOLS = *::detail *detail::* *link_direct_detail*",
+                    # Parse internal bases for inheritance; parse_compound still
+                    # excludes their standalone documentation.
                     "EXTENSION_MAPPING = h=C++ hpp=C++",
                     "",
                 ]

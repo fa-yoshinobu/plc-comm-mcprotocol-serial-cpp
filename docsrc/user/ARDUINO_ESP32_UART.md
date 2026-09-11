@@ -1,17 +1,18 @@
-# Arduino-ESP32 UARTアダプターの使い方
+# Using the Arduino-ESP32 UART Adapter
 
-`Esp32UartClient`は、ESP32のUARTでMCプロトコル通信を行うためのクラスです。
-単点・連続・ランダム・複数ブロックの読み書きに対応し、同期処理と非同期処理を選べます。
-M5ライブラリには依存しません。LCDやボタンはアプリケーション側で扱います。
+`Esp32UartClient` provides MC protocol communication over an ESP32 UART.
+It supports single-point, contiguous, random, and multi-block reads and writes,
+with synchronous and asynchronous APIs.
+It does not depend on M5 libraries. The application handles the LCD and buttons.
 
-## 使用環境と設定
+## Requirements and Configuration
 
-Arduino-ESP32とC++17を使用します。
-ESP32-S3・ESP32-C3、Arduino-ESP32 2.0.17でビルド確認しています。
-Arduino-ESP32 3.xは未検証です。このアダプターはRP2040・AVR・ESP-IDF単独環境では使用できません。
+Use Arduino-ESP32 and C++17.
+Builds have been verified for ESP32-S3 and ESP32-C3 with Arduino-ESP32 2.0.17.
+Arduino-ESP32 3.x is unverified. This adapter cannot be used on RP2040, AVR, or standalone ESP-IDF.
 
-ライブラリに `mcprotocol_serial_arduino_esp32.hpp` が含まれていることを確認してください。
-既存のPlatformIO設定に、次の指定を追加します。他の必要なフラグは残してください。
+Make sure the library includes `mcprotocol_serial_arduino_esp32.hpp`.
+Add the following settings to your existing PlatformIO configuration, keeping any other required flags.
 
 ```ini
 build_unflags =
@@ -25,52 +26,52 @@ build_flags =
     -DMCPROTOCOL_SERIAL_MAX_REQUEST_DATA_BYTES=384
 ```
 
-`-std=gnu++17`を`build_unflags`へ入れると、必要な指定が取り消されます。
-バッファ容量の指定は、アプリケーションとライブラリの両方に同じ値を適用してください。
+Adding `-std=gnu++17` to `build_unflags` removes the required compiler flag.
+Apply the same buffer capacity definitions to both the application and the library.
 
-上記は少数点の読み書きに使う設定です。機能を無効にする設定ではありませんが、
-一度に扱える点数はフレーム容量によって制限されます。
-点数を増やす場合は、フレーム容量と使用するタスクのスタック容量を確認してください。
-UARTの受信バッファは、この通信フレーム用バッファとは別です。
+These settings are intended for reads and writes involving a small number of points.
+They do not disable features, but frame capacity limits the number of points per request.
+Before increasing the point count, check the frame capacity and the stack size of the task in use.
+The UART receive buffer is separate from these protocol frame buffers.
 
-## 接続を設定する
+## Configuring the Connection
 
-UARTの設定は`Esp32UartConfig`、PLCの通信形式は`ProtocolConfig`で指定します。
+Use `Esp32UartConfig` for UART settings and `ProtocolConfig` for the PLC communication format.
 
-| UART設定 | 初期値 | 指定内容 |
+| UART setting | Default | Description |
 | --- | --- | --- |
-| `baud` | 19200 | 300～115200bps |
-| `format` | `SERIAL_8E1` | 7/8データビット、パリティなし/偶数/奇数、ストップ1/2 |
-| `rx_pin` / `tx_pin` | -1 | 使用するRX/TXピン。明示指定が必要 |
-| `direction` | `External` | 自動方向制御等はExternal、RTSによるRS-485制御はRs485Rts |
-| `rts_pin` | -1 | Rs485Rtsでは方向制御ピンを指定。Externalでは-1 |
-| `rx_buffer_bytes` | 1024 | UART受信バッファ容量。256～65536バイト |
+| `baud` | 19200 | 300 to 115200 bps |
+| `format` | `SERIAL_8E1` | 7/8 data bits, no/even/odd parity, 1/2 stop bits |
+| `rx_pin` / `tx_pin` | -1 | RX/TX pins; must be specified explicitly |
+| `direction` | `External` | External for automatic direction control or similar; Rs485Rts for RTS-controlled RS-485 |
+| `rts_pin` | -1 | Direction control pin for Rs485Rts; -1 for External |
+| `rx_buffer_bytes` | 1024 | UART receive buffer capacity, from 256 to 65536 bytes |
 
-`Rs485Rts`は、DEと/REをRTSへ接続した半二重RS-485回路向けです。
-`External`ではアダプターが方向制御ピンを操作しません。
-基板に合ったRS-485/RS-232トランシーバーを使用してください。
-CTSフロー制御には対応していません。
+`Rs485Rts` is intended for half-duplex RS-485 circuits with DE and /RE connected to RTS.
+With `External`, the adapter does not operate a direction control pin.
+Use an RS-485/RS-232 transceiver suitable for your board.
+CTS flow control is not supported.
 
-以下の例は、STAMPLCのPWR-485とFX5Uの内蔵RS-485を接続する設定です。
+The following example configures a connection between STAMPLC PWR-485 and the FX5U built-in RS-485 port.
 
-| 項目 | 設定 |
+| Item | Setting |
 | --- | --- |
-| UART / ピン | UART1、RX=39、TX=0、DIR=46 |
-| 通信速度・データ形式 | 19200bps、8bit、偶数パリティ、ストップ1 |
-| PLCプロファイル | `PlcProfile::MelsecIqF` |
-| MC伝文 | `ProtocolConfig::c4_binary()`：4Cバイナリ、形式5 |
-| サムチェック / 局番 | あり / 0 |
+| UART / pins | UART1, RX=39, TX=0, DIR=46 |
+| Baud rate / data format | 19200 bps, 8 data bits, even parity, 1 stop bit |
+| PLC profile | `PlcProfile::MelsecIqF` |
+| MC frame | `ProtocolConfig::c4_binary()`: 4C binary, format 5 |
+| Sum check / station number | Enabled / 0 |
 
-別のボードではピンを変更してください。
-PLC側の伝文形式・サムチェック・局番・速度・パリティを一致させます。
-バイナリ形式5では8データビットが必要です。
+Change the pins for other boards.
+Match the PLC settings for frame format, sum check, station number, baud rate, and parity.
+Binary format 5 requires 8 data bits.
 
-## D100を非同期で定期的に読む
+## Reading D100 Periodically with the Asynchronous API
 
-次のプログラムは、D100を符号付き16ビット整数として読み、
-読み取り完了から1秒後に次の要求を送ります。
-値とエラーはデバッグ用Serialへ出力します。
-Serialの接続先はボードとUSB設定に従います。PLC用UART1とは分けてください。
+The following program reads D100 as a signed 16-bit integer and sends the next request
+one second after the read completes.
+Values and errors are printed to the debug Serial interface.
+The Serial connection depends on the board and USB settings. Keep it separate from UART1 used by the PLC.
 
 ```cpp
 #include <Arduino.h>
@@ -78,8 +79,8 @@ Serialの接続先はボードとUSB設定に従います。PLC用UART1とは分
 
 using namespace mcprotocol::serial;
 
-Esp32UartClient plc(1); // UART1をこのクラスが専有
-std::int16_t d100 = 0; // 非同期の受信先は完了まで保持する
+Esp32UartClient plc(1); // This class owns UART1 exclusively.
+std::int16_t d100 = 0; // Keep the asynchronous output alive until completion.
 std::uint32_t nextRead = 0;
 bool ready = false;
 
@@ -88,7 +89,7 @@ void onRead(void*, Status status) {
     ready = false;
     Serial.printf("COMM Error: %s (PLC=%04X)\n",
         status.message, static_cast<unsigned>(status.plc_error_code));
-    return; // 異常時は通信を停止する
+    return; // Stop communication on error.
   }
   Serial.printf("D100:%d\n", static_cast<int>(d100));
   nextRead = millis() + 1000;
@@ -115,139 +116,139 @@ void setup() {
 }
 
 void loop() {
-  plc.update(); // 送受信とタイムアウトを進める
+  plc.update(); // Advance transmission, reception, and timeout handling.
 
   if (ready && !plc.busy() &&
       static_cast<std::int32_t>(millis() - nextRead) >= 0) {
     const Status status =
         plc.async_read_word({DeviceCode::D, 100}, d100, onRead);
-    if (!status.ok()) onRead(nullptr, status); // 要求の受付失敗
+    if (!status.ok()) onRead(nullptr, status); // Request admission failed.
   }
 
-  // LCD・ボタンなどの更新処理をここで行う
+  // Update the LCD, buttons, and other application components here.
   delay(1);
 }
 ```
 
-`begin()`の成功は初期化の成功であり、PLCと通信できたことを意味しません。
-読取要求の完了結果で通信の成功を確認します。
-`TimeoutConfig{3000, 250}`は全体の応答期限と受信バイト間の期限をミリ秒で指定します。
-全体の期限には物理送信にかかる時間も含みます。
+A successful `begin()` means initialization succeeded; it does not confirm communication with the PLC.
+Check the read completion result to confirm successful communication.
+`TimeoutConfig{3000, 250}` specifies the overall response timeout and the inter-byte receive timeout in milliseconds.
+The overall deadline includes physical transmission time.
 
-## 同期と非同期の違い
+## Synchronous and Asynchronous APIs
 
-| 方式 | 関数が戻るタイミング | 結果の確認 |
+| Mode | When the function returns | How to check the result |
 | --- | --- | --- |
-| 同期 | 通信完了またはエラー発生後 | 戻り値のStatus |
-| 非同期 | 要求を受け付けた直後 | 受付は戻り値、通信完了はコールバックのStatus |
+| Synchronous | After communication completes or an error occurs | Returned Status |
+| Asynchronous | Immediately after request admission | Returned Status for admission; callback Status for completion |
 
-同期関数は応答待ちの間、同じタスクのLCD・ボタン処理を進められません。
-画面や入出力を更新し続ける場合は非同期関数を使用します。
+While a synchronous function waits for a response, LCD and button processing in the same task cannot proceed.
+Use asynchronous functions when the display or I/O must keep updating.
 
-非同期処理では次のルールを守ってください。
+Follow these rules for asynchronous operations:
 
-- `loop()`等から`update()`を継続して呼ぶ。長時間呼ばないと受信処理と期限の判定も遅れる。
-- 同時に実行する要求は1件。`busy()`がtrueの間の追加要求はBusyになる。
-- 戻り値が失敗なら、その要求の完了コールバックは呼ばれない。
-- 受付成功後は、コールバックを指定していれば、成功・エラー・キャンセルのいずれかで1回呼ばれる。
-- 受信先とコールバックで参照するデータは、完了またはキャンセル完了まで保持する。
-- コールバックは`update()`や`cancel()`を呼ぶタスクで実行される。割り込み処理ではない。
-- コールバック内で新しい要求を開始しない。次のloopで開始する。
-- 同じアダプターを複数タスクから同時に操作しない。
+- Call `update()` regularly from `loop()` or equivalent. Long gaps also delay receive processing and deadline checks.
+- Only one request can run at a time. Additional requests return Busy while `busy()` is true.
+- If request admission fails, the completion callback is not called for that request.
+- After successful admission, a supplied callback is called exactly once on success, error, or cancellation.
+- Keep output buffers and data referenced by the callback alive until completion or completed cancellation.
+- Callbacks run in the task that calls `update()` or `cancel()`, not in an interrupt handler.
+- Do not start a new request inside a callback. Start it in the next loop iteration.
+- Do not access the same adapter concurrently from multiple tasks.
 
-## 読み書き関数
+## Read and Write Functions
 
-`address`は`{DeviceCode::D, 100}`のように指定します。
-`Span<T>`は配列と要素数を渡すための型です。固定長配列はそのまま渡せます。
-関数名が同じでも、読み書き可能なデバイス・点数はPLCと伝文形式によって異なります。
+Specify `address` as, for example, `{DeviceCode::D, 100}`.
+`Span<T>` passes an array and its element count. Fixed-size arrays can be passed directly.
+Available devices and point counts depend on the PLC and frame format, even when the function name is the same.
 
-| 同期関数 | データ |
+| Synchronous function | Data |
 | --- | --- |
-| `read_word(address, value)` | uint16_t& または int16_t& |
+| `read_word(address, value)` | uint16_t& or int16_t& |
 | `read_words(address, values)` | Span<uint16_t> |
 | `read_bit(address, value)` | bool& |
 | `read_bits(address, values)` | Span<bool> |
 | `write_word(address, value)` | uint16_t |
 | `write_words(address, values)` | Span<const uint16_t> |
-| `write_bit(address, value)` | BitValue（bool） |
+| `write_bit(address, value)` | BitValue (bool) |
 | `write_bits(address, values)` | Span<const BitValue> |
 
-非同期では`async_read_words`、`async_read_bits`、`async_write_words`、
-`async_write_bits`を使用し、データの後にコールバックと任意のuserポインターを渡します。
-符号付き1ワードには`async_read_word(address, int16_t&, callback, user)`も使えます。
-その他の単点操作は、対応する配列版に1要素を渡します。
+For asynchronous operations, use `async_read_words`, `async_read_bits`, `async_write_words`,
+and `async_write_bits`, passing a callback and an optional user pointer after the data arguments.
+For a single signed word, you can also use `async_read_word(address, int16_t&, callback, user)`.
+For other single-point operations, pass one element to the corresponding array-based function.
 
-符号付き読取では、コールバックの前に符号を解釈します。
-エラー時は符号付き出力を更新しません。いずれの読取も成功時だけ値を使用してください。
+Signed reads interpret the sign before invoking the callback.
+The signed output is unchanged on error. For all reads, use the returned values only on success.
 
-## ランダム・複数ブロック・32ビット値
+## Random Access, Multiple Blocks, and 32-Bit Values
 
-| 同期関数 | 引数 |
+| Synchronous function | Arguments |
 | --- | --- |
-| `random_read` | RandomReadRequest、WORD出力、DWORD出力 |
-| `random_write_words` | RandomWriteWordItem配列、RandomWriteDWordItem配列 |
-| `random_write_bits` | RandomWriteBitItem配列 |
-| `multi_block_read` | MultiBlockReadRequest、WORD出力、ビット出力、MultiBlockReadBlockResult出力 |
+| `random_read` | RandomReadRequest, WORD output, DWORD output |
+| `random_write_words` | RandomWriteWordItem array, RandomWriteDWordItem array |
+| `random_write_bits` | RandomWriteBitItem array |
+| `multi_block_read` | MultiBlockReadRequest, WORD output, bit output, MultiBlockReadBlockResult output |
 | `multi_block_write` | MultiBlockWriteRequest |
 
-各関数には`async_`を付けた非同期版があります。
-引数の後ろにコールバックと任意のuserポインターを追加します。
+Each function has an asynchronous version with the `async_` prefix.
+Append a callback and an optional user pointer to the arguments.
 
-ランダムアクセスは離れた番地をまとめて指定します。
-WORDとDWORDの結果は別々の配列に、指定順で格納されます。
-ビットデバイスのランダム読取はワード単位のビット列として扱い、
-ランダムビット読取専用の関数はありません。
+Random access groups noncontiguous addresses in one request.
+WORD and DWORD results are stored in separate arrays, in the order specified.
+Random reads of bit devices treat the data as word-sized groups of bits;
+there is no dedicated random bit-read function.
 
-複数ブロックは「D100から2点」「D200から3点」などをまとめて指定します。
-結果の`data_offset`と`data_count`は、対応するWORDまたはビット出力配列内の位置と数です。
-**ビットブロックのpoints=1は16ビットです。出力には16要素が必要です。**
+Multi-block requests group ranges such as two points starting at D100 and three points starting at D200.
+The result fields `data_offset` and `data_count` specify the position and count within the corresponding WORD or bit output array.
+**For a bit block, points=1 means 16 bits. The output requires 16 elements.**
 
-通常のDレジスタのDWORDは連続2ワードを使い、先頭が下位ワードです。
-floatはDWORDと同じ32ビット列を`memcpy`で相互変換します。数値キャストは使用しません。
+A DWORD in ordinary D registers uses two consecutive words, with the low word first.
+Convert between float and the corresponding 32-bit DWORD representation using `memcpy`, not a numeric cast.
 
-対応外の要求や容量を超える要求はエラーになります。
-アダプターが複数要求へ自動分割することはありません。
-各方式のコード例は[用途別サンプル](../../examples/esp32_uart_usage/README.md)を参照してください。
+Unsupported requests and requests that exceed capacity return errors.
+The adapter does not automatically split them into multiple requests.
+See the [usage examples](../../examples/esp32_uart_usage/README.md) for code demonstrating each operation.
 
-## UARTの専有と終了
+## UART Ownership and Shutdown
 
-`Esp32UartClient plc(1)`はUART1を初期化して使用します。
-同じポートをSerial1・Modbus・別のアダプターから使用しないでください。
-別のドライバーが使用中なら`begin()`はBusyを返します。
-ピンもSPI/I2C等と競合しないように割り当てます。
+`Esp32UartClient plc(1)` initializes and uses UART1.
+Do not use the same port through Serial1, Modbus, or another adapter.
+If another driver owns the port, `begin()` returns Busy.
+Also assign pins so they do not conflict with SPI, I2C, or other peripherals.
 
-M5StamPLCのUART1を使う場合は、公式ライブラリのModbusスレーブ機能を無効にしてから
-M5StamPLCを初期化してください。LCDを含む設定例は
-[async_lcd.cpp](../../examples/esp32_uart_usage/async_lcd.cpp)にあります。
+When using UART1 on M5StamPLC, disable the official library's Modbus slave feature
+before initializing M5StamPLC. For a configuration example that includes the LCD,
+see [async_lcd.cpp](../../examples/esp32_uart_usage/async_lcd.cpp).
 
-- `cancel()`：実行中の要求をキャンセルする。送信中なら物理送信も停止する。
-- `end()`：待機中のUARTを閉じる。実行中はBusyを返すため、先にcancelする。
-- `configure(protocol)`：待機中で正常なUARTの通信形式を変更する。復旧要求は解除しない。
+- `cancel()`: Cancels the active request. If transmission is in progress, it also stops physical transmission.
+- `end()`: Closes an idle UART. Returns Busy while a request is active, so call cancel first.
+- `configure(protocol)`: Changes the protocol configuration on an idle, healthy UART. It does not clear a recovery requirement.
 
-受信先やコールバック用データを破棄する前に、要求を完了またはキャンセルしてください。
-コールバック内でアダプターを破棄しないでください。
+Complete or cancel the request before destroying output buffers or callback data.
+Do not destroy the adapter inside a callback.
 
-## エラーと通信再開
+## Errors and Resuming Communication
 
-`Status::ok()`で成功を確認します。
-`code`はエラー種別、`message`は説明、`plc_error_code`はPLCエラー時の詳細コードです。
-書込結果を確定できない場合は`OperationOutcomeUnknown`になることがあります。
+Check success with `Status::ok()`.
+`code` identifies the error category, `message` provides a description, and `plc_error_code` holds the detailed PLC error code.
+A write whose outcome cannot be confirmed may return `OperationOutcomeUnknown`.
 
-`requires_transport_reset()`がtrueなら、そのまま次の要求を送れません。
-UARTが閉じている場合もtrueになります。
-初期化に失敗した場合は原因を修正して`begin()`を行います。
+If `requires_transport_reset()` is true, you cannot send the next request without recovery.
+It is also true when the UART is closed.
+If initialization fails, correct the cause and call `begin()`.
 
-一度beginに成功したUARTを復旧する場合は、次の順序で操作します。
+To recover a UART after a successful begin, follow this sequence:
 
-1. 新しい要求を止め、配線・設定・PLC側の状態を確認する。
-2. PLCや通信モジュールの手順に従い、前回の遅延応答が今後届かない状態を確保する。
-3. `recover(protocol)`でUARTと通信設定を初期化し直す。
-4. 戻り値の成功を確認してから、新しい要求を開始する。
+1. Stop new requests and check the wiring, configuration, and PLC state.
+2. Follow the PLC or communication module procedure to ensure that no delayed response from the previous transaction can still arrive.
+3. Call `recover(protocol)` to reinitialize the UART and protocol configuration.
+4. Check that it succeeds before starting a new request.
 
-UARTの開き直し、受信バッファの破棄、MCUのリセットだけでは、
-線上やPLC側に残る遅延応答を排除できません。一律の待機時間での保証もありません。
-アダプターは自動復旧・自動再送を行いません。
+Reopening the UART, discarding its receive buffer, or resetting the MCU alone cannot
+exclude delayed responses still on the line or pending in the PLC. A fixed waiting period does not guarantee this either.
+The adapter does not recover or retry automatically.
 
-書込応答が届かなくても、PLCでは書き込み済みの場合があります。
-書込結果が不明な要求をそのまま再送しないでください。
-実装例は[ESP32-C3の復旧例](../../examples/platformio_esp32c3_arduino_async_polling_reconnect/README.md)を参照してください。
+The PLC may have completed a write even if its response never arrives.
+Do not blindly resend a request whose write outcome is unknown.
+See the [ESP32-C3 recovery example](../../examples/platformio_esp32c3_arduino_async_polling_reconnect/README.md) for an implementation.

@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.1] - 2026-09-11
+
+- Release: Bumped CMake, PlatformIO, Arduino, and public version metadata to `4.2.1`.
+- Docs: Added the English Arduino-ESP32 UART guide and generated UART API reference, including inherited overloads; aligned setup and memory guidance with the adapter.
+- Tests: Added a generated UART API regression check for public members, overloads, and private-member exclusion.
+- Samples: Corrected UART physical-TX completion and early-response handling in the Pico example, stopped retries after ambiguous communication failures, and fixed host baud parsing and soak-test mismatch reporting.
+
+- Compatibility: The bundled string-view fallback now uses `mcprotocol::serial::StringView` instead of defining `std::string_view`. Fallback users must update that type name and rebuild the library and consumers with matching compatibility settings. Standard-library builds retain `std::string_view` through the `StringView` alias.
+
 - Library: Added asynchronous signed-word UART reads with conversion before completion notification and unchanged output on failure.
 
 - Library: Added signed `int16_t` UART `read_word` overload, preserving the caller's value on failure.
@@ -28,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Library: Added opt-in `Esp32UartClient` for Arduino-ESP32 with exclusive UART ownership, synchronous/asynchronous word and bit operations, incremental TX/RX, RTS half duplex, cancellation, and explicit recovery. Existing core and host APIs remain unchanged and Arduino-independent.
 - Library: Recognize GCC 8's `201603` string-view feature value to avoid duplicate `std::string_view` definitions in C++17 builds.
-- Samples: Added an ESP32-S3 / STAMPLC UART1 read-only FX5U D100 example and an adapter usage guide. Physical RS-485 verification remains pending.
+- Samples: Added an ESP32-S3 / STAMPLC UART1 read-only FX5U D100 example and an adapter usage guide.
 - Tests: Added transport-state-machine, stubbed ESP32 ownership/recovery, and GCC 8 string-view regression tests.
 - CI: Added an ESP32-S3 adapter consumer to packed-package checks, selecting GNU C++17 explicitly for Arduino-ESP32's SDK headers.
 

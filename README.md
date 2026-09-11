@@ -41,10 +41,10 @@ The PlatformIO package contains the transport-agnostic `MelsecSerialClient`, cod
 Arduino-ESP32 users can opt into the new
 [`Esp32UartClient` UART adapter](docsrc/user/ARDUINO_ESP32_UART.md).
 It manages UART initialization, incremental TX/RX, deadlines, and explicit recovery,
-and provides synchronous and asynchronous word/bit operations. Include
+and provides synchronous and asynchronous word/bit, random, and multi-block operations. Include
 `mcprotocol_serial_arduino_esp32.hpp` explicitly; the existing core header and host
-APIs remain Arduino-independent. The initial build-checked target is Arduino-ESP32
-2.0.17 / ESP32-S3. Physical RS-485 validation is still required.
+APIs remain Arduino-independent. Follow the adapter guide for its GNU C++17
+build settings and UART configuration.
 
 Select the PLC profile explicitly, configure the core client, then connect its async TX/RX lifecycle to your UART or simulated transport:
 

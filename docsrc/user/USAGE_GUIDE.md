@@ -1,6 +1,6 @@
 # Usage guide
 
-The library exposes three practical entry paths. Pick one based on how much transport control your application needs.
+The library provides the following entry paths. Pick one based on your platform and how much transport control your application needs.
 
 ## Design summary
 
@@ -8,9 +8,13 @@ The public API is designed for host tools and MCU firmware:
 
 - no exceptions
 - no RTTI
-- no dynamic allocation in the library
+- no dynamic allocation in the communication core
 - caller-owned buffers via `mcprotocol::serial::Span`
 - transport-agnostic client state machine
+
+The optional Arduino-ESP32 adapter initializes a UART driver that allocates its
+own buffers and driver resources. The core's fixed buffers are separate from
+those UART buffers.
 
 `Span<T>` is the library's C++17 non-owning contiguous view. Construct it from pointer/count,
 pointer-pair, a C-array, or a matching `std::array` lvalue. Other containers use the explicit
@@ -30,6 +34,10 @@ representation is required.
 | High-level helpers | `mcprotocol/serial/high_level.hpp` | You want protocol presets and string-address request builders. |
 | Host sync facade | `mcprotocol/serial/host_sync.hpp` | You are writing a blocking Linux or Windows bring-up tool. |
 | Low-level async client | `mcprotocol/serial/client.hpp` | You are integrating your own UART, DMA, interrupt, or scheduler layer. |
+| Arduino-ESP32 UART adapter | `mcprotocol_serial_arduino_esp32.hpp` | You want managed UART I/O with synchronous or asynchronous reads and writes on ESP32. |
+
+For the adapter's setup, operations, callbacks, cancellation, and recovery, see
+the [Arduino-ESP32 UART guide](ARDUINO_ESP32_UART.md).
 
 ## Entry path 1: high-level helpers
 

@@ -18,6 +18,9 @@ Do not edit it manually; run `scripts/update_api_reference.py` instead.
 - `include/mcprotocol/serial/posix_serial.hpp`
 - `include/mcprotocol/serial/link_direct.hpp`
 - `include/mcprotocol/serial/qualified_buffer.hpp`
+- `include/mcprotocol_serial_arduino_esp32.hpp`
+- `include/mcprotocol/serial/detail/uart_client.hpp`
+- `include/mcprotocol/serial/string_view_compat.hpp`
 
 ### Public Header Macros In `include/mcprotocol/serial/types.hpp`
 
@@ -759,6 +762,12 @@ Converts a logical buffer-memory word address plus module offset into a byte sta
 
 #### Aliases
 
+#### `StringView`
+
+```cpp
+using mcprotocol::serial::StringView = std::string_view
+```
+
 #### `PosixSerialConfig`
 
 ```cpp
@@ -876,6 +885,13 @@ Qualified buffer-memory family used by helper U... accessors.
 | --- | --- |
 | `G` |  |
 | `HG` |  |
+
+#### `Esp32Direction`
+
+| Value | Description |
+| --- | --- |
+| `External` |  |
+| `Rs485Rts` |  |
 
 #### `HardwareFlowControl`
 
@@ -4135,6 +4151,214 @@ ProtocolConfig mcprotocol::serial::ProtocolConfig::with_inter_byte_timeout_ms(st
 
 Returns a new configuration with a different retained-frame inactivity timeout.
 
+### Class `mcprotocol::serial::Esp32UartClient`
+
+#### Member Functions
+
+#### `Esp32UartClient`
+
+```cpp
+mcprotocol::serial::Esp32UartClient::Esp32UartClient(std::uint8_t uart_port=1)
+```
+
+#### `~Esp32UartClient`
+
+```cpp
+mcprotocol::serial::Esp32UartClient::~Esp32UartClient()
+```
+
+#### `begin`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::begin(const Esp32UartConfig &uart, const ProtocolConfig &protocol)
+```
+
+#### `configure`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::configure(const ProtocolConfig &protocol)
+```
+
+#### `recover`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::recover(const ProtocolConfig &protocol)
+```
+
+#### `end`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::end()
+```
+
+#### `busy`
+
+```cpp
+bool mcprotocol::serial::Esp32UartClient::busy() const noexcept
+```
+
+#### `requires_transport_reset`
+
+```cpp
+bool mcprotocol::serial::Esp32UartClient::requires_transport_reset() const noexcept
+```
+
+#### `async_read_words`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::async_read_words(DeviceAddress address, Span< std::uint16_t > out, CompletionHandler callback, void *user=nullptr) noexcept
+```
+
+#### `async_read_word`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::async_read_word(DeviceAddress address, std::int16_t &out, CompletionHandler callback, void *user=nullptr) noexcept
+```
+
+#### `async_read_bits`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::async_read_bits(DeviceAddress address, Span< bool > out, CompletionHandler callback, void *user=nullptr) noexcept
+```
+
+#### `async_write_words`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::async_write_words(DeviceAddress address, Span< const std::uint16_t > data, CompletionHandler callback, void *user=nullptr) noexcept
+```
+
+#### `async_write_bits`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::async_write_bits(DeviceAddress address, Span< const BitValue > data, CompletionHandler callback, void *user=nullptr) noexcept
+```
+
+#### `read_words`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::read_words(DeviceAddress address, Span< std::uint16_t > out) noexcept
+```
+
+#### `read_word`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::read_word(DeviceAddress address, std::uint16_t &out) noexcept
+```
+
+#### `read_word`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::read_word(DeviceAddress address, std::int16_t &out) noexcept
+```
+
+#### `read_bits`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::read_bits(DeviceAddress address, Span< bool > out) noexcept
+```
+
+#### `read_bit`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::read_bit(DeviceAddress address, bool &out) noexcept
+```
+
+#### `write_words`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::write_words(DeviceAddress address, Span< const std::uint16_t > data) noexcept
+```
+
+#### `write_word`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::write_word(DeviceAddress address, std::uint16_t value) noexcept
+```
+
+#### `write_bits`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::write_bits(DeviceAddress address, Span< const BitValue > data) noexcept
+```
+
+#### `write_bit`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::write_bit(DeviceAddress address, BitValue value) noexcept
+```
+
+#### `async_random_read`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::async_random_read(const RandomReadRequest &request, Span< std::uint16_t > out_words, Span< std::uint32_t > out_dwords, CompletionHandler callback, void *user=nullptr) noexcept
+```
+
+#### `random_read`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::random_read(const RandomReadRequest &request, Span< std::uint16_t > out_words, Span< std::uint32_t > out_dwords) noexcept
+```
+
+#### `async_random_write_words`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::async_random_write_words(Span< const RandomWriteWordItem > word_items, Span< const RandomWriteDWordItem > dword_items, CompletionHandler callback, void *user=nullptr) noexcept
+```
+
+#### `random_write_words`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::random_write_words(Span< const RandomWriteWordItem > word_items, Span< const RandomWriteDWordItem > dword_items) noexcept
+```
+
+#### `async_random_write_bits`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::async_random_write_bits(Span< const RandomWriteBitItem > items, CompletionHandler callback, void *user=nullptr) noexcept
+```
+
+#### `random_write_bits`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::random_write_bits(Span< const RandomWriteBitItem > items) noexcept
+```
+
+#### `async_multi_block_read`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::async_multi_block_read(const MultiBlockReadRequest &request, Span< std::uint16_t > out_words, Span< BitValue > out_bits, Span< MultiBlockReadBlockResult > out_results, CompletionHandler callback, void *user=nullptr) noexcept
+```
+
+#### `multi_block_read`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::multi_block_read(const MultiBlockReadRequest &request, Span< std::uint16_t > out_words, Span< BitValue > out_bits, Span< MultiBlockReadBlockResult > out_results) noexcept
+```
+
+#### `async_multi_block_write`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::async_multi_block_write(const MultiBlockWriteRequest &request, CompletionHandler callback, void *user=nullptr) noexcept
+```
+
+#### `multi_block_write`
+
+```cpp
+Status mcprotocol::serial::Esp32UartClient::multi_block_write(const MultiBlockWriteRequest &request) noexcept
+```
+
+#### `update`
+
+```cpp
+void mcprotocol::serial::Esp32UartClient::update() noexcept
+```
+
+#### `cancel`
+
+```cpp
+void mcprotocol::serial::Esp32UartClient::cancel() noexcept
+```
+
 ## Structs
 
 ### Struct `mcprotocol::serial::RawResponseFrame`
@@ -6210,3 +6434,49 @@ void* mcprotocol::serial::Rs485Hooks::user = nullptr
 ```
 
 Opaque user pointer passed back to both callbacks.
+
+### Struct `mcprotocol::serial::Esp32UartConfig`
+
+#### Fields
+
+#### `baud`
+
+```cpp
+std::uint32_t mcprotocol::serial::Esp32UartConfig::baud = 19200
+```
+
+#### `format`
+
+```cpp
+std::uint32_t mcprotocol::serial::Esp32UartConfig::format = SERIAL_8E1
+```
+
+#### `rx_pin`
+
+```cpp
+int mcprotocol::serial::Esp32UartConfig::rx_pin = -1
+```
+
+#### `tx_pin`
+
+```cpp
+int mcprotocol::serial::Esp32UartConfig::tx_pin = -1
+```
+
+#### `direction`
+
+```cpp
+Esp32Direction mcprotocol::serial::Esp32UartConfig::direction = Esp32Direction::External
+```
+
+#### `rts_pin`
+
+```cpp
+int mcprotocol::serial::Esp32UartConfig::rts_pin = -1
+```
+
+#### `rx_buffer_bytes`
+
+```cpp
+std::size_t mcprotocol::serial::Esp32UartConfig::rx_buffer_bytes = 1024
+```
