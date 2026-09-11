@@ -164,8 +164,108 @@ void test_reentrant_callback() {
   pump(client, uart);
   assert(context.nested.code == StatusCode::Busy);
 }
+void test_advanced_operations() {
+  // Compare the complete transmitted frames against the standalone core, then
+  // exercise both adapter entry points with fragmented replies.
+  for (int operation = 0; operation < 5; ++operation) {
+    for (bool synchronous : {false, true}) {
+      FakeUart uart; Client client(uart); MelsecSerialClient core; Completion completion;
+      assert(client.configure(protocol()).ok() && core.configure(protocol()).ok());
+      const RandomReadWordItem reads[] = {{d100}, {{DeviceCode::D, 200}}};
+      const RandomReadDWordItem dreads[] = {{{DeviceCode::D, 500}}};
+      const RandomReadRequest random_request({reads, 2}, {dreads, 1});
+      const RandomWriteWordItem writes[] = {{d100, 123}, {{DeviceCode::D, 200}, 456}};
+      const RandomWriteDWordItem dwrites[] = {{{DeviceCode::D, 500}, 0x12345678}};
+      const RandomWriteBitItem bwrites[] = {{{DeviceCode::M, 100}, true}, {{DeviceCode::M, 200}, false}};
+      const MultiBlockReadBlock blocks[] = {{d100, 2, false}, {{DeviceCode::M, 100}, 1, true}};
+      const MultiBlockReadRequest block_request({blocks, 2});
+      std::uint16_t words[2] {}, reference_words[2] {};
+      std::uint32_t dwords[1] {}, reference_dwords[1] {};
+      BitValue bits[16] {}, reference_bits[16] {};
+      MultiBlockReadBlockResult results[2] {}, reference_results[2] {};
+      const std::uint16_t write_values[] = {123, 456};
+      const BitValue write_bits[16] = {true};
+      const MultiBlockWriteBlock write_blocks[] = {
+          {d100, 2, Span<const std::uint16_t>(write_values, 2)},
+          {{DeviceCode::M, 100}, 1, Span<const BitValue>(write_bits, 16)}};
+      const MultiBlockWriteRequest block_write({write_blocks, 2});
+      const std::uint8_t random_data[] = {0x34, 0x12, 0x78, 0x56, 0x78, 0x56, 0x34, 0x12};
+      const std::uint8_t block_data[] = {0x34, 0x12, 0x78, 0x56, 1, 0};
+      response(uart, operation == 0 ? Span<const std::uint8_t>(random_data, 8)
+                    : operation == 3 ? Span<const std::uint8_t>(block_data, 6)
+                                     : Span<const std::uint8_t>{});
+      Status expected, actual;
+      switch (operation) {
+        case 0:
+          expected = core.async_random_read(0, random_request, reference_words, reference_dwords, [](void*, Status) {}, nullptr);
+          actual = synchronous ? client.random_read(random_request, words, dwords)
+              : client.async_random_read(random_request, words, dwords, Completion::callback, &completion);
+          break;
+        case 1:
+          expected = core.async_random_write_words(0, writes, dwrites, [](void*, Status) {}, nullptr);
+          actual = synchronous ? client.random_write_words(writes, dwrites)
+              : client.async_random_write_words(writes, dwrites, Completion::callback, &completion);
+          break;
+        case 2:
+          expected = core.async_random_write_bits(0, bwrites, [](void*, Status) {}, nullptr);
+          actual = synchronous ? client.random_write_bits(bwrites)
+              : client.async_random_write_bits(bwrites, Completion::callback, &completion);
+          break;
+        case 3:
+          expected = core.async_multi_block_read(0, block_request, reference_words, reference_bits, reference_results, [](void*, Status) {}, nullptr);
+          actual = synchronous ? client.multi_block_read(block_request, words, bits, results)
+              : client.async_multi_block_read(block_request, words, bits, results, Completion::callback, &completion);
+          break;
+        default:
+          expected = core.async_multi_block_write(0, block_write, [](void*, Status) {}, nullptr);
+          actual = synchronous ? client.multi_block_write(block_write)
+              : client.async_multi_block_write(block_write, Completion::callback, &completion);
+      }
+      if (!expected.ok() || !actual.ok())
+        std::fprintf(stderr, "operation=%d sync=%d core=%s adapter=%s\n", operation,
+                     synchronous, expected.message, actual.message);
+      assert(expected.ok() && actual.ok());
+      if (!synchronous) {
+        assert(client.async_random_write_bits(bwrites, nullptr).code == StatusCode::Busy);
+        pump(client, uart);
+        assert(completion.count == 1 && completion.result.ok());
+      }
+      const auto frame = core.pending_tx_frame();
+      assert(uart.tx.size() == frame.size());
+      assert(std::equal(uart.tx.begin(), uart.tx.end(), reinterpret_cast<const std::uint8_t*>(frame.data())));
+      if (operation == 0 || operation == 3) assert(words[0] == 0x1234 && words[1] == 0x5678);
+      if (operation == 0) assert(dwords[0] == 0x12345678);
+      if (operation == 3) {
+        assert(bits[0] && !bits[1] && !bits[15]);
+        assert(results[0].data_count == 2 && results[1].bit_block && results[1].data_count == 16);
+      }
+    }
+  }
+}
+
+void test_advanced_rejection_and_uncertain_write() {
+  FakeUart uart; Client client(uart); Completion completion;
+  assert(client.configure(protocol()).ok());
+  assert(!client.async_random_read(RandomReadRequest({}, {}), {}, {}, Completion::callback, &completion).ok());
+  assert(!client.async_random_write_words({}, {}, Completion::callback, &completion).ok());
+  assert(!client.async_random_write_bits({}, Completion::callback, &completion).ok());
+  assert(!client.async_multi_block_read(MultiBlockReadRequest(Span<const MultiBlockReadBlock>{}), {}, {}, {}, Completion::callback, &completion).ok());
+  assert(!client.async_multi_block_write(MultiBlockWriteRequest(Span<const MultiBlockWriteBlock>{}), Completion::callback, &completion).ok());
+  const MultiBlockReadBlock blocks[] = {{d100, 2, false}};
+  assert(client.multi_block_read(MultiBlockReadRequest(blocks), {}, {}, {}).code == StatusCode::BufferTooSmall);
+  assert(!client.busy() && completion.count == 0 && uart.tx.empty());
+  const RandomWriteWordItem writes[] = {{d100, 123}};
+  response(uart, {}, 0xC051);
+  const auto error = client.random_write_words(writes, {});
+  assert(error.code == StatusCode::PlcError && error.plc_error_code == 0xC051);
+  uart.rx.clear(); uart.rx_offset = 0;
+  assert(client.random_write_words(writes, {}).code == StatusCode::OperationOutcomeUnknown);
+  assert(client.requires_transport_reset());
+}
+
 int main() {
   test_read_and_admission(); test_failures_and_recovery(); test_tx_deadline_and_cancel();
   test_transport_errors(); test_plc_error_and_writes(); test_bits_and_inter_byte_timeout();
   test_reentrant_callback();
+  test_advanced_operations(); test_advanced_rejection_and_uncertain_write();
 }

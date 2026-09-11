@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Library: Added synchronous/asynchronous random read, random word/dword and bit writes, and multi-block read/write to the ESP32 UART adapter, reusing core validation and buffers.
+- Tests: Compare new UART operations against core TX frames and check fragmented responses, invalid requests, busy admission, PLC errors and uncertain writes.
+
 - Library: Added opt-in `Esp32UartClient` for Arduino-ESP32 with exclusive UART ownership, synchronous/asynchronous word and bit operations, incremental TX/RX, RTS half duplex, cancellation, and explicit recovery. Existing core and host APIs remain unchanged and Arduino-independent.
 - Library: Recognize GCC 8's `201603` string-view feature value to avoid duplicate `std::string_view` definitions in C++17 builds.
 - Samples: Added an ESP32-S3 / STAMPLC UART1 read-only FX5U D100 example and an adapter usage guide. Physical RS-485 verification remains pending.

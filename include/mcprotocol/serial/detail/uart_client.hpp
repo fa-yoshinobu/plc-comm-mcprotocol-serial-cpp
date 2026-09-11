@@ -90,6 +90,67 @@ class UartClient {
     return write_bits(address, Span<const BitValue>(&value, 1));
   }
 
+  // Native advanced operations use the core's request validation and buffers.
+  [[nodiscard]] Status async_random_read(const RandomReadRequest& request, Span<std::uint16_t> out_words,
+      Span<std::uint32_t> out_dwords,
+      CompletionHandler callback, void* user = nullptr) noexcept {
+    Status s = admit(callback, user);
+    if (!s.ok()) return s;
+    return started(core_.async_random_read(transport_.now_ms(),
+        request, out_words, out_dwords, completed, this));
+  }
+  [[nodiscard]] Status random_read(const RandomReadRequest& request, Span<std::uint16_t> out_words,
+      Span<std::uint32_t> out_dwords) noexcept {
+    return wait(async_random_read(request, out_words, out_dwords, nullptr));
+  }
+
+  [[nodiscard]] Status async_random_write_words(Span<const RandomWriteWordItem> word_items,
+      Span<const RandomWriteDWordItem> dword_items,
+      CompletionHandler callback, void* user = nullptr) noexcept {
+    Status s = admit(callback, user);
+    if (!s.ok()) return s;
+    return started(core_.async_random_write_words(transport_.now_ms(),
+        word_items, dword_items, completed, this));
+  }
+  [[nodiscard]] Status random_write_words(Span<const RandomWriteWordItem> word_items,
+      Span<const RandomWriteDWordItem> dword_items) noexcept {
+    return wait(async_random_write_words(word_items, dword_items, nullptr));
+  }
+
+  [[nodiscard]] Status async_random_write_bits(Span<const RandomWriteBitItem> items,
+      CompletionHandler callback, void* user = nullptr) noexcept {
+    Status s = admit(callback, user);
+    if (!s.ok()) return s;
+    return started(core_.async_random_write_bits(transport_.now_ms(),
+        items, completed, this));
+  }
+  [[nodiscard]] Status random_write_bits(Span<const RandomWriteBitItem> items) noexcept {
+    return wait(async_random_write_bits(items, nullptr));
+  }
+
+  [[nodiscard]] Status async_multi_block_read(const MultiBlockReadRequest& request, Span<std::uint16_t> out_words,
+      Span<BitValue> out_bits, Span<MultiBlockReadBlockResult> out_results,
+      CompletionHandler callback, void* user = nullptr) noexcept {
+    Status s = admit(callback, user);
+    if (!s.ok()) return s;
+    return started(core_.async_multi_block_read(transport_.now_ms(),
+        request, out_words, out_bits, out_results, completed, this));
+  }
+  [[nodiscard]] Status multi_block_read(const MultiBlockReadRequest& request, Span<std::uint16_t> out_words,
+      Span<BitValue> out_bits, Span<MultiBlockReadBlockResult> out_results) noexcept {
+    return wait(async_multi_block_read(request, out_words, out_bits, out_results, nullptr));
+  }
+
+  [[nodiscard]] Status async_multi_block_write(const MultiBlockWriteRequest& request,
+      CompletionHandler callback, void* user = nullptr) noexcept {
+    Status s = admit(callback, user);
+    if (!s.ok()) return s;
+    return started(core_.async_multi_block_write(transport_.now_ms(),
+        request, completed, this));
+  }
+  [[nodiscard]] Status multi_block_write(const MultiBlockWriteRequest& request) noexcept {
+    return wait(async_multi_block_write(request, nullptr));
+  }
   // One bounded TX attempt / RX chunk per call. No callbacks from ISR/task context.
   void update() noexcept {
     if (!active_ || in_callback_) return;
@@ -155,6 +216,11 @@ class UartClient {
     if (!transport_.ready()) return closed_status();
     if (count == 0 || count > 65535U)
       return make_status(StatusCode::InvalidArgument, "Point count must be 1..65535");
+    return admit(callback, user);
+  }
+  Status admit(CompletionHandler callback, void* user) noexcept {
+    if (busy()) return busy_status();
+    if (!transport_.ready()) return closed_status();
     callback_ = callback;
     user_ = user;
     active_ = true;

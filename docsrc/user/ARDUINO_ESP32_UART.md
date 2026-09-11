@@ -152,7 +152,55 @@ not a hard real-time scheduling guarantee. Call `update()` frequently enough for
 your baud rate, receive-buffer size and timeout; 1 ms is a practical starting point.
 Timeouts are only serviced when the application calls `update()`.
 
-Advanced core commands are still available through the existing standalone core
+## Random and multi-block operations
+
+The adapter also exposes these native core commands. Each synchronous method has
+an `async_` counterpart with the same arguments followed by a completion callback
+and an optional user pointer. They use the same UART state machine and add no
+member variables or buffers.
+
+| Synchronous method | Arguments before callback |
+| --- | --- |
+| `random_read` | `RandomReadRequest`, word output span, dword output span |
+| `random_write_words` | `RandomWriteWordItem` span, `RandomWriteDWordItem` span |
+| `random_write_bits` | `RandomWriteBitItem` span |
+| `multi_block_read` | `MultiBlockReadRequest`, word output span, bit output span, `MultiBlockReadBlockResult` span |
+| `multi_block_write` | `MultiBlockWriteRequest` |
+
+For example, read D100 and D200 together:
+
+```cpp
+const RandomReadWordItem items[] = {
+    {{DeviceCode::D, 100}}, {{DeviceCode::D, 200}}};
+std::uint16_t values[2] {};
+const Status status = plc.random_read(RandomReadRequest(items, {}), values, {});
+// Use values[0] and values[1] only when status.ok().
+```
+
+Read two separate contiguous ranges:
+
+```cpp
+const MultiBlockReadBlock blocks[] = {
+    {{DeviceCode::D, 100}, 2, false},  // D100..D101
+    {{DeviceCode::D, 200}, 3, false}}; // D200..D202
+std::uint16_t values[5] {};
+MultiBlockReadBlockResult results[2] {};
+const Status status = plc.multi_block_read(
+    MultiBlockReadRequest(blocks), values, {}, results);
+```
+
+Results preserve block order and describe offsets into the word/bit output spans.
+A bit block's `points` counts 16-bit groups: one point requires 16 `BitValue`
+output entries, not one. Random reads of bit devices likewise use word masks;
+there is no separate native random-bit-read method.
+
+Core PLC/frame restrictions, feature switches and buffer limits still apply;
+unsupported requests return the core status without being split into individual
+transactions. Async buffers and callback context must remain valid through
+completion/cancellation. Writes are never automatically retried, and an
+unconfirmed write can return `OperationOutcomeUnknown`.
+
+Other advanced core commands are still available through the existing standalone core
 API. This initial adapter intentionally does not expose its core object, so callers
 cannot bypass its TX ownership and request lifecycle.
 
@@ -187,6 +235,11 @@ The adapter contains one existing core client, not a second protocol implementat
 Its additional state and HardwareSerial object are small, but the UART driver allocates
 RX/TX buffers and RTOS resources dynamically. The RX buffer defaults to 1024 bytes
 and the TX ring to 256 bytes. Static ELF size is not total runtime heap usage.
+
+After adding random/multi-block wrappers, the unchanged STAMPLC LCD D100 demo
+build uses 45,344 bytes of static RAM (unchanged) and 589,821 bytes of Flash
+(100 bytes above 589,721). This includes a shared admission-helper change; unused
+methods do not guarantee an identical final binary. Physical PLC tests remain pending.
 
 With the checked ESP32-S3 full-feature build, the adapter object occupies 22,212
 bytes, versus 22,060 bytes for a bare core client (152 bytes of additional static
