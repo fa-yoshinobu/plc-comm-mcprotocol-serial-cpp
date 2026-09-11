@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release: Bumped CMake, PlatformIO, Arduino, and public version metadata to `4.2.1`.
 - Docs: Added the English Arduino-ESP32 UART guide and generated UART API reference, including inherited overloads; aligned setup and memory guidance with the adapter.
 - Tests: Added a generated UART API regression check for public members, overloads, and private-member exclusion.
+- CI: Normalized inherited API documentation across Doxygen versions and excluded nested Git ignore files from PlatformIO packages.
 - Samples: Corrected UART physical-TX completion and early-response handling in the Pico example, stopped retries after ambiguous communication failures, and fixed host baud parsing and soak-test mismatch reporting.
 
 - Compatibility: The bundled string-view fallback now uses `mcprotocol::serial::StringView` instead of defining `std::string_view`. Fallback users must update that type name and rebuild the library and consumers with matching compatibility settings. Standard-library builds retain `std::string_view` through the `StringView` alias.

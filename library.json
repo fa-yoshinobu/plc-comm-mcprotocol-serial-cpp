@@ -55,6 +55,7 @@
   "export": {
     "exclude": [
       ".gitignore",
+      "**/.gitignore",
       ".gitattributes",
       ".github",
       ".pio",

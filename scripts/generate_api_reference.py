@@ -256,11 +256,28 @@ def parse_compound(path: Path) -> Compound | None:
     members: list[Member] = []
     inherited_members: list[Member] = []
     inherited: set[tuple[str, str]] = set()
+    def function_key(member: ET.Element) -> tuple:
+        return (xml_text(member, "name"),
+                tuple(xml_text(param, "type") for param in member.findall("param")),
+                member.get("const"), member.get("volatile"), member.get("refqual"))
+
+    declared_functions = {
+        function_key(member)
+        for member in compound_node.findall("sectiondef/memberdef[@kind='function']")
+        if xml_text(member, "definition").endswith(f"{name}::{xml_text(member, 'name')}")
+    }
     for section in compound_node.findall("sectiondef"):
         section_kind = section.get("kind", "")
         if kind in {"class", "struct", "union"} and not section_kind.startswith("public"):
             continue
         for member_node in section.findall("memberdef"):
+            # Older Doxygen emits a using-declaration even when the derived
+            # class hides that base overload. noexcept is not an overload key.
+            if (member_node.get("kind") == "function"
+                    and function_key(member_node) in declared_functions
+                    and not xml_text(member_node, "definition").endswith(
+                        f"{name}::{xml_text(member_node, 'name')}")):
+                continue
             owner_id = member_node.get("id", "").rsplit("_1", 1)[0]
             if (kind in {"class", "struct"} and member_node.get("kind") == "function"
                     and owner_id != compound_node.get("id")):

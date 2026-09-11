@@ -1,3 +1,8 @@
+---
+title: MC Protocol Serial for C++ - Arduino-ESP32 UART adapter
+description: Configure the ESP32 UART adapter and use synchronous or asynchronous MC Protocol Serial reads and writes.
+---
+
 # Using the Arduino-ESP32 UART Adapter
 
 `Esp32UartClient` provides MC protocol communication over an ESP32 UART.

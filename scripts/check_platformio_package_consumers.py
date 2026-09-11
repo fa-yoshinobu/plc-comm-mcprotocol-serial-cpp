@@ -100,6 +100,7 @@ def check_archive(package: Path) -> None:
         name
         for name in names
         if any(name.startswith(prefix) for prefix in FORBIDDEN_PREFIXES)
+        or Path(name).name in {".gitignore", ".gitattributes", "CMakeLists.txt"}
         or name
         in {
             "AGENTS.md",
